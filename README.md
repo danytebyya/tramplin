@@ -11,6 +11,6 @@ The platform focuses not only on job search but on helping users **build their c
 - Backend: FastAPI  
 - Database: PostgreSQL  
 
-## 📌 About
+## About
 This project is developed as part of the  
 **“Applied Programming if…else” (IT-Planet 2026)** competition.
