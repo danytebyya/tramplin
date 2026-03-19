@@ -12,6 +12,7 @@ FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
+BACKEND_PY_BIN="${ROOT_DIR}/backend/.venv/bin/python"
 
 if [ -f ".env" ]; then
   set -a
@@ -73,7 +74,7 @@ wait_for_port() {
 }
 
 ensure_backend_deps() {
-  local py_bin="backend/.venv/bin/python"
+  local py_bin="${BACKEND_PY_BIN}"
 
   if [ ! -x "$py_bin" ]; then
     if ! command -v python3 >/dev/null 2>&1; then
@@ -111,9 +112,8 @@ ensure_frontend_deps() {
 }
 
 start_backend() {
-  local py_bin="backend/.venv/bin/python"
   echo -e "${BLUE}--- Backend (${BACKEND_PORT})${NC}"
-  nohup bash -lc "cd backend && API_PORT=${BACKEND_PORT} API_HOST=0.0.0.0 PYTHONPATH=. ${py_bin} -m uvicorn src.main:app --host 0.0.0.0 --port ${BACKEND_PORT}" > backend.log 2>&1 &
+  nohup bash -lc "cd backend && API_PORT=${BACKEND_PORT} API_HOST=0.0.0.0 PYTHONPATH=. ${BACKEND_PY_BIN} -m uvicorn src.main:app --host 0.0.0.0 --port ${BACKEND_PORT}" > backend.log 2>&1 &
   BACK_PID=$!
   wait_for_port "${BACKEND_PORT}" "Backend"
 }
