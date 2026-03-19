@@ -11,7 +11,7 @@ def test_register_applicant(client):
         },
     }
 
-    response = client.post("/api/v1/auth/register", json=payload)
+    response = client.post("/api/v1/users", json=payload)
     assert response.status_code == 201
     body = response.json()
     assert body["success"] is True
@@ -27,7 +27,7 @@ def test_register_employer_requires_profile(client):
         "role": "employer",
     }
 
-    response = client.post("/api/v1/auth/register", json=payload)
+    response = client.post("/api/v1/users", json=payload)
     assert response.status_code == 422
 
 
@@ -43,20 +43,20 @@ def test_login_and_refresh_flow(client):
             "corporate_email": "corp@acme.example",
         },
     }
-    register_response = client.post("/api/v1/auth/register", json=register_payload)
+    register_response = client.post("/api/v1/users", json=register_payload)
     assert register_response.status_code == 201
 
     login_response = client.post(
-        "/api/v1/auth/login",
+        "/api/v1/auth/sessions",
         json={"email": "employer@example.com", "password": "StrongPass123"},
     )
-    assert login_response.status_code == 200
+    assert login_response.status_code == 201
     login_body = login_response.json()["data"]
     assert login_body["access_token"]
     assert login_body["refresh_token"]
 
     refresh_response = client.post(
-        "/api/v1/auth/refresh",
+        "/api/v1/auth/tokens",
         json={"refresh_token": login_body["refresh_token"]},
     )
     assert refresh_response.status_code == 200
