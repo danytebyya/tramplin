@@ -112,6 +112,8 @@
 
 .auth-card__hint a {
   color: var(--color-primary);
+  text-decoration-color: currentColor;
+  transition: color var(--transition-base), text-decoration-color var(--transition-base);
 }
 
 .auth-card__hint a:hover {
@@ -197,7 +199,9 @@
   margin: 0 4px;
   color: var(--color-primary);
   text-decoration: underline;
+  text-decoration-color: currentColor;
   text-underline-offset: 2px;
+  transition: color var(--transition-base), text-decoration-color var(--transition-base);
 }
 
 .auth-form__terms a:hover {
@@ -286,8 +290,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -296,13 +300,13 @@
 }
 
 .auth-social__button:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .auth-social__icon {
   display: block;
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
 }
 
