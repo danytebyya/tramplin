@@ -6,7 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
-import { loginRequest, useAuthStore } from "../../features/auth";
+import { loginRequest, resolvePostAuthRoute, useAuthStore } from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
 import "../auth/auth.css";
 import "./login.css";
@@ -15,11 +15,11 @@ const loginSchema = z.object({
   email: z
     .string()
     .trim()
-    .min(1, "Поле обязательно для заполнения")
+    .min(1, "Обязательное поле")
     .email("Введите корректный email"),
   password: z
     .string()
-    .min(1, "Поле обязательно для заполнения")
+    .min(1, "Обязательное поле")
     .min(8, "Пароль должен содержать минимум 8 символов"),
 });
 
@@ -29,6 +29,7 @@ type LoginSuccessResponse = {
     access_token?: string;
     user?: {
       role?: "applicant" | "employer";
+      has_employer_profile?: boolean;
     };
   };
 };
@@ -55,12 +56,13 @@ export function LoginPage() {
     onSuccess: (data: LoginSuccessResponse) => {
       const accessToken = data?.data?.access_token;
       const role = data?.data?.user?.role ?? "applicant";
+      const hasEmployerProfile = data?.data?.user?.has_employer_profile;
 
       if (accessToken) {
         setSession(accessToken, role);
       }
 
-      navigate(role === "employer" ? "/dashboard/employer" : "/dashboard/applicant");
+      navigate(resolvePostAuthRoute(role, hasEmployerProfile));
     },
     onError: () => {
       setApiError("Не удалось выполнить вход. Проверьте email и пароль.");

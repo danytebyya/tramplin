@@ -18,6 +18,17 @@ from src.utils.responses import success_response
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _serialize_auth_user(user: User) -> dict:
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "display_name": user.display_name,
+        "role": user.role.value,
+        "status": user.status.value,
+        "has_employer_profile": user.employer_profile is not None,
+    }
+
+
 @router.post("/email/check", status_code=status.HTTP_200_OK)
 def check_email_availability(
     payload: EmailCheckRequest,
@@ -67,13 +78,7 @@ def create_session(payload: LoginRequest, request: Request, db: Session = Depend
         user_agent=request.headers.get("User-Agent"),
         ip_address=request.client.host if request.client else None,
     )
-    token_data["user"] = {
-        "id": str(token_data["user"].id),
-        "email": token_data["user"].email,
-        "display_name": token_data["user"].display_name,
-        "role": token_data["user"].role.value,
-        "status": token_data["user"].status.value,
-    }
+    token_data["user"] = _serialize_auth_user(token_data["user"])
     return success_response(token_data)
 
 
@@ -85,13 +90,7 @@ def create_tokens(payload: RefreshRequest, request: Request, db: Session = Depen
         user_agent=request.headers.get("User-Agent"),
         ip_address=request.client.host if request.client else None,
     )
-    token_data["user"] = {
-        "id": str(token_data["user"].id),
-        "email": token_data["user"].email,
-        "display_name": token_data["user"].display_name,
-        "role": token_data["user"].role.value,
-        "status": token_data["user"].status.value,
-    }
+    token_data["user"] = _serialize_auth_user(token_data["user"])
     return success_response(token_data)
 
 

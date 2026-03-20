@@ -27,12 +27,6 @@ export type RegisterPayload = {
   applicant_profile?: {
     full_name?: string;
   };
-  employer_profile?: {
-    company_name: string;
-    inn: string;
-    corporate_email: string;
-    website?: string;
-  };
 };
 
 export type LoginPayload = {
@@ -63,4 +57,12 @@ export async function loginRequest(payload: LoginPayload) {
 export async function meRequest() {
   const response = await apiClient.get("/users/me");
   return response.data;
+}
+
+export function resolvePostAuthRoute(role: AuthRole, hasEmployerProfile?: boolean) {
+  if (role === "employer") {
+    return hasEmployerProfile ? "/dashboard/employer" : "/onboarding/employer";
+  }
+
+  return "/";
 }

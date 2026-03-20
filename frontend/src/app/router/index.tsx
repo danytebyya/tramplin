@@ -5,6 +5,7 @@ import { useAuthStore } from "../../features/auth";
 import { AuthPage } from "../../pages/auth";
 import { CuratorDashboardPage } from "../../pages/curator-dashboard";
 import { EmployerDashboardPage } from "../../pages/employer-dashboard";
+import { EmployerOnboardingPage } from "../../pages/employer-onboarding";
 import { LoginPage } from "../../pages/login";
 import { MapPage } from "../../pages/map";
 import { SeekerDashboardPage } from "../../pages/seeker-dashboard";
@@ -27,6 +28,14 @@ export function AppRouter() {
       <Route path="/register" element={<AuthPage />} />
       <Route path="/ui-kit" element={<UiKitPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/onboarding/employer"
+        element={
+          <ProtectedRoute>
+            <EmployerOnboardingPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/dashboard/applicant"
         element={

@@ -2,7 +2,7 @@ from sqlalchemy import Enum, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base, TimestampMixin
-from src.enums import EmployerVerificationStatus
+from src.enums import EmployerType, EmployerVerificationStatus
 
 
 class ApplicantProfile(TimestampMixin, Base):
@@ -25,6 +25,10 @@ class EmployerProfile(TimestampMixin, Base):
 
     user_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True
+    )
+    employer_type: Mapped[EmployerType] = mapped_column(
+        Enum(EmployerType, name="employer_type"),
+        nullable=False,
     )
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     inn: Mapped[str] = mapped_column(String(12), nullable=False, index=True)

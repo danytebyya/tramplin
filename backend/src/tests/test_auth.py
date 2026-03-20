@@ -41,7 +41,7 @@ def test_register_applicant(client):
     assert body["data"]["user"]["role"] == "applicant"
 
 
-def test_register_employer_requires_profile(client):
+def test_register_employer_without_profile(client):
     code = _request_code(client, "hr@example.com")
     payload = {
         "email": "hr@example.com",
@@ -52,7 +52,8 @@ def test_register_employer_requires_profile(client):
     }
 
     response = client.post("/api/v1/users", json=payload)
-    assert response.status_code == 422
+    assert response.status_code == 201
+    assert response.json()["data"]["user"]["employer_profile"] is None
 
 
 def test_request_code_rejects_existing_email(client):
@@ -215,11 +216,6 @@ def test_login_and_refresh_flow(client):
         "password": "StrongPass123",
         "verification_code": code,
         "role": "employer",
-        "employer_profile": {
-            "company_name": "Acme Corp",
-            "inn": "7707083893",
-            "corporate_email": "corp@acme.example",
-        },
     }
     register_response = client.post("/api/v1/users", json=register_payload)
     assert register_response.status_code == 201
@@ -232,6 +228,7 @@ def test_login_and_refresh_flow(client):
     login_body = login_response.json()["data"]
     assert login_body["access_token"]
     assert login_body["refresh_token"]
+    assert login_body["user"]["has_employer_profile"] is False
 
     refresh_response = client.post(
         "/api/v1/auth/tokens",
@@ -241,6 +238,49 @@ def test_login_and_refresh_flow(client):
     refresh_body = refresh_response.json()["data"]
     assert refresh_body["access_token"]
     assert refresh_body["refresh_token"] != login_body["refresh_token"]
+
+
+def test_employer_onboarding_flow(client):
+    code = _request_code(client, "company-owner@example.com")
+    register_payload = {
+        "email": "company-owner@example.com",
+        "display_name": "Company Owner",
+        "password": "StrongPass123",
+        "verification_code": code,
+        "role": "employer",
+    }
+    register_response = client.post("/api/v1/users", json=register_payload)
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "company-owner@example.com", "password": "StrongPass123"},
+    )
+    assert login_response.status_code == 201
+
+    access_token = login_response.json()["data"]["access_token"]
+    onboarding_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Acme Corp",
+            "inn": "7707083893",
+            "corporate_email": "hr@acme.example",
+            "website": "https://acme.example",
+        },
+    )
+    assert onboarding_response.status_code == 200
+    user = onboarding_response.json()["data"]["user"]
+    assert user["employer_profile"]["employer_type"] == "company"
+    assert user["employer_profile"]["company_name"] == "Acme Corp"
+
+    me_response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert me_response.status_code == 200
+    assert me_response.json()["data"]["user"]["employer_profile"]["inn"] == "7707083893"
 
 
 def test_login_rate_limit(client):

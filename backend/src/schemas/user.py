@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
 
-from src.enums import EmployerVerificationStatus, UserRole, UserStatus
+from src.enums import EmployerType, EmployerVerificationStatus, UserRole, UserStatus
 
 
 class ApplicantProfileRead(BaseModel):
@@ -16,6 +16,7 @@ class ApplicantProfileRead(BaseModel):
 
 
 class EmployerProfileRead(BaseModel):
+    employer_type: EmployerType
     company_name: str
     inn: str
     corporate_email: EmailStr

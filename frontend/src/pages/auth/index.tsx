@@ -9,17 +9,17 @@ import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAura
 import {
   loginRequest,
   registerRequest,
+  resolvePostAuthRoute,
   requestEmailVerificationCode,
   useAuthStore,
   verifyEmailVerificationCode,
 } from "../../features/auth";
-import { Button, Checkbox, CodeInput, Container, Input, Radio, Select } from "../../shared/ui";
+import { Button, Checkbox, CodeInput, Container, Input, Radio } from "../../shared/ui";
 import "./auth.css";
 
 const registerSchema = z
   .object({
     role: z.enum(["applicant", "employer"]),
-    employerType: z.enum(["company", "sole_proprietor"]).optional(),
     email: z
       .string()
       .trim()
@@ -35,8 +35,6 @@ const registerSchema = z
       .refine((value) => /\d/.test(value), "Пароль должен содержать цифры"),
     confirmPassword: z.string().min(1, "Обязательное поле"),
     acceptTerms: z.boolean().refine((value) => value, "Подтвердите согласие"),
-    companyName: z.string().optional(),
-    inn: z.string().optional(),
   })
   .superRefine((value, context) => {
     if (value.password && value.confirmPassword && value.password !== value.confirmPassword) {
@@ -46,57 +44,12 @@ const registerSchema = z
         message: "Пароли не совпадают",
       });
     }
-
-    if (value.role === "employer") {
-      if (!value.employerType) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["employerType"],
-          message: "Выберите тип работодателя",
-        });
-      }
-
-      if (!value.companyName?.trim()) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["companyName"],
-          message: "Обязательное поле",
-        });
-      }
-
-      const normalizedInn = value.inn?.replace(/\D/g, "") ?? "";
-
-      if (!normalizedInn) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["inn"],
-          message: "Обязательное поле",
-        });
-      } else if (value.employerType === "sole_proprietor" && normalizedInn.length !== 10) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["inn"],
-          message: "Для ИП укажите 10 цифр ИНН",
-        });
-      } else if (value.employerType === "company" && normalizedInn.length !== 12) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["inn"],
-          message: "Для компании укажите 12 цифр ИНН",
-        });
-      }
-    }
   });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 type VerificationStep = "form" | "code";
 
 export function AuthPage() {
-  const employerTypeOptions = [
-    { value: "company", label: "Компания" },
-    { value: "sole_proprietor", label: "ИП" },
-  ];
-
   const navigate = useNavigate();
   const setSession = useAuthStore((state) => state.setSession);
   const [step, setStep] = useState<VerificationStep>("form");
@@ -114,18 +67,14 @@ export function AuthPage() {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       role: "applicant",
-      employerType: undefined,
       email: "",
       password: "",
       confirmPassword: "",
       acceptTerms: false,
-      companyName: "",
-      inn: "",
     },
   });
 
   const selectedRole = watch("role");
-  const selectedEmployerType = watch("employerType");
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
 
   const requestCodeMutation = useMutation({
@@ -179,14 +128,6 @@ export function AuthPage() {
                 full_name: resolveDisplayName(values.email),
               }
             : undefined,
-        employer_profile:
-          values.role === "employer"
-            ? {
-                company_name: values.companyName?.trim() ?? "",
-                inn: values.inn?.replace(/\D/g, "") ?? "",
-                corporate_email: values.email.trim(),
-              }
-            : undefined,
       });
 
       return loginRequest({
@@ -197,12 +138,13 @@ export function AuthPage() {
     onSuccess: (data: any) => {
       const accessToken = data?.data?.access_token;
       const role = data?.data?.user?.role ?? pendingValues?.role ?? "applicant";
+      const hasEmployerProfile = data?.data?.user?.has_employer_profile;
 
       if (accessToken) {
         setSession(accessToken, role);
       }
 
-      navigate(role === "employer" ? "/dashboard/employer" : "/dashboard/applicant");
+      navigate(resolvePostAuthRoute(role, hasEmployerProfile));
     },
     onError: (error: any) => {
       setApiError(
@@ -314,55 +256,6 @@ export function AuthPage() {
                       {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
                     </label>
 
-                    {selectedRole === "employer" && (
-                      <>
-                        <div className="auth-form__control">
-                          <span className="auth-form__label">Тип работодателя</span>
-                          <Select
-                            error={errors.employerType?.message}
-                            placeholder="Выберите тип работодателя"
-                            value={selectedEmployerType ?? ""}
-                            options={employerTypeOptions}
-                            onValueChange={(nextValue) =>
-                              setValue(
-                                "employerType",
-                                nextValue as "company" | "sole_proprietor",
-                                { shouldValidate: true },
-                              )
-                            }
-                          />
-                          {errors.employerType && (
-                            <span className="auth-form__error">{errors.employerType.message}</span>
-                          )}
-                        </div>
-
-                        <label className="auth-form__control">
-                          <span className="auth-form__label">Название компании</span>
-                          <Input
-                            placeholder='ООО "Трамплин"'
-                            error={errors.companyName?.message}
-                            clearable
-                            {...register("companyName")}
-                          />
-                          {errors.companyName && (
-                            <span className="auth-form__error">{errors.companyName.message}</span>
-                          )}
-                        </label>
-
-                        <label className="auth-form__control">
-                          <span className="auth-form__label">ИНН</span>
-                          <Input
-                            placeholder={selectedEmployerType === "sole_proprietor" ? "10 цифр" : "12 цифр"}
-                            inputMode="numeric"
-                            error={errors.inn?.message}
-                            clearable
-                            {...register("inn")}
-                          />
-                          {errors.inn && <span className="auth-form__error">{errors.inn.message}</span>}
-                        </label>
-                      </>
-                    )}
-
                     <label className="auth-form__control">
                       <span className="auth-form__label">Пароль</span>
                       <Input
@@ -394,11 +287,18 @@ export function AuthPage() {
                     </label>
                   </div>
 
+                  {selectedRole === "employer" && (
+                    <p className="auth-form__hint">
+                      Данные компании и ИНН вы заполните на следующем шаге после подтверждения email.
+                    </p>
+                  )}
+
                   <label className="auth-form__terms">
                     <Checkbox checked={watch("acceptTerms")} {...register("acceptTerms")} />
                     <span>
-                      Я принимаю <Link to="/terms">условия использования</Link> и{" "}
-                      <Link to="/privacy">политику конфиденциальности</Link>
+                      Я согласен с условиями <Link to="/terms">пользовательского соглашения</Link> и даю
+                      согласие на обработку моей персональной информации на условиях, определенных{" "}
+                      <Link to="/privacy">политикой конфиденциальности</Link>
                     </span>
                   </label>
 

@@ -1,0 +1,8 @@
+.employer-onboarding-card__header {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.employer-onboarding-page .auth-card__hint {
+  max-width: 420px;
+}

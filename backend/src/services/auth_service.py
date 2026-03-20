@@ -13,8 +13,8 @@ from src.core.security import (
     hash_token,
     verify_password,
 )
-from src.enums import EmployerVerificationStatus, TokenType, UserRole, UserStatus
-from src.models import ApplicantProfile, EmployerProfile, RefreshSession, User
+from src.enums import TokenType, UserRole, UserStatus
+from src.models import ApplicantProfile, RefreshSession, User
 from src.repositories import AuthRepository, UserRepository
 from src.schemas.auth import LoginRequest, RegisterRequest
 from src.services.otp_service import otp_service
@@ -64,21 +64,6 @@ class AuthService:
                 graduation_year=payload.applicant_profile.graduation_year
                 if payload.applicant_profile
                 else None,
-            )
-
-        if payload.role == UserRole.EMPLOYER:
-            if payload.employer_profile is None:
-                raise AppError(
-                    code="AUTH_EMPLOYER_PROFILE_REQUIRED",
-                    message="Для регистрации работодателя требуется профиль компании",
-                    status_code=422,
-                )
-            user.employer_profile = EmployerProfile(
-                company_name=payload.employer_profile.company_name,
-                inn=payload.employer_profile.inn,
-                corporate_email=payload.employer_profile.corporate_email,
-                website=payload.employer_profile.website,
-                verification_status=EmployerVerificationStatus.UNVERIFIED,
             )
 
         self.user_repo.add(user)

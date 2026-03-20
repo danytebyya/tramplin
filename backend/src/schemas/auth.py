@@ -9,20 +9,6 @@ class ApplicantRegistrationPayload(BaseModel):
     graduation_year: int | None = None
 
 
-class EmployerRegistrationPayload(BaseModel):
-    company_name: str = Field(min_length=2, max_length=255)
-    inn: str = Field(min_length=10, max_length=12)
-    corporate_email: EmailStr
-    website: str | None = Field(default=None, max_length=500)
-
-    @field_validator("inn")
-    @classmethod
-    def validate_inn(cls, value: str) -> str:
-        if not value.isdigit() or len(value) not in {10, 12}:
-            raise ValueError("ИНН должен содержать 10 или 12 цифр")
-        return value
-
-
 class RegisterRequest(BaseModel):
     email: EmailStr
     display_name: str = Field(min_length=2, max_length=120)
@@ -30,7 +16,6 @@ class RegisterRequest(BaseModel):
     verification_code: str = Field()
     role: UserRole
     applicant_profile: ApplicantRegistrationPayload | None = None
-    employer_profile: EmployerRegistrationPayload | None = None
 
     @field_validator("display_name")
     @classmethod
@@ -67,8 +52,6 @@ class RegisterRequest(BaseModel):
     def validate_profiles(self) -> "RegisterRequest":
         if self.role == UserRole.APPLICANT and self.applicant_profile is None:
             raise ValueError("Для регистрации соискателя требуется профиль соискателя")
-        if self.role == UserRole.EMPLOYER and self.employer_profile is None:
-            raise ValueError("Для регистрации работодателя требуется профиль компании")
         return self
 
 
