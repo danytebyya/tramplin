@@ -1,6 +1,25 @@
 @import "./fonts.css";
 @import "./tokens.css";
 
+:root {
+  --type-h1-size: 32px;
+  --type-h1-line: 40px;
+  --type-h2-size: 24px;
+  --type-h2-line: 32px;
+  --type-h3-size: 20px;
+  --type-h3-line: 28px;
+  --type-body-large-size: 18px;
+  --type-body-large-line: 28px;
+  --type-body-regular-size: 16px;
+  --type-body-regular-line: 24px;
+  --type-body-small-size: 14px;
+  --type-body-small-line: 20px;
+  --type-caption-size: 12px;
+  --type-caption-line: 16px;
+  --type-button-size: 16px;
+  --type-button-line: 24px;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -14,8 +33,56 @@ body,
 
 body {
   font-family: var(--font-family-base);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
   color: var(--color-text-primary);
   background: var(--color-bg-secondary);
+}
+
+h1,
+.text-h1 {
+  margin: 0;
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line);
+}
+
+h2,
+.text-h2 {
+  margin: 0;
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line);
+}
+
+h3,
+.text-h3 {
+  margin: 0;
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+}
+
+.text-body-large {
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
+}
+
+.text-body-regular {
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
+.text-body-small {
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+}
+
+.text-caption {
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.text-button {
+  font-size: var(--type-button-size);
+  line-height: var(--type-button-line);
 }
 
 button,

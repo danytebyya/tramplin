@@ -18,7 +18,8 @@
 }
 
 .login-page__note-title {
-  font-size: 14px;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -27,8 +28,8 @@
 
 .login-page__note-text {
   color: var(--color-text-secondary);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .login-card {
@@ -43,7 +44,8 @@
 
 .login-page__secondary-link {
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
   text-align: center;
   text-decoration: none;
 }

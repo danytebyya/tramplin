@@ -37,7 +37,8 @@
   border-radius: 999px;
   background: rgba(37, 99, 235, 0.1);
   color: var(--color-primary);
-  font-size: 14px;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
   font-weight: 700;
   letter-spacing: 0.14em;
 }
@@ -46,7 +47,7 @@
   max-width: 560px;
   margin: 0;
   font-size: 56px;
-  line-height: 0.98;
+  line-height: 56px;
   font-weight: 700;
 }
 
@@ -54,8 +55,8 @@
   max-width: 540px;
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 20px;
-  line-height: 1.5;
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
 }
 
 .auth-page__metrics {
@@ -76,14 +77,15 @@
 
 .auth-page__metric-value {
   color: var(--color-primary);
-  font-size: 18px;
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
   font-weight: 700;
 }
 
 .auth-page__metric-label {
   color: var(--color-text-primary);
-  font-size: 15px;
-  line-height: 1.4;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .auth-page__panel {
@@ -117,7 +119,8 @@
   padding: 10px 18px;
   border-radius: 999px;
   color: var(--color-text-secondary);
-  font-size: 15px;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
   font-weight: 500;
   text-decoration: none;
 }
@@ -136,14 +139,15 @@
 .auth-card__title {
   margin: 0;
   font-size: 42px;
-  line-height: 1;
+  line-height: 42px;
   font-weight: 700;
 }
 
 .auth-card__hint {
   margin: 12px 0 0;
   color: var(--color-text-secondary);
-  font-size: 16px;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
 }
 
 .auth-form {
@@ -165,7 +169,8 @@
 }
 
 .auth-form__role-label {
-  font-size: 16px;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
   font-weight: 500;
 }
 
@@ -190,7 +195,8 @@
 }
 
 .auth-form__label {
-  font-size: 14px;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
   font-weight: 500;
 }
 
@@ -199,14 +205,14 @@
   align-items: flex-start;
   gap: 12px;
   color: var(--color-text-secondary);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .auth-form__error {
   color: var(--color-danger);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
 }
 
 .auth-form__field:has(.input--error-editing) .auth-form__error {
