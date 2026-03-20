@@ -9,6 +9,13 @@ NC='\033[0m'
 
 BACKEND_PORT="${BACKEND_PORT:-4000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+POSTGRES_DB="${POSTGRES_DB:-tramplin}"
+POSTGRES_USER="${POSTGRES_USER:-tramplin_user}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-tramplin_password}"
+POSTGRES_DATA_DIR="${POSTGRES_DATA_DIR:-/opt/homebrew/var/postgresql@15}"
+POSTGRES_LOG_FILE="${POSTGRES_LOG_FILE:-/opt/homebrew/var/log/postgresql@15.log}"
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT_DIR"
@@ -111,6 +118,70 @@ ensure_frontend_deps() {
   fi
 }
 
+ensure_postgres() {
+  local psql_bin
+  local pg_ctl_bin
+
+  if pg_isready -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" >/dev/null 2>&1; then
+    echo -e "${GREEN}PostgreSQL is already accepting connections on ${POSTGRES_HOST}:${POSTGRES_PORT}${NC}"
+  else
+    pg_ctl_bin="$(command -v pg_ctl || true)"
+    if [ -z "$pg_ctl_bin" ] && [ -x "/opt/homebrew/opt/postgresql@15/bin/pg_ctl" ]; then
+      pg_ctl_bin="/opt/homebrew/opt/postgresql@15/bin/pg_ctl"
+    fi
+
+    if [ -z "$pg_ctl_bin" ]; then
+      echo -e "${RED}pg_ctl not found. Start PostgreSQL manually and retry.${NC}"
+      exit 1
+    fi
+
+    if [ ! -d "${POSTGRES_DATA_DIR}" ]; then
+      echo -e "${RED}PostgreSQL data directory not found at ${POSTGRES_DATA_DIR}.${NC}"
+      exit 1
+    fi
+
+    echo -e "${YELLOW}Starting PostgreSQL...${NC}"
+    rm -f "${POSTGRES_DATA_DIR}/postmaster.pid"
+    "${pg_ctl_bin}" -D "${POSTGRES_DATA_DIR}" -l "${POSTGRES_LOG_FILE}" start >/dev/null
+    sleep 2
+
+    if ! pg_isready -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" >/dev/null 2>&1; then
+      echo -e "${RED}PostgreSQL did not start correctly.${NC}"
+      [ -f "${POSTGRES_LOG_FILE}" ] && tail -n 40 "${POSTGRES_LOG_FILE}"
+      exit 1
+    fi
+  fi
+
+  psql_bin="$(command -v psql || true)"
+  if [ -z "$psql_bin" ] && [ -x "/opt/homebrew/opt/postgresql@15/bin/psql" ]; then
+    psql_bin="/opt/homebrew/opt/postgresql@15/bin/psql"
+  fi
+
+  if [ -z "$psql_bin" ]; then
+    echo -e "${RED}psql not found. Cannot initialize local PostgreSQL database.${NC}"
+    exit 1
+  fi
+
+  echo -e "${BLUE}--- Database (${POSTGRES_DB})${NC}"
+  PGPASSWORD="${POSTGRES_PASSWORD}" "${psql_bin}" -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -d postgres <<SQL >/dev/null
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_USER}') THEN
+        EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', '${POSTGRES_USER}', '${POSTGRES_PASSWORD}');
+    ELSE
+        EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', '${POSTGRES_USER}', '${POSTGRES_PASSWORD}');
+    END IF;
+END
+\$\$;
+SQL
+
+  if ! PGPASSWORD="${POSTGRES_PASSWORD}" "${psql_bin}" -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB}'" | grep -q 1; then
+    createdb -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -O "${POSTGRES_USER}" "${POSTGRES_DB}"
+  fi
+
+  echo -e "${GREEN}Database ${POSTGRES_DB} is ready${NC}"
+}
+
 start_backend() {
   echo -e "${BLUE}--- Backend (${BACKEND_PORT})${NC}"
   nohup bash -lc "cd backend && API_PORT=${BACKEND_PORT} API_HOST=0.0.0.0 PYTHONPATH=. ${BACKEND_PY_BIN} -m uvicorn src.main:app --host 0.0.0.0 --port ${BACKEND_PORT}" > backend.log 2>&1 &
@@ -133,6 +204,7 @@ main() {
 
   ensure_backend_deps
   ensure_frontend_deps
+  ensure_postgres
 
   start_backend
   start_frontend
