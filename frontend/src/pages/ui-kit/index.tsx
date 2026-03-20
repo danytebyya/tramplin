@@ -56,7 +56,6 @@ export function UiKitPage() {
                     variant={variant}
                     size={size}
                     loading
-                    withArrow={false}
                   >
                     Кнопка
                   </Button>
@@ -72,21 +71,19 @@ export function UiKitPage() {
             <label className="kit-field">
               <span className="kit-field__label">Label (large)</span>
               <div className="kit-field__control">
-                <Input placeholder="Input" />
-                <span className="kit-field__icon">×</span>
+                <Input placeholder="Input" defaultValue="Input value" />
               </div>
             </label>
             <label className="kit-field">
               <span className="kit-field__label">Label (small)</span>
               <div className="kit-field__control">
-                <Input placeholder="Input" className="input--sm" />
-                <span className="kit-field__icon">×</span>
+                <Input placeholder="Input" className="input--sm" defaultValue="Input value" />
               </div>
             </label>
             <label className="kit-field kit-field--error">
               <span className="kit-field__label">Label</span>
               <div className="kit-field__control">
-                <Input placeholder="Input" className="input--error" />
+                <Input placeholder="Input" className="input--error" defaultValue="Wrong value" />
                 <span className="kit-field__icon">!</span>
               </div>
               <span className="kit-field__caption">Caption</span>
@@ -95,7 +92,6 @@ export function UiKitPage() {
               <span className="kit-field__label kit-field__label--disabled">Label</span>
               <div className="kit-field__control">
                 <Input placeholder="Input" disabled />
-                <span className="kit-field__icon kit-field__icon--disabled">×</span>
               </div>
             </label>
           </div>

@@ -60,6 +60,10 @@ h3,
   line-height: var(--type-h3-line);
 }
 
+p {
+  margin: 0;
+}
+
 .text-body-large {
   font-size: var(--type-body-large-size);
   line-height: var(--type-body-large-line);
@@ -248,11 +252,6 @@ a {
   padding: 15px 16px;
 }
 
-.button__arrow {
-  font-size: 1.2em;
-  line-height: 1;
-}
-
 .button__spinner {
   width: 15px;
   height: 15px;
@@ -281,6 +280,12 @@ a {
   cursor: not-allowed;
 }
 
+.input-field {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+}
+
 .input {
   width: 100%;
   height: 60px;
@@ -294,7 +299,11 @@ a {
   transition: border-color var(--transition-base), color var(--transition-base);
 }
 
-.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):not(:active):hover {
+.input--with-clear {
+  padding-right: 44px;
+}
+
+.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
   border-color: var(--color-border-hover);
 }
 
@@ -303,13 +312,12 @@ a {
   opacity: 1;
 }
 
-.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):not(:active):hover::placeholder {
+.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover::placeholder {
   color: var(--color-text-secondary);
 }
 
 .input:focus,
-.input:focus-visible,
-.input:active {
+.input:focus-visible {
   border-color: var(--color-primary);
   outline: none;
 }
@@ -321,14 +329,13 @@ a {
 }
 
 .input--error:focus,
-.input--error:focus-visible,
-.input--error:active {
+.input--error:focus-visible {
   border-color: var(--color-primary);
   color: var(--color-text-primary);
   caret-color: var(--color-text-primary);
 }
 
-.input--error:not(:focus):not(:focus-visible):not(:active):not(.input--error-editing):hover {
+.input--error:not(:focus):not(:focus-visible):not(.input--error-editing):hover {
   border-color: var(--color-danger);
   color: var(--color-danger);
 }
@@ -336,8 +343,7 @@ a {
 .input--error.input--error-editing,
 .input--error.input--error-editing:hover,
 .input--error.input--error-editing:focus,
-.input--error.input--error-editing:focus-visible,
-.input--error.input--error-editing:active {
+.input--error.input--error-editing:focus-visible {
   border-color: var(--color-primary);
   color: var(--color-text-primary);
   caret-color: var(--color-text-primary);
@@ -362,6 +368,67 @@ a {
   height: 40px;
   font-size: 16px;
   line-height: 24px;
+}
+
+.input-field__action {
+  appearance: none;
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  top: 50%;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transform: translateY(-50%);
+  -webkit-appearance: none;
+}
+
+.input-field__action::before {
+  content: "";
+  display: block;
+  flex: 0 0 13px;
+  width: 13px;
+  height: 13px;
+  background-color: var(--color-text-tertiary);
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+.input-field__action--clear::before {
+  mask-image: url("../../assets/icons/close.svg");
+  -webkit-mask-image: url("../../assets/icons/close.svg");
+}
+
+.input-field__action--password-hidden::before {
+  width: 20px;
+  height: 20px;
+  flex-basis: 20px;
+  mask-image: url("../../assets/auth/eye.svg");
+  -webkit-mask-image: url("../../assets/auth/eye.svg");
+}
+
+.input-field__action--password-visible::before {
+  width: 20px;
+  height: 20px;
+  flex-basis: 20px;
+  mask-image: url("../../assets/auth/eye-close.svg");
+  -webkit-mask-image: url("../../assets/auth/eye-close.svg");
+}
+
+.input-field__action:hover::before {
+  background-color: var(--color-text-primary);
 }
 
 .checkbox {

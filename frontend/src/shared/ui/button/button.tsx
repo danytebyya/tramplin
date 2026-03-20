@@ -12,7 +12,6 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   fullWidth?: boolean;
   size?: ButtonSize;
   loading?: boolean;
-  withArrow?: boolean;
 };
 
 export function Button({
@@ -21,7 +20,6 @@ export function Button({
   fullWidth = false,
   size,
   loading = false,
-  withArrow = true,
   className,
   onClick,
   ...props
@@ -52,7 +50,6 @@ export function Button({
       {...props}
     >
       {loading ? <span className="button__spinner" /> : <span className="button__label">{children}</span>}
-      {!loading && withArrow ? <span className="button__arrow">›</span> : null}
     </button>
   );
 }

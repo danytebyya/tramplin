@@ -1,0 +1,320 @@
+.wave-aura {
+  --wave-aura-core-top: 8rem;
+  --wave-aura-core-left: 11rem;
+  --wave-aura-core-width: 28rem;
+  --wave-aura-core-height: 18rem;
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 50rem;
+  height: 36rem;
+  pointer-events: none;
+  transform: translate(-52%, -52%);
+  z-index: 0;
+  filter: saturate(122%);
+}
+
+.wave-aura__orbit,
+.wave-aura__blob,
+.wave-aura__core,
+.wave-aura__wave,
+.wave-aura__veil {
+  position: absolute;
+}
+
+.wave-aura__orbit {
+  inset: 0;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.wave-aura__orbit--outer {
+  animation-name: wave-aura-spin;
+  animation-duration: 28s;
+}
+
+.wave-aura__orbit--middle {
+  animation-name: wave-aura-spin-reverse;
+  animation-duration: 24s;
+}
+
+.wave-aura__orbit--inner {
+  animation-name: wave-aura-spin;
+  animation-duration: 20s;
+}
+
+.wave-aura__orbit--accent {
+  animation-name: wave-aura-drift;
+  animation-duration: 18s;
+}
+
+.wave-aura__blob {
+  border-radius: 42% 58% 57% 43% / 36% 43% 57% 64%;
+  opacity: 0.92;
+  will-change: transform;
+}
+
+.wave-aura__blob--outer {
+  top: 2.5rem;
+  left: 6rem;
+  width: 30rem;
+  height: 21rem;
+  background:
+    radial-gradient(circle at 34% 34%, rgba(255, 255, 255, 0.62), transparent 18%),
+    radial-gradient(circle at 50% 50%, rgba(147, 197, 253, 0.46), rgba(37, 99, 235, 0.38) 46%, rgba(29, 78, 216, 0.18) 68%, transparent 84%);
+  filter: blur(54px);
+  transform: rotate(-18deg) scale(1.1);
+}
+
+.wave-aura__blob--middle {
+  top: 5.5rem;
+  right: 4.5rem;
+  width: 25rem;
+  height: 17rem;
+  background:
+    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.56), transparent 18%),
+    radial-gradient(circle at 50% 50%, rgba(96, 165, 250, 0.44), rgba(37, 99, 235, 0.34) 44%, rgba(30, 64, 175, 0.16) 70%, transparent 86%);
+  filter: blur(50px);
+  transform: rotate(18deg) scale(1.08);
+}
+
+.wave-aura__blob--inner {
+  top: 8rem;
+  left: 13rem;
+  width: 22rem;
+  height: 15rem;
+  background:
+    radial-gradient(circle at 42% 34%, rgba(255, 255, 255, 0.68), transparent 18%),
+    radial-gradient(circle at 52% 52%, rgba(191, 219, 254, 0.46), rgba(59, 130, 246, 0.3) 46%, rgba(37, 99, 235, 0.16) 72%, transparent 86%);
+  filter: blur(44px);
+  transform: rotate(-10deg);
+}
+
+.wave-aura__blob--accent {
+  top: 9rem;
+  left: 15rem;
+  width: 19rem;
+  height: 12.5rem;
+  background:
+    radial-gradient(circle at 40% 36%, rgba(255, 255, 255, 0.74), transparent 18%),
+    radial-gradient(circle at 50% 50%, rgba(125, 211, 252, 0.36), rgba(37, 99, 235, 0.26) 48%, transparent 82%);
+  filter: blur(38px);
+  transform: rotate(8deg);
+}
+
+.wave-aura__core {
+  top: var(--wave-aura-core-top);
+  left: var(--wave-aura-core-left);
+  width: var(--wave-aura-core-width);
+  height: var(--wave-aura-core-height);
+  border-radius: 44% 56% 52% 48% / 42% 40% 60% 58%;
+  background:
+    radial-gradient(circle at 42% 40%, rgba(255, 255, 255, 0.68), transparent 18%),
+    radial-gradient(circle at 48% 52%, rgba(191, 219, 254, 0.52), rgba(59, 130, 246, 0.34) 56%, rgba(29, 78, 216, 0.16) 78%, transparent 88%);
+  filter: blur(30px);
+  box-shadow: 0 0 4.5rem rgba(59, 130, 246, 0.28);
+  opacity: 0.84;
+  animation: wave-aura-breathe 14s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.wave-aura__wave {
+  border-radius: 999px;
+  opacity: 0.34;
+  will-change: transform, opacity;
+}
+
+.wave-aura__wave--primary {
+  top: 9.8rem;
+  left: 9.8rem;
+  width: 24rem;
+  height: 6rem;
+  background:
+    radial-gradient(ellipse at center, rgba(191, 219, 254, 0.22) 0%, rgba(191, 219, 254, 0.12) 28%, transparent 72%);
+  border-top: 1px solid rgba(191, 219, 254, 0.42);
+  filter: blur(2px);
+  transform: rotate(-10deg);
+  animation: wave-aura-wave-primary 16s ease-in-out infinite;
+}
+
+.wave-aura__wave--secondary {
+  top: 13.8rem;
+  left: 12.8rem;
+  width: 20rem;
+  height: 5rem;
+  background:
+    radial-gradient(ellipse at center, rgba(147, 197, 253, 0.18) 0%, rgba(147, 197, 253, 0.08) 28%, transparent 72%);
+  border-top: 1px solid rgba(147, 197, 253, 0.34);
+  filter: blur(2px);
+  transform: rotate(7deg);
+  animation: wave-aura-wave-secondary 18s ease-in-out infinite;
+}
+
+.wave-aura__wave--tertiary {
+  top: 17.2rem;
+  left: 11rem;
+  width: 22rem;
+  height: 5.4rem;
+  background:
+    radial-gradient(ellipse at center, rgba(219, 234, 254, 0.16) 0%, rgba(219, 234, 254, 0.06) 26%, transparent 70%);
+  border-top: 1px solid rgba(219, 234, 254, 0.3);
+  filter: blur(2px);
+  transform: rotate(-6deg);
+  animation: wave-aura-wave-tertiary 14s ease-in-out infinite;
+}
+
+.wave-aura__veil {
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(147, 197, 253, 0.18), transparent);
+  filter: blur(26px);
+  opacity: 0.44;
+  will-change: transform, opacity;
+}
+
+.wave-aura__veil--left {
+  top: 12rem;
+  left: 2rem;
+  width: 14rem;
+  height: 7rem;
+  transform: rotate(-22deg);
+  animation: wave-aura-sway-left 16s ease-in-out infinite;
+}
+
+.wave-aura__veil--right {
+  top: 10rem;
+  right: 1rem;
+  width: 16rem;
+  height: 8rem;
+  transform: rotate(28deg);
+  animation: wave-aura-sway-right 18s ease-in-out infinite;
+}
+
+@keyframes wave-aura-spin {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.03);
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes wave-aura-spin-reverse {
+  from {
+    transform: rotate(360deg) scale(0.98);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.02);
+  }
+  to {
+    transform: rotate(0deg) scale(0.98);
+  }
+}
+
+@keyframes wave-aura-drift {
+  0% {
+    transform: rotate(0deg) translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: rotate(120deg) translate3d(0.5rem, -0.8rem, 0) scale(1.05);
+  }
+  66% {
+    transform: rotate(240deg) translate3d(-0.6rem, 0.7rem, 0) scale(0.98);
+  }
+  100% {
+    transform: rotate(360deg) translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes wave-aura-breathe {
+  0%,
+  100% {
+    transform: scale(0.98);
+    opacity: 0.66;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.82;
+  }
+}
+
+@keyframes wave-aura-wave-primary {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: rotate(-10deg) translate3d(0, 0, 0) scaleX(0.96);
+  }
+  50% {
+    opacity: 0.42;
+    transform: rotate(-6deg) translate3d(0.8rem, -0.4rem, 0) scaleX(1.04);
+  }
+}
+
+@keyframes wave-aura-wave-secondary {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: rotate(7deg) translate3d(0, 0, 0) scaleX(0.94);
+  }
+  50% {
+    opacity: 0.34;
+    transform: rotate(11deg) translate3d(-0.7rem, 0.3rem, 0) scaleX(1.02);
+  }
+}
+
+@keyframes wave-aura-wave-tertiary {
+  0%,
+  100% {
+    opacity: 0.14;
+    transform: rotate(-6deg) translate3d(0, 0, 0) scaleX(0.92);
+  }
+  50% {
+    opacity: 0.3;
+    transform: rotate(-2deg) translate3d(0.9rem, -0.2rem, 0) scaleX(1.04);
+  }
+}
+
+@keyframes wave-aura-sway-left {
+  0%,
+  100% {
+    transform: rotate(-22deg) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: rotate(-14deg) translate3d(1rem, -0.6rem, 0);
+  }
+}
+
+@keyframes wave-aura-sway-right {
+  0%,
+  100% {
+    transform: rotate(28deg) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: rotate(20deg) translate3d(-1rem, 0.6rem, 0);
+  }
+}
+
+@media (max-width: 1200px) {
+  .wave-aura {
+    --wave-aura-core-top: 6.8rem;
+    --wave-aura-core-left: 8.8rem;
+    --wave-aura-core-width: 24rem;
+    --wave-aura-core-height: 15.5rem;
+    width: 42rem;
+    height: 30rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .wave-aura {
+    --wave-aura-core-top: 4.6rem;
+    --wave-aura-core-left: 5.8rem;
+    --wave-aura-core-width: 16rem;
+    --wave-aura-core-height: 10.4rem;
+    width: 28rem;
+    height: 20rem;
+    transform: translate(-50%, -48%);
+  }
+}

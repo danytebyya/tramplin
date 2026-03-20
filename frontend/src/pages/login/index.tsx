@@ -5,8 +5,9 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import { loginRequest, useAuthStore } from "../../features/auth";
-import { Button, Card, Container, Input } from "../../shared/ui";
+import { Button, Container, Input } from "../../shared/ui";
 import "../auth/auth.css";
 import "./login.css";
 
@@ -68,78 +69,62 @@ export function LoginPage() {
     <main className="auth-page login-page">
       <Container className="auth-page__content" variant="auth-page">
         <section className="auth-page__hero">
-          <div className="auth-page__hero-surface login-page__hero-surface">
-            <span className="auth-page__eyebrow">TRAMPLIN</span>
-            <h1 className="auth-page__headline">Возвращайтесь в рабочий кабинет без лишней навигации.</h1>
-            <p className="auth-page__description">
-              Вход собран на тех же контролах и токенах, что и остальной интерфейс платформы.
-            </p>
-            <div className="login-page__notes">
-              <div className="login-page__note">
-                <span className="login-page__note-title">JWT flow</span>
-                <span className="login-page__note-text">Готово к access/refresh архитектуре backend.</span>
-              </div>
-              <div className="login-page__note">
-                <span className="login-page__note-title">Единая система</span>
-                <span className="login-page__note-text">Поведение инпутов и кнопок уже синхронизировано.</span>
-              </div>
+          <div className="auth-page__hero-content login-page__hero-content">
+            <div className="auth-page__brand-stage">
+              <WaveAuraBackground />
+              <span className="auth-page__brand">Трамплин</span>
             </div>
           </div>
         </section>
 
         <section className="auth-page__panel">
-          <Card className="auth-card login-card">
-            <div className="auth-card__tabs">
-              <Link className="auth-card__tab" to="/register">
-                Регистрация
-              </Link>
-              <span className="auth-card__tab auth-card__tab--active">Вход</span>
-            </div>
-
-            <div className="auth-card__header">
-              <h2 className="auth-card__title">Войти в аккаунт</h2>
-              <p className="auth-card__hint">
-                Нет аккаунта? <Link to="/register">Создать сейчас</Link>
-              </p>
-            </div>
-
-            <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
-              <div className="auth-form__grid auth-form__grid--single">
-                <label className="auth-form__field auth-form__field--wide">
-                  <span className="auth-form__label">Email</span>
-                  <Input
-                    placeholder="you@tramplin.ru"
-                    autoComplete="email"
-                    error={errors.email?.message}
-                    {...register("email")}
-                  />
-                  {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
-                </label>
-
-                <label className="auth-form__field auth-form__field--wide">
-                  <span className="auth-form__label">Пароль</span>
-                  <Input
-                    type="password"
-                    autoComplete="current-password"
-                    error={errors.password?.message}
-                    {...register("password")}
-                  />
-                  {errors.password && <span className="auth-form__error">{errors.password.message}</span>}
-                </label>
+          <div className="auth-page__panel-content">
+            <div className="auth-card login-card">
+              <div className="auth-card__header">
+                <h2 className="auth-card__title">Авторизация</h2>
+                <p className="auth-card__hint">
+                  Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+                </p>
               </div>
 
-              {apiError && <span className="auth-form__error">{apiError}</span>}
+              <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
+                <div className="auth-form__fields">
+                  <label className="auth-form__control">
+                    <span className="auth-form__label">Email</span>
+                    <Input
+                      placeholder="you@tramplin.ru"
+                      autoComplete="email"
+                      error={errors.email?.message}
+                      clearable
+                      {...register("email")}
+                    />
+                    {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
+                  </label>
 
-              <div className="login-page__actions">
-                <Button type="submit" fullWidth loading={loginMutation.isPending} withArrow={!loginMutation.isPending}>
-                  Войти
-                </Button>
-                <Link className="login-page__secondary-link" to="/register">
-                  Нужна регистрация работодателя или соискателя
-                </Link>
-              </div>
-            </form>
-          </Card>
+                  <label className="auth-form__control">
+                    <span className="auth-form__label">Пароль</span>
+                    <Input
+                      type="password"
+                      placeholder="Введите пароль"
+                      autoComplete="current-password"
+                      error={errors.password?.message}
+                      clearable
+                      {...register("password")}
+                    />
+                    {errors.password && <span className="auth-form__error">{errors.password.message}</span>}
+                  </label>
+                </div>
+
+                {apiError && <span className="auth-form__error">{apiError}</span>}
+
+                <div className="login-page__actions">
+                  <Button type="submit" fullWidth loading={loginMutation.isPending}>
+                    Войти
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
         </section>
       </Container>
     </main>
