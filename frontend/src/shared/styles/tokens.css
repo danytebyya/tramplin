@@ -1,14 +1,29 @@
 :root {
-  --color-bg: #f4f5f7;
-  --color-surface: #ffffff;
-  --color-text-primary: #1f2937;
-  --color-text-secondary: #6b7280;
-  --color-border: #d9dee7;
-  --color-primary: #2d66e3;
-  --color-primary-hover: #1f57d6;
-  --color-danger: #cf3737;
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F9FAFB;
+  --color-bg-tertiary: #F3F4F6;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  --color-text-inverse: #FFFFFF;
+  --color-border: #E5E7EB;
+  --color-border-hover: #D1D5DB;
+  --color-border-focus: #2563EB;
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-primary-active: #1E40AF;
+  --color-primary-focus: #2563EB;
+  --color-primary-disabled: #E5E7EB;
+  --color-danger: #EF4444;
+  --color-danger-hover: #DC2626;
+  --color-danger-active: #B91C1C;
+  --color-danger-focus: #EF4444;
+  --color-success: #10B981;
+  --color-success-hover: #059669;
+  --color-success-active: #047857;
+  --color-success-focus: #10B981;
 
-  --font-family-base: "Manrope", "Segoe UI", sans-serif;
+  --font-family-base: "Inter", "Segoe UI", sans-serif;
 
   --space-4: 4px;
   --space-8: 8px;

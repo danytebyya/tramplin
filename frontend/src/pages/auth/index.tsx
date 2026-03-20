@@ -6,7 +6,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { registerRequest, useAuthStore } from "../../features/auth";
-import { Button, Card, Checkbox, Input, Radio } from "../../shared/ui";
+import { Button, Card, Checkbox, Container, Input, Radio } from "../../shared/ui";
+import "./auth.css";
 
 const registerSchema = z
   .object({
@@ -76,76 +77,78 @@ export function AuthPage() {
 
   return (
     <main className="auth-page">
-      <section className="auth-page__media">
-        <div className="auth-page__media-grid" />
-        <div className="auth-page__media-note">Career visual placeholder</div>
-      </section>
+      <Container className="auth-page__content" variant="auth-page">
+        <section className="auth-page__media">
+          <div className="auth-page__illustration" />
+          <div className="auth-page__illustration-note">Career visual placeholder</div>
+        </section>
 
-      <section className="auth-page__form-side">
-        <Card className="auth-card">
-          <h1 className="auth-card__title">Registration</h1>
-          <p className="auth-card__hint">
-            Already have an account? <Link to="/login">Login</Link>
-          </p>
+        <section className="auth-page__form-side">
+          <Card className="auth-card">
+            <h1 className="auth-card__title">Registration</h1>
+            <p className="auth-card__hint">
+              Already have an account? <Link to="/login">Login</Link>
+            </p>
 
-          <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
-            <div className="auth-form__role-group">
-              <label className="auth-form__role-option">
-                <Radio
-                  checked={selectedRole === "employer"}
-                  onChange={() => setValue("role", "employer", { shouldValidate: true })}
-                />
-                <span>Employer</span>
+            <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
+              <div className="auth-form__role-group">
+                <label className="auth-form__role-option">
+                  <Radio
+                    checked={selectedRole === "employer"}
+                    onChange={() => setValue("role", "employer", { shouldValidate: true })}
+                  />
+                  <span>Employer</span>
+                </label>
+
+                <label className="auth-form__role-option">
+                  <Radio
+                    checked={selectedRole === "applicant"}
+                    onChange={() => setValue("role", "applicant", { shouldValidate: true })}
+                  />
+                  <span>Applicant</span>
+                </label>
+              </div>
+
+              <label className="auth-form__field">
+                <span className="auth-form__label">Name</span>
+                <Input placeholder="Your full name" {...register("displayName")} />
+                {errors.displayName && <span className="auth-form__error">{errors.displayName.message}</span>}
               </label>
 
-              <label className="auth-form__role-option">
-                <Radio
-                  checked={selectedRole === "applicant"}
-                  onChange={() => setValue("role", "applicant", { shouldValidate: true })}
-                />
-                <span>Applicant</span>
+              <label className="auth-form__field">
+                <span className="auth-form__label">Email</span>
+                <Input placeholder="name@company.com" autoComplete="email" {...register("email")} />
+                {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
               </label>
-            </div>
 
-            <label className="auth-form__field">
-              <span className="auth-form__label">Name</span>
-              <Input placeholder="Your full name" {...register("displayName")} />
-              {errors.displayName && <span className="auth-form__error">{errors.displayName.message}</span>}
-            </label>
+              <label className="auth-form__field">
+                <span className="auth-form__label">Password</span>
+                <Input type="password" autoComplete="new-password" {...register("password")} />
+                {errors.password && <span className="auth-form__error">{errors.password.message}</span>}
+              </label>
 
-            <label className="auth-form__field">
-              <span className="auth-form__label">Email</span>
-              <Input placeholder="name@company.com" autoComplete="email" {...register("email")} />
-              {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
-            </label>
+              <label className="auth-form__field">
+                <span className="auth-form__label">Confirm password</span>
+                <Input type="password" autoComplete="new-password" {...register("confirmPassword")} />
+                {errors.confirmPassword && <span className="auth-form__error">{errors.confirmPassword.message}</span>}
+              </label>
 
-            <label className="auth-form__field">
-              <span className="auth-form__label">Password</span>
-              <Input type="password" autoComplete="new-password" {...register("password")} />
-              {errors.password && <span className="auth-form__error">{errors.password.message}</span>}
-            </label>
+              <label className="auth-form__terms">
+                <Checkbox {...register("acceptTerms")} />
+                <span>
+                  I accept <a href="#">terms and conditions</a>
+                </span>
+              </label>
+              {errors.acceptTerms && <span className="auth-form__error">{errors.acceptTerms.message}</span>}
+              {apiError && <span className="auth-form__error">{apiError}</span>}
 
-            <label className="auth-form__field">
-              <span className="auth-form__label">Confirm password</span>
-              <Input type="password" autoComplete="new-password" {...register("confirmPassword")} />
-              {errors.confirmPassword && <span className="auth-form__error">{errors.confirmPassword.message}</span>}
-            </label>
-
-            <label className="auth-form__terms">
-              <Checkbox {...register("acceptTerms")} />
-              <span>
-                I accept <a href="#">terms and conditions</a>
-              </span>
-            </label>
-            {errors.acceptTerms && <span className="auth-form__error">{errors.acceptTerms.message}</span>}
-            {apiError && <span className="auth-form__error">{apiError}</span>}
-
-            <Button type="submit" fullWidth disabled={registerMutation.isPending}>
-              {registerMutation.isPending ? "Registering..." : "Register"}
-            </Button>
-          </form>
-        </Card>
-      </section>
+              <Button type="submit" fullWidth disabled={registerMutation.isPending}>
+                {registerMutation.isPending ? "Registering..." : "Register"}
+              </Button>
+            </form>
+          </Card>
+        </section>
+      </Container>
     </main>
   );
 }

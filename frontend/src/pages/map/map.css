@@ -1,0 +1,19 @@
+.map-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-24);
+}
+
+.map-page__title {
+  margin: 0;
+  font-size: 34px;
+}
+
+.map-page__text {
+  margin: 0;
+  color: var(--color-text-secondary);
+}

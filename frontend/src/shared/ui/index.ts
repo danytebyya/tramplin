@@ -3,3 +3,5 @@ export { Input } from "./input/input";
 export { Checkbox } from "./checkbox/checkbox";
 export { Radio } from "./radio/radio";
 export { Card } from "./card/card";
+export { Container } from "./container/container";
+export { Switch } from "./switch/switch";

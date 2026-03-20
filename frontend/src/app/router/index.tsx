@@ -8,6 +8,7 @@ import { EmployerDashboardPage } from "../../pages/employer-dashboard";
 import { LoginPage } from "../../pages/login";
 import { MapPage } from "../../pages/map";
 import { SeekerDashboardPage } from "../../pages/seeker-dashboard";
+import { UiKitPage } from "../../pages/ui-kit";
 
 function ProtectedRoute({ children }: { children: ReactElement }) {
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -24,6 +25,7 @@ export function AppRouter() {
     <Routes>
       <Route path="/" element={<MapPage />} />
       <Route path="/register" element={<AuthPage />} />
+      <Route path="/ui-kit" element={<UiKitPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/dashboard/applicant"
