@@ -362,10 +362,6 @@ a {
   border-color: var(--color-border-hover);
 }
 
-.input.input--secondary:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
-  border-color: var(--color-secondary-hover);
-}
-
   .input::placeholder {
     color: var(--color-text-tertiary);
     opacity: 1;
@@ -391,11 +387,6 @@ a {
 .input:focus-visible {
   border-color: var(--color-primary);
   outline: none;
-}
-
-.input.input--secondary:focus,
-.input.input--secondary:focus-visible {
-  border-color: var(--color-secondary);
 }
 
 .input--error {
@@ -475,21 +466,11 @@ a {
   border-color: var(--color-border-hover);
 }
 
-.select-field--secondary .select:hover:not(:disabled):not(.select--open):not(.select--error) {
-  border-color: var(--color-secondary-hover);
-}
-
 .select:focus,
 .select:focus-visible,
 .select--open {
   border-color: var(--color-primary);
   outline: none;
-}
-
-.select-field--secondary .select:focus,
-.select-field--secondary .select:focus-visible,
-.select-field--secondary .select--open {
-  border-color: var(--color-secondary);
 }
 
 .select--error {

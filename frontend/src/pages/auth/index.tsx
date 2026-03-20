@@ -209,7 +209,7 @@ export function AuthPage() {
         <section className="auth-page__hero">
           <div className="auth-page__hero-content">
             <div className="auth-page__brand-stage">
-              <WaveAuraBackground variant={roleTheme} />
+              <WaveAuraBackground variant={roleTheme} withInteractionOrb />
               <span className="auth-page__brand">Трамплин</span>
             </div>
           </div>
