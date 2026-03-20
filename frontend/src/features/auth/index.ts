@@ -22,6 +22,7 @@ export type RegisterPayload = {
   email: string;
   password: string;
   display_name: string;
+  verification_code: string;
   role: AuthRole;
   applicant_profile?: {
     full_name?: string;
@@ -41,6 +42,16 @@ export type LoginPayload = {
 
 export async function registerRequest(payload: RegisterPayload) {
   const response = await apiClient.post("/users", payload);
+  return response.data;
+}
+
+export async function requestEmailVerificationCode(email: string) {
+  const response = await apiClient.post("/auth/email/request-code", { email });
+  return response.data;
+}
+
+export async function verifyEmailVerificationCode(email: string, code: string) {
+  const response = await apiClient.post("/auth/email/verify-code", { email, code });
   return response.data;
 }
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("JWT_SECRET_KEY", "test_jwt_secret_key_with_at_least_32_chars")
+os.environ.setdefault("EMAIL_TRANSPORT", "log")
 
 from src.db.base import Base
 from src.db.session import get_db

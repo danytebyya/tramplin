@@ -21,8 +21,8 @@
   align-items: center;
   justify-content: center;
   height: 100vh;
-  padding: 48px;
-  background: linear-gradient(90deg, #f8fbff 0%, #eef5ff 58%, #ffffff 100%);
+  padding: 35px;
+  background: var(--color-bg-primary);
 }
 
 .auth-page__hero-content {
@@ -46,7 +46,7 @@
 .auth-page__brand {
   position: relative;
   z-index: 1;
-  color: color-mix(in srgb, var(--color-text-primary) 88%, var(--color-primary) 12%);
+  color: var(--color-text-primary);
   font-size: 72px;
   line-height: 72px;
   font-weight: 400;
@@ -58,7 +58,7 @@
   min-height: 100vh;
   height: 100vh;
   overflow-y: auto;
-  padding: 48px 56px;
+  padding: 35px;
   background: var(--color-bg-primary);
 }
 
@@ -92,7 +92,7 @@
 .auth-card__title {
   font-size: var(--type-h1-size);
   line-height: var(--type-h1-line);
-  font-weight: 400;
+  font-weight: 500;
   color: var(--color-text-primary);
 }
 
@@ -109,6 +109,10 @@
   display: flex;
   flex-direction: column;
   gap: 28px;
+}
+
+.auth-form--verification {
+  gap: 24px;
 }
 
 .auth-form__roles {
@@ -168,6 +172,30 @@
   color: var(--color-danger);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
+}
+
+.auth-verification {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.auth-verification__text {
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  text-align: center;
+}
+
+.auth-verification__text strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.auth-verification__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .auth-form__control:has(.input--error-editing) .auth-form__error {

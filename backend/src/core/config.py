@@ -60,7 +60,16 @@ class Settings(BaseSettings):
     )
     auth_login_ip_block_seconds: int = Field(default=900, alias="AUTH_LOGIN_IP_BLOCK_SECONDS")
 
+    email_transport: str = Field(default="log", alias="EMAIL_TRANSPORT")
     email_sender_name: str = Field(default="Tramplin", alias="EMAIL_SENDER_NAME")
+    email_sender_address: str | None = Field(default=None, alias="EMAIL_SENDER_ADDRESS")
+    smtp_host: str | None = Field(default=None, alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_username: str | None = Field(default=None, alias="SMTP_USERNAME")
+    smtp_password: str | None = Field(default=None, alias="SMTP_PASSWORD")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
+    smtp_timeout_seconds: int = Field(default=10, alias="SMTP_TIMEOUT_SECONDS")
 
     @field_validator("jwt_secret_key")
     @classmethod
@@ -70,6 +79,14 @@ class Settings(BaseSettings):
             raise ValueError("JWT secret key must contain at least 32 characters")
         if normalized_value.lower() in {"change_me", "changeme", "secret", "jwt_secret"}:
             raise ValueError("JWT secret key must not use an insecure placeholder value")
+        return normalized_value
+
+    @field_validator("email_transport")
+    @classmethod
+    def validate_email_transport(cls, value: str) -> str:
+        normalized_value = value.strip().lower()
+        if normalized_value not in {"log", "smtp"}:
+            raise ValueError("EMAIL_TRANSPORT must be either 'log' or 'smtp'")
         return normalized_value
 
 
