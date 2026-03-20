@@ -393,6 +393,11 @@ a {
   outline: none;
 }
 
+.input.input--secondary:focus,
+.input.input--secondary:focus-visible {
+  border-color: var(--color-secondary);
+}
+
 .input--error {
   border-color: var(--color-danger);
   color: var(--color-danger);
@@ -479,6 +484,12 @@ a {
 .select--open {
   border-color: var(--color-primary);
   outline: none;
+}
+
+.select-field--secondary .select:focus,
+.select-field--secondary .select:focus-visible,
+.select-field--secondary .select--open {
+  border-color: var(--color-secondary);
 }
 
 .select--error {
@@ -704,6 +715,10 @@ a {
   border-color: var(--color-border-hover);
 }
 
+.checkbox--secondary:not(:checked):not(:disabled):hover {
+  border-color: var(--color-secondary-hover);
+}
+
 .checkbox.checkbox--error {
   border-color: var(--color-danger);
 }
@@ -717,6 +732,11 @@ a {
   background-color: var(--color-primary);
 }
 
+.checkbox--secondary:checked {
+  border-color: var(--color-secondary);
+  background-color: var(--color-secondary);
+}
+
 .checkbox:checked::after {
   background-color: var(--color-text-inverse);
 }
@@ -724,6 +744,11 @@ a {
 .checkbox:checked:not(:disabled):hover {
   border-color: var(--color-primary-hover);
   background-color: var(--color-primary-hover);
+}
+
+.checkbox--secondary:checked:not(:disabled):hover {
+  border-color: var(--color-secondary-hover);
+  background-color: var(--color-secondary-hover);
 }
 
 .checkbox:disabled {

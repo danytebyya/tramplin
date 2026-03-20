@@ -77,6 +77,7 @@ export function AuthPage() {
   const selectedRole = watch("role");
   const roleTheme = selectedRole === "applicant" ? "secondary" : "primary";
   const inputThemeClassName = roleTheme === "secondary" ? "input--secondary" : undefined;
+  const checkboxTheme = roleTheme === "secondary" ? "secondary" : "primary";
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
 
   const requestCodeMutation = useMutation({
@@ -295,7 +296,11 @@ export function AuthPage() {
                   </div>
 
                   <label className="auth-form__terms">
-                    <Checkbox checked={watch("acceptTerms")} {...register("acceptTerms")} />
+                    <Checkbox
+                      checked={watch("acceptTerms")}
+                      variant={checkboxTheme}
+                      {...register("acceptTerms")}
+                    />
                     <span>
                       Я согласен с условиями <Link to="/terms">пользовательского соглашения</Link> и даю
                       согласие на обработку моей персональной информации на условиях, определенных{" "}
