@@ -23,6 +23,15 @@ export type RegisterPayload = {
   password: string;
   display_name: string;
   role: AuthRole;
+  applicant_profile?: {
+    full_name?: string;
+  };
+  employer_profile?: {
+    company_name: string;
+    inn: string;
+    corporate_email: string;
+    website?: string;
+  };
 };
 
 export type LoginPayload = {
@@ -31,16 +40,16 @@ export type LoginPayload = {
 };
 
 export async function registerRequest(payload: RegisterPayload) {
-  const response = await apiClient.post("/auth/register", payload);
+  const response = await apiClient.post("/users", payload);
   return response.data;
 }
 
 export async function loginRequest(payload: LoginPayload) {
-  const response = await apiClient.post("/auth/login", payload);
+  const response = await apiClient.post("/auth/sessions", payload);
   return response.data;
 }
 
 export async function meRequest() {
-  const response = await apiClient.get("/auth/me");
+  const response = await apiClient.get("/users/me");
   return response.data;
 }

@@ -106,7 +106,10 @@ export function UiKitPage() {
             <h1 className="kit-section__title">Checkboxes and Radio</h1>
             <div className="kit-controls__content">
               <Checkbox defaultChecked />
-              <Radio defaultChecked />
+              <Checkbox defaultChecked disabled />
+              <Radio name="kit-radio-group" defaultChecked />
+              <Radio name="kit-radio-group" />
+              <Radio checked disabled readOnly />
             </div>
           </div>
           <div className="kit-controls">

@@ -18,6 +18,13 @@ body {
   background: var(--color-bg-secondary);
 }
 
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
 a {
   color: var(--color-primary);
 }
@@ -292,27 +299,51 @@ a {
 
 .checkbox {
   appearance: none;
-  width: 32px;
-  height: 32px;
+  position: relative;
+  width: 20px;
+  height: 20px;
   margin: 0;
-  border: 2px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
   background-color: var(--color-bg-primary);
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 18px 18px;
+  background-size: 11px 11px;
   cursor: pointer;
   transition: border-color var(--transition-base), background-color var(--transition-base);
 }
 
-.checkbox:not(:disabled):hover {
+.checkbox::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  background-color: transparent;
+  mask-image: url("../../assets/icons/check-mark.svg");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: url("../../assets/icons/check-mark.svg");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+.checkbox:not(:checked):not(:disabled):hover {
   border-color: var(--color-border-hover);
 }
 
 .checkbox:checked {
   border-color: var(--color-primary);
   background-color: var(--color-primary);
-  background-image: url("../../assets/icons/check-mark.svg");
+}
+
+.checkbox:checked::after {
+  background-color: var(--color-text-inverse);
+}
+
+.checkbox:checked:not(:disabled):hover {
+  border-color: var(--color-primary-hover);
+  background-color: var(--color-primary-hover);
 }
 
 .checkbox:disabled {
@@ -322,18 +353,67 @@ a {
   opacity: 0.7;
 }
 
+.checkbox:checked:disabled::after {
+  background-color: var(--color-text-tertiary);
+}
+
 .radio {
-  width: 32px;
-  height: 32px;
+  appearance: none;
+  position: relative;
+  width: 20px;
+  height: 20px;
   margin: 0;
-  accent-color: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background-color: var(--color-bg-primary);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background-color var(--transition-base);
+}
+
+.radio::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background-color: transparent;
+}
+
+.radio:not(:checked):not(:disabled):hover {
+  border-color: var(--color-primary);
+}
+
+.radio:checked {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+}
+
+.radio:checked::after {
+  background-color: var(--color-text-inverse);
+}
+
+.radio:disabled {
+  border-color: var(--color-border);
+  background-color: var(--color-bg-tertiary);
+  cursor: not-allowed;
+}
+
+.radio:disabled::after {
+  background-color: var(--color-text-tertiary);
+}
+
+.radio:not(:checked):disabled {
+  background-color: var(--color-bg-primary);
+}
+
+.radio:not(:checked):disabled::after {
+  background-color: transparent;
 }
 
 .switch {
   position: relative;
   display: inline-flex;
-  width: 64px;
-  height: 36px;
+  width: 44px;
+  height: 24px;
 }
 
 .switch__input {
@@ -346,20 +426,24 @@ a {
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  background: #d1d5db;
+  background: var(--color-border);
   position: relative;
   transition: background-color var(--transition-base);
+}
+
+.switch:hover .switch__track {
+  background: var(--color-border-hover);
 }
 
 .switch__track::after {
   content: "";
   position: absolute;
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
-  background: #ffffff;
-  left: 5px;
-  top: 5px;
+  background: var(--color-text-inverse);
+  left: 4px;
+  top: 4px;
   transition: transform var(--transition-base);
 }
 
@@ -367,8 +451,12 @@ a {
   background: var(--color-primary);
 }
 
+.switch:hover .switch__input:checked + .switch__track {
+  background: var(--color-primary-hover);
+}
+
 .switch__input:checked + .switch__track::after {
-  transform: translateX(28px);
+  transform: translateX(20px);
 }
 
 .page-placeholder {
