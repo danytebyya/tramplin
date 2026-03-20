@@ -132,6 +132,7 @@ export function EmployerOnboardingPage() {
                   <label className="auth-form__role">
                     <Radio
                       name="employer-type"
+                      variant="secondary"
                       checked={selectedEmployerType === "company"}
                       onChange={() => setValue("employerType", "company", { shouldValidate: true })}
                     />
@@ -140,6 +141,7 @@ export function EmployerOnboardingPage() {
                   <label className="auth-form__role">
                     <Radio
                       name="employer-type"
+                      variant="secondary"
                       checked={selectedEmployerType === "sole_proprietor"}
                       onChange={() =>
                         setValue("employerType", "sole_proprietor", { shouldValidate: true })

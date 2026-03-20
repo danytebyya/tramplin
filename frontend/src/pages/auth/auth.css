@@ -157,12 +157,6 @@
   margin-left: 15px;
 }
 
-.auth-form__hint {
-  color: var(--color-text-secondary);
-  font-size: var(--type-caption-size);
-  line-height: var(--type-caption-line);
-}
-
 .auth-form__terms {
   display: grid;
   grid-template-columns: 24px 1fr;

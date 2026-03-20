@@ -228,6 +228,7 @@ export function AuthPage() {
                     <label className="auth-form__role">
                       <Radio
                         name="register-role"
+                        variant="secondary"
                         checked={selectedRole === "employer"}
                         onChange={() => setValue("role", "employer", { shouldValidate: true })}
                       />
@@ -286,12 +287,6 @@ export function AuthPage() {
                       )}
                     </label>
                   </div>
-
-                  {selectedRole === "employer" && (
-                    <p className="auth-form__hint">
-                      Данные компании и ИНН вы заполните на следующем шаге после подтверждения email.
-                    </p>
-                  )}
 
                   <label className="auth-form__terms">
                     <Checkbox checked={watch("acceptTerms")} {...register("acceptTerms")} />

@@ -135,10 +135,6 @@ a {
   transition: background-color var(--transition-base), opacity var(--transition-base), border-color var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base);
 }
 
-.button:not(.button--loading):not(:disabled):hover {
-  box-shadow: 0 4px 12px 0 #06b6d44d;
-}
-
 .button--primary {
   background: var(--color-primary);
   color: var(--color-text-inverse);
@@ -146,6 +142,7 @@ a {
 
 .button--primary:not(.button--loading):not(:disabled):hover {
   background: var(--color-primary-hover);
+  box-shadow: 0 4px 12px 0 rgba(37, 99, 235, 0.22);
 }
 
 .button--primary:not(.button--loading):not(:disabled):active {
@@ -159,24 +156,25 @@ a {
 }
 
 .button--secondary {
-  background: var(--color-bg-primary);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--color-secondary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-secondary);
 }
 
 .button--secondary:not(.button--loading):not(:disabled):hover {
-  border-color: var(--color-primary-hover);
-  color: var(--color-primary-hover);
+  background: var(--color-secondary-hover);
+  border-color: var(--color-secondary-hover);
+  box-shadow: 0 4px 12px 0 rgba(6, 182, 212, 0.24);
 }
 
 .button--secondary:not(.button--loading):not(:disabled):active {
-  border-color: var(--color-primary-active);
-  color: var(--color-primary-active);
+  background: var(--color-secondary-active);
+  border-color: var(--color-secondary-active);
 }
 
 .button--secondary:disabled {
-  background: var(--color-bg-primary);
-  border-color: var(--color-border);
+  background: var(--color-primary-disabled);
+  border-color: var(--color-primary-disabled);
   color: var(--color-text-tertiary);
 }
 
@@ -752,16 +750,29 @@ a {
   background-color: transparent;
 }
 
-.radio:not(:checked):not(:disabled):hover {
+.radio--primary:not(:checked):not(:disabled):hover {
   border-color: var(--color-primary);
 }
 
-.radio:checked {
+.radio--primary:checked {
   border-color: var(--color-primary);
   background-color: var(--color-primary);
 }
 
-.radio:checked::after {
+.radio--primary:checked::after {
+  background-color: var(--color-text-inverse);
+}
+
+.radio--secondary:not(:checked):not(:disabled):hover {
+  border-color: var(--color-secondary);
+}
+
+.radio--secondary:checked {
+  border-color: var(--color-secondary);
+  background-color: var(--color-secondary);
+}
+
+.radio--secondary:checked::after {
   background-color: var(--color-text-inverse);
 }
 
