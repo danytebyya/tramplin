@@ -76,6 +76,7 @@ export function AuthPage() {
 
   const selectedRole = watch("role");
   const roleTheme = selectedRole === "applicant" ? "secondary" : "primary";
+  const inputThemeClassName = roleTheme === "secondary" ? "input--secondary" : undefined;
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
 
   const requestCodeMutation = useMutation({
@@ -254,6 +255,7 @@ export function AuthPage() {
                         autoComplete="email"
                         error={errors.email?.message}
                         clearable
+                        className={inputThemeClassName}
                         {...register("email")}
                       />
                       {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
@@ -267,6 +269,7 @@ export function AuthPage() {
                         autoComplete="new-password"
                         error={errors.password?.message}
                         clearable
+                        className={inputThemeClassName}
                         {...register("password")}
                       />
                       {errors.password && (
@@ -282,6 +285,7 @@ export function AuthPage() {
                         autoComplete="new-password"
                         error={errors.confirmPassword?.message}
                         clearable
+                        className={inputThemeClassName}
                         {...register("confirmPassword")}
                       />
                       {errors.confirmPassword && (

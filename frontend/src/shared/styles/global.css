@@ -362,6 +362,10 @@ a {
   border-color: var(--color-border-hover);
 }
 
+.input.input--secondary:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
+  border-color: var(--color-secondary-hover);
+}
+
   .input::placeholder {
     color: var(--color-text-tertiary);
     opacity: 1;
@@ -464,6 +468,10 @@ a {
 
 .select:hover:not(:disabled):not(.select--open):not(.select--error) {
   border-color: var(--color-border-hover);
+}
+
+.select-field--secondary .select:hover:not(:disabled):not(.select--open):not(.select--error) {
+  border-color: var(--color-secondary-hover);
 }
 
 .select:focus,
