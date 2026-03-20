@@ -163,20 +163,9 @@ ensure_postgres() {
   fi
 
   echo -e "${BLUE}--- Database (${POSTGRES_DB})${NC}"
-  PGPASSWORD="${POSTGRES_PASSWORD}" "${psql_bin}" -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -d postgres <<SQL >/dev/null
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_USER}') THEN
-        EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', '${POSTGRES_USER}', '${POSTGRES_PASSWORD}');
-    ELSE
-        EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', '${POSTGRES_USER}', '${POSTGRES_PASSWORD}');
-    END IF;
-END
-\$\$;
-SQL
-
   if ! PGPASSWORD="${POSTGRES_PASSWORD}" "${psql_bin}" -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB}'" | grep -q 1; then
-    createdb -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -O "${POSTGRES_USER}" "${POSTGRES_DB}"
+    echo -e "${RED}Database ${POSTGRES_DB} does not exist. Create it manually before запуском стека.${NC}"
+    exit 1
   fi
 
   echo -e "${GREEN}Database ${POSTGRES_DB} is ready${NC}"
