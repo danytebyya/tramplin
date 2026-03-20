@@ -13,9 +13,19 @@ import "./auth.css";
 const registerSchema = z
   .object({
     role: z.enum(["applicant", "employer"]),
-    email: z.string().email("Введите корректный email"),
-    password: z.string().min(8, "Минимум 8 символов"),
-    confirmPassword: z.string().min(8, "Минимум 8 символов"),
+    email: z
+      .string()
+      .trim()
+      .min(1, "Поле обязательно для заполнения")
+      .email("Введите корректный email"),
+    password: z
+      .string()
+      .min(1, "Поле обязательно для заполнения")
+      .min(8, "Пароль должен содержать минимум 8 символов"),
+    confirmPassword: z
+      .string()
+      .min(1, "Поле обязательно для заполнения")
+      .min(8, "Пароль должен содержать минимум 8 символов"),
     acceptTerms: z.boolean().refine((value) => value, "Подтвердите согласие"),
     companyName: z.string().optional(),
     inn: z.string().optional(),
@@ -23,7 +33,7 @@ const registerSchema = z
     website: z.string().optional(),
   })
   .superRefine((value, context) => {
-    if (value.password !== value.confirmPassword) {
+    if (value.password && value.confirmPassword && value.password !== value.confirmPassword) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["confirmPassword"],
@@ -36,7 +46,7 @@ const registerSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["companyName"],
-          message: "Введите название компании",
+          message: "Поле обязательно для заполнения",
         });
       }
 
@@ -44,7 +54,7 @@ const registerSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["inn"],
-          message: "Введите ИНН",
+          message: "Поле обязательно для заполнения",
         });
       }
 
@@ -52,7 +62,13 @@ const registerSchema = z
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["corporateEmail"],
-          message: "Введите корпоративный email",
+          message: "Поле обязательно для заполнения",
+        });
+      } else if (!z.string().email().safeParse(value.corporateEmail.trim()).success) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["corporateEmail"],
+          message: "Введите корректный email",
         });
       }
     }
@@ -266,13 +282,15 @@ export function AuthPage() {
                 </div>
 
                 <label className="auth-form__terms">
-                  <Checkbox {...register("acceptTerms")} />
+                  <Checkbox
+                    className={errors.acceptTerms ? "checkbox--error" : undefined}
+                    {...register("acceptTerms")}
+                  />
                   <span>
                     Принимаю <a href="#">пользовательское соглашение</a> и{" "}
                     <a href="#">условия обработки персональных данных</a>
                   </span>
                 </label>
-                {errors.acceptTerms && <span className="auth-form__error">{errors.acceptTerms.message}</span>}
                 {apiError && <span className="auth-form__error">{apiError}</span>}
 
                 <Button type="submit" fullWidth loading={registerMutation.isPending}>

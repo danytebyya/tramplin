@@ -466,6 +466,14 @@ a {
   border-color: var(--color-border-hover);
 }
 
+.checkbox.checkbox--error {
+  border-color: var(--color-danger);
+}
+
+.checkbox.checkbox--error:not(:checked):not(:disabled):hover {
+  border-color: var(--color-danger);
+}
+
 .checkbox:checked {
   border-color: var(--color-primary);
   background-color: var(--color-primary);

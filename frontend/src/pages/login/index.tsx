@@ -12,8 +12,15 @@ import "../auth/auth.css";
 import "./login.css";
 
 const loginSchema = z.object({
-  email: z.string().email("Введите корректный email"),
-  password: z.string().min(8, "Минимум 8 символов"),
+  email: z
+    .string()
+    .trim()
+    .min(1, "Поле обязательно для заполнения")
+    .email("Введите корректный email"),
+  password: z
+    .string()
+    .min(1, "Поле обязательно для заполнения")
+    .min(8, "Пароль должен содержать минимум 8 символов"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
