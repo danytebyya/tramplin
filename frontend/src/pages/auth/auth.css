@@ -108,6 +108,30 @@
   line-height: var(--type-caption-line);
 }
 
+.auth-card__hint a {
+  color: var(--color-primary);
+}
+
+.auth-card__hint a:hover {
+  color: var(--color-primary-hover);
+}
+
+.auth-card__hint a:active {
+  color: var(--color-primary-active);
+}
+
+.auth-page--secondary-theme .auth-card__hint a {
+  color: var(--color-secondary);
+}
+
+.auth-page--secondary-theme .auth-card__hint a:hover {
+  color: var(--color-secondary-hover);
+}
+
+.auth-page--secondary-theme .auth-card__hint a:active {
+  color: var(--color-secondary-active);
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;
@@ -169,8 +193,29 @@
 
 .auth-form__terms a {
   margin: 0 4px;
+  color: var(--color-primary);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.auth-form__terms a:hover {
+  color: var(--color-primary-hover);
+}
+
+.auth-form__terms a:active {
+  color: var(--color-primary-active);
+}
+
+.auth-page--secondary-theme .auth-form__terms a {
+  color: var(--color-secondary);
+}
+
+.auth-page--secondary-theme .auth-form__terms a:hover {
+  color: var(--color-secondary-hover);
+}
+
+.auth-page--secondary-theme .auth-form__terms a:active {
+  color: var(--color-secondary-active);
 }
 
 .auth-form__error {

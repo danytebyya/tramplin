@@ -200,7 +200,7 @@ export function AuthPage() {
   const isCodeStep = step === "code" && pendingValues;
 
   return (
-    <main className="auth-page">
+    <main className={`auth-page ${roleTheme === "secondary" ? "auth-page--secondary-theme" : ""}`}>
       <Container className="auth-page__content" variant="auth-page">
         <section className="auth-page__hero">
           <div className="auth-page__hero-content">
