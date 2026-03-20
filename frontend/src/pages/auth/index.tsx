@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
@@ -60,6 +60,7 @@ export function AuthPage() {
   const [pendingValues, setPendingValues] = useState<RegisterFormValues | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     watch,
@@ -298,10 +299,18 @@ export function AuthPage() {
                   </div>
 
                   <label className="auth-form__terms">
-                    <Checkbox
-                      checked={watch("acceptTerms")}
-                      variant={checkboxTheme}
-                      {...register("acceptTerms")}
+                    <Controller
+                      control={control}
+                      name="acceptTerms"
+                      render={({ field }) => (
+                        <Checkbox
+                          checked={Boolean(field.value)}
+                          variant={checkboxTheme}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(event.target.checked)}
+                          ref={field.ref}
+                        />
+                      )}
                     />
                     <span>
                       Я согласен с условиями <Link to="/terms">пользовательского соглашения</Link> и даю
