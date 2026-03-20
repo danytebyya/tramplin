@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from src.core.config import settings
 from src.core.security import (
     TokenPayloadError,
     create_access_token,
@@ -16,6 +17,8 @@ from src.enums import EmployerVerificationStatus, TokenType, UserRole, UserStatu
 from src.models import ApplicantProfile, EmployerProfile, RefreshSession, User
 from src.repositories import AuthRepository, UserRepository
 from src.schemas.auth import LoginRequest, RegisterRequest
+from src.services.otp_service import otp_service
+from src.services.rate_limit_service import rate_limit_service
 from src.utils.errors import AppError
 
 
@@ -29,16 +32,18 @@ class AuthService:
         if payload.role not in {UserRole.APPLICANT, UserRole.EMPLOYER}:
             raise AppError(
                 code="AUTH_ROLE_NOT_ALLOWED",
-                message="Only applicant and employer roles can self-register",
+                message="Самостоятельная регистрация доступна только соискателям и работодателям",
                 status_code=422,
             )
 
         if self.user_repo.get_by_email(payload.email):
             raise AppError(
                 code="AUTH_EMAIL_EXISTS",
-                message="User with this email already exists",
+                message="Аккаунт с таким email уже существует",
                 status_code=409,
             )
+
+        otp_service.verify_code(payload.email, "register", payload.verification_code, consume=True)
 
         user = User(
             email=payload.email.lower(),
@@ -65,7 +70,7 @@ class AuthService:
             if payload.employer_profile is None:
                 raise AppError(
                     code="AUTH_EMPLOYER_PROFILE_REQUIRED",
-                    message="Employer profile payload is required",
+                    message="Для регистрации работодателя требуется профиль компании",
                     status_code=422,
                 )
             user.employer_profile = EmployerProfile(
@@ -82,18 +87,28 @@ class AuthService:
         return user
 
     def login(self, payload: LoginRequest, user_agent: str | None, ip_address: str | None) -> dict:
-        user = self.user_repo.get_by_email(payload.email.lower())
+        normalized_email = payload.email.lower()
+        normalized_ip = self._normalize_ip(ip_address)
+
+        self._ensure_login_allowed(normalized_email, normalized_ip)
+
+        user = self.user_repo.get_by_email(normalized_email)
         if user is None or not verify_password(payload.password, user.password_hash):
+            self._register_login_failure(normalized_email, normalized_ip)
             raise AppError(
                 code="AUTH_INVALID_CREDENTIALS",
-                message="Invalid email or password",
+                message="Неверный email или пароль",
                 status_code=401,
             )
 
         if user.status != UserStatus.ACTIVE:
             raise AppError(
-                code="AUTH_USER_NOT_ACTIVE", message="User account is not active", status_code=403
+                code="AUTH_USER_NOT_ACTIVE",
+                message="Учётная запись недоступна для входа",
+                status_code=403,
             )
+
+        self._reset_login_failures(normalized_email, normalized_ip)
 
         access_token, access_exp = create_access_token(subject=str(user.id), role=user.role.value)
         refresh_token, refresh_exp, jti = create_refresh_token(subject=str(user.id))
@@ -128,13 +143,22 @@ class AuthService:
         if active_session is None:
             raise AppError(
                 code="AUTH_REFRESH_REVOKED",
-                message="Refresh session is invalid or expired",
+                message="Сессия обновления недействительна или истекла",
+                status_code=401,
+            )
+
+        if active_session.jti != payload.get("jti") or str(active_session.user_id) != str(payload.get("sub")):
+            self.auth_repo.revoke_session(str(active_session.id))
+            self.db.commit()
+            raise AppError(
+                code="AUTH_INVALID_REFRESH",
+                message="Refresh token не соответствует активной сессии",
                 status_code=401,
             )
 
         user = self.user_repo.get_by_id(str(payload.get("sub")))
         if user is None:
-            raise AppError(code="AUTH_USER_NOT_FOUND", message="User not found", status_code=404)
+            raise AppError(code="AUTH_USER_NOT_FOUND", message="Пользователь не найден", status_code=404)
 
         self.auth_repo.revoke_session(str(active_session.id))
 
@@ -170,3 +194,47 @@ class AuthService:
     def logout_all(self, user_id: str) -> None:
         self.auth_repo.revoke_all_user_sessions(user_id)
         self.db.commit()
+
+    def _ensure_login_allowed(self, email: str, ip_address: str) -> None:
+        rate_limit_service.ensure_allowed(
+            "auth_login_email",
+            email,
+            limit=settings.auth_login_attempt_limit,
+            window_seconds=settings.auth_login_attempt_window_seconds,
+            block_seconds=settings.auth_login_block_seconds,
+            error_code="AUTH_LOGIN_RATE_LIMITED",
+            error_message="Слишком много неудачных попыток входа. Попробуйте позже.",
+        )
+        rate_limit_service.ensure_allowed(
+            "auth_login_ip",
+            ip_address,
+            limit=settings.auth_login_ip_attempt_limit,
+            window_seconds=settings.auth_login_ip_attempt_window_seconds,
+            block_seconds=settings.auth_login_ip_block_seconds,
+            error_code="AUTH_LOGIN_RATE_LIMITED",
+            error_message="Слишком много неудачных попыток входа. Попробуйте позже.",
+        )
+
+    def _register_login_failure(self, email: str, ip_address: str) -> None:
+        rate_limit_service.register_failure(
+            "auth_login_email",
+            email,
+            limit=settings.auth_login_attempt_limit,
+            window_seconds=settings.auth_login_attempt_window_seconds,
+            block_seconds=settings.auth_login_block_seconds,
+        )
+        rate_limit_service.register_failure(
+            "auth_login_ip",
+            ip_address,
+            limit=settings.auth_login_ip_attempt_limit,
+            window_seconds=settings.auth_login_ip_attempt_window_seconds,
+            block_seconds=settings.auth_login_ip_block_seconds,
+        )
+
+    def _reset_login_failures(self, email: str, ip_address: str) -> None:
+        rate_limit_service.clear("auth_login_email", email)
+        rate_limit_service.clear("auth_login_ip", ip_address)
+
+    @staticmethod
+    def _normalize_ip(ip_address: str | None) -> str:
+        return (ip_address or "unknown").strip().lower()

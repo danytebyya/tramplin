@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from src.api import api_router
@@ -32,13 +33,39 @@ def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
     )
 
 
+@app.exception_handler(RequestValidationError)
+def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    normalized_errors: list[dict[str, str]] = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error.get("loc", []) if part != "body")
+        message = error.get("msg", "Некорректные данные запроса")
+        if message.startswith("Value error, "):
+            message = message.replace("Value error, ", "", 1)
+        normalized_errors.append(
+            {
+                "field": location or "request",
+                "message": message,
+            }
+        )
+
+    first_error_message = normalized_errors[0]["message"] if normalized_errors else "Некорректные данные запроса"
+    return JSONResponse(
+        status_code=422,
+        content=error_response(
+            code="VALIDATION_ERROR",
+            message=first_error_message,
+            details={"fields": normalized_errors},
+        ),
+    )
+
+
 @app.exception_handler(Exception)
 def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=500,
         content=error_response(
             code="INTERNAL_SERVER_ERROR",
-            message="Unexpected server error",
-            details={"error": str(exc)} if settings.app_debug else {},
+            message="Внутренняя ошибка сервера",
+            details={"exception_type": exc.__class__.__name__} if settings.app_debug else {},
         ),
     )
