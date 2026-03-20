@@ -17,15 +17,31 @@ branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
 
-user_role = sa.Enum("guest", "applicant", "employer", "curator", "admin", name="user_role")
-user_status = sa.Enum("pending", "active", "blocked", "archived", name="user_status")
-employer_verification_status = sa.Enum(
+user_role = postgresql.ENUM(
+    "guest",
+    "applicant",
+    "employer",
+    "curator",
+    "admin",
+    name="user_role",
+    create_type=False,
+)
+user_status = postgresql.ENUM(
+    "pending",
+    "active",
+    "blocked",
+    "archived",
+    name="user_status",
+    create_type=False,
+)
+employer_verification_status = postgresql.ENUM(
     "unverified",
     "pending_review",
     "verified",
     "rejected",
     "changes_requested",
     name="employer_verification_status",
+    create_type=False,
 )
 
 
