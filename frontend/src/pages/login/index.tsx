@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import vkIcon from "../../assets/icons/vk.png";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import { loginRequest, resolvePostAuthRoute, useAuthStore } from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
@@ -132,6 +133,20 @@ export function LoginPage() {
                   </Button>
                 </div>
               </form>
+
+              <div className="auth-social">
+                <div className="auth-social__divider" aria-hidden="true">
+                  <span className="auth-social__divider-line" />
+                  <span className="auth-social__divider-text">или</span>
+                  <span className="auth-social__divider-line" />
+                </div>
+
+                <div className="auth-social__actions">
+                  <button type="button" className="auth-social__button" aria-label="Войти через VK">
+                    <img src={vkIcon} alt="" className="auth-social__icon" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
