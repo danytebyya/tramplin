@@ -1,4 +1,8 @@
 .wave-aura {
+  --wave-aura-color-rgb: 37, 99, 235;
+  --wave-aura-color-strong-rgb: 29, 78, 216;
+  --wave-aura-color-soft-rgb: 147, 197, 253;
+  --wave-aura-color-softest-rgb: 191, 219, 254;
   --wave-aura-core-top: 8rem;
   --wave-aura-core-left: 11rem;
   --wave-aura-core-width: 28rem;
@@ -16,6 +20,13 @@
   transform: translate(-52%, -52%);
   z-index: 0;
   filter: saturate(122%);
+}
+
+.wave-aura--secondary {
+  --wave-aura-color-rgb: 6, 182, 212;
+  --wave-aura-color-strong-rgb: 13, 171, 197;
+  --wave-aura-color-soft-rgb: 103, 232, 249;
+  --wave-aura-color-softest-rgb: 165, 243, 252;
 }
 
 .wave-aura__orbit,
@@ -68,7 +79,7 @@
   height: 21rem;
   background:
     radial-gradient(circle at 34% 34%, rgba(255, 255, 255, 0.62), transparent 18%),
-    radial-gradient(circle at 50% 50%, rgba(147, 197, 253, 0.46), rgba(37, 99, 235, 0.38) 46%, rgba(29, 78, 216, 0.18) 68%, transparent 84%);
+    radial-gradient(circle at 50% 50%, rgba(var(--wave-aura-color-soft-rgb), 0.46), rgba(var(--wave-aura-color-rgb), 0.38) 46%, rgba(var(--wave-aura-color-strong-rgb), 0.18) 68%, transparent 84%);
   filter: blur(54px);
   transform: rotate(-18deg) scale(1.1);
 }
@@ -80,7 +91,7 @@
   height: 17rem;
   background:
     radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.56), transparent 18%),
-    radial-gradient(circle at 50% 50%, rgba(96, 165, 250, 0.44), rgba(37, 99, 235, 0.34) 44%, rgba(30, 64, 175, 0.16) 70%, transparent 86%);
+    radial-gradient(circle at 50% 50%, rgba(var(--wave-aura-color-soft-rgb), 0.4), rgba(var(--wave-aura-color-rgb), 0.34) 44%, rgba(var(--wave-aura-color-strong-rgb), 0.16) 70%, transparent 86%);
   filter: blur(50px);
   transform: rotate(18deg) scale(1.08);
 }
@@ -92,7 +103,7 @@
   height: 15rem;
   background:
     radial-gradient(circle at 42% 34%, rgba(255, 255, 255, 0.68), transparent 18%),
-    radial-gradient(circle at 52% 52%, rgba(191, 219, 254, 0.46), rgba(59, 130, 246, 0.3) 46%, rgba(37, 99, 235, 0.16) 72%, transparent 86%);
+    radial-gradient(circle at 52% 52%, rgba(var(--wave-aura-color-softest-rgb), 0.46), rgba(var(--wave-aura-color-rgb), 0.3) 46%, rgba(var(--wave-aura-color-strong-rgb), 0.16) 72%, transparent 86%);
   filter: blur(44px);
   transform: rotate(-10deg);
 }
@@ -104,7 +115,7 @@
   height: 12.5rem;
   background:
     radial-gradient(circle at 40% 36%, rgba(255, 255, 255, 0.74), transparent 18%),
-    radial-gradient(circle at 50% 50%, rgba(125, 211, 252, 0.36), rgba(37, 99, 235, 0.26) 48%, transparent 82%);
+    radial-gradient(circle at 50% 50%, rgba(var(--wave-aura-color-soft-rgb), 0.34), rgba(var(--wave-aura-color-rgb), 0.26) 48%, transparent 82%);
   filter: blur(38px);
   transform: rotate(8deg);
 }
@@ -117,9 +128,9 @@
   border-radius: 44% 56% 52% 48% / 42% 40% 60% 58%;
   background:
     radial-gradient(circle at 42% 40%, rgba(255, 255, 255, 0.68), transparent 18%),
-    radial-gradient(circle at 48% 52%, rgba(191, 219, 254, 0.52), rgba(59, 130, 246, 0.34) 56%, rgba(29, 78, 216, 0.16) 78%, transparent 88%);
+    radial-gradient(circle at 48% 52%, rgba(var(--wave-aura-color-softest-rgb), 0.52), rgba(var(--wave-aura-color-rgb), 0.34) 56%, rgba(var(--wave-aura-color-strong-rgb), 0.16) 78%, transparent 88%);
   filter: blur(30px);
-  box-shadow: 0 0 4.5rem rgba(59, 130, 246, 0.28);
+  box-shadow: 0 0 4.5rem rgba(var(--wave-aura-color-rgb), 0.28);
   opacity: 0.84;
   animation: wave-aura-breathe 14s ease-in-out infinite;
   will-change: transform, opacity;
@@ -178,33 +189,33 @@
   background:
     radial-gradient(
       ellipse at 2% 50%,
-      rgba(96, 165, 250, 0.22) 0%,
-      rgba(59, 130, 246, 0.14) 20%,
-      rgba(37, 99, 235, 0.04) 42%,
+      rgba(var(--wave-aura-color-soft-rgb), 0.22) 0%,
+      rgba(var(--wave-aura-color-rgb), 0.14) 20%,
+      rgba(var(--wave-aura-color-rgb), 0.04) 42%,
       transparent 76%
     ),
     radial-gradient(
       ellipse at 12% 50%,
-      rgba(191, 219, 254, 0.14) 0%,
-      rgba(96, 165, 250, 0.12) 16%,
-      rgba(59, 130, 246, 0.05) 30%,
+      rgba(var(--wave-aura-color-softest-rgb), 0.14) 0%,
+      rgba(var(--wave-aura-color-soft-rgb), 0.12) 16%,
+      rgba(var(--wave-aura-color-rgb), 0.05) 30%,
       transparent 58%
     ),
     linear-gradient(
       90deg,
       transparent 0%,
-      rgba(37, 99, 235, 0.03) 4%,
-      rgba(59, 130, 246, 0.16) 14%,
-      rgba(96, 165, 250, 0.4) 30%,
-      rgba(59, 130, 246, 0.24) 46%,
-      rgba(37, 99, 235, 0.07) 58%,
-      rgba(37, 99, 235, 0.018) 78%,
-      rgba(37, 99, 235, 0.004) 90%,
+      rgba(var(--wave-aura-color-rgb), 0.03) 4%,
+      rgba(var(--wave-aura-color-rgb), 0.16) 14%,
+      rgba(var(--wave-aura-color-soft-rgb), 0.4) 30%,
+      rgba(var(--wave-aura-color-rgb), 0.24) 46%,
+      rgba(var(--wave-aura-color-rgb), 0.07) 58%,
+      rgba(var(--wave-aura-color-rgb), 0.018) 78%,
+      rgba(var(--wave-aura-color-rgb), 0.004) 90%,
       transparent 100%
     );
   box-shadow:
-    0 0 1.4rem rgba(147, 197, 253, 0.12),
-    0 0 3rem rgba(37, 99, 235, 0.1);
+    0 0 1.4rem rgba(var(--wave-aura-color-soft-rgb), 0.12),
+    0 0 3rem rgba(var(--wave-aura-color-rgb), 0.1);
   filter: blur(2.4px);
   transform:
     translate(-50%, -50%)
@@ -217,31 +228,31 @@
   background:
     radial-gradient(
       ellipse at 0% 50%,
-      rgba(147, 197, 253, 0.16) 0%,
-      rgba(96, 165, 250, 0.12) 16%,
-      rgba(59, 130, 246, 0.05) 34%,
+      rgba(var(--wave-aura-color-soft-rgb), 0.16) 0%,
+      rgba(var(--wave-aura-color-soft-rgb), 0.12) 16%,
+      rgba(var(--wave-aura-color-rgb), 0.05) 34%,
       transparent 82%
     ),
     radial-gradient(
       ellipse at 28% 50%,
-      rgba(96, 165, 250, 0.05) 0%,
-      rgba(59, 130, 246, 0.04) 26%,
+      rgba(var(--wave-aura-color-soft-rgb), 0.05) 0%,
+      rgba(var(--wave-aura-color-rgb), 0.04) 26%,
       transparent 70%
     ),
     linear-gradient(
       90deg,
       transparent 0%,
-      rgba(37, 99, 235, 0.08) 8%,
-      rgba(59, 130, 246, 0.14) 18%,
-      rgba(96, 165, 250, 0.12) 30%,
-      rgba(59, 130, 246, 0.055) 44%,
-      rgba(37, 99, 235, 0.02) 62%,
-      rgba(37, 99, 235, 0.01) 86%,
+      rgba(var(--wave-aura-color-rgb), 0.08) 8%,
+      rgba(var(--wave-aura-color-rgb), 0.14) 18%,
+      rgba(var(--wave-aura-color-soft-rgb), 0.12) 30%,
+      rgba(var(--wave-aura-color-rgb), 0.055) 44%,
+      rgba(var(--wave-aura-color-rgb), 0.02) 62%,
+      rgba(var(--wave-aura-color-rgb), 0.01) 86%,
       transparent 100%
     );
   box-shadow:
-    0 0 3.8rem rgba(96, 165, 250, 0.12),
-    0 0 5.6rem rgba(37, 99, 235, 0.08);
+    0 0 3.8rem rgba(var(--wave-aura-color-soft-rgb), 0.12),
+    0 0 5.6rem rgba(var(--wave-aura-color-rgb), 0.08);
   filter: blur(10px);
   transform:
     translate(-50%, -50%)
@@ -263,8 +274,8 @@
   width: 24rem;
   height: 6rem;
   background:
-    radial-gradient(ellipse at center, rgba(191, 219, 254, 0.22) 0%, rgba(191, 219, 254, 0.12) 28%, transparent 72%);
-  border-top: 1px solid rgba(191, 219, 254, 0.42);
+    radial-gradient(ellipse at center, rgba(var(--wave-aura-color-softest-rgb), 0.22) 0%, rgba(var(--wave-aura-color-softest-rgb), 0.12) 28%, transparent 72%);
+  border-top: 1px solid rgba(var(--wave-aura-color-softest-rgb), 0.42);
   filter: blur(2px);
   transform: rotate(-10deg);
   animation: wave-aura-wave-primary 16s ease-in-out infinite;
@@ -276,8 +287,8 @@
   width: 20rem;
   height: 5rem;
   background:
-    radial-gradient(ellipse at center, rgba(147, 197, 253, 0.18) 0%, rgba(147, 197, 253, 0.08) 28%, transparent 72%);
-  border-top: 1px solid rgba(147, 197, 253, 0.34);
+    radial-gradient(ellipse at center, rgba(var(--wave-aura-color-soft-rgb), 0.18) 0%, rgba(var(--wave-aura-color-soft-rgb), 0.08) 28%, transparent 72%);
+  border-top: 1px solid rgba(var(--wave-aura-color-soft-rgb), 0.34);
   filter: blur(2px);
   transform: rotate(7deg);
   animation: wave-aura-wave-secondary 18s ease-in-out infinite;
@@ -289,8 +300,8 @@
   width: 22rem;
   height: 5.4rem;
   background:
-    radial-gradient(ellipse at center, rgba(219, 234, 254, 0.16) 0%, rgba(219, 234, 254, 0.06) 26%, transparent 70%);
-  border-top: 1px solid rgba(219, 234, 254, 0.3);
+    radial-gradient(ellipse at center, rgba(var(--wave-aura-color-softest-rgb), 0.16) 0%, rgba(var(--wave-aura-color-softest-rgb), 0.06) 26%, transparent 70%);
+  border-top: 1px solid rgba(var(--wave-aura-color-softest-rgb), 0.3);
   filter: blur(2px);
   transform: rotate(-6deg);
   animation: wave-aura-wave-tertiary 14s ease-in-out infinite;
@@ -298,7 +309,7 @@
 
 .wave-aura__veil {
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(147, 197, 253, 0.18), transparent);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(var(--wave-aura-color-soft-rgb), 0.18), transparent);
   filter: blur(26px);
   opacity: 0.44;
   will-change: transform, opacity;
@@ -352,10 +363,10 @@
     transform: rotate(0deg) translate3d(0, 0, 0) scale(1);
   }
   33% {
-    transform: rotate(120deg) translate3d(0.5rem, -0.8rem, 0) scale(1.05);
+    transform: rotate(120deg) translate3d(0.32rem, -0.36rem, 0) scale(1.03);
   }
   66% {
-    transform: rotate(240deg) translate3d(-0.6rem, 0.7rem, 0) scale(0.98);
+    transform: rotate(240deg) translate3d(-0.38rem, 0.32rem, 0) scale(0.99);
   }
   100% {
     transform: rotate(360deg) translate3d(0, 0, 0) scale(1);
@@ -448,7 +459,7 @@
   }
   50% {
     opacity: 0.42;
-    transform: rotate(-6deg) translate3d(0.8rem, -0.4rem, 0) scaleX(1.04);
+    transform: rotate(-7deg) translate3d(0.56rem, -0.16rem, 0) scaleX(1.02);
   }
 }
 
@@ -460,7 +471,7 @@
   }
   50% {
     opacity: 0.34;
-    transform: rotate(11deg) translate3d(-0.7rem, 0.3rem, 0) scaleX(1.02);
+    transform: rotate(10deg) translate3d(-0.48rem, 0.12rem, 0) scaleX(1.01);
   }
 }
 
@@ -472,7 +483,7 @@
   }
   50% {
     opacity: 0.3;
-    transform: rotate(-2deg) translate3d(0.9rem, -0.2rem, 0) scaleX(1.04);
+    transform: rotate(-3deg) translate3d(0.58rem, -0.08rem, 0) scaleX(1.02);
   }
 }
 
@@ -482,7 +493,7 @@
     transform: rotate(-22deg) translate3d(0, 0, 0);
   }
   50% {
-    transform: rotate(-14deg) translate3d(1rem, -0.6rem, 0);
+    transform: rotate(-17deg) translate3d(0.56rem, -0.2rem, 0);
   }
 }
 
@@ -492,7 +503,7 @@
     transform: rotate(28deg) translate3d(0, 0, 0);
   }
   50% {
-    transform: rotate(20deg) translate3d(-1rem, 0.6rem, 0);
+    transform: rotate(23deg) translate3d(-0.56rem, 0.2rem, 0);
   }
 }
 

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 
+import { cn } from "../../shared/lib";
 import "./WaveAuraBackground.css";
 
 const streaks = [
@@ -57,9 +58,15 @@ const streaks = [
   },
 ];
 
-export function WaveAuraBackground() {
+type WaveAuraBackgroundVariant = "primary" | "secondary";
+
+type WaveAuraBackgroundProps = {
+  variant?: WaveAuraBackgroundVariant;
+};
+
+export function WaveAuraBackground({ variant = "primary" }: WaveAuraBackgroundProps) {
   return (
-    <div className="wave-aura" aria-hidden="true">
+    <div className={cn("wave-aura", `wave-aura--${variant}`)} aria-hidden="true">
       <div className="wave-aura__orbit wave-aura__orbit--outer">
         <span className="wave-aura__blob wave-aura__blob--outer" />
       </div>

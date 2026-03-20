@@ -75,6 +75,7 @@ export function AuthPage() {
   });
 
   const selectedRole = watch("role");
+  const roleTheme = selectedRole === "applicant" ? "secondary" : "primary";
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
 
   const requestCodeMutation = useMutation({
@@ -204,7 +205,7 @@ export function AuthPage() {
         <section className="auth-page__hero">
           <div className="auth-page__hero-content">
             <div className="auth-page__brand-stage">
-              <WaveAuraBackground />
+              <WaveAuraBackground variant={roleTheme} />
               <span className="auth-page__brand">Трамплин</span>
             </div>
           </div>
@@ -228,7 +229,7 @@ export function AuthPage() {
                     <label className="auth-form__role">
                       <Radio
                         name="register-role"
-                        variant="secondary"
+                        variant="primary"
                         checked={selectedRole === "employer"}
                         onChange={() => setValue("role", "employer", { shouldValidate: true })}
                       />
@@ -237,6 +238,7 @@ export function AuthPage() {
                     <label className="auth-form__role">
                       <Radio
                         name="register-role"
+                        variant="secondary"
                         checked={selectedRole === "applicant"}
                         onChange={() => setValue("role", "applicant", { shouldValidate: true })}
                       />
@@ -261,7 +263,7 @@ export function AuthPage() {
                       <span className="auth-form__label">Пароль</span>
                       <Input
                         type="password"
-                        placeholder="Введите пароль"
+                        placeholder="Не менее 8 символов"
                         autoComplete="new-password"
                         error={errors.password?.message}
                         clearable
@@ -276,7 +278,7 @@ export function AuthPage() {
                       <span className="auth-form__label">Повторите пароль</span>
                       <Input
                         type="password"
-                        placeholder="Повторите пароль"
+                        placeholder=""
                         autoComplete="new-password"
                         error={errors.confirmPassword?.message}
                         clearable
@@ -302,7 +304,12 @@ export function AuthPage() {
                   )}
                   {apiError && <span className="auth-form__error">{apiError}</span>}
 
-                  <Button type="submit" fullWidth loading={requestCodeMutation.isPending}>
+                  <Button
+                    type="submit"
+                    variant={roleTheme}
+                    fullWidth
+                    loading={requestCodeMutation.isPending}
+                  >
                     Продолжить
                   </Button>
                 </form>
@@ -331,13 +338,20 @@ export function AuthPage() {
                     <div className="auth-verification__actions">
                       <Button
                         type="button"
+                        variant={roleTheme}
                         fullWidth
                         loading={completeRegistrationMutation.isPending}
                         onClick={handleVerificationSubmit}
                       >
                         Завершить регистрацию
                       </Button>
-                      <Button type="button" variant="secondary" fullWidth onClick={handleResendCode} loading={resendCodeMutation.isPending}>
+                      <Button
+                        type="button"
+                        variant={roleTheme === "primary" ? "secondary" : "primary"}
+                        fullWidth
+                        onClick={handleResendCode}
+                        loading={resendCodeMutation.isPending}
+                      >
                         Отправить код ещё раз
                       </Button>
                       <Button type="button" variant="ghost" fullWidth onClick={handleBackToForm}>
