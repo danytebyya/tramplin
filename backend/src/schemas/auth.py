@@ -87,6 +87,7 @@ class EmailCheckResponse(BaseModel):
 
 class VerificationCodeRequest(BaseModel):
     email: EmailStr
+    force_resend: bool = False
 
 
 class VerificationCodeVerifyRequest(BaseModel):

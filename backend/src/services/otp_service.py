@@ -8,6 +8,7 @@ from secrets import compare_digest, randbelow
 from threading import Lock
 
 from src.core.config import settings
+from src.services.rate_limit_service import rate_limit_service
 from src.utils.errors import AppError
 
 
@@ -52,11 +53,41 @@ class OtpService:
             requests.append(now)
             return code
 
+    def has_active_code(self, email: str, purpose: str) -> bool:
+        normalized_email = email.lower().strip()
+        key = (purpose, normalized_email)
+        now = datetime.now(UTC)
+
+        with self._lock:
+            record = self._codes.get(key)
+            if record is None:
+                return False
+
+            if record.expires_at <= now:
+                self._codes.pop(key, None)
+                return False
+
+            return True
+
+    def ensure_verification_allowed(self, email: str, purpose: str) -> None:
+        normalized_email = email.lower().strip()
+        rate_limit_service.ensure_allowed(
+            "auth_otp_verify_email",
+            f"{purpose}:{normalized_email}",
+            limit=settings.otp_verify_attempt_limit,
+            window_seconds=settings.otp_verify_window_seconds,
+            block_seconds=settings.otp_verify_block_seconds,
+            error_code="AUTH_OTP_VERIFICATION_BLOCKED",
+            error_message="Слишком много неудачных попыток подтверждения email. Попробуйте позже.",
+        )
+
     def verify_code(self, email: str, purpose: str, code: str, *, consume: bool = True) -> None:
         normalized_email = email.lower().strip()
         key = (purpose, normalized_email)
         normalized_code = code.strip()
         now = datetime.now(UTC)
+
+        self.ensure_verification_allowed(normalized_email, purpose)
 
         with self._lock:
             record = self._codes.get(key)
@@ -77,6 +108,13 @@ class OtpService:
 
             if not compare_digest(record.code_hash, self._hash_code(normalized_code)):
                 record.attempts_left -= 1
+                rate_limit_service.register_failure(
+                    "auth_otp_verify_email",
+                    f"{purpose}:{normalized_email}",
+                    limit=settings.otp_verify_attempt_limit,
+                    window_seconds=settings.otp_verify_window_seconds,
+                    block_seconds=settings.otp_verify_block_seconds,
+                )
                 if record.attempts_left <= 0:
                     self._codes.pop(key, None)
                     raise AppError(
@@ -94,6 +132,8 @@ class OtpService:
 
             if consume:
                 self._codes.pop(key, None)
+
+            rate_limit_service.clear("auth_otp_verify_email", f"{purpose}:{normalized_email}")
 
     def consume_debug_code(self, email: str, purpose: str) -> str | None:
         key = (purpose, email.lower().strip())

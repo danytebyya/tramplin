@@ -50,6 +50,7 @@ def request_registration_code(
     service.request_registration_code(
         payload.email,
         ip_address=request.client.host if request.client else None,
+        force_resend=payload.force_resend,
     )
     return success_response({"message": "Код подтверждения отправлен на email"})
 

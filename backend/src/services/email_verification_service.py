@@ -31,10 +31,20 @@ class EmailVerificationService:
             block_seconds=settings.auth_email_check_window_seconds,
         )
 
-    def request_registration_code(self, email: str, ip_address: str | None = None) -> None:
+    def request_registration_code(
+        self,
+        email: str,
+        ip_address: str | None = None,
+        *,
+        force_resend: bool = False,
+    ) -> None:
         self.ensure_email_check_allowed(ip_address)
+        otp_service.ensure_verification_allowed(email, "register")
 
         if not self.check_email_availability(email):
+            return
+
+        if not force_resend and otp_service.has_active_code(email, "register"):
             return
 
         code = otp_service.issue_code(email, "register")

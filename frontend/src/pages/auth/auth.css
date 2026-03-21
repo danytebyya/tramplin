@@ -149,13 +149,37 @@
   padding: 0;
   border: 0;
   background: transparent;
+  color: var(--color-text-tertiary);
   cursor: pointer;
+  transition: color var(--transition-base), opacity var(--transition-base);
+}
+
+.auth-verification-header__back:hover {
+  color: var(--color-text-primary);
+  opacity: 1;
+}
+
+.auth-verification-header__back:active {
+  color: var(--color-text-secondary);
+  opacity: 1;
 }
 
 .auth-verification-header__back-icon {
   display: block;
   width: 26px;
+  opacity: 0.72;
+  filter: grayscale(1);
   transform: rotate(90deg);
+  transition: opacity var(--transition-base), filter var(--transition-base);
+}
+
+.auth-verification-header__back:hover .auth-verification-header__back-icon {
+  opacity: 1;
+  filter: grayscale(0);
+}
+
+.auth-verification-header__back:active .auth-verification-header__back-icon {
+  opacity: 0.88;
 }
 
 .auth-verification-header__content {
@@ -329,13 +353,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 680px;
+  width: 504px;
   max-width: 100%;
-  gap: 32px;
+  gap: 16px;
 }
 
 .auth-page--verification .auth-verification {
-  width: 680px;
+  width: 504px;
   max-width: 100%;
   margin: 0 auto;
 }
@@ -344,7 +368,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  gap: 32px;
+  gap: 16px;
 }
 
 .auth-verification__meta {
@@ -362,34 +386,10 @@
 }
 
 .auth-verification__resend {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-tertiary);
-  font-size: var(--type-caption-size);
-  line-height: var(--type-caption-line);
+  align-self: center;
   text-decoration: underline;
   text-decoration-color: currentColor;
   text-underline-offset: 2px;
-  cursor: not-allowed;
-  transition: color var(--transition-base), opacity var(--transition-base);
-}
-
-.auth-verification__resend:not(:disabled) {
-  color: var(--color-secondary);
-  cursor: pointer;
-}
-
-.auth-verification__resend:not(:disabled):hover {
-  color: var(--color-secondary-hover);
-}
-
-.auth-verification__resend:not(:disabled):active {
-  color: var(--color-secondary-active);
-}
-
-.auth-verification__resend:disabled {
-  opacity: 1;
 }
 
 .auth-form__control--verification .input-field {

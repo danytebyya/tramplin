@@ -39,8 +39,17 @@ export async function registerRequest(payload: RegisterPayload) {
   return response.data;
 }
 
-export async function requestEmailVerificationCode(email: string) {
-  const response = await apiClient.post("/auth/email/request-code", { email });
+export async function requestEmailVerificationCode({
+  email,
+  forceResend = false,
+}: {
+  email: string;
+  forceResend?: boolean;
+}) {
+  const response = await apiClient.post("/auth/email/request-code", {
+    email,
+    force_resend: forceResend,
+  });
   return response.data;
 }
 

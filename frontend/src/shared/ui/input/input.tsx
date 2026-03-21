@@ -3,6 +3,7 @@ import {
   ClipboardEvent,
   FocusEvent,
   InputHTMLAttributes,
+  KeyboardEvent,
   MouseEvent,
   forwardRef,
   useImperativeHandle,
@@ -16,6 +17,38 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   error?: string;
   clearable?: boolean;
 };
+
+function generateObfuscatedClipboardValue(length: number) {
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=_-";
+  const targetLength = Math.min(Math.max(length, 12), 32);
+
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(targetLength);
+    window.crypto.getRandomValues(bytes);
+
+    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+  }
+
+  return Array.from(
+    { length: targetLength },
+    () => alphabet[Math.floor(Math.random() * alphabet.length)],
+  ).join("");
+}
+
+async function writeTextToClipboard(value: string, clipboardData?: DataTransfer | null) {
+  if (clipboardData) {
+    clipboardData.setData("text/plain", value);
+  }
+
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      return;
+    }
+  }
+}
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   {
@@ -81,11 +114,26 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 
   const handleCopy = (event: ClipboardEvent<HTMLInputElement>) => {
     if (isPasswordField && !isPasswordVisible) {
+      const obfuscatedValue = generateObfuscatedClipboardValue(inputValue.length);
       event.preventDefault();
-      event.clipboardData.setData("text/plain", "••••••••");
+      void writeTextToClipboard(obfuscatedValue, event.clipboardData);
     }
 
     onCopy?.(event);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (
+      isPasswordField &&
+      !isPasswordVisible &&
+      (event.ctrlKey || event.metaKey) &&
+      event.key.toLowerCase() === "c"
+    ) {
+      event.preventDefault();
+      void writeTextToClipboard(generateObfuscatedClipboardValue(inputValue.length));
+    }
+
+    props.onKeyDown?.(event);
   };
 
   const handleClear = (event: MouseEvent<HTMLButtonElement>) => {
@@ -150,6 +198,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         onChange={handleInput}
         onInput={undefined}
         onCopy={handleCopy}
+        onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         defaultValue={isControlled ? undefined : defaultValue}
         value={value}

@@ -17,7 +17,7 @@ import {
   useAuthStore,
   verifyEmailVerificationCode,
 } from "../../features/auth";
-import { Button, Checkbox, Container, Input, Radio } from "../../shared/ui";
+import { Button, Checkbox, CodeInput, Container, Input, Radio } from "../../shared/ui";
 import "./auth.css";
 
 const registerSchema = z
@@ -224,8 +224,6 @@ export function AuthPage() {
     onSuccess: () => {
       const now = Date.now();
 
-      setVerificationCode("");
-      setStep("code");
       setApiError(null);
       setResendCountdown(60);
       if (pendingValues) {
@@ -238,6 +236,7 @@ export function AuthPage() {
       }
     },
     onError: (error: any) => {
+      setResendCountdown(0);
       setApiError(
         error?.response?.data?.error?.message ??
           "Не удалось отправить код подтверждения. Попробуйте позже.",
@@ -320,13 +319,31 @@ export function AuthPage() {
   });
 
   const handleFormSubmit = (values: RegisterFormValues) => {
+    const now = Date.now();
+
     setApiError(null);
     setPendingValues(values);
-    requestCodeMutation.mutate(values.email.trim(), {
-      onError: () => {
-        setPendingValues(null);
-      },
+    setVerificationCode("");
+    setStep("code");
+    setResendCountdown(60);
+    writePersistedVerificationState({
+      values,
+      verificationCode: "",
+      requestedAt: now,
+      expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
     });
+    requestCodeMutation.mutate(
+      { email: values.email.trim(), forceResend: false },
+      {
+        onError: () => {
+          clearPersistedVerificationState();
+          setStep("form");
+          setPendingValues(null);
+          setVerificationCode("");
+          setResendCountdown(0);
+        },
+      },
+    );
   };
 
   const handleVerificationSubmit = () => {
@@ -362,7 +379,7 @@ export function AuthPage() {
     }
 
     setApiError(null);
-    resendCodeMutation.mutate(pendingValues.email.trim(), {
+    resendCodeMutation.mutate({ email: pendingValues.email.trim(), forceResend: true }, {
       onSuccess: () => {},
     });
   };
@@ -525,7 +542,6 @@ export function AuthPage() {
                     type="submit"
                     variant={roleTheme}
                     fullWidth
-                    loading={requestCodeMutation.isPending}
                   >
                     Продолжить
                   </Button>
@@ -535,17 +551,12 @@ export function AuthPage() {
                   <div className="auth-verification">
                     <div className="auth-verification__group">
                       <label className="auth-form__control auth-form__control--verification">
-                        <Input
+                        <CodeInput
                           value={verificationCode}
-                          placeholder="000000"
-                          inputMode="numeric"
-                          maxLength={6}
-                          clearable
-                          className="auth-verification__input"
+                          variant={roleTheme}
                           error={apiError ?? undefined}
                           disabled={completeRegistrationMutation.isPending}
-                          onChange={(event) => {
-                            const nextValue = event.target.value.replace(/\D/g, "").slice(0, 6);
+                          onChange={(nextValue) => {
                             setVerificationCode(nextValue);
                             if (apiError) {
                               setApiError(null);
@@ -556,27 +567,23 @@ export function AuthPage() {
 
                       <div className="auth-verification__meta">
                         <div className="auth-verification__resend-block">
-                          <p className="auth-verification__timer">
-                            Запросить код повторно можно через {resendCountdown} секунд
-                          </p>
-
-                          <button
-                            type="button"
-                            className="auth-verification__resend"
-                            onClick={handleResendCode}
-                            disabled={resendCountdown > 0 || resendCodeMutation.isPending}
-                          >
-                            Запросить код
-                          </button>
+                          {resendCountdown > 0 ? (
+                            <p className="auth-verification__timer">
+                              Запросить код повторно можно через {resendCountdown} секунд
+                            </p>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="secondary-ghost"
+                              size="md"
+                              className="auth-verification__resend"
+                              onClick={handleResendCode}
+                              disabled={resendCodeMutation.isPending}
+                            >
+                              Запросить код повторно
+                            </Button>
+                          )}
                         </div>
-
-                        <button
-                          type="button"
-                          className="auth-verification__link"
-                          onClick={handleBackToForm}
-                        >
-                          Изменить адрес электронной почты
-                        </button>
                       </div>
                     </div>
 
@@ -592,9 +599,14 @@ export function AuthPage() {
                       </Button>
 
                       <div className="auth-verification__actions">
-                        <button type="button" className="auth-verification__link">
+                        <Button
+                          type="button"
+                          variant="secondary-ghost"
+                          size="md"
+                          className="auth-verification__resend"
+                        >
                           Не пришел код подтверждения?
-                        </button>
+                        </Button>
                       </div>
                     </div>
 

@@ -40,9 +40,11 @@ class Settings(BaseSettings):
 
     otp_code_length: int = Field(default=6, alias="OTP_CODE_LENGTH")
     otp_code_ttl_seconds: int = Field(default=900, alias="OTP_CODE_TTL_SECONDS")
-    otp_request_limit: int = Field(default=3, alias="OTP_REQUEST_LIMIT")
+    otp_request_limit: int = Field(default=5, alias="OTP_REQUEST_LIMIT")
     otp_request_window_seconds: int = Field(default=900, alias="OTP_REQUEST_WINDOW_SECONDS")
-    otp_verify_attempt_limit: int = Field(default=5, alias="OTP_VERIFY_ATTEMPT_LIMIT")
+    otp_verify_attempt_limit: int = Field(default=10, alias="OTP_VERIFY_ATTEMPT_LIMIT")
+    otp_verify_window_seconds: int = Field(default=900, alias="OTP_VERIFY_WINDOW_SECONDS")
+    otp_verify_block_seconds: int = Field(default=900, alias="OTP_VERIFY_BLOCK_SECONDS")
 
     auth_email_check_limit: int = Field(default=20, alias="AUTH_EMAIL_CHECK_LIMIT")
     auth_email_check_window_seconds: int = Field(

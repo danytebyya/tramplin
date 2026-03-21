@@ -3,8 +3,11 @@ import re
 from src.services.otp_service import otp_service
 
 
-def _request_code(client, email: str) -> str:
-    response = client.post("/api/v1/auth/email/request-code", json={"email": email})
+def _request_code(client, email: str, *, force_resend: bool = False) -> str:
+    response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": email, "force_resend": force_resend},
+    )
     assert response.status_code == 200
     code = otp_service.consume_debug_code(email, "register")
     assert code is not None
@@ -164,11 +167,17 @@ def test_register_rejects_weak_password(client):
 
 def test_request_code_rate_limit(client):
     email = "limit@example.com"
-    for _ in range(3):
-        response = client.post("/api/v1/auth/email/request-code", json={"email": email})
+    for _ in range(5):
+        response = client.post(
+            "/api/v1/auth/email/request-code",
+            json={"email": email, "force_resend": True},
+        )
         assert response.status_code == 200
 
-    response = client.post("/api/v1/auth/email/request-code", json={"email": email})
+    response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": email, "force_resend": True},
+    )
     assert response.status_code == 429
     assert response.json()["error"]["message"] == "Слишком много запросов кода. Попробуйте позже."
 
@@ -189,7 +198,7 @@ def test_email_check_rate_limit(client):
 def test_verify_code_attempt_limit(client):
     _request_code(client, "attempts@example.com")
 
-    for _ in range(4):
+    for _ in range(9):
         response = client.post(
             "/api/v1/auth/email/verify-code",
             json={"email": "attempts@example.com", "code": "000000"},
@@ -205,6 +214,70 @@ def test_verify_code_attempt_limit(client):
     assert (
         response.json()["error"]["message"]
         == "Превышено число попыток ввода кода. Запросите новый код."
+    )
+
+    blocked_response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": "attempts@example.com", "force_resend": False},
+    )
+    assert blocked_response.status_code == 429
+    assert (
+        blocked_response.json()["error"]["message"]
+        == "Слишком много неудачных попыток подтверждения email. Попробуйте позже."
+    )
+
+
+def test_request_code_does_not_resend_while_code_is_active(client):
+    first_code = _request_code(client, "active@example.com")
+    second_response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": "active@example.com", "force_resend": False},
+    )
+    assert second_response.status_code == 200
+    assert otp_service.consume_debug_code("active@example.com", "register") == first_code
+
+
+def test_request_code_force_resend_rotates_code(client, monkeypatch):
+    generated_codes = iter(["111111", "222222"])
+
+    monkeypatch.setattr(otp_service, "_generate_code", lambda: next(generated_codes))
+    first_code = _request_code(client, "resend@example.com")
+    second_code = _request_code(client, "resend@example.com", force_resend=True)
+    assert second_code != first_code
+
+
+def test_register_is_blocked_after_too_many_invalid_verification_attempts(client):
+    _request_code(client, "blocked-register@example.com")
+
+    for _ in range(10):
+        response = client.post(
+            "/api/v1/auth/email/verify-code",
+            json={"email": "blocked-register@example.com", "code": "000000"},
+        )
+
+    assert response.status_code == 400
+
+    request_response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": "blocked-register@example.com", "force_resend": False},
+    )
+    assert request_response.status_code == 429
+
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "blocked-register@example.com",
+            "display_name": "Blocked Register",
+            "password": "StrongPass123",
+            "verification_code": "000000",
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Blocked Register"},
+        },
+    )
+    assert register_response.status_code == 429
+    assert (
+        register_response.json()["error"]["message"]
+        == "Слишком много неудачных попыток подтверждения email. Попробуйте позже."
     )
 
 

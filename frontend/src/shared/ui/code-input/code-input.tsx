@@ -7,6 +7,7 @@ type CodeInputProps = {
   length?: number;
   error?: string;
   disabled?: boolean;
+  variant?: "primary" | "secondary" | "accent";
   onChange: (value: string) => void;
 };
 
@@ -15,6 +16,7 @@ export function CodeInput({
   length = 6,
   error,
   disabled = false,
+  variant = "primary",
   onChange,
 }: CodeInputProps) {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -130,6 +132,7 @@ export function CodeInput({
             disabled={disabled}
             className={cn(
               "code-input__cell",
+              `code-input__cell--${variant}`,
               error ? "code-input__cell--error" : undefined,
             )}
             aria-label={`Цифра ${index + 1} из ${length}`}
