@@ -439,7 +439,9 @@
 }
 
 .auth-verification__group--actions > .button {
-  width: 100%;
+  width: 680px;
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 .auth-social {

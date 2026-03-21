@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -112,6 +112,7 @@ export function AuthPage() {
   const [verificationCode, setVerificationCode] = useState("");
   const [pendingValues, setPendingValues] = useState<RegisterFormValues | null>(null);
   const [resendCountdown, setResendCountdown] = useState(60);
+  const lastAutoSubmittedCodeRef = useRef<string | null>(null);
 
   const {
     control,
@@ -250,6 +251,7 @@ export function AuthPage() {
       const now = Date.now();
 
       setVerificationCode("");
+      lastAutoSubmittedCodeRef.current = null;
       setApiError(null);
       setResendCountdown(60);
       if (pendingValues) {
@@ -324,6 +326,7 @@ export function AuthPage() {
     setApiError(null);
     setPendingValues(values);
     setVerificationCode("");
+    lastAutoSubmittedCodeRef.current = null;
     setStep("code");
     setResendCountdown(60);
     writePersistedVerificationState({
@@ -340,6 +343,7 @@ export function AuthPage() {
           setStep("form");
           setPendingValues(null);
           setVerificationCode("");
+          lastAutoSubmittedCodeRef.current = null;
           setResendCountdown(0);
         },
       },
@@ -364,11 +368,30 @@ export function AuthPage() {
     });
   };
 
+  useEffect(() => {
+    if (step !== "code" || !pendingValues || completeRegistrationMutation.isPending) {
+      return;
+    }
+
+    if (verificationCode.length !== 6) {
+      lastAutoSubmittedCodeRef.current = null;
+      return;
+    }
+
+    if (lastAutoSubmittedCodeRef.current === verificationCode) {
+      return;
+    }
+
+    lastAutoSubmittedCodeRef.current = verificationCode;
+    handleVerificationSubmit();
+  }, [completeRegistrationMutation.isPending, pendingValues, step, verificationCode]);
+
   const handleBackToForm = () => {
     clearPersistedVerificationState();
     setStep("form");
     setPendingValues(null);
     setVerificationCode("");
+    lastAutoSubmittedCodeRef.current = null;
     setApiError(null);
     setResendCountdown(60);
   };
@@ -565,6 +588,8 @@ export function AuthPage() {
                         />
                       </label>
 
+                      {apiError && <span className="auth-form__error">{apiError}</span>}
+
                       <div className="auth-verification__meta">
                         <div className="auth-verification__resend-block">
                           {resendCountdown > 0 ? (
@@ -609,8 +634,6 @@ export function AuthPage() {
                         </Button>
                       </div>
                     </div>
-
-                    {apiError && <span className="auth-form__error">{apiError}</span>}
                   </div>
                 </div>
               )}
