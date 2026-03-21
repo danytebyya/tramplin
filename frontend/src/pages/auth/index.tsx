@@ -15,7 +15,6 @@ import {
   resolvePostAuthRoute,
   requestEmailVerificationCode,
   useAuthStore,
-  verifyEmailVerificationCode,
 } from "../../features/auth";
 import { Button, Checkbox, CodeInput, Container, Input, Radio } from "../../shared/ui";
 import "./auth.css";
@@ -285,8 +284,6 @@ export function AuthPage() {
       values: RegisterFormValues;
       code: string;
     }) => {
-      await verifyEmailVerificationCode(values.email, code);
-
       await registerRequest({
         email: values.email,
         password: values.password,
