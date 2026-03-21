@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -16,7 +16,7 @@ import {
   useAuthStore,
   verifyEmailVerificationCode,
 } from "../../features/auth";
-import { Button, Checkbox, CodeInput, Container, Input, Radio } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, Radio } from "../../shared/ui";
 import "./auth.css";
 
 const registerSchema = z
@@ -58,6 +58,7 @@ export function AuthPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [pendingValues, setPendingValues] = useState<RegisterFormValues | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(60);
 
   const {
     control,
@@ -82,6 +83,26 @@ export function AuthPage() {
   const inputThemeClassName = roleTheme === "secondary" ? "input--secondary" : undefined;
   const checkboxTheme = roleTheme === "secondary" ? "secondary" : "primary";
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
+
+  useEffect(() => {
+    if (step !== "code") {
+      return;
+    }
+
+    setResendCountdown(60);
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== "code" || resendCountdown <= 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setResendCountdown((current) => current - 1);
+    }, 1000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [resendCountdown, step]);
 
   const requestCodeMutation = useMutation({
     mutationFn: requestEmailVerificationCode,
@@ -194,12 +215,16 @@ export function AuthPage() {
   };
 
   const handleResendCode = () => {
-    if (!pendingValues) {
+    if (!pendingValues || resendCountdown > 0) {
       return;
     }
 
     setApiError(null);
-    resendCodeMutation.mutate(pendingValues.email.trim());
+    resendCodeMutation.mutate(pendingValues.email.trim(), {
+      onSuccess: () => {
+        setResendCountdown(60);
+      },
+    });
   };
 
   const isCodeStep = step === "code" && pendingValues;
@@ -220,12 +245,34 @@ export function AuthPage() {
           <div className="auth-page__panel-content">
             <div className="auth-card">
               <div className="auth-card__header">
-                <h2 className="auth-card__title">
-                  {isCodeStep ? "Подтверждение email" : "Регистрация"}
-                </h2>
-                <p className="auth-card__hint">
-                  Уже есть аккаунт? <Link to="/login">Войти</Link>
-                </p>
+                {isCodeStep ? (
+                  <div className="auth-verification-header">
+                    <button
+                      type="button"
+                      className="auth-verification-header__back"
+                      aria-label="Назад"
+                      onClick={handleBackToForm}
+                    >
+                      <span className="auth-verification-header__back-icon" aria-hidden="true" />
+                    </button>
+                    <div className="auth-verification-header__content">
+                      <h2 className="auth-verification-header__title">
+                        <span className="auth-verification-header__title-accent">Подтверждение</span>{" "}
+                        адреса электронной почты
+                      </h2>
+                      <p className="auth-verification-header__description">
+                        На указанный e-mail было отправлено письмо с кодом подтверждения регистрации
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="auth-card__title">Регистрация</h2>
+                    <p className="auth-card__hint">
+                      Уже есть аккаунт? <Link to="/login">Войти</Link>
+                    </p>
+                  </>
+                )}
               </div>
 
               {!isCodeStep ? (
@@ -336,24 +383,37 @@ export function AuthPage() {
               ) : (
                 <div className="auth-form auth-form--verification">
                   <div className="auth-verification">
-                    <p className="auth-verification__text">
-                      Мы отправили 6-значный код на <strong>{pendingValues.email}</strong>
-                    </p>
-
-                    <label className="auth-form__control">
-                      <span className="auth-form__label">Код подтверждения</span>
-                      <CodeInput
+                    <label className="auth-form__control auth-form__control--verification">
+                      <Input
                         value={verificationCode}
-                        onChange={(nextValue) => {
+                        placeholder="000000"
+                        inputMode="numeric"
+                        maxLength={6}
+                        clearable
+                        className="auth-verification__input"
+                        error={apiError ?? undefined}
+                        disabled={completeRegistrationMutation.isPending}
+                        onChange={(event) => {
+                          const nextValue = event.target.value.replace(/\D/g, "").slice(0, 6);
                           setVerificationCode(nextValue);
                           if (apiError) {
                             setApiError(null);
                           }
                         }}
-                        error={apiError ?? undefined}
-                        disabled={completeRegistrationMutation.isPending}
                       />
                     </label>
+
+                    <p className="auth-verification__timer">
+                      Запросить код повторно можно через {resendCountdown} секунд
+                    </p>
+
+                    <button
+                      type="button"
+                      className="auth-verification__link"
+                      onClick={handleBackToForm}
+                    >
+                      Изменить адрес электронной почты
+                    </button>
 
                     <div className="auth-verification__actions">
                       <Button
@@ -363,20 +423,17 @@ export function AuthPage() {
                         loading={completeRegistrationMutation.isPending}
                         onClick={handleVerificationSubmit}
                       >
-                        Завершить регистрацию
+                        Подтвердить
                       </Button>
-                      <Button
+
+                      <button
                         type="button"
-                        variant={roleTheme === "primary" ? "secondary" : "primary"}
-                        fullWidth
+                        className="auth-verification__link"
                         onClick={handleResendCode}
-                        loading={resendCodeMutation.isPending}
+                        disabled={resendCountdown > 0 || resendCodeMutation.isPending}
                       >
-                        Отправить код ещё раз
-                      </Button>
-                      <Button type="button" variant="ghost" fullWidth onClick={handleBackToForm}>
-                        Изменить данные
-                      </Button>
+                        Не пришел код подтверждения?
+                      </button>
                     </div>
 
                     {apiError && <span className="auth-form__error">{apiError}</span>}
