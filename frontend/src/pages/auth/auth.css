@@ -439,8 +439,13 @@
 }
 
 .auth-verification__group--actions > .button {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.auth-verification__group--actions {
   width: 680px;
-  max-width: 100%;
+  max-width: none;
   margin: 0 auto;
 }
 

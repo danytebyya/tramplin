@@ -109,6 +109,7 @@ export function AuthPage() {
   const setSession = useAuthStore((state) => state.setSession);
   const [step, setStep] = useState<VerificationStep>("form");
   const [apiError, setApiError] = useState<string | null>(null);
+  const [apiErrorCode, setApiErrorCode] = useState<string | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [pendingValues, setPendingValues] = useState<RegisterFormValues | null>(null);
   const [resendCountdown, setResendCountdown] = useState(60);
@@ -138,6 +139,11 @@ export function AuthPage() {
   const inputThemeClassName = roleTheme === "secondary" ? "input--secondary" : undefined;
   const checkboxTheme = roleTheme === "secondary" ? "secondary" : "primary";
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
+  const isTemporarilyRateLimited =
+    apiErrorCode === "AUTH_OTP_REQUEST_LIMIT_REACHED" ||
+    apiErrorCode === "AUTH_OTP_VERIFICATION_BLOCKED";
+  const isRegistrationFormLocked = step === "form" && isTemporarilyRateLimited;
+  const isVerificationLocked = step === "code" && isTemporarilyRateLimited;
 
   useEffect(() => {
     const persistedState = readPersistedVerificationState();
@@ -151,6 +157,7 @@ export function AuthPage() {
     setVerificationCode(persistedState.verificationCode);
     setStep("code");
     setApiError(null);
+    setApiErrorCode(null);
     setResendCountdown(
       Math.max(
         0,
@@ -170,6 +177,7 @@ export function AuthPage() {
       setStep("form");
       setPendingValues(null);
       setVerificationCode("");
+      setApiErrorCode(null);
       setResendCountdown(60);
       return;
     }
@@ -214,6 +222,7 @@ export function AuthPage() {
       setPendingValues(null);
       setVerificationCode("");
       setApiError(null);
+      setApiErrorCode(null);
       setResendCountdown(60);
     }, Math.max(0, persistedState.expiresAt - Date.now()));
 
@@ -226,6 +235,7 @@ export function AuthPage() {
       const now = Date.now();
 
       setApiError(null);
+      setApiErrorCode(null);
       setResendCountdown(60);
       if (pendingValues) {
         writePersistedVerificationState({
@@ -237,6 +247,7 @@ export function AuthPage() {
       }
     },
     onError: (error: any) => {
+      setApiErrorCode(error?.response?.data?.error?.code ?? null);
       setResendCountdown(0);
       setApiError(
         error?.response?.data?.error?.message ??
@@ -253,6 +264,7 @@ export function AuthPage() {
       setVerificationCode("");
       lastAutoSubmittedCodeRef.current = null;
       setApiError(null);
+      setApiErrorCode(null);
       setResendCountdown(60);
       if (pendingValues) {
         writePersistedVerificationState({
@@ -264,6 +276,7 @@ export function AuthPage() {
       }
     },
     onError: (error: any) => {
+      setApiErrorCode(error?.response?.data?.error?.code ?? null);
       setApiError(
         error?.response?.data?.error?.message ??
           "Не удалось отправить код повторно. Попробуйте позже.",
@@ -310,9 +323,11 @@ export function AuthPage() {
       }
 
       clearPersistedVerificationState();
+      setApiErrorCode(null);
       navigate(resolvePostAuthRoute(role, hasEmployerProfile));
     },
     onError: (error: any) => {
+      setApiErrorCode(error?.response?.data?.error?.code ?? null);
       setApiError(
         error?.response?.data?.error?.message ??
           "Не удалось завершить регистрацию. Проверьте код и повторите попытку.",
@@ -324,6 +339,7 @@ export function AuthPage() {
     const now = Date.now();
 
     setApiError(null);
+    setApiErrorCode(null);
     setPendingValues(values);
     setVerificationCode("");
     lastAutoSubmittedCodeRef.current = null;
@@ -362,6 +378,7 @@ export function AuthPage() {
     }
 
     setApiError(null);
+    setApiErrorCode(null);
     completeRegistrationMutation.mutate({
       values: pendingValues,
       code: verificationCode,
@@ -393,6 +410,7 @@ export function AuthPage() {
     setVerificationCode("");
     lastAutoSubmittedCodeRef.current = null;
     setApiError(null);
+    setApiErrorCode(null);
     setResendCountdown(60);
   };
 
@@ -402,6 +420,7 @@ export function AuthPage() {
     }
 
     setApiError(null);
+    setApiErrorCode(null);
     resendCodeMutation.mutate({ email: pendingValues.email.trim(), forceResend: true }, {
       onSuccess: () => {},
     });
@@ -476,6 +495,7 @@ export function AuthPage() {
                         name="register-role"
                         variant="primary"
                         checked={selectedRole === "employer"}
+                        disabled={isRegistrationFormLocked}
                         onChange={() => setValue("role", "employer", { shouldValidate: true })}
                       />
                       <span className="auth-form__role-label">Работодатель</span>
@@ -485,6 +505,7 @@ export function AuthPage() {
                         name="register-role"
                         variant="secondary"
                         checked={selectedRole === "applicant"}
+                        disabled={isRegistrationFormLocked}
                         onChange={() => setValue("role", "applicant", { shouldValidate: true })}
                       />
                       <span className="auth-form__role-label">Соискатель</span>
@@ -500,6 +521,7 @@ export function AuthPage() {
                         error={errors.email?.message}
                         clearable
                         className={inputThemeClassName}
+                        disabled={isRegistrationFormLocked}
                         {...register("email")}
                       />
                       {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
@@ -514,6 +536,7 @@ export function AuthPage() {
                         error={errors.password?.message}
                         clearable
                         className={inputThemeClassName}
+                        disabled={isRegistrationFormLocked}
                         {...register("password")}
                       />
                       {errors.password && (
@@ -530,6 +553,7 @@ export function AuthPage() {
                         error={errors.confirmPassword?.message}
                         clearable
                         className={inputThemeClassName}
+                        disabled={isRegistrationFormLocked}
                         {...register("confirmPassword")}
                       />
                       {errors.confirmPassword && (
@@ -547,6 +571,7 @@ export function AuthPage() {
                           checked={Boolean(field.value)}
                           variant={checkboxTheme}
                           className={errors.acceptTerms ? "checkbox--error" : undefined}
+                          disabled={isRegistrationFormLocked}
                           onBlur={field.onBlur}
                           onChange={(event) => field.onChange(event.target.checked)}
                           ref={field.ref}
@@ -565,6 +590,7 @@ export function AuthPage() {
                     type="submit"
                     variant={roleTheme}
                     fullWidth
+                    disabled={isRegistrationFormLocked}
                   >
                     Продолжить
                   </Button>
@@ -578,11 +604,12 @@ export function AuthPage() {
                           value={verificationCode}
                           variant={roleTheme}
                           error={apiError ?? undefined}
-                          disabled={completeRegistrationMutation.isPending}
+                          disabled={completeRegistrationMutation.isPending || isVerificationLocked}
                           onChange={(nextValue) => {
                             setVerificationCode(nextValue);
                             if (apiError) {
                               setApiError(null);
+                              setApiErrorCode(null);
                             }
                           }}
                         />
@@ -603,7 +630,7 @@ export function AuthPage() {
                               size="md"
                               className="auth-verification__resend"
                               onClick={handleResendCode}
-                              disabled={resendCodeMutation.isPending}
+                              disabled={resendCodeMutation.isPending || isVerificationLocked}
                             >
                               Запросить код повторно
                             </Button>
@@ -617,6 +644,7 @@ export function AuthPage() {
                         type="button"
                         variant={roleTheme}
                         fullWidth
+                        disabled={isVerificationLocked}
                         loading={completeRegistrationMutation.isPending}
                         onClick={handleVerificationSubmit}
                       >
@@ -629,6 +657,7 @@ export function AuthPage() {
                           variant="secondary-ghost"
                           size="md"
                           className="auth-verification__resend"
+                          disabled={isVerificationLocked}
                         >
                           Не пришел код подтверждения?
                         </Button>
