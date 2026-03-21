@@ -9,6 +9,9 @@ from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("JWT_SECRET_KEY", "test_jwt_secret_key_with_at_least_32_chars")
 os.environ.setdefault("EMAIL_TRANSPORT", "log")
+os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite://")
+os.environ.setdefault("OTP_REQUEST_LIMIT", "5")
+os.environ.setdefault("OTP_VERIFY_ATTEMPT_LIMIT", "10")
 
 from src.db.base import Base
 from src.db.session import get_db

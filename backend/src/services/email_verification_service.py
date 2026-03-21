@@ -52,8 +52,6 @@ class EmailVerificationService:
         normalized_email = self._normalize_email(email)
         now = datetime.now(UTC)
 
-        self.ensure_email_check_allowed(ip_address)
-
         state = self.repo.get_or_create(normalized_email, "register")
         self._ensure_not_blocked(state, now)
 
@@ -103,9 +101,6 @@ class EmailVerificationService:
         normalized_email = self._normalize_email(email)
         normalized_code = code.strip()
         now = datetime.now(UTC)
-
-        if ip_address is not None:
-            self.ensure_email_check_allowed(ip_address)
 
         state = self.repo.get_or_create(normalized_email, "register")
         self._ensure_not_blocked(state, now)

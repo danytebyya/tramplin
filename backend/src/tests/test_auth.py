@@ -2,6 +2,7 @@ import re
 
 from sqlalchemy import select
 
+from src.core.config import settings
 from src.models import EmailVerificationState
 
 
@@ -195,6 +196,22 @@ def test_request_code_rate_limit(client):
     assert response.json()["error"]["message"] == "Слишком много запросов кода. Попробуйте позже."
 
 
+def test_request_code_is_not_bound_to_email_check_limit(client, monkeypatch):
+    monkeypatch.setattr(settings, "auth_email_check_limit", 1)
+
+    first_response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": "request-rate-limit@example.com", "force_resend": True},
+    )
+    assert first_response.status_code == 200
+
+    second_response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": "request-rate-limit@example.com", "force_resend": True},
+    )
+    assert second_response.status_code == 200
+
+
 def test_email_check_rate_limit(client):
     for _ in range(20):
         response = client.post("/api/v1/auth/email/check", json={"email": "probe@example.com"})
@@ -229,15 +246,22 @@ def test_verify_code_attempt_limit(client, db_session):
         == "Превышено число попыток ввода кода. Запросите новый код."
     )
 
-    blocked_response = client.post(
-        "/api/v1/auth/email/request-code",
-        json={"email": "attempts@example.com", "force_resend": False},
+
+def test_verify_code_is_not_bound_to_email_check_limit(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "auth_email_check_limit", 1)
+    code = _request_code(client, db_session, "verify-rate-limit@example.com")
+
+    first_response = client.post(
+        "/api/v1/auth/email/verify-code",
+        json={"email": "verify-rate-limit@example.com", "code": code},
     )
-    assert blocked_response.status_code == 429
-    assert (
-        blocked_response.json()["error"]["message"]
-        == "Слишком много неудачных попыток подтверждения email. Попробуйте позже."
+    assert first_response.status_code == 200
+
+    second_response = client.post(
+        "/api/v1/auth/email/verify-code",
+        json={"email": "verify-rate-limit@example.com", "code": code},
     )
+    assert second_response.status_code == 200
 
 
 def test_request_code_does_not_resend_while_code_is_active(client, db_session):
@@ -278,6 +302,10 @@ def test_register_is_blocked_after_too_many_invalid_verification_attempts(client
         json={"email": "blocked-register@example.com", "force_resend": False},
     )
     assert request_response.status_code == 429
+    assert (
+        request_response.json()["error"]["message"]
+        == "Слишком много неудачных попыток подтверждения email. Попробуйте позже."
+    )
 
     register_response = client.post(
         "/api/v1/users",

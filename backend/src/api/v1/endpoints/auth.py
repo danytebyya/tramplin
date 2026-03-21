@@ -18,14 +18,14 @@ from src.utils.responses import success_response
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _serialize_auth_user(user: User) -> dict:
+def _serialize_auth_user(user: User, *, has_employer_profile: bool) -> dict:
     return {
         "id": str(user.id),
         "email": user.email,
         "display_name": user.display_name,
         "role": user.role.value,
         "status": user.status.value,
-        "has_employer_profile": user.employer_profile is not None,
+        "has_employer_profile": has_employer_profile,
     }
 
 
@@ -79,7 +79,10 @@ def create_session(payload: LoginRequest, request: Request, db: Session = Depend
         user_agent=request.headers.get("User-Agent"),
         ip_address=request.client.host if request.client else None,
     )
-    token_data["user"] = _serialize_auth_user(token_data["user"])
+    token_data["user"] = _serialize_auth_user(
+        token_data["user"],
+        has_employer_profile=token_data.pop("has_employer_profile"),
+    )
     return success_response(token_data)
 
 
@@ -91,7 +94,10 @@ def create_tokens(payload: RefreshRequest, request: Request, db: Session = Depen
         user_agent=request.headers.get("User-Agent"),
         ip_address=request.client.host if request.client else None,
     )
-    token_data["user"] = _serialize_auth_user(token_data["user"])
+    token_data["user"] = _serialize_auth_user(
+        token_data["user"],
+        has_employer_profile=token_data.pop("has_employer_profile"),
+    )
     return success_response(token_data)
 
 

@@ -81,7 +81,7 @@ class AuthService:
 
         self._ensure_login_allowed(normalized_email, normalized_ip)
 
-        user = self.user_repo.get_by_email(normalized_email)
+        user = self.user_repo.get_by_email(normalized_email, with_profiles=False)
         if user is None or not verify_password(payload.password, user.password_hash):
             self._register_login_failure(normalized_email, normalized_ip)
             raise AppError(
@@ -119,6 +119,9 @@ class AuthService:
             "token_type": "bearer",
             "expires_in": int((access_exp - datetime.now(UTC)).total_seconds()),
             "user": user,
+            "has_employer_profile": (
+                self.user_repo.has_employer_profile(user.id) if user.role == UserRole.EMPLOYER else False
+            ),
         }
 
     def refresh(self, refresh_token: str, user_agent: str | None, ip_address: str | None) -> dict:
@@ -145,7 +148,7 @@ class AuthService:
                 status_code=401,
             )
 
-        user = self.user_repo.get_by_id(str(payload.get("sub")))
+        user = self.user_repo.get_by_id(str(payload.get("sub")), with_profiles=False)
         if user is None:
             raise AppError(code="AUTH_USER_NOT_FOUND", message="Пользователь не найден", status_code=404)
 
@@ -171,6 +174,9 @@ class AuthService:
             "token_type": "bearer",
             "expires_in": int((access_exp - datetime.now(UTC)).total_seconds()),
             "user": user,
+            "has_employer_profile": (
+                self.user_repo.has_employer_profile(user.id) if user.role == UserRole.EMPLOYER else False
+            ),
         }
 
     def logout(self, user_id: str, refresh_token: str) -> None:
