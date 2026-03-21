@@ -53,10 +53,13 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 type VerificationStep = "form" | "code";
 
 type PersistedVerificationState = {
+  step: VerificationStep;
   values: RegisterFormValues;
   verificationCode: string;
   requestedAt: number;
   expiresAt: number;
+  apiError: string | null;
+  apiErrorCode: string | null;
 };
 
 const EMAIL_VERIFICATION_STORAGE_KEY = "tramplin.auth.email-verification";
@@ -79,6 +82,7 @@ function readPersistedVerificationState(): PersistedVerificationState | null {
 
     if (
       !parsedValue ||
+      (parsedValue.step !== "form" && parsedValue.step !== "code") ||
       !parsedValue.values ||
       typeof parsedValue.verificationCode !== "string" ||
       typeof parsedValue.requestedAt !== "number" ||
@@ -113,6 +117,8 @@ export function AuthPage() {
   const [verificationCode, setVerificationCode] = useState("");
   const [pendingValues, setPendingValues] = useState<RegisterFormValues | null>(null);
   const [resendCountdown, setResendCountdown] = useState(60);
+  const [codeInputFocusTrigger, setCodeInputFocusTrigger] = useState(0);
+  const [codeInputErrorFocusTrigger, setCodeInputErrorFocusTrigger] = useState(0);
   const lastAutoSubmittedCodeRef = useRef<string | null>(null);
 
   const {
@@ -153,11 +159,14 @@ export function AuthPage() {
     }
 
     reset(persistedState.values);
-    setPendingValues(persistedState.values);
+    setPendingValues(persistedState.step === "code" ? persistedState.values : null);
     setVerificationCode(persistedState.verificationCode);
-    setStep("code");
-    setApiError(null);
-    setApiErrorCode(null);
+    setStep(persistedState.step);
+    setApiError(persistedState.apiError);
+    setApiErrorCode(persistedState.apiErrorCode);
+    if (persistedState.step === "code" && !persistedState.verificationCode) {
+      setCodeInputFocusTrigger((current) => current + 1);
+    }
     setResendCountdown(
       Math.max(
         0,
@@ -186,8 +195,10 @@ export function AuthPage() {
       ...persistedState,
       values: pendingValues,
       verificationCode,
+      apiError,
+      apiErrorCode,
     });
-  }, [pendingValues, step, verificationCode]);
+  }, [apiError, apiErrorCode, pendingValues, step, verificationCode]);
 
   useEffect(() => {
     if (step !== "code" || resendCountdown <= 0) {
@@ -231,29 +242,6 @@ export function AuthPage() {
 
   const requestCodeMutation = useMutation({
     mutationFn: requestEmailVerificationCode,
-    onSuccess: () => {
-      const now = Date.now();
-
-      setApiError(null);
-      setApiErrorCode(null);
-      setResendCountdown(60);
-      if (pendingValues) {
-        writePersistedVerificationState({
-          values: pendingValues,
-          verificationCode: "",
-          requestedAt: now,
-          expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
-        });
-      }
-    },
-    onError: (error: any) => {
-      setApiErrorCode(error?.response?.data?.error?.code ?? null);
-      setResendCountdown(0);
-      setApiError(
-        error?.response?.data?.error?.message ??
-          "Не удалось отправить код подтверждения. Попробуйте позже.",
-      );
-    },
   });
 
   const resendCodeMutation = useMutation({
@@ -266,20 +254,25 @@ export function AuthPage() {
       setApiError(null);
       setApiErrorCode(null);
       setResendCountdown(60);
+      setCodeInputFocusTrigger((current) => current + 1);
       if (pendingValues) {
         writePersistedVerificationState({
+          step: "code",
           values: pendingValues,
           verificationCode: "",
           requestedAt: now,
           expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
+          apiError: null,
+          apiErrorCode: null,
         });
       }
     },
     onError: (error: any) => {
       setApiErrorCode(error?.response?.data?.error?.code ?? null);
+      setCodeInputErrorFocusTrigger((current) => current + 1);
       setApiError(
         error?.response?.data?.error?.message ??
-          "Не удалось отправить код повторно. Попробуйте позже.",
+          "Не удалось отправить код подтверждения. Попробуйте позже.",
       );
     },
   });
@@ -335,35 +328,56 @@ export function AuthPage() {
     },
   });
 
-  const handleFormSubmit = (values: RegisterFormValues) => {
+  const handleFormSubmit = async (values: RegisterFormValues) => {
     const now = Date.now();
+
+    if (isRegistrationFormLocked) {
+      return;
+    }
 
     setApiError(null);
     setApiErrorCode(null);
-    setPendingValues(values);
-    setVerificationCode("");
-    lastAutoSubmittedCodeRef.current = null;
-    setStep("code");
-    setResendCountdown(60);
-    writePersistedVerificationState({
-      values,
-      verificationCode: "",
-      requestedAt: now,
-      expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
-    });
-    requestCodeMutation.mutate(
-      { email: values.email.trim(), forceResend: false },
-      {
-        onError: () => {
-          clearPersistedVerificationState();
-          setStep("form");
-          setPendingValues(null);
-          setVerificationCode("");
-          lastAutoSubmittedCodeRef.current = null;
-          setResendCountdown(0);
-        },
-      },
-    );
+    try {
+      await requestCodeMutation.mutateAsync({ email: values.email.trim(), forceResend: false });
+
+      setPendingValues(values);
+      setVerificationCode("");
+      lastAutoSubmittedCodeRef.current = null;
+      setStep("code");
+      setResendCountdown(60);
+      setCodeInputFocusTrigger((current) => current + 1);
+      writePersistedVerificationState({
+        step: "code",
+        values,
+        verificationCode: "",
+        requestedAt: now,
+        expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
+        apiError: null,
+        apiErrorCode: null,
+      });
+    } catch (error: any) {
+      const nextApiErrorCode = error?.response?.data?.error?.code ?? null;
+      const nextApiError =
+        error?.response?.data?.error?.message ??
+        "Не удалось отправить код подтверждения. Попробуйте позже.";
+
+      writePersistedVerificationState({
+        step: "form",
+        values,
+        verificationCode: "",
+        requestedAt: now,
+        expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
+        apiError: nextApiError,
+        apiErrorCode: nextApiErrorCode,
+      });
+      setStep("form");
+      setPendingValues(null);
+      setVerificationCode("");
+      lastAutoSubmittedCodeRef.current = null;
+      setResendCountdown(0);
+      setApiError(nextApiError);
+      setApiErrorCode(nextApiErrorCode);
+    }
   };
 
   const handleVerificationSubmit = () => {
@@ -421,6 +435,10 @@ export function AuthPage() {
 
     setApiError(null);
     setApiErrorCode(null);
+    setVerificationCode("");
+    lastAutoSubmittedCodeRef.current = null;
+    setCodeInputFocusTrigger((current) => current + 1);
+    setResendCountdown(60);
     resendCodeMutation.mutate({ email: pendingValues.email.trim(), forceResend: true }, {
       onSuccess: () => {},
     });
@@ -591,6 +609,7 @@ export function AuthPage() {
                     variant={roleTheme}
                     fullWidth
                     disabled={isRegistrationFormLocked}
+                    loading={requestCodeMutation.isPending}
                   >
                     Продолжить
                   </Button>
@@ -603,6 +622,8 @@ export function AuthPage() {
                         <CodeInput
                           value={verificationCode}
                           variant={roleTheme}
+                          focusTrigger={codeInputFocusTrigger}
+                          errorFocusTrigger={codeInputErrorFocusTrigger}
                           error={apiError ?? undefined}
                           disabled={completeRegistrationMutation.isPending || isVerificationLocked}
                           onChange={(nextValue) => {
@@ -619,22 +640,24 @@ export function AuthPage() {
 
                       <div className="auth-verification__meta">
                         <div className="auth-verification__resend-block">
-                          {resendCountdown > 0 ? (
-                            <p className="auth-verification__timer">
-                              Запросить код повторно можно через {resendCountdown} секунд
-                            </p>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="secondary-ghost"
-                              size="md"
-                              className="auth-verification__resend"
-                              onClick={handleResendCode}
-                              disabled={resendCodeMutation.isPending || isVerificationLocked}
-                            >
-                              Запросить код повторно
-                            </Button>
-                          )}
+                          {!isTemporarilyRateLimited ? (
+                            resendCountdown > 0 ? (
+                              <p className="auth-verification__timer">
+                                Запросить код повторно можно через {resendCountdown} секунд
+                              </p>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="secondary-ghost"
+                                size="md"
+                                className="auth-verification__resend"
+                                onClick={handleResendCode}
+                                disabled={resendCodeMutation.isPending || isVerificationLocked}
+                              >
+                                Запросить код повторно
+                              </Button>
+                            )
+                          ) : null}
                         </div>
                       </div>
                     </div>

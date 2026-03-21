@@ -35,7 +35,7 @@ def check_email_availability(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    service = EmailVerificationService(AuthService(db).user_repo)
+    service = EmailVerificationService(db, AuthService(db).user_repo)
     service.ensure_email_check_allowed(request.client.host if request.client else None)
     return success_response({"exists": not service.check_email_availability(payload.email)})
 
@@ -46,7 +46,7 @@ def request_registration_code(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    service = EmailVerificationService(AuthService(db).user_repo)
+    service = EmailVerificationService(db, AuthService(db).user_repo)
     service.request_registration_code(
         payload.email,
         ip_address=request.client.host if request.client else None,
@@ -61,7 +61,7 @@ def verify_registration_code(
     request: Request,
     db: Session = Depends(get_db),
 ) -> dict:
-    service = EmailVerificationService(AuthService(db).user_repo)
+    service = EmailVerificationService(db, AuthService(db).user_repo)
     service.verify_registration_code(
         payload.email,
         payload.code,

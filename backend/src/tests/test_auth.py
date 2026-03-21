@@ -1,15 +1,22 @@
 import re
 
-from src.services.otp_service import otp_service
+from sqlalchemy import select
+
+from src.models import EmailVerificationState
 
 
-def _request_code(client, email: str, *, force_resend: bool = False) -> str:
+def _request_code(client, db_session, email: str, *, force_resend: bool = False) -> str:
     response = client.post(
         "/api/v1/auth/email/request-code",
         json={"email": email, "force_resend": force_resend},
     )
     assert response.status_code == 200
-    code = otp_service.consume_debug_code(email, "register")
+    code = db_session.execute(
+        select(EmailVerificationState.debug_code).where(
+            EmailVerificationState.email == email,
+            EmailVerificationState.purpose == "register",
+        )
+    ).scalar_one_or_none()
     assert code is not None
     assert re.fullmatch(r"\d{6}", code)
     return code
@@ -21,8 +28,8 @@ def test_check_email_availability(client):
     assert response.json()["data"]["exists"] is False
 
 
-def test_register_applicant(client):
-    code = _request_code(client, "student@example.com")
+def test_register_applicant(client, db_session):
+    code = _request_code(client, db_session, "student@example.com")
     payload = {
         "email": "student@example.com",
         "display_name": "Student One",
@@ -44,8 +51,8 @@ def test_register_applicant(client):
     assert body["data"]["user"]["role"] == "applicant"
 
 
-def test_register_employer_without_profile(client):
-    code = _request_code(client, "hr@example.com")
+def test_register_employer_without_profile(client, db_session):
+    code = _request_code(client, db_session, "hr@example.com")
     payload = {
         "email": "hr@example.com",
         "display_name": "HR",
@@ -59,8 +66,8 @@ def test_register_employer_without_profile(client):
     assert response.json()["data"]["user"]["employer_profile"] is None
 
 
-def test_request_code_rejects_existing_email(client):
-    code = _request_code(client, "taken@example.com")
+def test_request_code_rejects_existing_email(client, db_session):
+    code = _request_code(client, db_session, "taken@example.com")
     register_payload = {
         "email": "taken@example.com",
         "display_name": "Taken User",
@@ -75,11 +82,17 @@ def test_request_code_rejects_existing_email(client):
     response = client.post("/api/v1/auth/email/request-code", json={"email": "taken@example.com"})
     assert response.status_code == 200
     assert response.json()["data"]["message"] == "Код подтверждения отправлен на email"
-    assert otp_service.consume_debug_code("taken@example.com", "register") is None
+    persisted_code = db_session.execute(
+        select(EmailVerificationState.debug_code).where(
+            EmailVerificationState.email == "taken@example.com",
+            EmailVerificationState.purpose == "register",
+        )
+    ).scalar_one_or_none()
+    assert persisted_code is None
 
 
-def test_check_email_returns_exists_for_registered_user(client):
-    code = _request_code(client, "registered@example.com")
+def test_check_email_returns_exists_for_registered_user(client, db_session):
+    code = _request_code(client, db_session, "registered@example.com")
     register_payload = {
         "email": "registered@example.com",
         "display_name": "Registered User",
@@ -96,8 +109,8 @@ def test_check_email_returns_exists_for_registered_user(client):
     assert response.json()["data"]["exists"] is True
 
 
-def test_verify_code_returns_success_without_consuming_code(client):
-    code = _request_code(client, "verify@example.com")
+def test_verify_code_returns_success_without_consuming_code(client, db_session):
+    code = _request_code(client, db_session, "verify@example.com")
     response = client.post(
         "/api/v1/auth/email/verify-code",
         json={"email": "verify@example.com", "code": code},
@@ -149,8 +162,8 @@ def test_register_rejects_invalid_verification_code_format(client):
     assert body["error"]["message"] == "Код подтверждения должен содержать 6 цифр"
 
 
-def test_register_rejects_weak_password(client):
-    code = _request_code(client, "weak@example.com")
+def test_register_rejects_weak_password(client, db_session):
+    code = _request_code(client, db_session, "weak@example.com")
     payload = {
         "email": "weak@example.com",
         "display_name": "Weak User",
@@ -195,8 +208,8 @@ def test_email_check_rate_limit(client):
     )
 
 
-def test_verify_code_attempt_limit(client):
-    _request_code(client, "attempts@example.com")
+def test_verify_code_attempt_limit(client, db_session):
+    _request_code(client, db_session, "attempts@example.com")
 
     for _ in range(9):
         response = client.post(
@@ -227,27 +240,30 @@ def test_verify_code_attempt_limit(client):
     )
 
 
-def test_request_code_does_not_resend_while_code_is_active(client):
-    first_code = _request_code(client, "active@example.com")
+def test_request_code_does_not_resend_while_code_is_active(client, db_session):
+    first_code = _request_code(client, db_session, "active@example.com")
     second_response = client.post(
         "/api/v1/auth/email/request-code",
         json={"email": "active@example.com", "force_resend": False},
     )
     assert second_response.status_code == 200
-    assert otp_service.consume_debug_code("active@example.com", "register") == first_code
+    active_code = db_session.execute(
+        select(EmailVerificationState.debug_code).where(
+            EmailVerificationState.email == "active@example.com",
+            EmailVerificationState.purpose == "register",
+        )
+    ).scalar_one_or_none()
+    assert active_code == first_code
 
 
-def test_request_code_force_resend_rotates_code(client, monkeypatch):
-    generated_codes = iter(["111111", "222222"])
-
-    monkeypatch.setattr(otp_service, "_generate_code", lambda: next(generated_codes))
-    first_code = _request_code(client, "resend@example.com")
-    second_code = _request_code(client, "resend@example.com", force_resend=True)
+def test_request_code_force_resend_rotates_code(client, db_session):
+    first_code = _request_code(client, db_session, "resend@example.com")
+    second_code = _request_code(client, db_session, "resend@example.com", force_resend=True)
     assert second_code != first_code
 
 
-def test_register_is_blocked_after_too_many_invalid_verification_attempts(client):
-    _request_code(client, "blocked-register@example.com")
+def test_register_is_blocked_after_too_many_invalid_verification_attempts(client, db_session):
+    _request_code(client, db_session, "blocked-register@example.com")
 
     for _ in range(10):
         response = client.post(
@@ -281,8 +297,8 @@ def test_register_is_blocked_after_too_many_invalid_verification_attempts(client
     )
 
 
-def test_login_and_refresh_flow(client):
-    code = _request_code(client, "employer@example.com")
+def test_login_and_refresh_flow(client, db_session):
+    code = _request_code(client, db_session, "employer@example.com")
     register_payload = {
         "email": "employer@example.com",
         "display_name": "Employer",
@@ -313,8 +329,8 @@ def test_login_and_refresh_flow(client):
     assert refresh_body["refresh_token"] != login_body["refresh_token"]
 
 
-def test_employer_onboarding_flow(client):
-    code = _request_code(client, "company-owner@example.com")
+def test_employer_onboarding_flow(client, db_session):
+    code = _request_code(client, db_session, "company-owner@example.com")
     register_payload = {
         "email": "company-owner@example.com",
         "display_name": "Company Owner",
@@ -356,8 +372,8 @@ def test_employer_onboarding_flow(client):
     assert me_response.json()["data"]["user"]["employer_profile"]["inn"] == "7707083893"
 
 
-def test_login_rate_limit(client):
-    code = _request_code(client, "limited-login@example.com")
+def test_login_rate_limit(client, db_session):
+    code = _request_code(client, db_session, "limited-login@example.com")
     register_payload = {
         "email": "limited-login@example.com",
         "display_name": "Limited Login",

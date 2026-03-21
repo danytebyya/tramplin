@@ -17,7 +17,7 @@ from src.enums import TokenType, UserRole, UserStatus
 from src.models import ApplicantProfile, RefreshSession, User
 from src.repositories import AuthRepository, UserRepository
 from src.schemas.auth import LoginRequest, RegisterRequest
-from src.services.otp_service import otp_service
+from src.services.email_verification_service import EmailVerificationService
 from src.services.rate_limit_service import rate_limit_service
 from src.utils.errors import AppError
 
@@ -43,7 +43,11 @@ class AuthService:
                 status_code=409,
             )
 
-        otp_service.verify_code(payload.email, "register", payload.verification_code, consume=True)
+        EmailVerificationService(self.db, self.user_repo).verify_registration_code(
+            payload.email,
+            payload.verification_code,
+            consume=True,
+        )
 
         user = User(
             email=payload.email.lower(),

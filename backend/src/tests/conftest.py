@@ -13,7 +13,6 @@ os.environ.setdefault("EMAIL_TRANSPORT", "log")
 from src.db.base import Base
 from src.db.session import get_db
 from src.main import app
-from src.services.otp_service import otp_service
 from src.services.rate_limit_service import rate_limit_service
 
 
@@ -50,8 +49,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture(autouse=True)
 def reset_otp_state() -> Generator[None, None, None]:
-    otp_service.reset()
     rate_limit_service.reset()
     yield
-    otp_service.reset()
     rate_limit_service.reset()
