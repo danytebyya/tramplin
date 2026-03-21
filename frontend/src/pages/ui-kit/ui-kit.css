@@ -27,10 +27,30 @@
   font-weight: 500;
 }
 
+.kit-button-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.kit-button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 .kit-section__group {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
+}
+
+.kit-section__group--buttons {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.kit-section__group--status-buttons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .kit-section__column {
@@ -78,13 +98,22 @@
   position: absolute;
   right: 14px;
   top: 50%;
+  width: 14px;
+  height: 14px;
   transform: translateY(-50%);
-  font-size: 26px;
-  color: #111827;
+  background-color: var(--color-danger);
+  mask-image: url("../../assets/icons/danger.svg");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: url("../../assets/icons/danger.svg");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
 }
 
 .kit-field__icon--disabled {
-  color: #9ca3af;
+  background-color: #9ca3af;
 }
 
 .kit-field--error .input {
@@ -144,6 +173,11 @@
 
 @media (max-width: 1200px) {
   .kit-section__group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kit-section__group--buttons,
+  .kit-section__group--status-buttons {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

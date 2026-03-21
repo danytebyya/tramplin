@@ -1,3 +1,4 @@
+import json
 from functools import lru_cache
 
 from pydantic import Field, field_validator
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
     app_env: str = Field(default="development", alias="APP_ENV")
     app_debug: bool = Field(default=True, alias="APP_DEBUG")
     api_v1_prefix: str = Field(default="/api/v1", alias="API_V1_PREFIX")
+    allowed_origins: list[str] = Field(default_factory=list, alias="ALLOWED_ORIGINS")
 
     database_url: str = Field(
         default="postgresql+psycopg://tramplin_user:tramplin_password@localhost:5432/tramplin",
@@ -88,6 +90,27 @@ class Settings(BaseSettings):
         if normalized_value not in {"log", "smtp"}:
             raise ValueError("EMAIL_TRANSPORT must be either 'log' or 'smtp'")
         return normalized_value
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def validate_allowed_origins(cls, value: str | list[str] | None) -> list[str]:
+        if value is None or value == "":
+            return []
+
+        if isinstance(value, list):
+            return [item.strip() for item in value if item.strip()]
+
+        normalized_value = value.strip()
+        if not normalized_value:
+            return []
+
+        if normalized_value.startswith("["):
+            parsed_value = json.loads(normalized_value)
+            if not isinstance(parsed_value, list):
+                raise ValueError("ALLOWED_ORIGINS must be a JSON array or comma-separated string")
+            return [str(item).strip() for item in parsed_value if str(item).strip()]
+
+        return [item.strip() for item in normalized_value.split(",") if item.strip()]
 
 
 @lru_cache(maxsize=1)

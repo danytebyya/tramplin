@@ -2,11 +2,15 @@ import { InputHTMLAttributes } from "react";
 
 import { cn } from "../../lib";
 
-type SwitchProps = InputHTMLAttributes<HTMLInputElement>;
+type SwitchVariant = "primary" | "secondary" | "accent";
 
-export function Switch({ className, ...props }: SwitchProps) {
+type SwitchProps = InputHTMLAttributes<HTMLInputElement> & {
+  variant?: SwitchVariant;
+};
+
+export function Switch({ className, variant = "primary", ...props }: SwitchProps) {
   return (
-    <label className={cn("switch", className)}>
+    <label className={cn("switch", `switch--${variant}`, className)}>
       <input type="checkbox" className="switch__input" {...props} />
       <span className="switch__track" />
     </label>

@@ -1,157 +1,65 @@
 .wave-aura {
   --wave-aura-primary-rgb: 37, 99, 235;
-  --wave-aura-primary-strong-rgb: 29, 78, 216;
   --wave-aura-primary-soft-rgb: 147, 197, 253;
-  --wave-aura-primary-softest-rgb: 191, 219, 254;
+  --wave-aura-primary-softest-rgb: 219, 234, 254;
   --wave-aura-secondary-rgb: 6, 182, 212;
-  --wave-aura-secondary-strong-rgb: 13, 171, 197;
   --wave-aura-secondary-soft-rgb: 103, 232, 249;
-  --wave-aura-secondary-softest-rgb: 165, 243, 252;
+  --wave-aura-secondary-softest-rgb: 207, 250, 254;
   --wave-aura-dominant-rgb: var(--wave-aura-primary-rgb);
-  --wave-aura-dominant-strong-rgb: var(--wave-aura-primary-strong-rgb);
   --wave-aura-dominant-soft-rgb: var(--wave-aura-primary-soft-rgb);
   --wave-aura-dominant-softest-rgb: var(--wave-aura-primary-softest-rgb);
   --wave-aura-accent-rgb: var(--wave-aura-secondary-rgb);
-  --wave-aura-accent-strong-rgb: var(--wave-aura-secondary-strong-rgb);
   --wave-aura-accent-soft-rgb: var(--wave-aura-secondary-soft-rgb);
   --wave-aura-accent-softest-rgb: var(--wave-aura-secondary-softest-rgb);
-  --wave-aura-core-top: 8rem;
-  --wave-aura-core-left: 11rem;
-  --wave-aura-core-width: 28rem;
-  --wave-aura-core-height: 18rem;
+  --wave-aura-orb-opacity: 0.86;
   --wave-aura-streak-shell-top: 1.2rem;
   --wave-aura-streak-shell-left: 2.2rem;
-  --wave-aura-streak-shell-width: 45rem;
-  --wave-aura-streak-shell-height: 31rem;
+  --wave-aura-streak-shell-width: 38rem;
+  --wave-aura-streak-shell-height: 26rem;
   --wave-aura-streak-shell-bleed: 6rem;
   position: absolute;
   inset: 50% auto auto 50%;
-  width: 50rem;
-  height: 36rem;
+  width: 42rem;
+  height: 30rem;
   pointer-events: none;
-  transform: translate(-52%, -52%);
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  isolation: isolate;
   z-index: 0;
-  filter: saturate(122%);
 }
 
 .wave-aura--secondary {
   --wave-aura-dominant-rgb: var(--wave-aura-secondary-rgb);
-  --wave-aura-dominant-strong-rgb: var(--wave-aura-secondary-strong-rgb);
   --wave-aura-dominant-soft-rgb: var(--wave-aura-secondary-soft-rgb);
   --wave-aura-dominant-softest-rgb: var(--wave-aura-secondary-softest-rgb);
   --wave-aura-accent-rgb: var(--wave-aura-primary-rgb);
-  --wave-aura-accent-strong-rgb: var(--wave-aura-primary-strong-rgb);
   --wave-aura-accent-soft-rgb: var(--wave-aura-primary-soft-rgb);
   --wave-aura-accent-softest-rgb: var(--wave-aura-primary-softest-rgb);
 }
 
-.wave-aura__orbit,
-.wave-aura__blob,
-.wave-aura__core,
+.wave-aura--interactive {
+  --wave-aura-orb-opacity: 0.92;
+}
+
+.wave-aura__orb,
 .wave-aura__streaks,
-.wave-aura__streak,
-.wave-aura__wave,
-.wave-aura__veil {
+.wave-aura__streak {
   position: absolute;
 }
 
-.wave-aura__orbit {
-  inset: 0;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  will-change: transform;
-}
-
-.wave-aura__orbit--outer {
-  animation-name: wave-aura-spin;
-  animation-duration: 28s;
-}
-
-.wave-aura__orbit--middle {
-  animation-name: wave-aura-spin-reverse;
-  animation-duration: 24s;
-}
-
-.wave-aura__orbit--inner {
-  animation-name: wave-aura-spin;
-  animation-duration: 20s;
-}
-
-.wave-aura__orbit--accent {
-  animation-name: wave-aura-drift;
-  animation-duration: 18s;
-}
-
-.wave-aura__blob {
-  border-radius: 42% 58% 57% 43% / 36% 43% 57% 64%;
-  opacity: 0.92;
-  will-change: transform;
-}
-
-.wave-aura__blob--outer {
-  top: 2.5rem;
-  left: 6rem;
-  width: 30rem;
-  height: 21rem;
+.wave-aura__orb {
+  top: 6.2rem;
+  left: 6.8rem;
+  width: 28rem;
+  height: 19rem;
+  border-radius: 50%;
   background:
-    radial-gradient(circle at 34% 34%, rgba(255, 255, 255, 0.62), transparent 18%),
-    radial-gradient(circle at 36% 44%, rgba(var(--wave-aura-dominant-soft-rgb), 0.44), rgba(var(--wave-aura-dominant-rgb), 0.34) 40%, rgba(var(--wave-aura-accent-rgb), 0.2) 58%, rgba(var(--wave-aura-dominant-strong-rgb), 0.14) 72%, transparent 84%);
-  filter: blur(54px);
-  transform: rotate(-18deg) scale(1.1);
-}
-
-.wave-aura__blob--middle {
-  top: 5.5rem;
-  right: 4.5rem;
-  width: 25rem;
-  height: 17rem;
-  background:
-    radial-gradient(circle at 36% 30%, rgba(255, 255, 255, 0.56), transparent 18%),
-    radial-gradient(circle at 48% 48%, rgba(var(--wave-aura-dominant-soft-rgb), 0.38), rgba(var(--wave-aura-dominant-rgb), 0.28) 42%, rgba(var(--wave-aura-accent-soft-rgb), 0.18) 58%, rgba(var(--wave-aura-accent-rgb), 0.12) 70%, transparent 86%);
-  filter: blur(50px);
-  transform: rotate(18deg) scale(1.08);
-}
-
-.wave-aura__blob--inner {
-  top: 8rem;
-  left: 13rem;
-  width: 22rem;
-  height: 15rem;
-  background:
-    radial-gradient(circle at 42% 34%, rgba(255, 255, 255, 0.68), transparent 18%),
-    radial-gradient(circle at 50% 52%, rgba(var(--wave-aura-dominant-softest-rgb), 0.42), rgba(var(--wave-aura-dominant-rgb), 0.26) 44%, rgba(var(--wave-aura-accent-soft-rgb), 0.18) 60%, rgba(var(--wave-aura-accent-rgb), 0.1) 72%, transparent 86%);
-  filter: blur(44px);
-  transform: rotate(-10deg);
-}
-
-.wave-aura__blob--accent {
-  top: 9rem;
-  left: 15rem;
-  width: 19rem;
-  height: 12.5rem;
-  background:
-    radial-gradient(circle at 40% 36%, rgba(255, 255, 255, 0.74), transparent 18%),
-    radial-gradient(circle at 46% 50%, rgba(var(--wave-aura-accent-soft-rgb), 0.28), rgba(var(--wave-aura-accent-rgb), 0.2) 44%, rgba(var(--wave-aura-dominant-rgb), 0.12) 62%, transparent 82%);
-  filter: blur(38px);
-  transform: rotate(8deg);
-}
-
-.wave-aura__core {
-  top: var(--wave-aura-core-top);
-  left: var(--wave-aura-core-left);
-  width: var(--wave-aura-core-width);
-  height: var(--wave-aura-core-height);
-  border-radius: 44% 56% 52% 48% / 42% 40% 60% 58%;
-  background:
-    radial-gradient(circle at 42% 40%, rgba(255, 255, 255, 0.68), transparent 18%),
-    radial-gradient(circle at 48% 52%, rgba(var(--wave-aura-dominant-softest-rgb), 0.48), rgba(var(--wave-aura-dominant-rgb), 0.3) 50%, rgba(var(--wave-aura-accent-soft-rgb), 0.18) 66%, rgba(var(--wave-aura-accent-rgb), 0.12) 78%, transparent 88%);
-  filter: blur(30px);
-  box-shadow:
-    0 0 4.5rem rgba(var(--wave-aura-dominant-rgb), 0.24),
-    0 0 6rem rgba(var(--wave-aura-accent-rgb), 0.08);
-  opacity: 0.84;
-  animation: wave-aura-breathe 14s ease-in-out infinite;
-  will-change: transform, opacity;
+    radial-gradient(circle at 50% 50%, rgba(var(--wave-aura-accent-soft-rgb), 0.38), rgba(var(--wave-aura-dominant-soft-rgb), 0.3) 24%, rgba(var(--wave-aura-dominant-rgb), 0.18) 42%, rgba(var(--wave-aura-accent-rgb), 0.08) 58%, transparent 76%),
+    radial-gradient(circle at 40% 44%, rgba(255, 255, 255, 0.32), transparent 24%),
+    radial-gradient(circle at 60% 56%, rgba(var(--wave-aura-accent-softest-rgb), 0.24), transparent 28%);
+  filter: blur(32px) saturate(106%);
+  opacity: 0.96;
+  transform: scale(1.02);
   z-index: 1;
 }
 
@@ -160,16 +68,19 @@
   left: var(--wave-aura-streak-shell-left);
   width: var(--wave-aura-streak-shell-width);
   height: var(--wave-aura-streak-shell-height);
-  opacity: 0.88;
+  opacity: 1;
   overflow: visible;
   filter: none;
-  z-index: 3;
+  z-index: 2;
 }
 
 .wave-aura__streak {
   --wave-aura-streak-start: 0deg;
   --wave-aura-streak-sweep: 108deg;
   --wave-aura-streak-travel: 24deg;
+  --wave-aura-streak-reveal-start: 0.12;
+  --wave-aura-streak-reveal-peak: 0.4;
+  --wave-aura-streak-reveal-fade: 0.68;
   --wave-aura-streak-duration: 9s;
   --wave-aura-streak-delay: 0s;
   --wave-aura-streak-opacity: 0.5;
@@ -187,7 +98,6 @@
   transform-origin: 50% 50%;
   animation: wave-aura-streak-orbit var(--wave-aura-streak-duration) linear infinite;
   animation-delay: var(--wave-aura-streak-delay);
-  will-change: transform, opacity, filter;
 }
 
 .wave-aura__streak::before,
@@ -200,7 +110,6 @@
   height: var(--wave-aura-streak-band-height);
   border-radius: 999px;
   transform-origin: 50% 50%;
-  mix-blend-mode: screen;
 }
 
 .wave-aura__streak::before {
@@ -233,9 +142,9 @@
       transparent 100%
     );
   box-shadow:
-    0 0 1.4rem rgba(var(--wave-aura-dominant-soft-rgb), 0.12),
-    0 0 3rem rgba(var(--wave-aura-accent-rgb), 0.08);
-  filter: blur(2.4px);
+    0 0 1rem rgba(var(--wave-aura-dominant-soft-rgb), 0.08),
+    0 0 2rem rgba(var(--wave-aura-accent-rgb), 0.05);
+  filter: blur(1.4px);
   transform:
     translate(-50%, -50%)
     rotate(calc(var(--wave-aura-streak-sweep) * 0.5))
@@ -270,9 +179,9 @@
       transparent 100%
     );
   box-shadow:
-    0 0 3.8rem rgba(var(--wave-aura-accent-soft-rgb), 0.1),
-    0 0 5.6rem rgba(var(--wave-aura-dominant-rgb), 0.08);
-  filter: blur(10px);
+    0 0 2.2rem rgba(var(--wave-aura-accent-soft-rgb), 0.08),
+    0 0 3rem rgba(var(--wave-aura-dominant-rgb), 0.05);
+  filter: blur(6px);
   transform:
     translate(-50%, -50%)
     rotate(calc(var(--wave-aura-streak-sweep) * 0.5))
@@ -280,133 +189,13 @@
     scale(2.16, 1.42);
 }
 
-.wave-aura__wave {
-  border-radius: 999px;
-  opacity: 0.34;
-  will-change: transform, opacity;
-  z-index: 2;
-}
-
-.wave-aura__wave--primary {
-  top: 9.8rem;
-  left: 9.8rem;
-  width: 24rem;
-  height: 6rem;
-  background:
-    radial-gradient(ellipse at center, rgba(var(--wave-aura-dominant-softest-rgb), 0.2) 0%, rgba(var(--wave-aura-accent-soft-rgb), 0.14) 28%, transparent 72%);
-  border-top: 1px solid rgba(var(--wave-aura-dominant-softest-rgb), 0.38);
-  filter: blur(2px);
-  transform: rotate(-10deg);
-  animation: wave-aura-wave-primary 16s ease-in-out infinite;
-}
-
-.wave-aura__wave--secondary {
-  top: 13.8rem;
-  left: 12.8rem;
-  width: 20rem;
-  height: 5rem;
-  background:
-    radial-gradient(ellipse at center, rgba(var(--wave-aura-accent-soft-rgb), 0.18) 0%, rgba(var(--wave-aura-dominant-soft-rgb), 0.08) 28%, transparent 72%);
-  border-top: 1px solid rgba(var(--wave-aura-accent-soft-rgb), 0.3);
-  filter: blur(2px);
-  transform: rotate(7deg);
-  animation: wave-aura-wave-secondary 18s ease-in-out infinite;
-}
-
-.wave-aura__wave--tertiary {
-  top: 17.2rem;
-  left: 11rem;
-  width: 22rem;
-  height: 5.4rem;
-  background:
-    radial-gradient(ellipse at center, rgba(var(--wave-aura-dominant-softest-rgb), 0.14) 0%, rgba(var(--wave-aura-accent-softest-rgb), 0.08) 26%, transparent 70%);
-  border-top: 1px solid rgba(var(--wave-aura-dominant-softest-rgb), 0.28);
-  filter: blur(2px);
-  transform: rotate(-6deg);
-  animation: wave-aura-wave-tertiary 14s ease-in-out infinite;
-}
-
-.wave-aura__veil {
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.12),
-    rgba(var(--wave-aura-dominant-soft-rgb), 0.16),
-    rgba(var(--wave-aura-accent-soft-rgb), 0.12),
-    transparent
-  );
-  filter: blur(26px);
-  opacity: 0.44;
-  will-change: transform, opacity;
-  z-index: 4;
-}
-
-.wave-aura__veil--left {
-  top: 12rem;
-  left: 2rem;
-  width: 14rem;
-  height: 7rem;
-  transform: rotate(-22deg);
-  animation: wave-aura-sway-left 16s ease-in-out infinite;
-}
-
-.wave-aura__veil--right {
-  top: 10rem;
-  right: 1rem;
-  width: 16rem;
-  height: 8rem;
-  transform: rotate(28deg);
-  animation: wave-aura-sway-right 18s ease-in-out infinite;
-}
-
-@keyframes wave-aura-spin {
-  from {
-    transform: rotate(0deg) scale(1);
-  }
-  50% {
-    transform: rotate(180deg) scale(1.03);
-  }
-  to {
-    transform: rotate(360deg) scale(1);
-  }
-}
-
-@keyframes wave-aura-spin-reverse {
-  from {
-    transform: rotate(360deg) scale(0.98);
-  }
-  50% {
-    transform: rotate(180deg) scale(1.02);
-  }
-  to {
-    transform: rotate(0deg) scale(0.98);
-  }
-}
-
-@keyframes wave-aura-drift {
-  0% {
-    transform: rotate(0deg) translate3d(0, 0, 0) scale(1);
-  }
-  33% {
-    transform: rotate(120deg) translate3d(0.32rem, -0.36rem, 0) scale(1.03);
-  }
-  66% {
-    transform: rotate(240deg) translate3d(-0.38rem, 0.32rem, 0) scale(0.99);
-  }
-  100% {
-    transform: rotate(360deg) translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes wave-aura-breathe {
-  0%,
-  100% {
-    transform: scale(0.98);
-    opacity: 0.66;
-  }
-  50% {
-    transform: scale(1.04);
-    opacity: 0.82;
+@media (prefers-reduced-motion: reduce) {
+  .wave-aura,
+  .wave-aura *,
+  .wave-aura *::before,
+  .wave-aura *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
@@ -421,7 +210,7 @@
       scale(calc(var(--wave-aura-streak-scale) * 0.965));
   }
   18% {
-    opacity: calc(var(--wave-aura-streak-opacity) * 0.2);
+    opacity: calc(var(--wave-aura-streak-opacity) * max(0, min(1, calc((0.18 - var(--wave-aura-streak-reveal-start)) / max(0.01, calc(var(--wave-aura-streak-reveal-peak) - var(--wave-aura-streak-reveal-start)))))) * 0.72);
     filter: blur(0.46px);
     transform:
       translate(-50%, -50%)
@@ -430,7 +219,7 @@
       scale(calc(var(--wave-aura-streak-scale) * 0.986));
   }
   30% {
-    opacity: calc(var(--wave-aura-streak-opacity) * 0.78);
+    opacity: calc(var(--wave-aura-streak-opacity) * max(0, min(1, calc((0.3 - var(--wave-aura-streak-reveal-start)) / max(0.01, calc(var(--wave-aura-streak-reveal-peak) - var(--wave-aura-streak-reveal-start)))))));
     filter: blur(0.16px);
     transform:
       translate(-50%, -50%)
@@ -439,7 +228,7 @@
       scale(calc(var(--wave-aura-streak-scale) * 1.006));
   }
   40% {
-    opacity: var(--wave-aura-streak-opacity);
+    opacity: calc(var(--wave-aura-streak-opacity) * max(0.22, min(1, calc((var(--wave-aura-streak-reveal-fade) - 0.4) / max(0.01, calc(var(--wave-aura-streak-reveal-fade) - var(--wave-aura-streak-reveal-peak)))))));
     filter: blur(0.08px);
     transform:
       translate(-50%, -50%)
@@ -448,7 +237,7 @@
       scale(calc(var(--wave-aura-streak-scale) * 1.016));
   }
   54% {
-    opacity: calc(var(--wave-aura-streak-opacity) * 0.52);
+    opacity: calc(var(--wave-aura-streak-opacity) * max(0, min(1, calc((var(--wave-aura-streak-reveal-fade) - 0.54) / max(0.01, calc(var(--wave-aura-streak-reveal-fade) - var(--wave-aura-streak-reveal-peak)))))) * 0.9);
     filter: blur(0.22px);
     transform:
       translate(-50%, -50%)
@@ -457,7 +246,7 @@
       scale(calc(var(--wave-aura-streak-scale) * 1.02));
   }
   68% {
-    opacity: calc(var(--wave-aura-streak-opacity) * 0.16);
+    opacity: calc(var(--wave-aura-streak-opacity) * max(0, min(1, calc((var(--wave-aura-streak-reveal-fade) - 0.68) / max(0.01, calc(var(--wave-aura-streak-reveal-fade) - var(--wave-aura-streak-reveal-peak)))))) * 0.44);
     filter: blur(0.38px);
     transform:
       translate(-50%, -50%)
@@ -476,68 +265,8 @@
   }
 }
 
-@keyframes wave-aura-wave-primary {
-  0%,
-  100% {
-    opacity: 0.22;
-    transform: rotate(-10deg) translate3d(0, 0, 0) scaleX(0.96);
-  }
-  50% {
-    opacity: 0.42;
-    transform: rotate(-7deg) translate3d(0.56rem, -0.16rem, 0) scaleX(1.02);
-  }
-}
-
-@keyframes wave-aura-wave-secondary {
-  0%,
-  100% {
-    opacity: 0.18;
-    transform: rotate(7deg) translate3d(0, 0, 0) scaleX(0.94);
-  }
-  50% {
-    opacity: 0.34;
-    transform: rotate(10deg) translate3d(-0.48rem, 0.12rem, 0) scaleX(1.01);
-  }
-}
-
-@keyframes wave-aura-wave-tertiary {
-  0%,
-  100% {
-    opacity: 0.14;
-    transform: rotate(-6deg) translate3d(0, 0, 0) scaleX(0.92);
-  }
-  50% {
-    opacity: 0.3;
-    transform: rotate(-3deg) translate3d(0.58rem, -0.08rem, 0) scaleX(1.02);
-  }
-}
-
-@keyframes wave-aura-sway-left {
-  0%,
-  100% {
-    transform: rotate(-22deg) translate3d(0, 0, 0);
-  }
-  50% {
-    transform: rotate(-17deg) translate3d(0.56rem, -0.2rem, 0);
-  }
-}
-
-@keyframes wave-aura-sway-right {
-  0%,
-  100% {
-    transform: rotate(28deg) translate3d(0, 0, 0);
-  }
-  50% {
-    transform: rotate(23deg) translate3d(-0.56rem, 0.2rem, 0);
-  }
-}
-
 @media (max-width: 1200px) {
   .wave-aura {
-    --wave-aura-core-top: 6.8rem;
-    --wave-aura-core-left: 8.8rem;
-    --wave-aura-core-width: 24rem;
-    --wave-aura-core-height: 15.5rem;
     --wave-aura-streak-shell-top: 0.9rem;
     --wave-aura-streak-shell-left: 1.8rem;
     --wave-aura-streak-shell-width: 38rem;
@@ -546,14 +275,17 @@
     width: 42rem;
     height: 30rem;
   }
+
+  .wave-aura__orb {
+    top: 6rem;
+    left: 6.4rem;
+    width: 27rem;
+    height: 18.4rem;
+  }
 }
 
 @media (max-width: 720px) {
   .wave-aura {
-    --wave-aura-core-top: 4.6rem;
-    --wave-aura-core-left: 5.8rem;
-    --wave-aura-core-width: 16rem;
-    --wave-aura-core-height: 10.4rem;
     --wave-aura-streak-shell-top: 0.6rem;
     --wave-aura-streak-shell-left: 1rem;
     --wave-aura-streak-shell-width: 25.8rem;
@@ -561,7 +293,15 @@
     --wave-aura-streak-shell-bleed: 3.2rem;
     width: 28rem;
     height: 20rem;
-    transform: translate(-50%, -48%);
+    transform: translate(-50%, -42%);
+  }
+
+  .wave-aura__orb {
+    top: 4rem;
+    left: 4.2rem;
+    width: 18.8rem;
+    height: 13rem;
+    filter: blur(24px) saturate(102%);
   }
 
   .wave-aura__streaks {

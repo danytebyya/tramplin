@@ -2,7 +2,7 @@ import { InputHTMLAttributes } from "react";
 
 import { cn } from "../../lib";
 
-type RadioVariant = "primary" | "secondary";
+type RadioVariant = "primary" | "secondary" | "accent";
 
 type RadioProps = InputHTMLAttributes<HTMLInputElement> & {
   variant?: RadioVariant;

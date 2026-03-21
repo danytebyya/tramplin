@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api import api_router
@@ -17,6 +18,15 @@ app = FastAPI(
     openapi_url=f"{settings.api_v1_prefix}/openapi.json",
     docs_url=f"{settings.api_v1_prefix}/docs",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 

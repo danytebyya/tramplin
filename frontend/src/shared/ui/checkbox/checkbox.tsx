@@ -2,7 +2,7 @@ import { InputHTMLAttributes, forwardRef } from "react";
 
 import { cn } from "../../lib";
 
-type CheckboxVariant = "primary" | "secondary";
+type CheckboxVariant = "primary" | "secondary" | "accent";
 
 type CheckboxProps = InputHTMLAttributes<HTMLInputElement> & {
   variant?: CheckboxVariant;

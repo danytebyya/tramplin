@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
+import arrowIcon from "../../assets/icons/arrow.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
   loginRequest,
@@ -51,6 +52,58 @@ const registerSchema = z
 type RegisterFormValues = z.infer<typeof registerSchema>;
 type VerificationStep = "form" | "code";
 
+type PersistedVerificationState = {
+  values: RegisterFormValues;
+  verificationCode: string;
+  requestedAt: number;
+  expiresAt: number;
+};
+
+const EMAIL_VERIFICATION_STORAGE_KEY = "tramplin.auth.email-verification";
+const EMAIL_VERIFICATION_TTL_MS = 15 * 60 * 1000;
+const EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
+
+function clearPersistedVerificationState() {
+  window.sessionStorage.removeItem(EMAIL_VERIFICATION_STORAGE_KEY);
+}
+
+function readPersistedVerificationState(): PersistedVerificationState | null {
+  const rawValue = window.sessionStorage.getItem(EMAIL_VERIFICATION_STORAGE_KEY);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsedValue = JSON.parse(rawValue) as PersistedVerificationState;
+
+    if (
+      !parsedValue ||
+      !parsedValue.values ||
+      typeof parsedValue.verificationCode !== "string" ||
+      typeof parsedValue.requestedAt !== "number" ||
+      typeof parsedValue.expiresAt !== "number"
+    ) {
+      clearPersistedVerificationState();
+      return null;
+    }
+
+    if (parsedValue.expiresAt <= Date.now()) {
+      clearPersistedVerificationState();
+      return null;
+    }
+
+    return parsedValue;
+  } catch {
+    clearPersistedVerificationState();
+    return null;
+  }
+}
+
+function writePersistedVerificationState(state: PersistedVerificationState) {
+  window.sessionStorage.setItem(EMAIL_VERIFICATION_STORAGE_KEY, JSON.stringify(state));
+}
+
 export function AuthPage() {
   const navigate = useNavigate();
   const setSession = useAuthStore((state) => state.setSession);
@@ -64,6 +117,7 @@ export function AuthPage() {
     control,
     register,
     handleSubmit,
+    reset,
     watch,
     setValue,
     formState: { errors },
@@ -85,12 +139,46 @@ export function AuthPage() {
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
 
   useEffect(() => {
-    if (step !== "code") {
+    const persistedState = readPersistedVerificationState();
+
+    if (!persistedState) {
       return;
     }
 
-    setResendCountdown(60);
-  }, [step]);
+    reset(persistedState.values);
+    setPendingValues(persistedState.values);
+    setVerificationCode(persistedState.verificationCode);
+    setStep("code");
+    setApiError(null);
+    setResendCountdown(
+      Math.max(
+        0,
+        Math.ceil((persistedState.requestedAt + EMAIL_RESEND_COOLDOWN_MS - Date.now()) / 1000),
+      ),
+    );
+  }, [reset]);
+
+  useEffect(() => {
+    if (step !== "code" || !pendingValues) {
+      return;
+    }
+
+    const persistedState = readPersistedVerificationState();
+
+    if (!persistedState) {
+      setStep("form");
+      setPendingValues(null);
+      setVerificationCode("");
+      setResendCountdown(60);
+      return;
+    }
+
+    writePersistedVerificationState({
+      ...persistedState,
+      values: pendingValues,
+      verificationCode,
+    });
+  }, [pendingValues, step, verificationCode]);
 
   useEffect(() => {
     if (step !== "code" || resendCountdown <= 0) {
@@ -104,17 +192,55 @@ export function AuthPage() {
     return () => window.clearTimeout(timeoutId);
   }, [resendCountdown, step]);
 
+  useEffect(() => {
+    if (step !== "code") {
+      return;
+    }
+
+    const persistedState = readPersistedVerificationState();
+
+    if (!persistedState) {
+      setStep("form");
+      setPendingValues(null);
+      setVerificationCode("");
+      setResendCountdown(60);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      clearPersistedVerificationState();
+      setStep("form");
+      setPendingValues(null);
+      setVerificationCode("");
+      setApiError(null);
+      setResendCountdown(60);
+    }, Math.max(0, persistedState.expiresAt - Date.now()));
+
+    return () => window.clearTimeout(timeoutId);
+  }, [step]);
+
   const requestCodeMutation = useMutation({
     mutationFn: requestEmailVerificationCode,
     onSuccess: () => {
+      const now = Date.now();
+
       setVerificationCode("");
       setStep("code");
       setApiError(null);
+      setResendCountdown(60);
+      if (pendingValues) {
+        writePersistedVerificationState({
+          values: pendingValues,
+          verificationCode: "",
+          requestedAt: now,
+          expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
+        });
+      }
     },
     onError: (error: any) => {
       setApiError(
         error?.response?.data?.error?.message ??
-          "Не удалось отправить код подтверждения. Попробуйте ещё раз.",
+          "Не удалось отправить код подтверждения. Попробуйте позже.",
       );
     },
   });
@@ -122,8 +248,19 @@ export function AuthPage() {
   const resendCodeMutation = useMutation({
     mutationFn: requestEmailVerificationCode,
     onSuccess: () => {
+      const now = Date.now();
+
       setVerificationCode("");
       setApiError(null);
+      setResendCountdown(60);
+      if (pendingValues) {
+        writePersistedVerificationState({
+          values: pendingValues,
+          verificationCode: "",
+          requestedAt: now,
+          expiresAt: now + EMAIL_VERIFICATION_TTL_MS,
+        });
+      }
     },
     onError: (error: any) => {
       setApiError(
@@ -171,6 +308,7 @@ export function AuthPage() {
         setSession(accessToken, role);
       }
 
+      clearPersistedVerificationState();
       navigate(resolvePostAuthRoute(role, hasEmployerProfile));
     },
     onError: (error: any) => {
@@ -183,9 +321,10 @@ export function AuthPage() {
 
   const handleFormSubmit = (values: RegisterFormValues) => {
     setApiError(null);
+    setPendingValues(values);
     requestCodeMutation.mutate(values.email.trim(), {
-      onSuccess: () => {
-        setPendingValues(values);
+      onError: () => {
+        setPendingValues(null);
       },
     });
   };
@@ -209,9 +348,12 @@ export function AuthPage() {
   };
 
   const handleBackToForm = () => {
+    clearPersistedVerificationState();
     setStep("form");
+    setPendingValues(null);
     setVerificationCode("");
     setApiError(null);
+    setResendCountdown(60);
   };
 
   const handleResendCode = () => {
@@ -221,29 +363,35 @@ export function AuthPage() {
 
     setApiError(null);
     resendCodeMutation.mutate(pendingValues.email.trim(), {
-      onSuccess: () => {
-        setResendCountdown(60);
-      },
+      onSuccess: () => {},
     });
   };
 
   const isCodeStep = step === "code" && pendingValues;
 
   return (
-    <main className={`auth-page ${roleTheme === "secondary" ? "auth-page--secondary-theme" : ""}`}>
+    <main
+      className={`auth-page ${roleTheme === "secondary" ? "auth-page--secondary-theme" : ""} ${
+        isCodeStep ? "auth-page--verification" : ""
+      }`}
+    >
       <Container className="auth-page__content" variant="auth-page">
-        <section className="auth-page__hero">
-          <div className="auth-page__hero-content">
-            <div className="auth-page__brand-stage">
-              <WaveAuraBackground variant={roleTheme} withInteractionOrb />
-              <span className="auth-page__brand">Трамплин</span>
+        {!isCodeStep ? (
+          <section className="auth-page__hero">
+            <div className="auth-page__hero-content">
+              <div className="auth-page__brand-stage">
+                <WaveAuraBackground variant={roleTheme} withInteractionOrb />
+                <span className="auth-page__brand">Трамплин</span>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
-        <section className="auth-page__panel">
+        <section
+          className={`auth-page__panel ${isCodeStep ? "auth-page__panel--verification" : ""}`}
+        >
           <div className="auth-page__panel-content">
-            <div className="auth-card">
+            <div className={`auth-card ${isCodeStep ? "auth-card--verification" : ""}`}>
               <div className="auth-card__header">
                 {isCodeStep ? (
                   <div className="auth-verification-header">
@@ -253,7 +401,12 @@ export function AuthPage() {
                       aria-label="Назад"
                       onClick={handleBackToForm}
                     >
-                      <span className="auth-verification-header__back-icon" aria-hidden="true" />
+                      <img
+                        src={arrowIcon}
+                        alt=""
+                        className="auth-verification-header__back-icon"
+                        aria-hidden="true"
+                      />
                     </button>
                     <div className="auth-verification-header__content">
                       <h2 className="auth-verification-header__title">
@@ -353,6 +506,7 @@ export function AuthPage() {
                         <Checkbox
                           checked={Boolean(field.value)}
                           variant={checkboxTheme}
+                          className={errors.acceptTerms ? "checkbox--error" : undefined}
                           onBlur={field.onBlur}
                           onChange={(event) => field.onChange(event.target.checked)}
                           ref={field.ref}
@@ -365,10 +519,6 @@ export function AuthPage() {
                       <Link to="/privacy">политикой конфиденциальности</Link>
                     </span>
                   </label>
-
-                  {errors.acceptTerms && (
-                    <span className="auth-form__error">{errors.acceptTerms.message}</span>
-                  )}
                   {apiError && <span className="auth-form__error">{apiError}</span>}
 
                   <Button
@@ -383,39 +533,54 @@ export function AuthPage() {
               ) : (
                 <div className="auth-form auth-form--verification">
                   <div className="auth-verification">
-                    <label className="auth-form__control auth-form__control--verification">
-                      <Input
-                        value={verificationCode}
-                        placeholder="000000"
-                        inputMode="numeric"
-                        maxLength={6}
-                        clearable
-                        className="auth-verification__input"
-                        error={apiError ?? undefined}
-                        disabled={completeRegistrationMutation.isPending}
-                        onChange={(event) => {
-                          const nextValue = event.target.value.replace(/\D/g, "").slice(0, 6);
-                          setVerificationCode(nextValue);
-                          if (apiError) {
-                            setApiError(null);
-                          }
-                        }}
-                      />
-                    </label>
+                    <div className="auth-verification__group">
+                      <label className="auth-form__control auth-form__control--verification">
+                        <Input
+                          value={verificationCode}
+                          placeholder="000000"
+                          inputMode="numeric"
+                          maxLength={6}
+                          clearable
+                          className="auth-verification__input"
+                          error={apiError ?? undefined}
+                          disabled={completeRegistrationMutation.isPending}
+                          onChange={(event) => {
+                            const nextValue = event.target.value.replace(/\D/g, "").slice(0, 6);
+                            setVerificationCode(nextValue);
+                            if (apiError) {
+                              setApiError(null);
+                            }
+                          }}
+                        />
+                      </label>
 
-                    <p className="auth-verification__timer">
-                      Запросить код повторно можно через {resendCountdown} секунд
-                    </p>
+                      <div className="auth-verification__meta">
+                        <div className="auth-verification__resend-block">
+                          <p className="auth-verification__timer">
+                            Запросить код повторно можно через {resendCountdown} секунд
+                          </p>
 
-                    <button
-                      type="button"
-                      className="auth-verification__link"
-                      onClick={handleBackToForm}
-                    >
-                      Изменить адрес электронной почты
-                    </button>
+                          <button
+                            type="button"
+                            className="auth-verification__resend"
+                            onClick={handleResendCode}
+                            disabled={resendCountdown > 0 || resendCodeMutation.isPending}
+                          >
+                            Запросить код
+                          </button>
+                        </div>
 
-                    <div className="auth-verification__actions">
+                        <button
+                          type="button"
+                          className="auth-verification__link"
+                          onClick={handleBackToForm}
+                        >
+                          Изменить адрес электронной почты
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="auth-verification__group auth-verification__group--actions">
                       <Button
                         type="button"
                         variant={roleTheme}
@@ -426,14 +591,11 @@ export function AuthPage() {
                         Подтвердить
                       </Button>
 
-                      <button
-                        type="button"
-                        className="auth-verification__link"
-                        onClick={handleResendCode}
-                        disabled={resendCountdown > 0 || resendCodeMutation.isPending}
-                      >
-                        Не пришел код подтверждения?
-                      </button>
+                      <div className="auth-verification__actions">
+                        <button type="button" className="auth-verification__link">
+                          Не пришел код подтверждения?
+                        </button>
+                      </div>
                     </div>
 
                     {apiError && <span className="auth-form__error">{apiError}</span>}

@@ -17,7 +17,7 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     if credentials is None:
-        raise AppError(code="AUTH_UNAUTHORIZED", message="Missing bearer token", status_code=401)
+        raise AppError(code="AUTH_UNAUTHORIZED", message="Требуется access token", status_code=401)
 
     token = credentials.credentials
 
@@ -28,10 +28,10 @@ def get_current_user(
 
     user_id = payload.get("sub")
     if user_id is None:
-        raise AppError(code="AUTH_UNAUTHORIZED", message="Invalid token subject", status_code=401)
+        raise AppError(code="AUTH_UNAUTHORIZED", message="Некорректный токен доступа", status_code=401)
 
     user = UserRepository(db).get_by_id(user_id)
     if user is None:
-        raise AppError(code="AUTH_UNAUTHORIZED", message="User not found", status_code=401)
+        raise AppError(code="AUTH_UNAUTHORIZED", message="Пользователь не найден", status_code=401)
 
     return user

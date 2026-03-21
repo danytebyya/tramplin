@@ -3,7 +3,18 @@ import { ReactNode } from "react";
 
 import { cn } from "../../lib";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success";
+type ButtonVariant =
+  | "primary"
+  | "primary-outline"
+  | "ghost"
+  | "secondary"
+  | "secondary-outline"
+  | "secondary-ghost"
+  | "accent"
+  | "accent-outline"
+  | "accent-ghost"
+  | "danger"
+  | "success";
 type ButtonSize = "sm" | "md";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

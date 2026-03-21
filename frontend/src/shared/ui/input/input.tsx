@@ -1,5 +1,6 @@
 import {
   ChangeEvent,
+  ClipboardEvent,
   FocusEvent,
   InputHTMLAttributes,
   MouseEvent,
@@ -17,7 +18,19 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
 };
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, error, onFocus, onBlur, onInput, onChange, clearable = true, defaultValue, value, ...props },
+  {
+    className,
+    error,
+    onFocus,
+    onBlur,
+    onInput,
+    onChange,
+    onCopy,
+    clearable = true,
+    defaultValue,
+    value,
+    ...props
+  },
   ref,
 ) {
   const [isFocused, setIsFocused] = useState(false);
@@ -64,6 +77,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     setIsFocused(false);
     setHasChangedWhileFocused(false);
     onBlur?.(event);
+  };
+
+  const handleCopy = (event: ClipboardEvent<HTMLInputElement>) => {
+    if (isPasswordField && !isPasswordVisible) {
+      event.preventDefault();
+      event.clipboardData.setData("text/plain", "••••••••");
+    }
+
+    onCopy?.(event);
   };
 
   const handleClear = (event: MouseEvent<HTMLButtonElement>) => {
@@ -127,6 +149,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         onFocus={handleFocus}
         onChange={handleInput}
         onInput={undefined}
+        onCopy={handleCopy}
         onBlur={handleBlur}
         defaultValue={isControlled ? undefined : defaultValue}
         value={value}
