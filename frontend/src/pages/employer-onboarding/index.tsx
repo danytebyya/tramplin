@@ -1,13 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChangeEvent, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
+import { meRequest } from "../../features/auth";
 import { upsertEmployerProfile } from "../../features/company-verification";
-import { Button, Checkbox, Container, Input } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, Radio } from "../../shared/ui";
 import "../auth/auth.css";
 import "./employer-onboarding.css";
 
@@ -16,11 +17,6 @@ const employerOnboardingSchema = z
     employerType: z.enum(["company", "sole_proprietor"]),
     companyName: z.string().trim().min(1, "Обязательное поле"),
     inn: z.string().trim().min(1, "Обязательное поле"),
-    corporateEmail: z
-      .string()
-      .trim()
-      .min(1, "Обязательное поле")
-      .email("Введите корректный email"),
     website: z
       .string()
       .trim()
@@ -74,8 +70,11 @@ export function EmployerOnboardingPage() {
 
   const {
     control,
+    getValues,
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<EmployerOnboardingValues>({
     resolver: zodResolver(employerOnboardingSchema),
@@ -83,11 +82,18 @@ export function EmployerOnboardingPage() {
       employerType: "company",
       companyName: "",
       inn: "",
-      corporateEmail: "",
       website: "",
       socialLink: "",
       confirmation: true,
     },
+  });
+
+  const selectedEmployerType = watch("employerType");
+  const innDigitsLimit = selectedEmployerType === "sole_proprietor" ? 10 : 12;
+  const currentUserQuery = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: meRequest,
+    staleTime: 5 * 60 * 1000,
   });
 
   const onboardingMutation = useMutation({
@@ -104,12 +110,19 @@ export function EmployerOnboardingPage() {
   });
 
   const handleOnboardingSubmit = (values: EmployerOnboardingValues) => {
+    const currentUserEmail = currentUserQuery.data?.data?.user?.email?.trim();
+
+    if (!currentUserEmail) {
+      setApiError("Не удалось получить email текущего пользователя. Обновите страницу и попробуйте ещё раз.");
+      return;
+    }
+
     setApiError(null);
     onboardingMutation.mutate({
       employer_type: values.employerType,
       company_name: values.companyName.trim(),
       inn: values.inn.replace(/\D/g, ""),
-      corporate_email: values.corporateEmail.trim(),
+      corporate_email: currentUserEmail,
       website: values.website?.trim() || undefined,
     });
   };
@@ -117,6 +130,13 @@ export function EmployerOnboardingPage() {
   const handleDocumentChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextFile = event.target.files?.[0];
     setDocumentName(nextFile?.name ?? "");
+  };
+
+  const handleEmployerTypeChange = (nextEmployerType: EmployerOnboardingValues["employerType"]) => {
+    const nextInnValue = getValues("inn").replace(/\D/g, "").slice(0, nextEmployerType === "sole_proprietor" ? 10 : 12);
+
+    setValue("employerType", nextEmployerType, { shouldValidate: true });
+    setValue("inn", nextInnValue, { shouldValidate: true, shouldDirty: true });
   };
 
   return (
@@ -136,19 +156,43 @@ export function EmployerOnboardingPage() {
                   работодателя
                 </h2>
                 <p className="auth-verification-header__description employer-onboarding-card__description">
-                  Заполните данные компании для проверки. После отправки заявки мы сверим информацию и
-                  подтвердим профиль работодателя.
+                  Добавьте данные компании, и мы проверим их в течение часа. После этого профиль работодателя будет активирован.
                 </p>
               </div>
 
               <form className="auth-form" onSubmit={handleSubmit(handleOnboardingSubmit)}>
+                <div
+                  className="auth-form__roles employer-onboarding-form__roles"
+                  role="radiogroup"
+                  aria-label="Тип работодателя"
+                >
+                  <label className="auth-form__role">
+                    <Radio
+                      name="employer-type"
+                      variant="primary"
+                      checked={selectedEmployerType === "company"}
+                      onChange={() => handleEmployerTypeChange("company")}
+                    />
+                    <span className="auth-form__role-label">Компания</span>
+                  </label>
+                  <label className="auth-form__role">
+                    <Radio
+                      name="employer-type"
+                      variant="primary"
+                      checked={selectedEmployerType === "sole_proprietor"}
+                      onChange={() => handleEmployerTypeChange("sole_proprietor")}
+                    />
+                    <span className="auth-form__role-label">ИП</span>
+                  </label>
+                </div>
+
                 <div className="auth-form__fields employer-onboarding-form__fields">
                   <label className="auth-form__control employer-onboarding-form__control">
                     <span className="auth-form__label employer-onboarding-form__label">
                       Название компании
                     </span>
                     <Input
-                      placeholder="Например: ООО Трамплин"
+                      placeholder='Например: ООО "Трамплин"'
                       error={errors.companyName?.message}
                       clearable
                       {...register("companyName")}
@@ -159,31 +203,20 @@ export function EmployerOnboardingPage() {
                   </label>
 
                   <label className="auth-form__control employer-onboarding-form__control">
-                    <span className="auth-form__label employer-onboarding-form__label">ИНН/ОГРН</span>
+                    <span className="auth-form__label employer-onboarding-form__label">ИНН</span>
                     <Input
-                      placeholder="Например: 7707083893"
+                      placeholder={selectedEmployerType === "sole_proprietor" ? "10 цифр" : "12 цифр"}
                       inputMode="numeric"
+                      maxLength={innDigitsLimit}
                       error={errors.inn?.message}
                       clearable
-                      {...register("inn")}
+                      {...register("inn", {
+                        onChange: (event) => {
+                          event.target.value = event.target.value.replace(/\D/g, "").slice(0, innDigitsLimit);
+                        },
+                      })}
                     />
                     {errors.inn && <span className="auth-form__error">{errors.inn.message}</span>}
-                  </label>
-
-                  <label className="auth-form__control employer-onboarding-form__control">
-                    <span className="auth-form__label employer-onboarding-form__label">
-                      Корпоративная почта
-                    </span>
-                    <Input
-                      placeholder="Например: hr@tramplin.ru"
-                      autoComplete="email"
-                      error={errors.corporateEmail?.message}
-                      clearable
-                      {...register("corporateEmail")}
-                    />
-                    {errors.corporateEmail && (
-                      <span className="auth-form__error">{errors.corporateEmail.message}</span>
-                    )}
                   </label>
 
                   <label className="auth-form__control employer-onboarding-form__control">

@@ -1,11 +1,12 @@
 .employer-onboarding-page {
   position: relative;
+  min-height: 100vh;
   overflow: visible;
   isolation: isolate;
 }
 
 .employer-onboarding-page__background {
-  position: fixed;
+  position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
@@ -78,6 +79,10 @@
   gap: 18px;
 }
 
+.employer-onboarding-form__roles {
+  gap: 40px;
+}
+
 .employer-onboarding-form__control {
   gap: 10px;
 }
@@ -148,9 +153,9 @@
 }
 
 .employer-onboarding-form__terms {
-  justify-content: center;
-  max-width: 720px;
-  margin: 0 auto;
+  justify-content: flex-start;
+  max-width: 100%;
+  margin: 0;
   font-size: 18px;
   line-height: 28px;
 }
