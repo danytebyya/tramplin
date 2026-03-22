@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import { upsertEmployerProfile } from "../../features/company-verification";
 import { Button, Checkbox, Container, Input } from "../../shared/ui";
 import "../auth/auth.css";
@@ -120,6 +121,11 @@ export function EmployerOnboardingPage() {
 
   return (
     <main className="auth-page auth-page--verification employer-onboarding-page">
+      <div className="employer-onboarding-page__background" aria-hidden="true">
+        <div className="employer-onboarding-page__background-aura">
+          <WaveAuraBackground />
+        </div>
+      </div>
       <Container className="auth-page__content" variant="auth-page">
         <section className="auth-page__panel employer-onboarding-page__panel">
           <div className="auth-page__panel-content">
