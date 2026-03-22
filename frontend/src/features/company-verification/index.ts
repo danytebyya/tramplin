@@ -9,6 +9,24 @@ export type EmployerOnboardingPayload = {
   website?: string;
 };
 
+export type EmployerInnVerificationPayload = {
+  employer_type: "company" | "sole_proprietor";
+  inn: string;
+};
+
+export type EmployerInnVerificationResponse = {
+  data?: {
+    verification?: {
+      inn?: string;
+      name?: string;
+      ogrn?: string | null;
+      address?: string | null;
+      type?: string | null;
+      status?: string | null;
+    };
+  };
+};
+
 function getAuthorizedHeaders() {
   const accessToken = useAuthStore.getState().accessToken;
 
@@ -21,6 +39,15 @@ function getAuthorizedHeaders() {
 
 export async function upsertEmployerProfile(payload: EmployerOnboardingPayload) {
   const response = await apiClient.put("/companies/profile", payload, {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
+export async function verifyEmployerInn(
+  payload: EmployerInnVerificationPayload,
+): Promise<EmployerInnVerificationResponse> {
+  const response = await apiClient.post("/companies/verify-inn", payload, {
     headers: getAuthorizedHeaders(),
   });
   return response.data;

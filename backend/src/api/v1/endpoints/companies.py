@@ -3,13 +3,34 @@ from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_user
 from src.db import get_db
+from src.enums import UserRole
 from src.models import User
-from src.schemas.company import EmployerOnboardingRequest
+from src.schemas.company import EmployerInnVerificationRequest, EmployerOnboardingRequest
 from src.schemas.user import UserRead
-from src.services import EmployerService
+from src.services import DadataService, EmployerService
+from src.utils.errors import AppError
 from src.utils.responses import success_response
 
 router = APIRouter(prefix="/companies", tags=["companies"])
+
+
+@router.post("/verify-inn", status_code=status.HTTP_200_OK)
+def verify_employer_inn(
+    payload: EmployerInnVerificationRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if current_user.role != UserRole.EMPLOYER:
+        raise AppError(
+            code="EMPLOYER_PROFILE_FORBIDDEN",
+            message="Профиль работодателя доступен только работодателям",
+            status_code=403,
+        )
+
+    verification_result = DadataService().verify_inn(
+        inn=payload.inn,
+        employer_type=payload.employer_type,
+    )
+    return success_response({"verification": verification_result})
 
 
 @router.put("/profile", status_code=status.HTTP_200_OK)

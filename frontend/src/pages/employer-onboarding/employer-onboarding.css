@@ -96,10 +96,40 @@ body.employer-onboarding-page-root {
   gap: 10px;
 }
 
-.employer-onboarding-form__label {
-  margin-left: 0;
-  font-size: 20px;
-  line-height: 28px;
+.employer-onboarding-form__input-status {
+  position: relative;
+}
+
+.employer-onboarding-form__input--with-status.input {
+  padding-right: 44px;
+}
+
+.employer-onboarding-form__status {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+}
+
+.employer-onboarding-form__status--loading {
+  border: 2px solid var(--color-text-tertiary);
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: button-spinner 0.8s linear infinite;
+}
+
+.employer-onboarding-form__status--verified {
+  background-color: var(--color-success);
+  mask-image: url("../../assets/icons/check-mark.svg");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: url("../../assets/icons/check-mark.svg");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
 }
 
 .employer-onboarding-form__required {
@@ -117,33 +147,35 @@ body.employer-onboarding-page-root {
 }
 
 .employer-onboarding-upload__dropzone {
+  --employer-onboarding-upload-focus: var(--color-primary);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 24px;
   min-height: 190px;
   padding: 32px;
   border: 1px dashed var(--color-border);
   border-radius: 18px;
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--color-text-tertiary);
   cursor: pointer;
-  transition: border-color var(--transition-base), background-color var(--transition-base);
+  transition: border-color var(--transition-base), color var(--transition-base);
 }
 
 .employer-onboarding-upload__dropzone:hover {
-  border-color: rgba(37, 99, 235, 0.45);
-  background: rgba(239, 246, 255, 0.7);
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
 }
 
 .employer-onboarding-upload__dropzone:active {
-  border-color: rgba(37, 99, 235, 0.6);
+  border-color: var(--employer-onboarding-upload-focus);
+  color: var(--color-text-primary);
 }
 
 .employer-onboarding-upload__dropzone:focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.45);
-  outline-offset: 3px;
+  border-color: var(--employer-onboarding-upload-focus);
+  outline: none;
 }
 
 .employer-onboarding-upload__description {
@@ -156,7 +188,10 @@ body.employer-onboarding-page-root {
 .employer-onboarding-upload__icon {
   display: block;
   width: 18px;
-  object-fit: contain;
+  height: 18px;
+  color: inherit;
+  fill: currentColor;
+  flex-shrink: 0;
 }
 
 .employer-onboarding-form__terms {

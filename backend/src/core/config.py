@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
     smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
     smtp_timeout_seconds: int = Field(default=10, alias="SMTP_TIMEOUT_SECONDS")
+    dadata_api_key: str | None = Field(default=None, alias="DADATA_API_KEY")
+    dadata_suggestions_url: str = Field(
+        default="https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/party",
+        alias="DADATA_SUGGESTIONS_URL",
+    )
+    dadata_timeout_seconds: int = Field(default=5, alias="DADATA_TIMEOUT_SECONDS")
 
     @field_validator("jwt_secret_key")
     @classmethod

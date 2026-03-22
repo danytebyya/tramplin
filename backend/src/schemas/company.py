@@ -34,3 +34,26 @@ class EmployerOnboardingRequest(BaseModel):
 
         normalized_value = value.strip()
         return normalized_value or None
+
+
+class EmployerInnVerificationRequest(BaseModel):
+    employer_type: EmployerType
+    inn: str = Field(min_length=10, max_length=12)
+
+    @field_validator("inn")
+    @classmethod
+    def validate_inn(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if not normalized_value.isdigit() or len(normalized_value) not in {10, 12}:
+            raise ValueError("ИНН должен содержать 10 или 12 цифр")
+        return normalized_value
+
+    @field_validator("inn")
+    @classmethod
+    def validate_inn_length_by_employer_type(cls, value: str, info) -> str:
+        employer_type = info.data.get("employer_type")
+        if employer_type == EmployerType.SOLE_PROPRIETOR and len(value) != 10:
+            raise ValueError("Для ИП ИНН должен содержать 10 цифр")
+        if employer_type == EmployerType.COMPANY and len(value) != 12:
+            raise ValueError("Для компании ИНН должен содержать 12 цифр")
+        return value
