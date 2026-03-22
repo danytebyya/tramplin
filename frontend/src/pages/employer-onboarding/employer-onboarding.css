@@ -71,7 +71,6 @@ body.employer-onboarding-page-root {
   flex-direction: column;
   align-items: stretch;
   min-height: auto;
-  padding-bottom: 48px;
 }
 
 .employer-onboarding-card {
@@ -101,6 +100,10 @@ body.employer-onboarding-page-root {
   margin-left: 0;
   font-size: 20px;
   line-height: 28px;
+}
+
+.employer-onboarding-form__required {
+  color: var(--color-primary);
 }
 
 .employer-onboarding-upload {
@@ -144,7 +147,7 @@ body.employer-onboarding-page-root {
 }
 
 .employer-onboarding-upload__description {
-  max-width: 420px;
+  max-width: 560px;
   text-align: center;
   font-size: 18px;
   line-height: 28px;

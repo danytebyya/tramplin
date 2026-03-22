@@ -26,8 +26,8 @@ const employerOnboardingSchema = z
     socialLink: z
       .string()
       .trim()
-      .optional()
-      .refine((value) => !value || /^https?:\/\//.test(value), "Укажите ссылку с http:// или https://"),
+      .min(1, "Обязательное поле")
+      .refine((value) => /^https?:\/\//.test(value), "Укажите ссылку с http:// или https://"),
     confirmation: z.literal(true, {
       errorMap: () => ({ message: "Подтвердите достоверность данных" }),
     }),
@@ -202,7 +202,7 @@ export function EmployerOnboardingPage() {
                 <div className="auth-form__fields employer-onboarding-form__fields">
                   <label className="auth-form__control employer-onboarding-form__control">
                     <span className="auth-form__label employer-onboarding-form__label">
-                      Название компании
+                      Название компании <span className="employer-onboarding-form__required">*</span>
                     </span>
                     <Input
                       placeholder='Например: ООО "Трамплин"'
@@ -216,7 +216,9 @@ export function EmployerOnboardingPage() {
                   </label>
 
                   <label className="auth-form__control employer-onboarding-form__control">
-                    <span className="auth-form__label employer-onboarding-form__label">ИНН</span>
+                    <span className="auth-form__label employer-onboarding-form__label">
+                      ИНН <span className="employer-onboarding-form__required">*</span>
+                    </span>
                     <Input
                       placeholder={selectedEmployerType === "sole_proprietor" ? "10 цифр" : "12 цифр"}
                       inputMode="numeric"
@@ -250,6 +252,8 @@ export function EmployerOnboardingPage() {
                   <label className="auth-form__control employer-onboarding-form__control">
                     <span className="auth-form__label employer-onboarding-form__label">
                       Ссылка на соцсети
+                      {" "}
+                      <span className="employer-onboarding-form__required">*</span>
                     </span>
                     <Input
                       placeholder="https://t.me/tramplin"
@@ -280,7 +284,8 @@ export function EmployerOnboardingPage() {
                     onClick={() => documentInputRef.current?.click()}
                   >
                     <span className="employer-onboarding-upload__description">
-                      {documentName || "Описание того, что надо загрузить"}
+                      {documentName ||
+                        "Загрузите документ или ссылку, которые подтверждают связь с компанией: выписку, доверенность, письмо с корпоративного домена или другой официальный материал."}
                     </span>
                     <img
                       src={uploadIcon}
