@@ -1,13 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { ChangeEvent, useRef, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
-import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import { upsertEmployerProfile } from "../../features/company-verification";
-import { Button, Container, Input, Radio } from "../../shared/ui";
+import { Button, Checkbox, Container, Input } from "../../shared/ui";
 import "../auth/auth.css";
 import "./employer-onboarding.css";
 
@@ -26,6 +25,14 @@ const employerOnboardingSchema = z
       .trim()
       .optional()
       .refine((value) => !value || /^https?:\/\//.test(value), "Укажите ссылку с http:// или https://"),
+    socialLink: z
+      .string()
+      .trim()
+      .optional()
+      .refine((value) => !value || /^https?:\/\//.test(value), "Укажите ссылку с http:// или https://"),
+    confirmation: z.literal(true, {
+      errorMap: () => ({ message: "Подтвердите достоверность данных" }),
+    }),
   })
   .superRefine((value, context) => {
     const normalizedInn = value.inn.replace(/\D/g, "");
@@ -61,12 +68,13 @@ type EmployerOnboardingValues = z.infer<typeof employerOnboardingSchema>;
 export function EmployerOnboardingPage() {
   const navigate = useNavigate();
   const [apiError, setApiError] = useState<string | null>(null);
+  const [documentName, setDocumentName] = useState("");
+  const documentInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors },
   } = useForm<EmployerOnboardingValues>({
     resolver: zodResolver(employerOnboardingSchema),
@@ -76,10 +84,10 @@ export function EmployerOnboardingPage() {
       inn: "",
       corporateEmail: "",
       website: "",
+      socialLink: "",
+      confirmation: true,
     },
   });
-
-  const selectedEmployerType = watch("employerType");
 
   const onboardingMutation = useMutation({
     mutationFn: upsertEmployerProfile,
@@ -105,57 +113,36 @@ export function EmployerOnboardingPage() {
     });
   };
 
-  return (
-    <main className="auth-page employer-onboarding-page">
-      <Container className="auth-page__content" variant="auth-page">
-        <section className="auth-page__hero">
-          <div className="auth-page__hero-content">
-            <div className="auth-page__brand-stage">
-              <WaveAuraBackground />
-              <span className="auth-page__brand">Трамплин</span>
-            </div>
-          </div>
-        </section>
+  const handleDocumentChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.target.files?.[0];
+    setDocumentName(nextFile?.name ?? "");
+  };
 
-        <section className="auth-page__panel">
+  return (
+    <main className="auth-page auth-page--verification employer-onboarding-page">
+      <Container className="auth-page__content" variant="auth-page">
+        <section className="auth-page__panel employer-onboarding-page__panel">
           <div className="auth-page__panel-content">
-            <div className="auth-card employer-onboarding-card">
+            <div className="auth-card auth-card--verification employer-onboarding-card">
               <div className="auth-card__header employer-onboarding-card__header">
-                <h2 className="auth-card__title">Данные работодателя</h2>
-                <p className="auth-card__hint">
-                  Заполните профиль компании, чтобы перейти к публикации возможностей и верификации.
+                <h2 className="auth-verification-header__title employer-onboarding-card__title">
+                  <span className="auth-verification-header__title-accent">Верификация</span>{" "}
+                  работодателя
+                </h2>
+                <p className="auth-verification-header__description employer-onboarding-card__description">
+                  Заполните данные компании для проверки. После отправки заявки мы сверим информацию и
+                  подтвердим профиль работодателя.
                 </p>
               </div>
 
               <form className="auth-form" onSubmit={handleSubmit(handleOnboardingSubmit)}>
-                <div className="auth-form__roles" role="radiogroup" aria-label="Тип работодателя">
-                  <label className="auth-form__role">
-                    <Radio
-                      name="employer-type"
-                      variant="primary"
-                      checked={selectedEmployerType === "company"}
-                      onChange={() => setValue("employerType", "company", { shouldValidate: true })}
-                    />
-                    <span className="auth-form__role-label">Компания</span>
-                  </label>
-                  <label className="auth-form__role">
-                    <Radio
-                      name="employer-type"
-                      variant="primary"
-                      checked={selectedEmployerType === "sole_proprietor"}
-                      onChange={() =>
-                        setValue("employerType", "sole_proprietor", { shouldValidate: true })
-                      }
-                    />
-                    <span className="auth-form__role-label">ИП</span>
-                  </label>
-                </div>
-
-                <div className="auth-form__fields">
-                  <label className="auth-form__control">
-                    <span className="auth-form__label">Название компании</span>
+                <div className="auth-form__fields employer-onboarding-form__fields">
+                  <label className="auth-form__control employer-onboarding-form__control">
+                    <span className="auth-form__label employer-onboarding-form__label">
+                      Название компании
+                    </span>
                     <Input
-                      placeholder='ООО "Трамплин"'
+                      placeholder="Например: ООО Трамплин"
                       error={errors.companyName?.message}
                       clearable
                       {...register("companyName")}
@@ -165,10 +152,10 @@ export function EmployerOnboardingPage() {
                     )}
                   </label>
 
-                  <label className="auth-form__control">
-                    <span className="auth-form__label">ИНН</span>
+                  <label className="auth-form__control employer-onboarding-form__control">
+                    <span className="auth-form__label employer-onboarding-form__label">ИНН/ОГРН</span>
                     <Input
-                      placeholder={selectedEmployerType === "sole_proprietor" ? "10 цифр" : "12 цифр"}
+                      placeholder="Например: 7707083893"
                       inputMode="numeric"
                       error={errors.inn?.message}
                       clearable
@@ -177,10 +164,12 @@ export function EmployerOnboardingPage() {
                     {errors.inn && <span className="auth-form__error">{errors.inn.message}</span>}
                   </label>
 
-                  <label className="auth-form__control">
-                    <span className="auth-form__label">Корпоративный email</span>
+                  <label className="auth-form__control employer-onboarding-form__control">
+                    <span className="auth-form__label employer-onboarding-form__label">
+                      Корпоративная почта
+                    </span>
                     <Input
-                      placeholder="team@company.ru"
+                      placeholder="Например: hr@tramplin.ru"
                       autoComplete="email"
                       error={errors.corporateEmail?.message}
                       clearable
@@ -191,8 +180,10 @@ export function EmployerOnboardingPage() {
                     )}
                   </label>
 
-                  <label className="auth-form__control">
-                    <span className="auth-form__label">Сайт</span>
+                  <label className="auth-form__control employer-onboarding-form__control">
+                    <span className="auth-form__label employer-onboarding-form__label">
+                      Сайт компании
+                    </span>
                     <Input
                       placeholder="https://company.ru"
                       error={errors.website?.message}
@@ -203,12 +194,71 @@ export function EmployerOnboardingPage() {
                       <span className="auth-form__error">{errors.website.message}</span>
                     )}
                   </label>
+
+                  <label className="auth-form__control employer-onboarding-form__control">
+                    <span className="auth-form__label employer-onboarding-form__label">
+                      Ссылка на соцсети
+                    </span>
+                    <Input
+                      placeholder="https://t.me/tramplin"
+                      error={errors.socialLink?.message}
+                      clearable
+                      {...register("socialLink")}
+                    />
+                    {errors.socialLink && (
+                      <span className="auth-form__error">{errors.socialLink.message}</span>
+                    )}
+                  </label>
                 </div>
 
+                <div className="employer-onboarding-upload">
+                  <span className="auth-form__label employer-onboarding-form__label">
+                    Загрузите документ
+                  </span>
+                  <input
+                    ref={documentInputRef}
+                    className="employer-onboarding-upload__input"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    onChange={handleDocumentChange}
+                  />
+                  <button
+                    type="button"
+                    className="employer-onboarding-upload__dropzone"
+                    onClick={() => documentInputRef.current?.click()}
+                  >
+                    <span className="employer-onboarding-upload__description">
+                      {documentName || "Описание того, что надо загрузить"}
+                    </span>
+                    <span className="employer-onboarding-upload__icon" aria-hidden="true">
+                      ↑
+                    </span>
+                  </button>
+                </div>
+
+                <label className="auth-form__terms employer-onboarding-form__terms">
+                  <Controller
+                    control={control}
+                    name="confirmation"
+                    render={({ field }) => (
+                      <Checkbox
+                        checked={Boolean(field.value)}
+                        className={errors.confirmation ? "checkbox--error" : undefined}
+                        onBlur={field.onBlur}
+                        onChange={(event) => field.onChange(event.target.checked)}
+                        ref={field.ref}
+                      />
+                    )}
+                  />
+                  <span>Подтверждаю достоверность предоставленной мною информации</span>
+                </label>
+                {errors.confirmation && (
+                  <span className="auth-form__error">{errors.confirmation.message}</span>
+                )}
                 {apiError && <span className="auth-form__error">{apiError}</span>}
 
                 <Button type="submit" fullWidth loading={onboardingMutation.isPending}>
-                  Сохранить и продолжить
+                  Отправить на проверку
                 </Button>
               </form>
             </div>

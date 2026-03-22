@@ -1,8 +1,180 @@
-.employer-onboarding-card__header {
-  align-items: flex-start;
-  text-align: left;
+.employer-onboarding-page .auth-page__content.container.container__auth-page {
+  width: 1200px;
+  max-width: 1200px;
+  min-height: 100vh;
+  height: auto;
+  padding: 48px 24px;
+  grid-template-columns: repeat(12, 1fr);
 }
 
-.employer-onboarding-page .auth-card__hint {
+.employer-onboarding-page__panel {
+  grid-column: 2 / span 10;
+  min-height: auto;
+  height: auto;
+}
+
+.employer-onboarding-card__header {
+  gap: 24px;
+  align-items: center;
+  text-align: center;
+}
+
+.employer-onboarding-page .auth-page__panel-content {
+  align-items: center;
+  min-height: auto;
+}
+
+.employer-onboarding-card {
+  width: 100%;
+  max-width: 1090px;
+  gap: 40px;
+  padding: 64px 96px 72px;
+}
+
+.employer-onboarding-card__title {
+  max-width: 720px;
+  font-size: 52px;
+  line-height: 1.08;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+
+.employer-onboarding-card__description {
+  max-width: 900px;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.employer-onboarding-form__fields {
+  gap: 18px;
+}
+
+.employer-onboarding-form__control {
+  gap: 10px;
+}
+
+.employer-onboarding-form__label {
+  margin-left: 0;
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.employer-onboarding-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.employer-onboarding-upload__input {
+  display: none;
+}
+
+.employer-onboarding-upload__dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 190px;
+  padding: 32px;
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.7);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background-color var(--transition-base);
+}
+
+.employer-onboarding-upload__dropzone:hover {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(239, 246, 255, 0.7);
+}
+
+.employer-onboarding-upload__dropzone:active {
+  border-color: rgba(37, 99, 235, 0.6);
+}
+
+.employer-onboarding-upload__dropzone:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 3px;
+}
+
+.employer-onboarding-upload__description {
   max-width: 420px;
+  text-align: center;
+  font-size: 18px;
+  line-height: 28px;
+}
+
+.employer-onboarding-upload__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.employer-onboarding-form__terms {
+  justify-content: center;
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 18px;
+  line-height: 28px;
+}
+
+@media (max-width: 1279px) {
+  .employer-onboarding-page__panel {
+    grid-column: 2 / span 10;
+  }
+
+  .employer-onboarding-card {
+    max-width: 100%;
+    padding: 56px 56px 64px;
+  }
+
+  .employer-onboarding-card__title {
+    font-size: 44px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .employer-onboarding-page .auth-page__content.container.container__auth-page {
+    padding: 24px 16px;
+  }
+
+  .employer-onboarding-page__panel {
+    grid-column: 1 / -1;
+  }
+
+  .employer-onboarding-card {
+    max-width: 100%;
+    padding: 32px 24px 40px;
+    gap: 32px;
+  }
+
+  .employer-onboarding-card__title {
+    font-size: 36px;
+  }
+
+  .employer-onboarding-card__description {
+    font-size: 16px;
+  }
+
+  .employer-onboarding-form__label {
+    font-size: 18px;
+    line-height: 26px;
+  }
+
+  .employer-onboarding-upload__dropzone {
+    min-height: 160px;
+  }
+
+  .employer-onboarding-form__terms {
+    font-size: 16px;
+    line-height: 24px;
+  }
 }
