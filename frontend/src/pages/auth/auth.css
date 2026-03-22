@@ -9,8 +9,8 @@
 }
 
 .auth-page__content.container.container__auth-page {
-  width: 1080px;
-  max-width: 1080px;
+  width: min(1080px, 100%);
+  max-width: 100%;
   min-height: 100vh;
   height: 100vh;
   padding: 0 24px;
@@ -19,10 +19,10 @@
 }
 
 .auth-page--verification .auth-page__content.container.container__auth-page {
-  width: 1080px;
-  max-width: 1080px;
+  width: min(1080px, 100%);
+  max-width: 100%;
   min-height: 100vh;
-  height: 100vh;
+  height: auto;
   padding: 48px 24px;
 }
 
@@ -80,7 +80,7 @@
 .auth-page--verification .auth-page__panel {
   grid-column: 2 / span 10;
   min-height: 100vh;
-  height: 100vh;
+  height: auto;
   overflow-y: visible;
   padding: 0;
 }
@@ -116,8 +116,7 @@
 .auth-card--verification {
   width: 100%;
   gap: 32px;
-  margin: 24px 0;
-  padding: 48px 64px;
+  padding: 48px 88px;
   border-radius: 20px;
   background: var(--color-bg-primary);
   box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.1);
@@ -200,6 +199,11 @@
 }
 
 .auth-verification-header__title-accent {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.auth-page--secondary-theme .auth-verification-header__title-accent {
   color: var(--color-secondary);
 }
 
@@ -347,6 +351,8 @@
   color: var(--color-danger);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
+  text-align: center;
+  align-self: center;
 }
 
 .auth-verification {
@@ -397,6 +403,10 @@
 }
 
 .auth-verification__timer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
   color: var(--color-text-secondary);
   font-size: var(--type-small-size);
   line-height: var(--type-small-line);
@@ -438,15 +448,14 @@
   gap: 16px;
 }
 
-.auth-verification__group--actions > .button {
-  width: 100%;
-  margin: 0 auto;
-}
-
 .auth-verification__group--actions {
+  position: relative;
+  left: 50%;
+  align-self: flex-start;
   width: 680px;
   max-width: none;
-  margin: 0 auto;
+  margin: 0;
+  transform: translateX(-50%);
 }
 
 .auth-social {
@@ -507,4 +516,14 @@
 
 .auth-form__control:has(.input--error-editing) .auth-form__error {
   display: none;
+}
+
+@media (max-width: 1079px) {
+  .auth-page__content.container.container__auth-page {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .auth-page--verification .auth-page__content.container.container__auth-page {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
 }

@@ -1,6 +1,12 @@
+html.employer-onboarding-page-root,
+body.employer-onboarding-page-root {
+  background: var(--color-bg-primary);
+}
+
 .employer-onboarding-page {
   position: relative;
   min-height: 100vh;
+  background: var(--color-bg-primary);
   overflow: visible;
   isolation: isolate;
 }
@@ -35,12 +41,14 @@
 }
 
 .employer-onboarding-page .auth-page__content.container.container__auth-page {
-  width: 1200px;
-  max-width: 1200px;
+  width: min(1080px, 100%);
+  max-width: 100%;
   min-height: 100vh;
   height: auto;
   padding: 48px 24px;
-  grid-template-columns: repeat(12, 1fr);
+  background: var(--color-bg-primary);
+  column-gap: 24px;
+  grid-template-columns: repeat(12, 64px);
 }
 
 .employer-onboarding-page__panel {
@@ -58,15 +66,16 @@
 }
 
 .employer-onboarding-page .auth-page__panel-content {
-  align-items: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   min-height: auto;
+  padding-bottom: 48px;
 }
 
 .employer-onboarding-card {
   width: 100%;
-  max-width: 1090px;
-  gap: 40px;
-  padding: 64px 96px 72px;
 }
 
 .employer-onboarding-card__description {
@@ -75,8 +84,9 @@
   line-height: 1.45;
 }
 
-.employer-onboarding-form__fields {
-  gap: 18px;
+.employer-onboarding-page .auth-form__error {
+  text-align: left;
+  align-self: flex-start;
 }
 
 .employer-onboarding-form__roles {
@@ -111,9 +121,9 @@
   gap: 18px;
   min-height: 190px;
   padding: 32px;
-  border: 1px dashed rgba(148, 163, 184, 0.5);
+  border: 1px dashed var(--color-border);
   border-radius: 18px;
-  background: rgba(248, 250, 252, 0.7);
+  background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
   transition: border-color var(--transition-base), background-color var(--transition-base);
@@ -141,15 +151,9 @@
 }
 
 .employer-onboarding-upload__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 10px;
-  font-size: 28px;
-  line-height: 1;
+  display: block;
+  width: 18px;
+  object-fit: contain;
 }
 
 .employer-onboarding-form__terms {
@@ -165,9 +169,16 @@
     grid-column: 2 / span 10;
   }
 
+  .employer-onboarding-page .auth-page__content.container.container__auth-page {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .employer-onboarding-page .auth-page__panel-content {
+    display: flex;
+  }
+
   .employer-onboarding-card {
-    max-width: 100%;
-    padding: 56px 56px 64px;
+    padding: 56px;
   }
 }
 
@@ -185,9 +196,12 @@
     grid-column: 1 / -1;
   }
 
+  .employer-onboarding-page .auth-page__panel-content {
+    display: flex;
+  }
+
   .employer-onboarding-card {
-    max-width: 100%;
-    padding: 32px 24px 40px;
+    padding: 32px 24px;
     gap: 32px;
   }
 

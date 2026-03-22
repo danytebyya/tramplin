@@ -1,10 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChangeEvent, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import uploadIcon from "../../assets/icons/upload.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import { meRequest } from "../../features/auth";
 import { upsertEmployerProfile } from "../../features/company-verification";
@@ -96,6 +97,16 @@ export function EmployerOnboardingPage() {
     staleTime: 5 * 60 * 1000,
   });
 
+  useEffect(() => {
+    document.documentElement.classList.add("employer-onboarding-page-root");
+    document.body.classList.add("employer-onboarding-page-root");
+
+    return () => {
+      document.documentElement.classList.remove("employer-onboarding-page-root");
+      document.body.classList.remove("employer-onboarding-page-root");
+    };
+  }, []);
+
   const onboardingMutation = useMutation({
     mutationFn: upsertEmployerProfile,
     onSuccess: () => {
@@ -133,10 +144,12 @@ export function EmployerOnboardingPage() {
   };
 
   const handleEmployerTypeChange = (nextEmployerType: EmployerOnboardingValues["employerType"]) => {
-    const nextInnValue = getValues("inn").replace(/\D/g, "").slice(0, nextEmployerType === "sole_proprietor" ? 10 : 12);
+    const nextInnValue = getValues("inn")
+      .replace(/\D/g, "")
+      .slice(0, nextEmployerType === "sole_proprietor" ? 10 : 12);
 
-    setValue("employerType", nextEmployerType, { shouldValidate: true });
-    setValue("inn", nextInnValue, { shouldValidate: true, shouldDirty: true });
+    setValue("employerType", nextEmployerType, { shouldDirty: true });
+    setValue("inn", nextInnValue, { shouldDirty: true });
   };
 
   return (
@@ -269,9 +282,12 @@ export function EmployerOnboardingPage() {
                     <span className="employer-onboarding-upload__description">
                       {documentName || "Описание того, что надо загрузить"}
                     </span>
-                    <span className="employer-onboarding-upload__icon" aria-hidden="true">
-                      ↑
-                    </span>
+                    <img
+                      src={uploadIcon}
+                      alt=""
+                      aria-hidden="true"
+                      className="employer-onboarding-upload__icon"
+                    />
                   </button>
                 </div>
 
