@@ -29,6 +29,7 @@
   height: auto;
   padding: 48px 24px;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: center;
 }
 
 .auth-page__hero {
@@ -84,7 +85,7 @@
 
 .auth-page--verification .auth-page__panel {
   grid-column: 2 / span 10;
-  min-height: 100vh;
+  min-height: auto;
   height: auto;
   overflow-y: visible;
   padding: 0;
@@ -101,7 +102,7 @@
 }
 
 .auth-page--verification .auth-page__panel-content {
-  min-height: calc(100vh - 96px);
+  min-height: auto;
   justify-content: center;
   overflow: visible;
 }
@@ -363,14 +364,14 @@
 .auth-verification {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: 440px;
+  align-items: stretch;
+  width: 100%;
   max-width: 100%;
   gap: 16px;
 }
 
 .auth-page--verification .auth-verification {
-  width: 440px;
+  width: min(504px, 100%);
   max-width: 100%;
   margin: 0 auto;
 }
@@ -454,13 +455,10 @@
 }
 
 .auth-verification__group--actions {
-  position: relative;
-  left: 50%;
-  align-self: flex-start;
+  align-self: stretch;
   width: 100%;
-  max-width: none;
+  max-width: 100%;
   margin: 0;
-  transform: translateX(-50%);
 }
 
 .auth-social {
