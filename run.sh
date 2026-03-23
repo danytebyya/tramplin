@@ -7,7 +7,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-BACKEND_PORT="${BACKEND_PORT:-4000}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
@@ -180,7 +180,7 @@ start_backend() {
 
 start_frontend() {
   echo -e "${BLUE}--- Frontend (${FRONTEND_PORT})${NC}"
-  nohup bash -lc "cd frontend && npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT}" > frontend.log 2>&1 &
+  nohup bash -lc "cd frontend && VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api/v1 npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT}" > frontend.log 2>&1 &
   FRONT_PID=$!
   wait_for_port "${FRONTEND_PORT}" "Frontend"
 }

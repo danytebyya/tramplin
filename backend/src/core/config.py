@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = Field(
         default=60, alias="JWT_ACCESS_TOKEN_EXPIRE_MINUTES"
     )
-    jwt_refresh_token_expire_days: int = Field(default=14, alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
+    jwt_refresh_token_expire_days: int = Field(default=30, alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
     jwt_issuer: str = Field(default="tramplin-api", alias="JWT_ISSUER")
 
     initial_admin_email: str = Field(default="admin@tramplin.local", alias="INITIAL_ADMIN_EMAIL")

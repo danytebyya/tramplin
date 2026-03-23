@@ -5,15 +5,22 @@ from src.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMix
 from src.enums import UserRole, UserStatus
 
 
+def enum_values(enum_cls: type) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role", values_callable=enum_values),
+        nullable=False,
+    )
     status: Mapped[UserStatus] = mapped_column(
-        Enum(UserStatus, name="user_status"),
+        Enum(UserStatus, name="user_status", values_callable=enum_values),
         default=UserStatus.ACTIVE,
         nullable=False,
     )

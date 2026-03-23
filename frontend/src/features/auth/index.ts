@@ -1,29 +1,21 @@
-import { create } from "zustand";
-
 import { apiClient } from "../../shared/api/client";
+import { AUTH_STORAGE_KEY, clearPersistedAuthSession, isAccessTokenExpired, restoreAuthSession, useAuthStore } from "./session";
 
-export type AuthRole = "applicant" | "employer";
-
-type AuthState = {
-  accessToken: string | null;
-  role: AuthRole | null;
-  setSession: (accessToken: string, role: AuthRole) => void;
-  clearSession: () => void;
-};
-
-export const useAuthStore = create<AuthState>((set) => ({
-  accessToken: null,
-  role: null,
-  setSession: (accessToken, role) => set({ accessToken, role }),
-  clearSession: () => set({ accessToken: null, role: null }),
-}));
+export type { AuthRole } from "./session";
+export {
+  AUTH_STORAGE_KEY,
+  clearPersistedAuthSession,
+  isAccessTokenExpired,
+  restoreAuthSession,
+  useAuthStore,
+} from "./session";
 
 export type RegisterPayload = {
   email: string;
   password: string;
   display_name: string;
   verification_code: string;
-  role: AuthRole;
+  role: "applicant" | "employer";
   applicant_profile?: {
     full_name?: string;
   };
@@ -32,6 +24,22 @@ export type RegisterPayload = {
 export type LoginPayload = {
   email: string;
   password: string;
+};
+
+export type RefreshPayload = {
+  refresh_token: string;
+};
+
+export type AuthSuccessResponse = {
+  data?: {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    user?: {
+      role?: "applicant" | "employer";
+      has_employer_profile?: boolean;
+    };
+  };
 };
 
 export async function registerRequest(payload: RegisterPayload) {
@@ -63,12 +71,31 @@ export async function loginRequest(payload: LoginPayload) {
   return response.data;
 }
 
+export async function refreshSessionRequest(payload: RefreshPayload) {
+  const response = await apiClient.post("/auth/tokens", payload);
+  return response.data;
+}
+
 export async function meRequest() {
   const response = await apiClient.get("/users/me");
   return response.data;
 }
 
-export function resolvePostAuthRoute(role: AuthRole, hasEmployerProfile?: boolean) {
+export function applyAuthSession(response: AuthSuccessResponse) {
+  const accessToken = response?.data?.access_token;
+  const refreshToken = response?.data?.refresh_token;
+  const expiresIn = response?.data?.expires_in;
+  const role = response?.data?.user?.role ?? "applicant";
+
+  if (!accessToken || !refreshToken || !expiresIn) {
+    return false;
+  }
+
+  useAuthStore.getState().setSession(accessToken, refreshToken, role, expiresIn);
+  return true;
+}
+
+export function resolvePostAuthRoute(role: "applicant" | "employer", hasEmployerProfile?: boolean) {
   if (role === "employer") {
     return hasEmployerProfile ? "/dashboard/employer" : "/onboarding/employer";
   }

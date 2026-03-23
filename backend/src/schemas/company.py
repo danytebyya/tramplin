@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from src.enums import EmployerType
 
@@ -15,7 +15,7 @@ class EmployerOnboardingRequest(BaseModel):
     def validate_company_name(cls, value: str) -> str:
         normalized_value = value.strip()
         if len(normalized_value) < 2:
-            raise ValueError("Название компании должно содержать минимум 2 символа")
+            raise ValueError("Название организации должно содержать минимум 2 символа")
         return normalized_value
 
     @field_validator("inn")
@@ -35,10 +35,19 @@ class EmployerOnboardingRequest(BaseModel):
         normalized_value = value.strip()
         return normalized_value or None
 
+    @model_validator(mode="after")
+    def validate_inn_length_by_employer_type(self) -> "EmployerOnboardingRequest":
+        expected_length = 12 if self.employer_type == EmployerType.SOLE_PROPRIETOR else 10
+        if len(self.inn) != expected_length:
+            if self.employer_type == EmployerType.SOLE_PROPRIETOR:
+                raise ValueError("ИНН физического лица должен содержать 12 цифр")
+            raise ValueError("ИНН организации должен содержать 10 цифр")
+        return self
+
 
 class EmployerInnVerificationRequest(BaseModel):
-    employer_type: EmployerType
-    inn: str = Field(min_length=10, max_length=12)
+    employer_type: EmployerType | None = None
+    inn: str
 
     @field_validator("inn")
     @classmethod
@@ -48,12 +57,14 @@ class EmployerInnVerificationRequest(BaseModel):
             raise ValueError("ИНН должен содержать 10 или 12 цифр")
         return normalized_value
 
-    @field_validator("inn")
-    @classmethod
-    def validate_inn_length_by_employer_type(cls, value: str, info) -> str:
-        employer_type = info.data.get("employer_type")
-        if employer_type == EmployerType.SOLE_PROPRIETOR and len(value) != 10:
-            raise ValueError("Для ИП ИНН должен содержать 10 цифр")
-        if employer_type == EmployerType.COMPANY and len(value) != 12:
-            raise ValueError("Для компании ИНН должен содержать 12 цифр")
-        return value
+    @model_validator(mode="after")
+    def validate_inn_length_by_employer_type(self) -> "EmployerInnVerificationRequest":
+        if self.employer_type is None:
+            return self
+
+        expected_length = 12 if self.employer_type == EmployerType.SOLE_PROPRIETOR else 10
+        if len(self.inn) != expected_length:
+            if self.employer_type == EmployerType.SOLE_PROPRIETOR:
+                raise ValueError("ИНН физического лица должен содержать 12 цифр")
+            raise ValueError("ИНН организации должен содержать 10 цифр")
+        return self

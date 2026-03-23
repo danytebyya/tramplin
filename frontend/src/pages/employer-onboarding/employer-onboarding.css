@@ -1,43 +1,16 @@
 html.employer-onboarding-page-root,
 body.employer-onboarding-page-root {
   background: var(--color-bg-primary);
+  overflow-x: hidden;
 }
 
 .employer-onboarding-page {
   position: relative;
   min-height: 100vh;
   background: var(--color-bg-primary);
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: visible;
   isolation: isolate;
-}
-
-.employer-onboarding-page__background {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.employer-onboarding-page__background::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--color-bg-primary);
-}
-
-.employer-onboarding-page__background-aura {
-  position: absolute;
-  top: 140px;
-  left: 50%;
-  width: 100%;
-  height: 520px;
-  transform: translateX(-50%);
-}
-
-.employer-onboarding-page__background-aura .wave-aura {
-  top: 50%;
-  left: 50%;
 }
 
 .employer-onboarding-page .auth-page__content.container.container__auth-page {
@@ -48,48 +21,70 @@ body.employer-onboarding-page-root {
   padding: 48px 24px;
   background: var(--color-bg-primary);
   column-gap: 24px;
-  grid-template-columns: repeat(12, 64px);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
-.employer-onboarding-page__panel {
+.employer-onboarding-page .auth-page__panel.employer-onboarding-page__panel {
   grid-column: 2 / span 10;
   min-height: auto;
   height: auto;
   position: relative;
   z-index: 1;
+  overflow: visible;
+}
+
+.employer-onboarding-card__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
 .employer-onboarding-card__header {
-  gap: 24px;
+  position: relative;
+  width: 100%;
+  z-index: 3;
+}
+
+.employer-onboarding-card__header-content {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  width: 100%;
+  gap: 0;
+}
+
+.employer-onboarding-card__title {
+  grid-column: 2;
+  margin: 0;
+  max-width: 520px;
   text-align: center;
+}
+
+.employer-onboarding-card__title-spacer {
+  grid-column: 1;
 }
 
 .employer-onboarding-page .auth-page__panel-content {
   width: 100%;
-  display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   align-items: stretch;
   min-height: auto;
 }
 
-.employer-onboarding-card {
-  width: 100%;
-}
-
-.employer-onboarding-card__description {
-  max-width: 900px;
-  font-size: 18px;
-  line-height: 1.45;
+.employer-onboarding-card__info {
+  grid-column: 3;
+  justify-self: start;
+  width: 32px;
+  height: 32px;
+  margin-left: 10px;
+  line-height: 0;
+  transform: translateY(2px);
 }
 
 .employer-onboarding-page .auth-form__error {
   text-align: left;
   align-self: flex-start;
-}
-
-.employer-onboarding-form__roles {
-  gap: 40px;
 }
 
 .employer-onboarding-form__control {
@@ -108,12 +103,20 @@ body.employer-onboarding-page-root {
   position: absolute;
   top: 50%;
   right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 18px;
   height: 18px;
   transform: translateY(-50%);
 }
 
 .employer-onboarding-form__status--loading {
+}
+
+.employer-onboarding-form__status-spinner {
+  width: 13px;
+  height: 13px;
   border: 2px solid var(--color-text-tertiary);
   border-right-color: transparent;
   border-radius: 999px;
@@ -121,6 +124,11 @@ body.employer-onboarding-page-root {
 }
 
 .employer-onboarding-form__status--verified {
+}
+
+.employer-onboarding-form__status-check {
+  width: 15px;
+  height: 15px;
   background-color: var(--color-success);
   mask-image: url("../../assets/icons/check-mark.svg");
   mask-repeat: no-repeat;
@@ -139,11 +147,186 @@ body.employer-onboarding-page-root {
 .employer-onboarding-upload {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+
+.employer-onboarding-upload__guide {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text-secondary);
+}
+
+.employer-onboarding-upload__guide > .auth-form__label {
+  margin-bottom: 4px;
+}
+
+.employer-onboarding-upload__guide-section {
+  margin-left: 15px;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+}
+
+.employer-onboarding-upload__guide-list {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+}
+
+.employer-onboarding-upload__guide-list li {
+  display: list-item;
+}
+
+.employer-onboarding-upload__guide-list span {
+  vertical-align: middle;
+}
+
+.employer-onboarding-upload__guide-tooltip.info-tooltip {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.employer-onboarding-upload__guide-tooltip.info-tooltip .info-tooltip__trigger {
+  inset: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.employer-onboarding-upload__guide-tooltip.info-tooltip .info-tooltip__icon {
+  width: 14px;
+  height: 14px;
 }
 
 .employer-onboarding-upload__input {
   display: none;
+}
+
+.employer-onboarding-upload__files {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.employer-onboarding-upload__file {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f7f7f8;
+}
+
+.employer-onboarding-upload__file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #17b34a;
+  flex: 0 0 30px;
+}
+
+.employer-onboarding-upload__file-icon--uploading {
+  background: transparent;
+}
+
+.employer-onboarding-upload__file-icon-mark {
+  display: block;
+  width: 15px;
+  height: 15px;
+  background-color: var(--color-text-inverse);
+  mask-image: url("../../assets/icons/check-mark.svg");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: url("../../assets/icons/check-mark.svg");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+.employer-onboarding-upload__file-icon-spinner {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: button-spinner 0.8s linear infinite;
+}
+
+.employer-onboarding-upload__file-body {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.employer-onboarding-upload__file-name {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employer-onboarding-upload__file-type {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employer-onboarding-upload__file-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex: 0 0 20px;
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+.employer-onboarding-upload__file-remove:hover {
+  color: var(--color-text-primary);
+}
+
+.employer-onboarding-upload__file-remove:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.employer-onboarding-upload__file-remove-icon {
+  display: block;
+  width: 10px;
+  height: 10px;
+  background-color: currentColor;
+  mask-image: url("../../assets/icons/close.svg");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: url("../../assets/icons/close.svg");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
 }
 
 .employer-onboarding-upload__dropzone {
@@ -153,7 +336,7 @@ body.employer-onboarding-page-root {
   align-items: center;
   justify-content: center;
   gap: 24px;
-  min-height: 190px;
+  min-height: 186px;
   padding: 32px;
   border: 1px dashed var(--color-border);
   border-radius: 18px;
@@ -171,6 +354,12 @@ body.employer-onboarding-page-root {
 .employer-onboarding-upload__dropzone:active {
   border-color: var(--employer-onboarding-upload-focus);
   color: var(--color-text-primary);
+}
+
+.employer-onboarding-upload__dropzone--active {
+  border-color: var(--employer-onboarding-upload-focus);
+  color: var(--color-text-primary);
+  background: rgba(29, 78, 216, 0.04);
 }
 
 .employer-onboarding-upload__dropzone:focus-visible {
@@ -194,14 +383,6 @@ body.employer-onboarding-page-root {
   flex-shrink: 0;
 }
 
-.employer-onboarding-form__terms {
-  justify-content: flex-start;
-  max-width: 100%;
-  margin: 0;
-  font-size: 18px;
-  line-height: 28px;
-}
-
 @media (max-width: 1279px) {
   .employer-onboarding-page__panel {
     grid-column: 2 / span 10;
@@ -218,16 +399,16 @@ body.employer-onboarding-page-root {
   .employer-onboarding-card {
     padding: 56px;
   }
+
+  .employer-onboarding-card__intro {
+    gap: 28px;
+  }
+
 }
 
 @media (max-width: 1023px) {
   .employer-onboarding-page .auth-page__content.container.container__auth-page {
     padding: 24px 16px;
-  }
-
-  .employer-onboarding-page__background-aura {
-    top: 96px;
-    height: 420px;
   }
 
   .employer-onboarding-page__panel {
@@ -243,17 +424,42 @@ body.employer-onboarding-page-root {
     gap: 32px;
   }
 
+  .employer-onboarding-card__intro {
+    gap: 24px;
+  }
+
   .employer-onboarding-card__title {
     font-size: 36px;
   }
 
-  .employer-onboarding-card__description {
-    font-size: 16px;
+  .employer-onboarding-card__info .info-tooltip__panel {
+    width: min(320px, calc(100vw - 40px));
   }
 
   .employer-onboarding-form__label {
     font-size: 18px;
     line-height: 26px;
+  }
+
+  .employer-onboarding-upload__guide-section,
+  .employer-onboarding-upload__guide-list {
+    font-size: 16px;
+    line-height: 24px;
+  }
+
+  .employer-onboarding-upload__files {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .employer-onboarding-upload__file {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .employer-onboarding-upload__file-icon {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
   }
 
   .employer-onboarding-upload__dropzone {
@@ -263,5 +469,9 @@ body.employer-onboarding-page-root {
   .employer-onboarding-form__terms {
     font-size: 16px;
     line-height: 24px;
+  }
+
+  .employer-onboarding-upload__files {
+    grid-template-columns: 1fr;
   }
 }

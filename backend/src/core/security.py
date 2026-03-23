@@ -65,12 +65,12 @@ def decode_token(token: str) -> dict:
             issuer=settings.jwt_issuer,
         )
     except JWTError as exc:
-        raise TokenPayloadError("Invalid or expired token") from exc
+        raise TokenPayloadError("Токен недействителен или срок его действия истек") from exc
     return payload
 
 
 def ensure_token_type(payload: dict, token_type: TokenType) -> dict:
     raw_type = payload.get("type")
     if raw_type != token_type:
-        raise TokenPayloadError("Invalid token type")
+        raise TokenPayloadError("Некорректный тип токена")
     return payload

@@ -10,11 +10,11 @@ import vkIcon from "../../assets/auth/vk.png";
 import arrowIcon from "../../assets/icons/arrow.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
+  applyAuthSession,
   loginRequest,
   registerRequest,
   resolvePostAuthRoute,
   requestEmailVerificationCode,
-  useAuthStore,
 } from "../../features/auth";
 import { Button, Checkbox, CodeInput, Container, Input, Radio } from "../../shared/ui";
 import "./auth.css";
@@ -107,18 +107,54 @@ function writePersistedVerificationState(state: PersistedVerificationState) {
   window.sessionStorage.setItem(EMAIL_VERIFICATION_STORAGE_KEY, JSON.stringify(state));
 }
 
+function getInitialPersistedVerificationState(): PersistedVerificationState | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return readPersistedVerificationState();
+}
+
+function blurActiveElement() {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement) {
+    activeElement.blur();
+  }
+}
+
 export function AuthPage() {
+  const initialPersistedState = getInitialPersistedVerificationState();
   const navigate = useNavigate();
-  const setSession = useAuthStore((state) => state.setSession);
-  const [step, setStep] = useState<VerificationStep>("form");
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [apiErrorCode, setApiErrorCode] = useState<string | null>(null);
-  const [verificationCode, setVerificationCode] = useState("");
-  const [pendingValues, setPendingValues] = useState<RegisterFormValues | null>(null);
-  const [resendCountdown, setResendCountdown] = useState(60);
-  const [codeInputFocusTrigger, setCodeInputFocusTrigger] = useState(0);
+  const [step, setStep] = useState<VerificationStep>(initialPersistedState?.step ?? "form");
+  const [apiError, setApiError] = useState<string | null>(initialPersistedState?.apiError ?? null);
+  const [apiErrorCode, setApiErrorCode] = useState<string | null>(
+    initialPersistedState?.apiErrorCode ?? null,
+  );
+  const [verificationCode, setVerificationCode] = useState(initialPersistedState?.verificationCode ?? "");
+  const [pendingValues, setPendingValues] = useState<RegisterFormValues | null>(
+    initialPersistedState?.step === "code" ? initialPersistedState.values : null,
+  );
+  const [resendCountdown, setResendCountdown] = useState(
+    initialPersistedState
+      ? Math.max(
+          0,
+          Math.ceil(
+            (initialPersistedState.requestedAt + EMAIL_RESEND_COOLDOWN_MS - Date.now()) / 1000,
+          ),
+        )
+      : 60,
+  );
+  const [codeInputFocusTrigger, setCodeInputFocusTrigger] = useState(
+    initialPersistedState?.step === "code" && !initialPersistedState.verificationCode ? 1 : 0,
+  );
   const [codeInputErrorFocusTrigger, setCodeInputErrorFocusTrigger] = useState(0);
   const lastAutoSubmittedCodeRef = useRef<string | null>(null);
+  const registrationSubmitLockRef = useRef(false);
+  const previousEmailRef = useRef<string>("");
 
   const {
     control,
@@ -130,7 +166,7 @@ export function AuthPage() {
     formState: { errors },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
-    defaultValues: {
+    defaultValues: initialPersistedState?.values ?? {
       role: "applicant",
       email: "",
       password: "",
@@ -140,39 +176,31 @@ export function AuthPage() {
   });
 
   const selectedRole = watch("role");
+  const selectedEmail = watch("email");
   const roleTheme = selectedRole === "applicant" ? "secondary" : "primary";
+  const roleGhostVariant = roleTheme === "secondary" ? "secondary-ghost" : "ghost";
   const inputThemeClassName = roleTheme === "secondary" ? "input--secondary" : undefined;
   const checkboxTheme = roleTheme === "secondary" ? "secondary" : "primary";
   const resolveDisplayName = (email: string) => email.split("@")[0]?.trim() || email.trim();
   const isTemporarilyRateLimited =
     apiErrorCode === "AUTH_OTP_REQUEST_LIMIT_REACHED" ||
     apiErrorCode === "AUTH_OTP_VERIFICATION_BLOCKED";
-  const isRegistrationFormLocked = step === "form" && isTemporarilyRateLimited;
   const isVerificationLocked = step === "code" && isTemporarilyRateLimited;
 
   useEffect(() => {
-    const persistedState = readPersistedVerificationState();
-
-    if (!persistedState) {
+    if (step !== "form") {
+      previousEmailRef.current = selectedEmail;
       return;
     }
 
-    reset(persistedState.values);
-    setPendingValues(persistedState.step === "code" ? persistedState.values : null);
-    setVerificationCode(persistedState.verificationCode);
-    setStep(persistedState.step);
-    setApiError(persistedState.apiError);
-    setApiErrorCode(persistedState.apiErrorCode);
-    if (persistedState.step === "code" && !persistedState.verificationCode) {
-      setCodeInputFocusTrigger((current) => current + 1);
+    if (previousEmailRef.current && previousEmailRef.current !== selectedEmail && isTemporarilyRateLimited) {
+      setApiError(null);
+      setApiErrorCode(null);
+      clearPersistedVerificationState();
     }
-    setResendCountdown(
-      Math.max(
-        0,
-        Math.ceil((persistedState.requestedAt + EMAIL_RESEND_COOLDOWN_MS - Date.now()) / 1000),
-      ),
-    );
-  }, [reset]);
+
+    previousEmailRef.current = selectedEmail;
+  }, [apiErrorCode, isTemporarilyRateLimited, selectedEmail, step]);
 
   useEffect(() => {
     if (step !== "code" || !pendingValues) {
@@ -284,19 +312,26 @@ export function AuthPage() {
       values: RegisterFormValues;
       code: string;
     }) => {
-      await registerRequest({
-        email: values.email,
-        password: values.password,
-        verification_code: code,
-        display_name: resolveDisplayName(values.email),
-        role: values.role,
-        applicant_profile:
-          values.role === "applicant"
-            ? {
-                full_name: resolveDisplayName(values.email),
-              }
-            : undefined,
-      });
+      try {
+        await registerRequest({
+          email: values.email,
+          password: values.password,
+          verification_code: code,
+          display_name: resolveDisplayName(values.email),
+          role: values.role,
+          applicant_profile:
+            values.role === "applicant"
+              ? {
+                  full_name: resolveDisplayName(values.email),
+                }
+              : undefined,
+        });
+      } catch (error: any) {
+        const errorCode = error?.response?.data?.error?.code;
+        if (errorCode !== "AUTH_EMAIL_EXISTS") {
+          throw error;
+        }
+      }
 
       return loginRequest({
         email: values.email,
@@ -304,19 +339,18 @@ export function AuthPage() {
       });
     },
     onSuccess: (data: any) => {
-      const accessToken = data?.data?.access_token;
+      registrationSubmitLockRef.current = false;
       const role = data?.data?.user?.role ?? pendingValues?.role ?? "applicant";
       const hasEmployerProfile = data?.data?.user?.has_employer_profile;
 
-      if (accessToken) {
-        setSession(accessToken, role);
-      }
+      applyAuthSession(data);
 
       clearPersistedVerificationState();
       setApiErrorCode(null);
       navigate(resolvePostAuthRoute(role, hasEmployerProfile));
     },
     onError: (error: any) => {
+      registrationSubmitLockRef.current = false;
       setApiErrorCode(error?.response?.data?.error?.code ?? null);
       setApiError(
         error?.response?.data?.error?.message ??
@@ -328,15 +362,12 @@ export function AuthPage() {
   const handleFormSubmit = async (values: RegisterFormValues) => {
     const now = Date.now();
 
-    if (isRegistrationFormLocked) {
-      return;
-    }
-
     setApiError(null);
     setApiErrorCode(null);
     try {
       await requestCodeMutation.mutateAsync({ email: values.email.trim(), forceResend: false });
 
+      blurActiveElement();
       setPendingValues(values);
       setVerificationCode("");
       lastAutoSubmittedCodeRef.current = null;
@@ -383,11 +414,16 @@ export function AuthPage() {
       return;
     }
 
+    if (completeRegistrationMutation.isPending || registrationSubmitLockRef.current) {
+      return;
+    }
+
     if (verificationCode.length !== 6) {
       setApiError("Введите 6-значный код подтверждения");
       return;
     }
 
+    registrationSubmitLockRef.current = true;
     setApiError(null);
     setApiErrorCode(null);
     completeRegistrationMutation.mutate({
@@ -415,11 +451,13 @@ export function AuthPage() {
   }, [completeRegistrationMutation.isPending, pendingValues, step, verificationCode]);
 
   const handleBackToForm = () => {
+    blurActiveElement();
     clearPersistedVerificationState();
     setStep("form");
     setPendingValues(null);
     setVerificationCode("");
     lastAutoSubmittedCodeRef.current = null;
+    registrationSubmitLockRef.current = false;
     setApiError(null);
     setApiErrorCode(null);
     setResendCountdown(60);
@@ -434,6 +472,7 @@ export function AuthPage() {
     setApiErrorCode(null);
     setVerificationCode("");
     lastAutoSubmittedCodeRef.current = null;
+    registrationSubmitLockRef.current = false;
     setCodeInputFocusTrigger((current) => current + 1);
     setResendCountdown(60);
     resendCodeMutation.mutate({ email: pendingValues.email.trim(), forceResend: true }, {
@@ -444,26 +483,18 @@ export function AuthPage() {
   const isCodeStep = step === "code" && pendingValues;
 
   return (
-    <main
-      className={`auth-page ${roleTheme === "secondary" ? "auth-page--secondary-theme" : ""} ${
-        isCodeStep ? "auth-page--verification" : ""
-      }`}
-    >
+    <main className={`auth-page ${roleTheme === "secondary" ? "auth-page--secondary-theme" : ""}`}>
       <Container className="auth-page__content" variant="auth-page">
-        {!isCodeStep ? (
-          <section className="auth-page__hero">
-            <div className="auth-page__hero-content">
-              <div className="auth-page__brand-stage">
-                <WaveAuraBackground variant={roleTheme} withInteractionOrb />
-                <span className="auth-page__brand">Трамплин</span>
-              </div>
+        <section className="auth-page__hero">
+          <div className="auth-page__hero-content">
+            <div className="auth-page__brand-stage">
+              <WaveAuraBackground variant={roleTheme} withInteractionOrb />
+              <span className="auth-page__brand">Трамплин</span>
             </div>
-          </section>
-        ) : null}
+          </div>
+        </section>
 
-        <section
-          className={`auth-page__panel ${isCodeStep ? "auth-page__panel--verification" : ""}`}
-        >
+        <section className="auth-page__panel">
           <div className="auth-page__panel-content">
             <div className={`auth-card ${isCodeStep ? "auth-card--verification" : ""}`}>
               <div className="auth-card__header">
@@ -510,7 +541,6 @@ export function AuthPage() {
                         name="register-role"
                         variant="primary"
                         checked={selectedRole === "employer"}
-                        disabled={isRegistrationFormLocked}
                         onChange={() => setValue("role", "employer", { shouldValidate: true })}
                       />
                       <span className="auth-form__role-label">Работодатель</span>
@@ -520,7 +550,6 @@ export function AuthPage() {
                         name="register-role"
                         variant="secondary"
                         checked={selectedRole === "applicant"}
-                        disabled={isRegistrationFormLocked}
                         onChange={() => setValue("role", "applicant", { shouldValidate: true })}
                       />
                       <span className="auth-form__role-label">Соискатель</span>
@@ -536,7 +565,6 @@ export function AuthPage() {
                         error={errors.email?.message}
                         clearable
                         className={inputThemeClassName}
-                        disabled={isRegistrationFormLocked}
                         {...register("email")}
                       />
                       {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
@@ -551,7 +579,6 @@ export function AuthPage() {
                         error={errors.password?.message}
                         clearable
                         className={inputThemeClassName}
-                        disabled={isRegistrationFormLocked}
                         {...register("password")}
                       />
                       {errors.password && (
@@ -568,7 +595,6 @@ export function AuthPage() {
                         error={errors.confirmPassword?.message}
                         clearable
                         className={inputThemeClassName}
-                        disabled={isRegistrationFormLocked}
                         {...register("confirmPassword")}
                       />
                       {errors.confirmPassword && (
@@ -586,7 +612,6 @@ export function AuthPage() {
                           checked={Boolean(field.value)}
                           variant={checkboxTheme}
                           className={errors.acceptTerms ? "checkbox--error" : undefined}
-                          disabled={isRegistrationFormLocked}
                           onBlur={field.onBlur}
                           onChange={(event) => field.onChange(event.target.checked)}
                           ref={field.ref}
@@ -605,7 +630,6 @@ export function AuthPage() {
                     type="submit"
                     variant={roleTheme}
                     fullWidth
-                    disabled={isRegistrationFormLocked}
                     loading={requestCodeMutation.isPending}
                   >
                     Продолжить
@@ -625,6 +649,7 @@ export function AuthPage() {
                           disabled={completeRegistrationMutation.isPending || isVerificationLocked}
                           onChange={(nextValue) => {
                             setVerificationCode(nextValue);
+                            registrationSubmitLockRef.current = false;
                             if (apiError) {
                               setApiError(null);
                               setApiErrorCode(null);
@@ -645,7 +670,7 @@ export function AuthPage() {
                             ) : (
                               <Button
                                 type="button"
-                                variant="secondary-ghost"
+                                variant={roleGhostVariant}
                                 size="md"
                                 className="auth-verification__resend"
                                 onClick={handleResendCode}
@@ -674,7 +699,7 @@ export function AuthPage() {
                       <div className="auth-verification__actions">
                         <Button
                           type="button"
-                          variant="secondary-ghost"
+                          variant={roleGhostVariant}
                           size="md"
                           className="auth-verification__resend"
                           disabled={isVerificationLocked}

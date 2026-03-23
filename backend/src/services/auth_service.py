@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -28,7 +29,10 @@ class AuthService:
         self.user_repo = UserRepository(db)
         self.auth_repo = AuthRepository(db)
 
+    logger = logging.getLogger(__name__)
+
     def register(self, payload: RegisterRequest) -> User:
+        normalized_email = payload.email.lower()
         if payload.role not in {UserRole.APPLICANT, UserRole.EMPLOYER}:
             raise AppError(
                 code="AUTH_ROLE_NOT_ALLOWED",
@@ -36,21 +40,27 @@ class AuthService:
                 status_code=422,
             )
 
-        if self.user_repo.get_by_email(payload.email):
+        if self.user_repo.get_by_email(normalized_email):
+            self.logger.warning("auth.register.email_exists email=%s", normalized_email)
             raise AppError(
                 code="AUTH_EMAIL_EXISTS",
                 message="Аккаунт с таким email уже существует",
                 status_code=409,
             )
 
+        self.logger.info(
+            "auth.register.verify_code email=%s role=%s",
+            normalized_email,
+            payload.role.value,
+        )
         EmailVerificationService(self.db, self.user_repo).verify_registration_code(
-            payload.email,
+            normalized_email,
             payload.verification_code,
             consume=True,
         )
 
         user = User(
-            email=payload.email.lower(),
+            email=normalized_email,
             display_name=payload.display_name,
             password_hash=hash_password(payload.password),
             role=payload.role,
@@ -73,6 +83,7 @@ class AuthService:
         self.user_repo.add(user)
         self.db.commit()
         self.db.refresh(user)
+        self.logger.info("auth.register.persisted email=%s user_id=%s", user.email, user.id)
         return user
 
     def login(self, payload: LoginRequest, user_agent: str | None, ip_address: str | None) -> dict:

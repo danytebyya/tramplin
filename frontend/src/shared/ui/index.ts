@@ -7,3 +7,4 @@ export { Card } from "./card/card";
 export { Container } from "./container/container";
 export { Switch } from "./switch/switch";
 export { Select } from "./select/select";
+export { InfoTooltip } from "./info-tooltip/info-tooltip";

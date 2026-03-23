@@ -40,15 +40,21 @@ def test_verify_employer_inn(client, db_session, monkeypatch):
     access_token = _register_and_login_employer(client, db_session)
 
     def mock_verify_inn(self, inn, employer_type):
-        assert inn == "770708389312"
-        assert employer_type.value == "company"
+        assert inn == "7707083893"
+        assert employer_type is None
         return {
-            "inn": "770708389312",
+            "employer_type": "company",
+            "inn": "7707083893",
+            "full_name": "ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО СБЕРБАНК",
             "name": "ПАО СБЕРБАНК",
             "ogrn": "1027700132195",
             "address": "г Москва, ул Вавилова, д 19",
             "type": "LEGAL",
             "status": "ACTIVE",
+            "subject_type": "Публичное акционерное общество",
+            "status_label": "Действующая",
+            "registration_date": "20.06.1991",
+            "director_name": "Иванов Иван Иванович",
         }
 
     monkeypatch.setattr(DadataService, "verify_inn", mock_verify_inn)
@@ -56,13 +62,15 @@ def test_verify_employer_inn(client, db_session, monkeypatch):
     response = client.post(
         "/api/v1/companies/verify-inn",
         headers={"Authorization": f"Bearer {access_token}"},
-        json={"employer_type": "company", "inn": "770708389312"},
+        json={"inn": "7707083893"},
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["data"]["verification"]["inn"] == "770708389312"
+    assert body["data"]["verification"]["inn"] == "7707083893"
     assert body["data"]["verification"]["name"] == "ПАО СБЕРБАНК"
+    assert body["data"]["verification"]["employer_type"] == "company"
+    assert body["data"]["verification"]["subject_type"] == "Публичное акционерное общество"
 
 
 def test_verify_employer_inn_returns_not_found(client, db_session, monkeypatch):
@@ -73,7 +81,7 @@ def test_verify_employer_inn_returns_not_found(client, db_session, monkeypatch):
     def mock_verify_inn(self, inn, employer_type):
         raise AppError(
             code="EMPLOYER_INN_NOT_FOUND",
-            message="Организация или ИП с таким ИНН не найдены",
+            message="Организация с таким ИНН не найдена",
             status_code=404,
         )
 
@@ -82,21 +90,22 @@ def test_verify_employer_inn_returns_not_found(client, db_session, monkeypatch):
     response = client.post(
         "/api/v1/companies/verify-inn",
         headers={"Authorization": f"Bearer {access_token}"},
-        json={"employer_type": "company", "inn": "770708389312"},
+        json={"inn": "7707083893"},
     )
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "EMPLOYER_INN_NOT_FOUND"
+    assert response.json()["error"]["message"] == "Организация с таким ИНН не найдена"
 
 
-def test_verify_employer_inn_validates_length_by_employer_type(client, db_session):
+def test_verify_employer_inn_validates_length(client, db_session):
     access_token = _register_and_login_employer(client, db_session)
 
     response = client.post(
         "/api/v1/companies/verify-inn",
         headers={"Authorization": f"Bearer {access_token}"},
-        json={"employer_type": "company", "inn": "7707083893"},
+        json={"inn": "770708389"},
     )
 
     assert response.status_code == 422
-    assert response.json()["error"]["message"] == "Для компании ИНН должен содержать 12 цифр"
+    assert response.json()["error"]["message"] == "ИНН должен содержать 10 или 12 цифр"

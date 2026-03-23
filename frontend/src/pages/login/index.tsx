@@ -8,7 +8,7 @@ import { z } from "zod";
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
-import { loginRequest, resolvePostAuthRoute, useAuthStore } from "../../features/auth";
+import { applyAuthSession, loginRequest, resolvePostAuthRoute } from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
 import "../auth/auth.css";
 import "./login.css";
@@ -28,7 +28,6 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 type LoginSuccessResponse = {
   data?: {
-    access_token?: string;
     user?: {
       role?: "applicant" | "employer";
       has_employer_profile?: boolean;
@@ -38,7 +37,6 @@ type LoginSuccessResponse = {
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const setSession = useAuthStore((state) => state.setSession);
   const [apiError, setApiError] = useState<string | null>(null);
 
   const {
@@ -56,18 +54,17 @@ export function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: loginRequest,
     onSuccess: (data: LoginSuccessResponse) => {
-      const accessToken = data?.data?.access_token;
       const role = data?.data?.user?.role ?? "applicant";
       const hasEmployerProfile = data?.data?.user?.has_employer_profile;
 
-      if (accessToken) {
-        setSession(accessToken, role);
-      }
+      applyAuthSession(data);
 
       navigate(resolvePostAuthRoute(role, hasEmployerProfile));
     },
-    onError: () => {
-      setApiError("Не удалось выполнить вход. Проверьте email и пароль.");
+    onError: (error: any) => {
+      setApiError(
+        error?.response?.data?.error?.message ?? "Неверный email или пароль",
+      );
     },
   });
 

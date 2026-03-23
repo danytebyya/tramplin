@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
@@ -10,6 +12,7 @@ from src.services import AuthService
 from src.utils.responses import success_response
 
 router = APIRouter(prefix="/users", tags=["users"])
+logger = logging.getLogger(__name__)
 
 
 def _serialize_user(user: User) -> dict:
@@ -40,7 +43,18 @@ def _serialize_user(user: User) -> dict:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_user(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
+    logger.info(
+        "auth.register.request email=%s role=%s",
+        payload.email.lower(),
+        payload.role.value,
+    )
     user = AuthService(db).register(payload)
+    logger.info(
+        "auth.register.success email=%s user_id=%s role=%s",
+        user.email,
+        user.id,
+        user.role.value,
+    )
     return success_response({"user": _serialize_user(user)})
 
 

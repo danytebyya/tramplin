@@ -280,10 +280,10 @@ def test_request_code_does_not_resend_while_code_is_active(client, db_session):
     assert active_code == first_code
 
 
-def test_request_code_force_resend_rotates_code(client, db_session):
+def test_request_code_force_resend_reuses_active_code(client, db_session):
     first_code = _request_code(client, db_session, "resend@example.com")
     second_code = _request_code(client, db_session, "resend@example.com", force_resend=True)
-    assert second_code != first_code
+    assert second_code == first_code
 
 
 def test_register_is_blocked_after_too_many_invalid_verification_attempts(client, db_session):

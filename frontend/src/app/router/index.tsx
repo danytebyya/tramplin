@@ -13,8 +13,14 @@ import { UiKitPage } from "../../pages/ui-kit";
 
 function ProtectedRoute({ children }: { children: ReactElement }) {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
 
-  if (!accessToken) {
+  if (!isHydrated) {
+    return null;
+  }
+
+  if (!accessToken && !refreshToken) {
     return <Navigate to="/login" replace />;
   }
 

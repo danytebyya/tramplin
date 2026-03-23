@@ -15,7 +15,7 @@
   height: 100vh;
   padding: 0 24px;
   column-gap: 24px;
-  grid-template-columns: repeat(12, 64px);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
 .auth-page--verification .auth-page__content.container.container__auth-page {
@@ -24,6 +24,7 @@
   min-height: 100vh;
   height: auto;
   padding: 48px 24px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
 }
 
 .auth-page__hero {
@@ -138,7 +139,7 @@
 
 .auth-verification-header__back {
   position: absolute;
-  top: 8px;
+  top: 5px;
   left: 0;
   display: inline-flex;
   align-items: center;
@@ -258,7 +259,7 @@
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 32px;
 }
 
 .auth-form--verification {
@@ -359,13 +360,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 504px;
+  width: 440px;
   max-width: 100%;
   gap: 16px;
 }
 
 .auth-page--verification .auth-verification {
-  width: 504px;
+  width: 440px;
   max-width: 100%;
   margin: 0 auto;
 }
@@ -452,7 +453,7 @@
   position: relative;
   left: 50%;
   align-self: flex-start;
-  width: 680px;
+  width: 100%;
   max-width: none;
   margin: 0;
   transform: translateX(-50%);
@@ -525,5 +526,68 @@
 
   .auth-page--verification .auth-page__content.container.container__auth-page {
     grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .auth-card--verification {
+    padding: 40px 48px;
+  }
+
+  .auth-verification__group--actions {
+    width: 100%;
+    max-width: 100%;
+    left: auto;
+    align-self: stretch;
+    transform: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .auth-page__content.container.container__auth-page {
+    min-height: auto;
+    height: auto;
+    padding: 24px 16px;
+  }
+
+  .auth-page--verification .auth-page__content.container.container__auth-page {
+    padding: 24px 16px;
+  }
+
+  .auth-page__panel {
+    grid-column: 1 / -1;
+    min-height: auto;
+    height: auto;
+    padding: 24px 0;
+  }
+
+  .auth-page--verification .auth-page__panel {
+    grid-column: 1 / -1;
+  }
+
+  .auth-page__panel-content,
+  .auth-page--verification .auth-page__panel-content {
+    min-height: auto;
+  }
+
+  .auth-card--verification {
+    gap: 24px;
+    padding: 28px 20px;
+    border-radius: 16px;
+  }
+
+  .auth-verification {
+    width: 100%;
+  }
+
+  .auth-verification__group--actions {
+    width: 100%;
+  }
+
+  .auth-verification-header__content {
+    gap: 20px;
+  }
+
+  .auth-verification-header__title {
+    font-size: 32px;
+    line-height: 40px;
   }
 }

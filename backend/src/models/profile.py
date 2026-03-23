@@ -5,6 +5,10 @@ from src.db.base import Base, TimestampMixin
 from src.enums import EmployerType, EmployerVerificationStatus
 
 
+def enum_values(enum_cls: type) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class ApplicantProfile(TimestampMixin, Base):
     __tablename__ = "applicant_profiles"
 
@@ -27,7 +31,7 @@ class EmployerProfile(TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True
     )
     employer_type: Mapped[EmployerType] = mapped_column(
-        Enum(EmployerType, name="employer_type"),
+        Enum(EmployerType, name="employer_type", values_callable=enum_values),
         nullable=False,
     )
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -35,7 +39,11 @@ class EmployerProfile(TimestampMixin, Base):
     corporate_email: Mapped[str] = mapped_column(String(320), nullable=False)
     website: Mapped[str | None] = mapped_column(String(500), nullable=True)
     verification_status: Mapped[EmployerVerificationStatus] = mapped_column(
-        Enum(EmployerVerificationStatus, name="employer_verification_status"),
+        Enum(
+            EmployerVerificationStatus,
+            name="employer_verification_status",
+            values_callable=enum_values,
+        ),
         default=EmployerVerificationStatus.UNVERIFIED,
         nullable=False,
     )

@@ -10,19 +10,25 @@ export type EmployerOnboardingPayload = {
 };
 
 export type EmployerInnVerificationPayload = {
-  employer_type: "company" | "sole_proprietor";
+  employer_type?: "company" | "sole_proprietor";
   inn: string;
 };
 
 export type EmployerInnVerificationResponse = {
   data?: {
     verification?: {
+      employer_type?: "company" | "sole_proprietor";
       inn?: string;
+      full_name?: string;
       name?: string;
       ogrn?: string | null;
       address?: string | null;
       type?: string | null;
       status?: string | null;
+      subject_type?: string | null;
+      status_label?: string | null;
+      registration_date?: string | null;
+      director_name?: string | null;
     };
   };
 };

@@ -8,6 +8,8 @@ type CodeInputProps = {
   error?: string;
   disabled?: boolean;
   variant?: "primary" | "secondary" | "accent";
+  focusTrigger?: number;
+  errorFocusTrigger?: number;
   onChange: (value: string) => void;
 };
 
@@ -17,6 +19,8 @@ export function CodeInput({
   error,
   disabled = false,
   variant = "primary",
+  focusTrigger = 0,
+  errorFocusTrigger = 0,
   onChange,
 }: CodeInputProps) {
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -32,6 +36,38 @@ export function CodeInput({
   useEffect(() => {
     inputRefs.current = inputRefs.current.slice(0, length);
   }, [length]);
+
+  const shouldAutoFocus = () => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return true;
+    }
+
+    return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  };
+
+  useEffect(() => {
+    if (disabled || normalizedValue.length > 0 || !shouldAutoFocus()) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      focusInput(0);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [disabled, focusTrigger, normalizedValue.length]);
+
+  useEffect(() => {
+    if (disabled || normalizedValue.length !== length || !shouldAutoFocus()) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      focusInput(length - 1);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [disabled, errorFocusTrigger, length, normalizedValue.length]);
 
   const focusInput = (index: number) => {
     const nextInput = inputRefs.current[index];
