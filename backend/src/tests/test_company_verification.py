@@ -109,3 +109,62 @@ def test_verify_employer_inn_validates_length(client, db_session):
 
     assert response.status_code == 422
     assert response.json()["error"]["message"] == "ИНН должен содержать 10 или 12 цифр"
+
+
+def test_upload_employer_verification_documents_persists_records(client, db_session):
+    access_token = _register_and_login_employer(client, db_session)
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Acme Corp",
+            "inn": "7707083893",
+            "corporate_email": "hr@acme.example",
+            "website": "https://acme.example",
+        },
+    )
+    assert profile_response.status_code == 200
+
+    response = client.post(
+        "/api/v1/companies/verification-documents",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files=[
+            ("files", ("registration.pdf", b"registration-document", "application/pdf")),
+            ("files", ("power.docx", b"power-of-attorney", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")),
+        ],
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["documents_count"] == 2
+
+    from src.models import Employer, EmployerMembership, EmployerProfile, EmployerVerificationDocument, EmployerVerificationRequest, MediaFile, User
+
+    user = db_session.query(User).filter(User.email == "verify-inn@example.com").one()
+    employer_profile = db_session.query(EmployerProfile).filter(EmployerProfile.user_id == user.id).one()
+    employer = db_session.query(Employer).filter(Employer.inn == "7707083893").one()
+    membership = (
+        db_session.query(EmployerMembership)
+        .filter(EmployerMembership.employer_id == employer.id, EmployerMembership.user_id == user.id)
+        .one()
+    )
+    verification_request = (
+        db_session.query(EmployerVerificationRequest)
+        .filter(EmployerVerificationRequest.employer_id == employer.id)
+        .one()
+    )
+    documents = (
+        db_session.query(EmployerVerificationDocument)
+        .filter(EmployerVerificationDocument.verification_request_id == verification_request.id)
+        .all()
+    )
+    media_files = db_session.query(MediaFile).all()
+
+    assert employer.legal_name == "Acme Corp"
+    assert membership.is_primary is True
+    assert employer_profile.verification_status.value == "pending_review"
+    assert verification_request.inn == "7707083893"
+    assert len(documents) == 2
+    assert len(media_files) == 2

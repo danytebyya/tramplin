@@ -14,3 +14,11 @@ class EmployerVerificationStatus(StrEnum):
     VERIFIED = "verified"
     REJECTED = "rejected"
     CHANGES_REQUESTED = "changes_requested"
+
+
+class EmployerVerificationRequestStatus(StrEnum):
+    PENDING = "pending"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SUSPENDED = "suspended"

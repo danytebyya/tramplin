@@ -7,7 +7,11 @@ import { z } from "zod";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import { meRequest, useAuthStore } from "../../features/auth";
-import { upsertEmployerProfile, verifyEmployerInn } from "../../features/company-verification";
+import {
+  upsertEmployerProfile,
+  uploadEmployerVerificationDocuments,
+  verifyEmployerInn,
+} from "../../features/company-verification";
 import { Button, Checkbox, Container, InfoTooltip, Input } from "../../shared/ui";
 import "../auth/auth.css";
 import "./employer-onboarding.css";
@@ -241,7 +245,13 @@ export function EmployerOnboardingPage() {
   };
 
   const onboardingMutation = useMutation({
-    mutationFn: upsertEmployerProfile,
+    mutationFn: async (payload: {
+      profile: Parameters<typeof upsertEmployerProfile>[0];
+      documents: File[];
+    }) => {
+      await upsertEmployerProfile(payload.profile);
+      return uploadEmployerVerificationDocuments(payload.documents);
+    },
     onSuccess: () => {
       navigate("/dashboard/employer");
     },
@@ -317,11 +327,14 @@ export function EmployerOnboardingPage() {
     setApiError(null);
     setDocumentError(null);
     onboardingMutation.mutate({
-      employer_type: verifiedEmployerData.employerType,
-      company_name: verifiedEmployerData.fullName,
-      inn: values.inn.replace(/\D/g, ""),
-      corporate_email: currentUserEmail,
-      website: values.website?.trim() || undefined,
+      profile: {
+        employer_type: verifiedEmployerData.employerType,
+        company_name: verifiedEmployerData.fullName,
+        inn: values.inn.replace(/\D/g, ""),
+        corporate_email: currentUserEmail,
+        website: values.website?.trim() || undefined,
+      },
+      documents: documentFiles.map((item) => item.file),
     });
   };
 
@@ -758,6 +771,43 @@ export function EmployerOnboardingPage() {
                             </li>
                           </ul>
                         </div>
+                        <input
+                          ref={documentInputRef}
+                          className="employer-onboarding-upload__input"
+                          type="file"
+                          multiple
+                          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                          onChange={handleDocumentChange}
+                        />
+                        <button
+                          type="button"
+                          className={
+                            isDocumentDragActive
+                              ? "employer-onboarding-upload__dropzone employer-onboarding-upload__dropzone--active"
+                              : "employer-onboarding-upload__dropzone"
+                          }
+                          onClick={() => documentInputRef.current?.click()}
+                          onDragEnter={handleDocumentDragEnter}
+                          onDragOver={handleDocumentDragOver}
+                          onDragLeave={handleDocumentDragLeave}
+                          onDrop={handleDocumentDrop}
+                        >
+                          <span className="employer-onboarding-upload__description">
+                            Выберите или перетащите файлы
+                          </span>
+                          <svg
+                            aria-hidden="true"
+                            className="employer-onboarding-upload__icon"
+                            viewBox="0 0 512 499"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M61.7045 499C44.4615 499 29.8667 493.028 17.92 481.085C5.97334 469.141 0 454.55 0 437.312V370.377C0 363.114 2.45191 357.034 7.35573 352.137C12.2539 347.235 18.3353 344.784 25.6 344.784C32.8647 344.784 38.9461 347.235 43.8443 352.137C48.7481 357.034 51.2 363.114 51.2 370.377V437.312C51.2 439.939 52.2951 442.345 54.4853 444.529C56.6699 446.719 59.0763 447.814 61.7045 447.814H450.295C452.924 447.814 455.33 446.719 457.515 444.529C459.705 442.345 460.8 439.939 460.8 437.312V370.377C460.8 363.114 463.252 357.034 468.156 352.137C473.054 347.235 479.135 344.784 486.4 344.784C493.665 344.784 499.746 347.235 504.644 352.137C509.548 357.034 512 363.114 512 370.377V437.312C512 454.55 506.027 469.141 494.08 481.085C482.133 493.028 467.539 499 450.295 499H61.7045ZM230.4 85.7032L164.762 151.324C159.681 156.397 153.654 158.903 146.679 158.84C139.699 158.772 133.561 156.09 128.265 150.795C123.321 145.506 120.761 139.514 120.585 132.82C120.408 126.126 122.968 120.132 128.265 114.837L234.402 8.72728C237.599 5.53097 240.97 3.27878 244.514 1.97068C248.058 0.656891 251.887 0 256 0C260.113 0 263.942 0.656891 267.486 1.97068C271.03 3.27878 274.401 5.53097 277.598 8.72728L383.736 114.837C388.81 119.91 391.316 125.851 391.253 132.658C391.185 139.46 388.679 145.506 383.736 150.795C378.439 156.09 372.358 158.826 365.491 159.002C358.619 159.179 352.535 156.619 347.238 151.324L281.6 85.7032V346.754C281.6 354.017 279.148 360.097 274.244 364.994C269.346 369.896 263.265 372.348 256 372.348C248.735 372.348 242.654 369.896 237.756 364.994C232.852 360.097 230.4 354.017 230.4 346.754V85.7032Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </button>
                         {documentFiles.length > 0 ? (
                           <div className="employer-onboarding-upload__files">
                             {documentFiles.map((item) => (
@@ -803,43 +853,6 @@ export function EmployerOnboardingPage() {
                             ))}
                           </div>
                         ) : null}
-                        <input
-                          ref={documentInputRef}
-                          className="employer-onboarding-upload__input"
-                          type="file"
-                          multiple
-                          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-                          onChange={handleDocumentChange}
-                        />
-                        <button
-                          type="button"
-                          className={
-                            isDocumentDragActive
-                              ? "employer-onboarding-upload__dropzone employer-onboarding-upload__dropzone--active"
-                              : "employer-onboarding-upload__dropzone"
-                          }
-                          onClick={() => documentInputRef.current?.click()}
-                          onDragEnter={handleDocumentDragEnter}
-                          onDragOver={handleDocumentDragOver}
-                          onDragLeave={handleDocumentDragLeave}
-                          onDrop={handleDocumentDrop}
-                        >
-                          <span className="employer-onboarding-upload__description">
-                            Выберите или перетащите файлы
-                          </span>
-                          <svg
-                            aria-hidden="true"
-                            className="employer-onboarding-upload__icon"
-                            viewBox="0 0 512 499"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              d="M61.7045 499C44.4615 499 29.8667 493.028 17.92 481.085C5.97334 469.141 0 454.55 0 437.312V370.377C0 363.114 2.45191 357.034 7.35573 352.137C12.2539 347.235 18.3353 344.784 25.6 344.784C32.8647 344.784 38.9461 347.235 43.8443 352.137C48.7481 357.034 51.2 363.114 51.2 370.377V437.312C51.2 439.939 52.2951 442.345 54.4853 444.529C56.6699 446.719 59.0763 447.814 61.7045 447.814H450.295C452.924 447.814 455.33 446.719 457.515 444.529C459.705 442.345 460.8 439.939 460.8 437.312V370.377C460.8 363.114 463.252 357.034 468.156 352.137C473.054 347.235 479.135 344.784 486.4 344.784C493.665 344.784 499.746 347.235 504.644 352.137C509.548 357.034 512 363.114 512 370.377V437.312C512 454.55 506.027 469.141 494.08 481.085C482.133 493.028 467.539 499 450.295 499H61.7045ZM230.4 85.7032L164.762 151.324C159.681 156.397 153.654 158.903 146.679 158.84C139.699 158.772 133.561 156.09 128.265 150.795C123.321 145.506 120.761 139.514 120.585 132.82C120.408 126.126 122.968 120.132 128.265 114.837L234.402 8.72728C237.599 5.53097 240.97 3.27878 244.514 1.97068C248.058 0.656891 251.887 0 256 0C260.113 0 263.942 0.656891 267.486 1.97068C271.03 3.27878 274.401 5.53097 277.598 8.72728L383.736 114.837C388.81 119.91 391.316 125.851 391.253 132.658C391.185 139.46 388.679 145.506 383.736 150.795C378.439 156.09 372.358 158.826 365.491 159.002C358.619 159.179 352.535 156.619 347.238 151.324L281.6 85.7032V346.754C281.6 354.017 279.148 360.097 274.244 364.994C269.346 369.896 263.265 372.348 256 372.348C248.735 372.348 242.654 369.896 237.756 364.994C232.852 360.097 230.4 354.017 230.4 346.754V85.7032Z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        </button>
                         {documentError ? <span className="auth-form__error">{documentError}</span> : null}
                       </div>
                     </div>

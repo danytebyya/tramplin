@@ -50,6 +50,19 @@ export async function upsertEmployerProfile(payload: EmployerOnboardingPayload) 
   return response.data;
 }
 
+export async function uploadEmployerVerificationDocuments(files: File[]) {
+  const formData = new FormData();
+
+  files.forEach((file) => {
+    formData.append("files", file);
+  });
+
+  const response = await apiClient.post("/companies/verification-documents", formData, {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
 export async function verifyEmployerInn(
   payload: EmployerInnVerificationPayload,
 ): Promise<EmployerInnVerificationResponse> {

@@ -8,10 +8,6 @@
   overflow: visible;
 }
 
-.auth-page--verification .auth-page__hero {
-  display: none;
-}
-
 .auth-page__content.container.container__auth-page {
   width: min(1080px, 100%);
   max-width: 100%;

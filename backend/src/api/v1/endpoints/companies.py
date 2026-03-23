@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_user
@@ -42,3 +42,18 @@ def upsert_employer_profile(
     EmployerService(db).upsert_profile(current_user=current_user, payload=payload)
     db.refresh(current_user)
     return success_response({"user": UserRead.model_validate(current_user).model_dump(mode="json")})
+
+
+@router.post("/verification-documents", status_code=status.HTTP_200_OK)
+async def upload_employer_verification_documents(
+    files: list[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    documents = []
+    for item in files:
+        content = await item.read()
+        documents.append((item.filename or "document", item.content_type or "application/octet-stream", content))
+
+    result = EmployerService(db).submit_verification_documents(current_user=current_user, files=documents)
+    return success_response(result)

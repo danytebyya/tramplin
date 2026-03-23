@@ -1006,6 +1006,7 @@ a {
   width: 20px;
   height: 20px;
   flex-basis: 20px;
+  transform: translateY(1px);
   mask-image: url("../../assets/auth/eye-close.svg");
   -webkit-mask-image: url("../../assets/auth/eye-close.svg");
 }
