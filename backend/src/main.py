@@ -49,6 +49,9 @@ def _normalize_validation_message(error: dict) -> str:
     ):
         return "Введите корректный email"
 
+    if lower_message == "field required":
+        return "Обязательное поле"
+
     return message
 
 

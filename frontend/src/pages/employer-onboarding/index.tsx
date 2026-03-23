@@ -253,7 +253,7 @@ export function EmployerOnboardingPage() {
       return uploadEmployerVerificationDocuments(payload.documents);
     },
     onSuccess: () => {
-      navigate("/dashboard/employer");
+      navigate("/");
     },
     onError: (error: any) => {
       setApiError(

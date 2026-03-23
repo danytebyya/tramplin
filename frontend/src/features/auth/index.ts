@@ -9,6 +9,7 @@ export {
   restoreAuthSession,
   useAuthStore,
 } from "./session";
+export { LogoutButton } from "./logout-button";
 
 export type RegisterPayload = {
   email: string;
@@ -97,7 +98,7 @@ export function applyAuthSession(response: AuthSuccessResponse) {
 
 export function resolvePostAuthRoute(role: "applicant" | "employer", hasEmployerProfile?: boolean) {
   if (role === "employer") {
-    return hasEmployerProfile ? "/dashboard/employer" : "/onboarding/employer";
+    return hasEmployerProfile ? "/" : "/onboarding/employer";
   }
 
   return "/";
