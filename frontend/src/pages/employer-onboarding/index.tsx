@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -57,6 +57,12 @@ const employerOnboardingSchema = z
 type EmployerOnboardingValues = z.infer<typeof employerOnboardingSchema>;
 type InnVerificationStatus = "idle" | "verifying" | "verified" | "failed";
 type OnboardingStep = "verification" | "details";
+type DocumentUploadStatus = "uploading" | "ready";
+type DocumentUploadItem = {
+  key: string;
+  file: File;
+  status: DocumentUploadStatus;
+};
 type VerifiedEmployerData = {
   employerType: "company" | "sole_proprietor";
   inn: string;
@@ -83,12 +89,53 @@ function getInnValidationMessage(employerType: "company" | "sole_proprietor") {
     : "ИНН организации должен содержать 10 цифр";
 }
 
+function formatPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) {
+    return "";
+  }
+
+  const normalizedDigits =
+    digits[0] === "7" || digits[0] === "8" ? `7${digits.slice(1, 11)}` : `7${digits.slice(0, 10)}`;
+  const countryCode = normalizedDigits[0];
+  const areaCode = normalizedDigits.slice(1, 4);
+  const firstPart = normalizedDigits.slice(4, 7);
+  const secondPart = normalizedDigits.slice(7, 9);
+  const thirdPart = normalizedDigits.slice(9, 11);
+
+  let formattedValue = `+${countryCode}`;
+
+  if (areaCode) {
+    formattedValue += ` (${areaCode}`;
+  }
+
+  if (areaCode.length === 3) {
+    formattedValue += ")";
+  }
+
+  if (firstPart) {
+    formattedValue += ` ${firstPart}`;
+  }
+
+  if (secondPart) {
+    formattedValue += `-${secondPart}`;
+  }
+
+  if (thirdPart) {
+    formattedValue += `-${thirdPart}`;
+  }
+
+  return formattedValue;
+}
+
 export function EmployerOnboardingPage() {
   const navigate = useNavigate();
   const accessToken = useAuthStore((state) => state.accessToken);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [documentName, setDocumentName] = useState("");
+  const [documentFiles, setDocumentFiles] = useState<DocumentUploadItem[]>([]);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [isDocumentDragActive, setIsDocumentDragActive] = useState(false);
   const [selectedEmployerType, setSelectedEmployerType] = useState<"company" | "sole_proprietor">(
     "company",
   );
@@ -96,6 +143,7 @@ export function EmployerOnboardingPage() {
   const [innVerificationStatus, setInnVerificationStatus] = useState<InnVerificationStatus>("idle");
   const [verifiedEmployerData, setVerifiedEmployerData] = useState<VerifiedEmployerData | null>(null);
   const documentInputRef = useRef<HTMLInputElement | null>(null);
+  const documentDragDepthRef = useRef(0);
   const pendingInnRequestKeyRef = useRef<string | null>(null);
   const lastCheckedInnRequestKeyRef = useRef<string | null>(null);
   const verifyInnTimeoutRef = useRef<number | null>(null);
@@ -261,8 +309,8 @@ export function EmployerOnboardingPage() {
       return;
     }
 
-    if (!documentName) {
-      setDocumentError("Загрузите документ");
+    if (documentFiles.length === 0) {
+      setDocumentError("Загрузите хотя бы один документ");
       return;
     }
 
@@ -277,10 +325,81 @@ export function EmployerOnboardingPage() {
     });
   };
 
-  const handleDocumentChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextFile = event.target.files?.[0];
-    setDocumentName(nextFile?.name ?? "");
+  const mergeDocumentFiles = (nextFiles: File[]) => {
+    setDocumentFiles((currentFiles) => {
+      const nextEntries = new Map(currentFiles.map((item) => [item.key, item]));
+
+      nextFiles.forEach((file) => {
+        const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
+        if (!nextEntries.has(fileKey)) {
+          nextEntries.set(fileKey, { key: fileKey, file, status: "uploading" });
+        }
+      });
+
+      return Array.from(nextEntries.values());
+    });
     setDocumentError(null);
+  };
+
+  const handleDocumentChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFiles = Array.from(event.target.files ?? []);
+    if (nextFiles.length === 0) {
+      return;
+    }
+
+    mergeDocumentFiles(nextFiles);
+    event.target.value = "";
+  };
+
+  const handleDocumentDragEnter = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    documentDragDepthRef.current += 1;
+    setIsDocumentDragActive(true);
+  };
+
+  const handleDocumentDragOver = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDocumentDragActive(true);
+  };
+
+  const handleDocumentDragLeave = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    documentDragDepthRef.current = Math.max(0, documentDragDepthRef.current - 1);
+
+    if (documentDragDepthRef.current === 0) {
+      setIsDocumentDragActive(false);
+    }
+  };
+
+  const handleDocumentDrop = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    documentDragDepthRef.current = 0;
+    setIsDocumentDragActive(false);
+
+    const nextFiles = Array.from(event.dataTransfer.files ?? []);
+    if (nextFiles.length === 0) {
+      return;
+    }
+
+    mergeDocumentFiles(nextFiles);
+  };
+
+  const handleDocumentRemove = (fileToRemove: File) => {
+    setDocumentFiles((currentFiles) =>
+      currentFiles.filter(
+        (item) =>
+          !(
+            item.file.name === fileToRemove.name &&
+            item.file.size === fileToRemove.size &&
+            item.file.lastModified === fileToRemove.lastModified
+          ),
+      ),
+    );
   };
 
   const handleContinue = () => {
@@ -293,7 +412,37 @@ export function EmployerOnboardingPage() {
     }
 
     setStep("details");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const handleBack = () => {
+    if (step === "details") {
+      setStep("verification");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    navigate(-1);
+  };
+
+  useEffect(() => {
+    const uploadingItems = documentFiles.filter((item) => item.status === "uploading");
+    if (uploadingItems.length === 0) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setDocumentFiles((currentFiles) =>
+        currentFiles.map((item) =>
+          item.status === "uploading" ? { ...item, status: "ready" } : item,
+        ),
+      );
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [documentFiles]);
 
   return (
     <main className="auth-page auth-page--verification employer-onboarding-page">
@@ -308,7 +457,7 @@ export function EmployerOnboardingPage() {
                       type="button"
                       className="auth-verification-header__back"
                       aria-label="Назад"
-                      onClick={() => navigate(-1)}
+                      onClick={handleBack}
                     >
                       <img
                         src={arrowIcon}
@@ -558,7 +707,11 @@ export function EmployerOnboardingPage() {
                           inputMode="tel"
                           error={errors.phone?.message}
                           clearable
-                          {...register("phone")}
+                          {...register("phone", {
+                            onChange: (event) => {
+                              event.target.value = formatPhoneNumber(event.target.value);
+                            },
+                          })}
                         />
                         {errors.phone && (
                           <span className="auth-form__error">{errors.phone.message}</span>
@@ -605,20 +758,74 @@ export function EmployerOnboardingPage() {
                             </li>
                           </ul>
                         </div>
+                        {documentFiles.length > 0 ? (
+                          <div className="employer-onboarding-upload__files">
+                            {documentFiles.map((item) => (
+                              <div key={item.key} className="employer-onboarding-upload__file">
+                                <div
+                                  className={
+                                    item.status === "uploading"
+                                      ? "employer-onboarding-upload__file-icon employer-onboarding-upload__file-icon--uploading"
+                                      : "employer-onboarding-upload__file-icon"
+                                  }
+                                  aria-hidden="true"
+                                >
+                                  <span
+                                    className={
+                                      item.status === "uploading"
+                                        ? "employer-onboarding-upload__file-icon-spinner"
+                                        : "employer-onboarding-upload__file-icon-mark"
+                                    }
+                                  />
+                                </div>
+                                <div className="employer-onboarding-upload__file-body">
+                                  <span className="employer-onboarding-upload__file-name">
+                                    {item.file.name}
+                                  </span>
+                                  <span className="employer-onboarding-upload__file-type">
+                                    {item.status === "uploading"
+                                      ? "Загрузка..."
+                                      : item.file.type || "Документ"}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="employer-onboarding-upload__file-remove"
+                                  aria-label={`Удалить файл ${item.file.name}`}
+                                  onClick={() => handleDocumentRemove(item.file)}
+                                >
+                                  <span
+                                    className="employer-onboarding-upload__file-remove-icon"
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                         <input
                           ref={documentInputRef}
                           className="employer-onboarding-upload__input"
                           type="file"
+                          multiple
                           accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
                           onChange={handleDocumentChange}
                         />
                         <button
                           type="button"
-                          className="employer-onboarding-upload__dropzone"
+                          className={
+                            isDocumentDragActive
+                              ? "employer-onboarding-upload__dropzone employer-onboarding-upload__dropzone--active"
+                              : "employer-onboarding-upload__dropzone"
+                          }
                           onClick={() => documentInputRef.current?.click()}
+                          onDragEnter={handleDocumentDragEnter}
+                          onDragOver={handleDocumentDragOver}
+                          onDragLeave={handleDocumentDragLeave}
+                          onDrop={handleDocumentDrop}
                         >
                           <span className="employer-onboarding-upload__description">
-                            {documentName || "Выберите или перетащите файлы"}
+                            Выберите или перетащите файлы
                           </span>
                           <svg
                             aria-hidden="true"

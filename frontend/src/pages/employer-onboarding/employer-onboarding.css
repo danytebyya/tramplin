@@ -230,7 +230,7 @@ body.employer-onboarding-page-root {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: #17b34a;
+  background: var(--color-primary);
   flex: 0 0 30px;
 }
 
@@ -257,7 +257,7 @@ body.employer-onboarding-page-root {
   display: block;
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.92);
+  border: 2px solid #98a2b3;
   border-right-color: transparent;
   border-radius: 999px;
   animation: button-spinner 0.8s linear infinite;
