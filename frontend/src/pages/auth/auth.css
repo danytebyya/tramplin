@@ -273,6 +273,14 @@
   gap: 48px;
 }
 
+.auth-form__role-switch .segmented-switch__indicator {
+  background: var(--color-primary);
+}
+
+.auth-form__role-switch.segmented-switch--second-active .segmented-switch__indicator {
+  background: var(--color-secondary);
+}
+
 .auth-form__role {
   display: inline-flex;
   align-items: center;
@@ -353,8 +361,8 @@
   color: var(--color-danger);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
-  text-align: center;
-  align-self: center;
+  text-align: left;
+  align-self: stretch;
 }
 
 .auth-verification {

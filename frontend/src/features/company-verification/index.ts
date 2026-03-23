@@ -43,6 +43,17 @@ function getAuthorizedHeaders() {
     : undefined;
 }
 
+function dispatchEmployerDocumentUploadProgress(file: File, progress: number) {
+  window.dispatchEvent(
+    new CustomEvent("tramplin:employer-document-upload-progress", {
+      detail: {
+        fileKey: `${file.name}:${file.size}:${file.lastModified}`,
+        progress,
+      },
+    }),
+  );
+}
+
 export async function upsertEmployerProfile(payload: EmployerOnboardingPayload) {
   const response = await apiClient.put("/companies/profile", payload, {
     headers: getAuthorizedHeaders(),
@@ -51,16 +62,31 @@ export async function upsertEmployerProfile(payload: EmployerOnboardingPayload) 
 }
 
 export async function uploadEmployerVerificationDocuments(files: File[]) {
-  const formData = new FormData();
+  let verificationRequestId: string | undefined;
 
-  files.forEach((file) => {
+  for (const file of files) {
+    let latestProgress = 1;
+    const formData = new FormData();
     formData.append("files", file);
-  });
+    if (verificationRequestId) {
+      formData.append("verification_request_id", verificationRequestId);
+    }
 
-  const response = await apiClient.post("/companies/verification-documents", formData, {
-    headers: getAuthorizedHeaders(),
-  });
-  return response.data;
+    dispatchEmployerDocumentUploadProgress(file, latestProgress);
+
+    const response = await apiClient.post("/companies/verification-documents", formData, {
+      headers: getAuthorizedHeaders(),
+      onUploadProgress: (event) => {
+        latestProgress = event.total
+          ? Math.min(Math.max(Math.round((event.loaded / event.total) * 100), 1), 95)
+          : latestProgress;
+        dispatchEmployerDocumentUploadProgress(file, latestProgress);
+      },
+    });
+
+    dispatchEmployerDocumentUploadProgress(file, 100);
+    verificationRequestId = response.data?.data?.verification_request_id ?? verificationRequestId;
+  }
 }
 
 export async function verifyEmployerInn(

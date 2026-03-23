@@ -256,13 +256,12 @@ body.employer-onboarding-page-root {
 
 .employer-onboarding-upload__file-icon-spinner {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
-  background:
-    conic-gradient(var(--color-primary) var(--upload-progress, 0%), rgba(203, 213, 225, 0.28) 0),
-    radial-gradient(circle, transparent 58%, var(--color-bg-primary) 59%);
-  border-radius: 999px;
+  background: conic-gradient(#98a2b3 var(--upload-progress, 0%), rgba(152, 162, 179, 0.32) 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3.5px));
   transition: background 0.12s linear;
 }
 

@@ -16,7 +16,7 @@ import {
   resolvePostAuthRoute,
   requestEmailVerificationCode,
 } from "../../features/auth";
-import { Button, Checkbox, CodeInput, Container, Input, Radio } from "../../shared/ui";
+import { Button, Checkbox, CodeInput, Container, Input } from "../../shared/ui";
 import "./auth.css";
 
 const registerSchema = z
@@ -539,25 +539,38 @@ export function AuthPage() {
 
               {!isCodeStep ? (
                 <form className="auth-form" onSubmit={handleSubmit(handleFormSubmit)}>
-                  <div className="auth-form__roles" role="radiogroup" aria-label="Выбор роли">
-                    <label className="auth-form__role">
-                      <Radio
-                        name="register-role"
-                        variant="primary"
-                        checked={selectedRole === "employer"}
-                        onChange={() => setValue("role", "employer", { shouldValidate: true })}
-                      />
-                      <span className="auth-form__role-label">Работодатель</span>
-                    </label>
-                    <label className="auth-form__role">
-                      <Radio
-                        name="register-role"
-                        variant="secondary"
-                        checked={selectedRole === "applicant"}
-                        onChange={() => setValue("role", "applicant", { shouldValidate: true })}
-                      />
-                      <span className="auth-form__role-label">Соискатель</span>
-                    </label>
+                  <div
+                    className={
+                      selectedRole === "applicant"
+                        ? "segmented-switch segmented-switch--second-active auth-form__role-switch"
+                        : "segmented-switch auth-form__role-switch"
+                    }
+                    role="tablist"
+                    aria-label="Выбор роли"
+                  >
+                    <span className="segmented-switch__indicator" aria-hidden="true" />
+                    <button
+                      type="button"
+                      className={
+                        selectedRole === "employer"
+                          ? "segmented-switch__option segmented-switch__option--active"
+                          : "segmented-switch__option"
+                      }
+                      onClick={() => setValue("role", "employer", { shouldValidate: true })}
+                    >
+                      Работодатель
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        selectedRole === "applicant"
+                          ? "segmented-switch__option segmented-switch__option--active"
+                          : "segmented-switch__option"
+                      }
+                      onClick={() => setValue("role", "applicant", { shouldValidate: true })}
+                    >
+                      Соискатель
+                    </button>
                   </div>
 
                   <div className="auth-form__fields">

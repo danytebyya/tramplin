@@ -3,3 +3,8 @@
   flex-direction: column;
   gap: 12px;
 }
+
+.login-page__error {
+  text-align: left;
+  align-self: stretch;
+}

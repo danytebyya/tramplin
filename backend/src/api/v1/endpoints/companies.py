@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_user
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/companies", tags=["companies"])
 def verify_employer_inn(
     payload: EmployerInnVerificationRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> dict:
     if current_user.role != UserRole.EMPLOYER:
         raise AppError(
@@ -26,6 +27,7 @@ def verify_employer_inn(
             status_code=403,
         )
 
+    EmployerService(db).ensure_inn_available(current_user=current_user, inn=payload.inn)
     verification_result = DadataService().verify_inn(
         inn=payload.inn,
         employer_type=payload.employer_type,
@@ -47,6 +49,7 @@ def upsert_employer_profile(
 @router.post("/verification-documents", status_code=status.HTTP_200_OK)
 async def upload_employer_verification_documents(
     files: list[UploadFile] = File(...),
+    verification_request_id: str | None = Form(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -55,5 +58,9 @@ async def upload_employer_verification_documents(
         content = await item.read()
         documents.append((item.filename or "document", item.content_type or "application/octet-stream", content))
 
-    result = EmployerService(db).submit_verification_documents(current_user=current_user, files=documents)
+    result = EmployerService(db).submit_verification_documents(
+        current_user=current_user,
+        files=documents,
+        verification_request_id=verification_request_id,
+    )
     return success_response(result)

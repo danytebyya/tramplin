@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
-import { meRequest, useAuthStore } from "../../features/auth";
+import { clearPersistedAuthSession, meRequest, useAuthStore } from "../../features/auth";
 import {
   upsertEmployerProfile,
   uploadEmployerVerificationDocuments,
@@ -61,7 +61,7 @@ const employerOnboardingSchema = z
 type EmployerOnboardingValues = z.infer<typeof employerOnboardingSchema>;
 type InnVerificationStatus = "idle" | "verifying" | "verified" | "failed";
 type OnboardingStep = "verification" | "details";
-type DocumentUploadStatus = "uploading" | "ready";
+type DocumentUploadStatus = "pending" | "uploading" | "ready";
 type DocumentUploadItem = {
   key: string;
   file: File;
@@ -327,6 +327,13 @@ export function EmployerOnboardingPage() {
 
     setApiError(null);
     setDocumentError(null);
+    setDocumentFiles((currentFiles) =>
+      currentFiles.map((item) => ({
+        ...item,
+        status: "uploading",
+        progress: 1,
+      })),
+    );
     onboardingMutation.mutate({
       profile: {
         employer_type: verifiedEmployerData.employerType,
@@ -346,7 +353,7 @@ export function EmployerOnboardingPage() {
       nextFiles.forEach((file) => {
         const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
         if (!nextEntries.has(fileKey)) {
-          nextEntries.set(fileKey, { key: fileKey, file, status: "uploading", progress: 0 });
+          nextEntries.set(fileKey, { key: fileKey, file, status: "pending", progress: 0 });
         }
       });
 
@@ -436,33 +443,40 @@ export function EmployerOnboardingPage() {
       return;
     }
 
-    navigate(-1);
+    useAuthStore.getState().clearSession();
+    clearPersistedAuthSession();
+    navigate("/login", { replace: true });
   };
 
   useEffect(() => {
-    const uploadingItems = documentFiles.filter((item) => item.status === "uploading");
-    if (uploadingItems.length === 0) {
-      return;
-    }
+    const handleUploadProgress = (event: Event) => {
+      const customEvent = event as CustomEvent<{ fileKey: string; progress: number }>;
 
-    const intervalId = window.setInterval(() => {
       setDocumentFiles((currentFiles) =>
         currentFiles.map((item) =>
-          item.status === "uploading"
+          item.key === customEvent.detail.fileKey
             ? {
                 ...item,
-                progress: Math.min(item.progress + 12, 100),
-                status: item.progress >= 88 ? "ready" : item.status,
+                status: customEvent.detail.progress >= 100 ? "ready" : "uploading",
+                progress: customEvent.detail.progress,
               }
             : item,
         ),
       );
-    }, 120);
+    };
+
+    window.addEventListener(
+      "tramplin:employer-document-upload-progress",
+      handleUploadProgress as EventListener,
+    );
 
     return () => {
-      window.clearInterval(intervalId);
+      window.removeEventListener(
+        "tramplin:employer-document-upload-progress",
+        handleUploadProgress as EventListener,
+      );
     };
-  }, [documentFiles]);
+  }, []);
 
   return (
     <main className="auth-page auth-page--verification employer-onboarding-page">
@@ -847,7 +861,9 @@ export function EmployerOnboardingPage() {
                                   <span className="employer-onboarding-upload__file-type">
                                     {item.status === "uploading"
                                       ? "Загрузка..."
-                                      : item.file.type || "Документ"}
+                                      : item.status === "pending"
+                                        ? "Ожидает отправки"
+                                        : item.file.type || "Документ"}
                                   </span>
                                 </div>
                                 <button

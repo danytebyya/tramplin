@@ -1,10 +1,10 @@
 from src.services.dadata_service import DadataService
 
 
-def _register_and_login_employer(client, db_session):
+def _register_and_login_employer(client, db_session, *, email: str = "verify-inn@example.com"):
     request_code_response = client.post(
         "/api/v1/auth/email/request-code",
-        json={"email": "verify-inn@example.com", "force_resend": False},
+        json={"email": email, "force_resend": False},
     )
     assert request_code_response.status_code == 200
 
@@ -12,14 +12,14 @@ def _register_and_login_employer(client, db_session):
 
     verification_state = (
         db_session.query(EmailVerificationState)
-        .filter(EmailVerificationState.email == "verify-inn@example.com")
+        .filter(EmailVerificationState.email == email)
         .one()
     )
 
     register_response = client.post(
         "/api/v1/users",
         json={
-            "email": "verify-inn@example.com",
+            "email": email,
             "display_name": "Verify Inn",
             "password": "StrongPass123",
             "verification_code": verification_state.debug_code,
@@ -30,7 +30,7 @@ def _register_and_login_employer(client, db_session):
 
     login_response = client.post(
         "/api/v1/auth/sessions",
-        json={"email": "verify-inn@example.com", "password": "StrongPass123"},
+        json={"email": email, "password": "StrongPass123"},
     )
     assert login_response.status_code == 201
     return login_response.json()["data"]["access_token"]
@@ -109,6 +109,41 @@ def test_verify_employer_inn_validates_length(client, db_session):
 
     assert response.status_code == 422
     assert response.json()["error"]["message"] == "ИНН должен содержать 10 или 12 цифр"
+
+
+def test_verify_employer_inn_rejects_existing_inn_in_platform(client, db_session):
+    access_token = _register_and_login_employer(client, db_session, email="first-verify-inn@example.com")
+    another_access_token = _register_and_login_employer(
+        client,
+        db_session,
+        email="second-verify-inn@example.com",
+    )
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Existing Corp",
+            "inn": "7707083893",
+            "corporate_email": "hr@existing.example",
+            "website": "https://existing.example",
+        },
+    )
+    assert profile_response.status_code == 200
+
+    response = client.post(
+        "/api/v1/companies/verify-inn",
+        headers={"Authorization": f"Bearer {another_access_token}"},
+        json={"inn": "7707083893"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "EMPLOYER_INN_EXISTS"
+    assert (
+        response.json()["error"]["message"]
+        == "Организация или работодатель с таким ИНН уже зарегистрированы на платформе"
+    )
 
 
 def test_upload_employer_verification_documents_persists_records(client, db_session):

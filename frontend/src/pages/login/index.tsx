@@ -74,12 +74,12 @@ export function LoginPage() {
   };
 
   return (
-    <main className="auth-page login-page">
+    <main className="auth-page auth-page--secondary-theme login-page">
       <Container className="auth-page__content" variant="auth-page">
         <section className="auth-page__hero">
           <div className="auth-page__hero-content login-page__hero-content">
             <div className="auth-page__brand-stage">
-              <WaveAuraBackground />
+              <WaveAuraBackground variant="secondary" />
               <span className="auth-page__brand">Трамплин</span>
             </div>
           </div>
@@ -104,6 +104,7 @@ export function LoginPage() {
                       autoComplete="email"
                       error={errors.email?.message}
                       clearable
+                      className="input--secondary"
                       {...register("email")}
                     />
                     {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
@@ -117,16 +118,17 @@ export function LoginPage() {
                       autoComplete="current-password"
                       error={errors.password?.message}
                       clearable
+                      className="input--secondary"
                       {...register("password")}
                     />
                     {errors.password && <span className="auth-form__error">{errors.password.message}</span>}
                   </label>
+
+                  {apiError && <span className="auth-form__error login-page__error">{apiError}</span>}
                 </div>
 
-                {apiError && <span className="auth-form__error">{apiError}</span>}
-
                 <div className="login-page__actions">
-                  <Button type="submit" fullWidth loading={loginMutation.isPending}>
+                  <Button type="submit" variant="secondary" fullWidth loading={loginMutation.isPending}>
                     Войти
                   </Button>
                 </div>
