@@ -3,7 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import { LogoutButton, useAuthStore } from "../../features/auth";
-import { Button, Container } from "../../shared/ui";
+import { Button, Container, Input } from "../../shared/ui";
+import "../../widgets/header/header.css";
 import "./map.css";
 
 export function MapPage() {
@@ -21,91 +22,86 @@ export function MapPage() {
 
   return (
     <main className={mapPageClassName}>
-      <header className="map-header">
-        <div className="map-header__top">
-          <Container className="map-header__top-container">
-            <div className="map-header__brand">
-              <Link to="/" className="map-header__brand-name">
+      <header className="header">
+        <div className="header__top">
+          <Container className="map-page__container header__top-container">
+            <div className="header__brand">
+              <Link to="/" className="header__brand-name">
                 Трамплин
               </Link>
-              <div className="map-header__logo-badge">Лого</div>
+              <div className="header__logo-badge">Лого</div>
             </div>
 
-            <nav className="map-header__nav" aria-label="Основная навигация">
-              <Link to="/" className="map-header__nav-link">
-                Главная
-              </Link>
-              <a href="#about" className="map-header__nav-link">
-                О проекте
-              </a>
-            </nav>
+            <div className="header__main">
+              <nav className="header__nav" aria-label="Основная навигация">
+                <Link to="/" className="header__nav-link">
+                  Главная
+                </Link>
+                <a href="#about" className="header__nav-link">
+                  О проекте
+                </a>
+              </nav>
 
-            <label className="map-header__search" aria-label="Поиск">
-              <svg className="map-header__search-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="11" cy="11" r="6.5" />
-                <path d="M16 16L21 21" />
-              </svg>
-              <input
-                type="search"
-                className="map-header__search-input"
-                placeholder="Поиск"
-                aria-label="Поиск по платформе"
-              />
-              <button type="button" className="map-header__search-clear" aria-label="Очистить поиск">
-                <span className="map-header__search-clear-line" />
-                <span className="map-header__search-clear-line" />
-              </button>
-            </label>
+              <div className="header__controls">
+                <label className="header__search" aria-label="Поиск">
+                  <Input
+                    type="search"
+                    placeholder="Поиск"
+                    aria-label="Поиск по платформе"
+                    className="input--sm header__search-input"
+                  />
+                </label>
 
-            <div className="map-header__auth">
-              {isAuthenticated ? (
-                <LogoutButton className="map-header__auth-button" variant="primary-outline" />
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="primary-outline"
-                    className="map-header__auth-button"
-                    onClick={() => navigate("/login")}
-                  >
-                    Вход
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    className="map-header__auth-button"
-                    onClick={() => navigate("/register")}
-                  >
-                    Регистрация
-                  </Button>
-                </>
-              )}
+                <div className="header__actions">
+                  {isAuthenticated ? (
+                    <LogoutButton className="header__action-button" variant="primary-outline" />
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="primary-outline"
+                        size="md"
+                        className="header__action-button header__action-button--login"
+                        onClick={() => navigate("/login")}
+                      >
+                        Вход
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="md"
+                        className="header__action-button header__action-button--register"
+                        onClick={() => navigate("/register")}
+                      >
+                        Регистрация
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </Container>
         </div>
 
-        <div className="map-header__bottom">
-          <Container className="map-header__bottom-container">
-            <nav className="map-header__categories" aria-label="Категории">
-              <a href="#vacancies" className="map-header__category-link">
+        <div className="header__bottom">
+          <Container className="map-page__container header__bottom-container">
+            <nav className="header__categories" aria-label="Категории">
+              <a href="#vacancies" className="header__category-link">
                 Вакансии
               </a>
-              <a href="#internships" className="map-header__category-link">
+              <a href="#internships" className="header__category-link">
                 Стажировки
               </a>
-              <a href="#events" className="map-header__category-link">
+              <a href="#events" className="header__category-link">
                 Мероприятия
               </a>
-              <a href="#mentorship" className="map-header__category-link">
+              <a href="#mentorship" className="header__category-link">
                 Менторство
               </a>
             </nav>
 
-            <div className="map-header__location">
-              <svg className="map-header__location-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 21C12 21 18 14.7 18 10A6 6 0 1 0 6 10C6 14.7 12 21 12 21Z" />
-                <circle cx="12" cy="10" r="2.5" />
-              </svg>
+            <div className="header__location">
+              <span className="header__location-icon" aria-hidden="true" />
               <span>Чебоксары</span>
             </div>
           </Container>
@@ -113,7 +109,7 @@ export function MapPage() {
       </header>
 
       <section className="map-page__hero">
-        <Container className="map-page__hero-container">
+        <Container className="map-page__container map-page__hero-container">
           <div className="map-page__hero-card">
             <span className="map-page__hero-eyebrow">Главная</span>
             <h1 className="map-page__title">Карьерная платформа для студентов, выпускников и работодателей</h1>
@@ -126,7 +122,7 @@ export function MapPage() {
       </section>
 
       <footer className="map-footer" id="about">
-        <Container className="map-footer__container">
+        <Container className="map-page__container map-footer__container">
           <div className="map-footer__main">
             <div className="map-footer__logo-card">Лого</div>
 
