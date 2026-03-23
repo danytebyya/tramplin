@@ -371,6 +371,12 @@
 }
 
 .auth-page--verification .auth-verification {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
+.auth-verification__content {
   width: min(504px, 100%);
   max-width: 100%;
   margin: 0 auto;

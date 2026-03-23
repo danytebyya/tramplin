@@ -640,48 +640,50 @@ export function AuthPage() {
               ) : (
                 <div className="auth-form auth-form--verification">
                   <div className="auth-verification">
-                    <div className="auth-verification__group">
-                      <label className="auth-form__control auth-form__control--verification">
-                        <CodeInput
-                          value={verificationCode}
-                          variant={roleTheme}
-                          focusTrigger={codeInputFocusTrigger}
-                          errorFocusTrigger={codeInputErrorFocusTrigger}
-                          error={apiError ?? undefined}
-                          disabled={completeRegistrationMutation.isPending || isVerificationLocked}
-                          onChange={(nextValue) => {
-                            setVerificationCode(nextValue);
-                            registrationSubmitLockRef.current = false;
-                            if (apiError) {
-                              setApiError(null);
-                              setApiErrorCode(null);
-                            }
-                          }}
-                        />
-                      </label>
+                    <div className="auth-verification__content">
+                      <div className="auth-verification__group">
+                        <label className="auth-form__control auth-form__control--verification">
+                          <CodeInput
+                            value={verificationCode}
+                            variant={roleTheme}
+                            focusTrigger={codeInputFocusTrigger}
+                            errorFocusTrigger={codeInputErrorFocusTrigger}
+                            error={apiError ?? undefined}
+                            disabled={completeRegistrationMutation.isPending || isVerificationLocked}
+                            onChange={(nextValue) => {
+                              setVerificationCode(nextValue);
+                              registrationSubmitLockRef.current = false;
+                              if (apiError) {
+                                setApiError(null);
+                                setApiErrorCode(null);
+                              }
+                            }}
+                          />
+                        </label>
 
-                      {apiError && <span className="auth-form__error">{apiError}</span>}
+                        {apiError && <span className="auth-form__error">{apiError}</span>}
 
-                      <div className="auth-verification__meta">
-                        <div className="auth-verification__resend-block">
-                          {!isTemporarilyRateLimited ? (
-                            resendCountdown > 0 ? (
-                              <p className="auth-verification__timer">
-                                Запросить код повторно можно через {resendCountdown} секунд
-                              </p>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant={roleGhostVariant}
-                                size="md"
-                                className="auth-verification__resend"
-                                onClick={handleResendCode}
-                                disabled={resendCodeMutation.isPending || isVerificationLocked}
-                              >
-                                Запросить код повторно
-                              </Button>
-                            )
-                          ) : null}
+                        <div className="auth-verification__meta">
+                          <div className="auth-verification__resend-block">
+                            {!isTemporarilyRateLimited ? (
+                              resendCountdown > 0 ? (
+                                <p className="auth-verification__timer">
+                                  Запросить код повторно можно через {resendCountdown} секунд
+                                </p>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant={roleGhostVariant}
+                                  size="md"
+                                  className="auth-verification__resend"
+                                  onClick={handleResendCode}
+                                  disabled={resendCodeMutation.isPending || isVerificationLocked}
+                                >
+                                  Запросить код повторно
+                                </Button>
+                              )
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
