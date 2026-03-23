@@ -58,9 +58,12 @@ class EmailVerificationService:
         self._ensure_not_blocked(state, now)
 
         if not self.check_email_availability(normalized_email):
-            self.logger.info("auth.otp.request.skip_existing_email email=%s", normalized_email)
-            self.db.commit()
-            return
+            self.logger.info("auth.otp.request.reject_existing_email email=%s", normalized_email)
+            raise AppError(
+                code="AUTH_EMAIL_EXISTS",
+                message="Аккаунт с такой почтой уже зарегистрирован",
+                status_code=409,
+            )
 
         if self._has_active_code(state, now):
             self.logger.info(

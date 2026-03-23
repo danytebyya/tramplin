@@ -44,7 +44,7 @@ class AuthService:
             self.logger.warning("auth.register.email_exists email=%s", normalized_email)
             raise AppError(
                 code="AUTH_EMAIL_EXISTS",
-                message="Аккаунт с таким email уже существует",
+                message="Аккаунт с такой почтой уже зарегистрирован",
                 status_code=409,
             )
 

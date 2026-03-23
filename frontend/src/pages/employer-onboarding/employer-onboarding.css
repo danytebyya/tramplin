@@ -258,10 +258,12 @@ body.employer-onboarding-page-root {
   display: block;
   width: 16px;
   height: 16px;
-  border: 2px solid #98a2b3;
-  border-right-color: transparent;
   border-radius: 999px;
-  animation: button-spinner 0.8s linear infinite;
+  background:
+    conic-gradient(var(--color-primary) var(--upload-progress, 0%), rgba(203, 213, 225, 0.28) 0),
+    radial-gradient(circle, transparent 58%, var(--color-bg-primary) 59%);
+  border-radius: 999px;
+  transition: background 0.12s linear;
 }
 
 .employer-onboarding-upload__file-body {

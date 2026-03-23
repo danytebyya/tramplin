@@ -66,6 +66,7 @@ type DocumentUploadItem = {
   key: string;
   file: File;
   status: DocumentUploadStatus;
+  progress: number;
 };
 type VerifiedEmployerData = {
   employerType: "company" | "sole_proprietor";
@@ -345,7 +346,7 @@ export function EmployerOnboardingPage() {
       nextFiles.forEach((file) => {
         const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
         if (!nextEntries.has(fileKey)) {
-          nextEntries.set(fileKey, { key: fileKey, file, status: "uploading" });
+          nextEntries.set(fileKey, { key: fileKey, file, status: "uploading", progress: 0 });
         }
       });
 
@@ -444,16 +445,22 @@ export function EmployerOnboardingPage() {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
+    const intervalId = window.setInterval(() => {
       setDocumentFiles((currentFiles) =>
         currentFiles.map((item) =>
-          item.status === "uploading" ? { ...item, status: "ready" } : item,
+          item.status === "uploading"
+            ? {
+                ...item,
+                progress: Math.min(item.progress + 12, 100),
+                status: item.progress >= 88 ? "ready" : item.status,
+              }
+            : item,
         ),
       );
-    }, 900);
+    }, 120);
 
     return () => {
-      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
     };
   }, [documentFiles]);
 
@@ -825,6 +832,11 @@ export function EmployerOnboardingPage() {
                                       item.status === "uploading"
                                         ? "employer-onboarding-upload__file-icon-spinner"
                                         : "employer-onboarding-upload__file-icon-mark"
+                                    }
+                                    style={
+                                      item.status === "uploading"
+                                        ? ({ "--upload-progress": `${item.progress}%` } as React.CSSProperties)
+                                        : undefined
                                     }
                                   />
                                 </div>

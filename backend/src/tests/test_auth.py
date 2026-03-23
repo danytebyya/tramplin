@@ -81,8 +81,9 @@ def test_request_code_rejects_existing_email(client, db_session):
     assert register_response.status_code == 201
 
     response = client.post("/api/v1/auth/email/request-code", json={"email": "taken@example.com"})
-    assert response.status_code == 200
-    assert response.json()["data"]["message"] == "Код подтверждения отправлен на email"
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "AUTH_EMAIL_EXISTS"
+    assert response.json()["error"]["message"] == "Аккаунт с такой почтой уже зарегистрирован"
     persisted_code = db_session.execute(
         select(EmailVerificationState.debug_code).where(
             EmailVerificationState.email == "taken@example.com",
@@ -90,6 +91,35 @@ def test_request_code_rejects_existing_email(client, db_session):
         )
     ).scalar_one_or_none()
     assert persisted_code is None
+
+
+def test_register_rejects_existing_email_for_another_role(client, db_session):
+    code = _request_code(client, db_session, "multi-role@example.com")
+    first_payload = {
+        "email": "multi-role@example.com",
+        "display_name": "Applicant User",
+        "password": "StrongPass123",
+        "verification_code": code,
+        "role": "applicant",
+        "applicant_profile": {"full_name": "Applicant User"},
+    }
+
+    first_response = client.post("/api/v1/users", json=first_payload)
+    assert first_response.status_code == 201
+
+    second_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "multi-role@example.com",
+            "display_name": "Employer User",
+            "password": "StrongPass123",
+            "verification_code": "123456",
+            "role": "employer",
+        },
+    )
+    assert second_response.status_code == 409
+    assert second_response.json()["error"]["code"] == "AUTH_EMAIL_EXISTS"
+    assert second_response.json()["error"]["message"] == "Аккаунт с такой почтой уже зарегистрирован"
 
 
 def test_check_email_returns_exists_for_registered_user(client, db_session):
