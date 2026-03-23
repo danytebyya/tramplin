@@ -676,6 +676,18 @@ a {
   padding-right: 44px;
 }
 
+.input[type="password"]::-ms-reveal,
+.input[type="password"]::-ms-clear {
+  display: none;
+}
+
+.input[type="password"]::-webkit-credentials-auto-fill-button,
+.input[type="password"]::-webkit-strong-password-auto-fill-button,
+.input[type="password"]::-webkit-textfield-decoration-container {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
   border-color: var(--color-border-hover);
 }

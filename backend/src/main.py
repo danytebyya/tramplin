@@ -33,6 +33,25 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
+def _normalize_validation_message(error: dict) -> str:
+    message = error.get("msg", "Некорректные данные запроса")
+    if message.startswith("Value error, "):
+        message = message.replace("Value error, ", "", 1)
+
+    location_parts = [str(part) for part in error.get("loc", []) if part != "body"]
+    location = ".".join(location_parts)
+    lower_message = message.lower()
+
+    if "email" in location.lower() and (
+        "valid email address" in lower_message
+        or "email address" in lower_message
+        or "e-mail address" in lower_message
+    ):
+        return "Введите корректный email"
+
+    return message
+
+
 @app.get("/health")
 def health() -> dict:
     return success_response({"status": "ok"})
@@ -60,9 +79,7 @@ def validation_error_handler(request: Request, exc: RequestValidationError) -> J
     normalized_errors: list[dict[str, str]] = []
     for error in exc.errors():
         location = ".".join(str(part) for part in error.get("loc", []) if part != "body")
-        message = error.get("msg", "Некорректные данные запроса")
-        if message.startswith("Value error, "):
-            message = message.replace("Value error, ", "", 1)
+        message = _normalize_validation_message(error)
         normalized_errors.append(
             {
                 "field": location or "request",

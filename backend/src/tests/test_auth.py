@@ -163,6 +163,20 @@ def test_register_rejects_invalid_verification_code_format(client):
     assert body["error"]["message"] == "Код подтверждения должен содержать 6 цифр"
 
 
+def test_request_code_rejects_invalid_email_with_localized_message(client):
+    response = client.post(
+        "/api/v1/auth/email/request-code",
+        json={"email": "invalid-email", "force_resend": True},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert body["error"]["message"] == "Введите корректный email"
+    assert body["error"]["details"]["fields"][0]["field"] == "email"
+    assert body["error"]["details"]["fields"][0]["message"] == "Введите корректный email"
+
+
 def test_register_rejects_weak_password(client, db_session):
     code = _request_code(client, db_session, "weak@example.com")
     payload = {
