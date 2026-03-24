@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { load } from "@2gis/mapgl";
-import type { HtmlMarker, Map } from "@2gis/mapgl/types";
+import { Clusterer } from "@2gis/mapgl-clusterer";
+import type { ClusterStyle, InputMarker } from "@2gis/mapgl-clusterer";
+import type { Map } from "@2gis/mapgl/types";
 
 import { Opportunity } from "../../entities/opportunity";
 import { env } from "../../shared/config/env";
@@ -45,113 +47,17 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
 
 const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
 const initialFormatValue: Opportunity["format"] | "saved" = "office";
-const clusterZoomThreshold = 12;
-
-type MarkerDisplayItem =
-  | {
-      type: "opportunity";
-      key: string;
-      coordinates: [number, number];
-      opportunity: Opportunity;
-    }
-  | {
-      type: "cluster";
-      key: string;
-      coordinates: [number, number];
-      count: number;
-      opportunityIds: string[];
-    };
-
-function getClusterCellSize(zoom: number) {
-  if (zoom <= 8) {
-    return 112;
-  }
-
-  if (zoom <= 10) {
-    return 92;
-  }
-
-  return 76;
-}
-
-function projectToWorldCell(longitude: number, latitude: number, zoom: number, cellSize: number) {
-  const worldSize = 256 * 2 ** zoom;
-  const normalizedLongitude = (longitude + 180) / 360;
-  const latitudeInRadians = (latitude * Math.PI) / 180;
-  const mercatorY =
-    0.5 -
-    Math.log((1 + Math.sin(latitudeInRadians)) / (1 - Math.sin(latitudeInRadians))) /
-      (4 * Math.PI);
+function createClusterStyle(pointsCount: number): ClusterStyle {
+  const clusterElement = document.createElement("div");
+  clusterElement.className = "map-view__marker-cluster";
+  clusterElement.textContent = String(pointsCount);
 
   return {
-    x: Math.floor((normalizedLongitude * worldSize) / cellSize),
-    y: Math.floor((mercatorY * worldSize) / cellSize),
+    type: "html",
+    html: clusterElement,
+    anchor: [24, 20],
+    preventMapInteractions: true,
   };
-}
-
-function buildMarkerDisplayItems(zoom: number, opportunities: Opportunity[]): MarkerDisplayItem[] {
-  
-  if (zoom > clusterZoomThreshold) {
-    return opportunities.map((opportunity) => ({
-      type: "opportunity",
-      key: opportunity.id,
-      coordinates: [opportunity.longitude, opportunity.latitude],
-      opportunity,
-    }));
-  }
-
-  const cellSize = getClusterCellSize(zoom);
-  const clusters = new globalThis.Map<
-    string,
-    {
-      opportunities: Opportunity[];
-      sumLongitude: number;
-      sumLatitude: number;
-    }
-  >();
-
-  opportunities.forEach((opportunity) => {
-    const { x, y } = projectToWorldCell(opportunity.longitude, opportunity.latitude, zoom, cellSize);
-    const cellKey = `${x}:${y}`;
-    const cluster = clusters.get(cellKey);
-
-    if (cluster) {
-      cluster.opportunities.push(opportunity);
-      cluster.sumLongitude += opportunity.longitude;
-      cluster.sumLatitude += opportunity.latitude;
-      return;
-    }
-
-    clusters.set(cellKey, {
-      opportunities: [opportunity],
-      sumLongitude: opportunity.longitude,
-      sumLatitude: opportunity.latitude,
-    });
-  });
-
-  return Array.from(clusters.entries()).map(([cellKey, cluster]) => {
-    if (cluster.opportunities.length === 1) {
-      const [opportunity] = cluster.opportunities;
-
-      return {
-        type: "opportunity",
-        key: opportunity.id,
-        coordinates: [opportunity.longitude, opportunity.latitude],
-        opportunity,
-      };
-    }
-
-    return {
-      type: "cluster",
-      key: `cluster:${cellKey}`,
-      coordinates: [
-        cluster.sumLongitude / cluster.opportunities.length,
-        cluster.sumLatitude / cluster.opportunities.length,
-      ],
-      count: cluster.opportunities.length,
-      opportunityIds: cluster.opportunities.map((opportunity) => opportunity.id),
-    };
-  });
 }
 
 export function MapView({
@@ -164,13 +70,11 @@ export function MapView({
   onToggleExpand,
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapglApiRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
   const mapInstanceRef = useRef<Map | null>(null);
+  const clustererRef = useRef<Clusterer | null>(null);
   const hasAlignedInitialViewportRef = useRef(false);
-  const markersRef = useRef<HtmlMarker[]>([]);
   const markerElementsRef = useRef(new globalThis.Map<string, HTMLButtonElement>());
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
-  const [zoomVersion, setZoomVersion] = useState(0);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isMapVisible, setIsMapVisible] = useState(false);
@@ -213,7 +117,6 @@ export function MapView({
           return;
         }
 
-        mapglApiRef.current = mapglAPI;
         mapInstanceRef.current = new mapglAPI.Map(container, {
           center: mapCenter,
           zoom: 12,
@@ -243,29 +146,47 @@ export function MapView({
 
     return () => {
       isMounted = false;
-      markersRef.current.forEach((marker) => marker.destroy());
-      markersRef.current = [];
+      clustererRef.current?.destroy();
+      clustererRef.current = null;
       markerElementsRef.current.clear();
       mapInstanceRef.current?.destroy();
       mapInstanceRef.current = null;
-      mapglApiRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!mapInstanceRef.current) {
+    if (!isMapReady || !mapInstanceRef.current || clustererRef.current) {
       return;
     }
 
     const map = mapInstanceRef.current;
-    const syncZoom = () => {
-      setZoomVersion((current) => current + 1);
-    };
+    const clusterer = new Clusterer(map as never, {
+      radius: 64,
+      disableClusteringAtZoom: 13,
+      clusterStyle: (pointsCount) => createClusterStyle(pointsCount),
+    });
 
-    map.on("zoomend", syncZoom);
+    clusterer.on("click", (event) => {
+      if (event.target.type === "cluster") {
+        const expansionZoom = clusterer.getClusterExpansionZoom(event.target.id);
+        map.setCenter(event.lngLat, { duration: 280 });
+        map.setZoom(Math.min(expansionZoom, 14), { duration: 280 });
+        return;
+      }
+
+      const opportunityId = event.target.userData?.opportunityId as string | undefined;
+      if (opportunityId) {
+        onSelectOpportunityRef.current(opportunityId);
+      }
+    });
+
+    clustererRef.current = clusterer;
 
     return () => {
-      map.off("zoomend", syncZoom);
+      clusterer.destroy();
+      if (clustererRef.current === clusterer) {
+        clustererRef.current = null;
+      }
     };
   }, [isMapReady]);
 
@@ -302,60 +223,33 @@ export function MapView({
   }, [isMapReady]);
 
   useEffect(() => {
-    if (!isMapReady || !mapInstanceRef.current || !mapglApiRef.current) {
+    if (!isMapReady || !clustererRef.current) {
       return;
     }
 
-    const mapglApi = mapglApiRef.current;
-
-    markersRef.current.forEach((marker) => marker.destroy());
-    markersRef.current = [];
     markerElementsRef.current.clear();
 
-    const displayItems = buildMarkerDisplayItems(mapInstanceRef.current.getZoom(), opportunities);
-
-    markersRef.current = displayItems.map((item) => {
+    const inputMarkers: InputMarker[] = opportunities.map((opportunity) => {
       const markerElement = document.createElement("button");
       markerElement.type = "button";
+      markerElement.className = ["map-view__marker", `map-view__marker--${opportunity.accent}`].join(" ");
+      markerElement.setAttribute("aria-label", `Открыть ${opportunity.title}`);
+      markerElementsRef.current.set(opportunity.id, markerElement);
 
-      if (item.type === "cluster") {
-        markerElement.className = "map-view__marker-cluster";
-        markerElement.textContent = String(item.count);
-        markerElement.setAttribute("aria-label", `Показать ${item.count} результатов`);
-        markerElement.addEventListener("click", () => {
-          const map = mapInstanceRef.current;
-
-          if (!map) {
-            return;
-          }
-
-          map.setCenter(item.coordinates, { duration: 280 });
-          map.setZoom(Math.min(map.getZoom() + 2, 14), { duration: 280 });
-        });
-
-        return new mapglApi.HtmlMarker(mapInstanceRef.current as Map, {
-          coordinates: item.coordinates,
-          html: markerElement,
-          anchor: [24, 20],
-          interactive: true,
-          preventMapInteractions: true,
-        });
-      }
-
-      markerElement.className = ["map-view__marker", `map-view__marker--${item.opportunity.accent}`].join(" ");
-      markerElement.setAttribute("aria-label", `Открыть ${item.opportunity.title}`);
-      markerElement.addEventListener("click", () => onSelectOpportunityRef.current(item.opportunity.id));
-      markerElementsRef.current.set(item.opportunity.id, markerElement);
-
-      return new mapglApi.HtmlMarker(mapInstanceRef.current as Map, {
-        coordinates: item.coordinates,
+      return {
+        type: "html",
+        coordinates: [opportunity.longitude, opportunity.latitude],
         html: markerElement,
         anchor: [17, 34],
-        interactive: true,
         preventMapInteractions: true,
-      });
+        userData: {
+          opportunityId: opportunity.id,
+        },
+      };
     });
-  }, [isMapReady, opportunities, zoomVersion]);
+
+    clustererRef.current.load(inputMarkers);
+  }, [isMapReady, opportunities]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
