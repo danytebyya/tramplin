@@ -8,7 +8,7 @@ import { CuratorDashboardPage } from "../../pages/curator-dashboard";
 import { EmployerDashboardPage } from "../../pages/employer-dashboard";
 import { EmployerOnboardingPage } from "../../pages/employer-onboarding";
 import { LoginPage } from "../../pages/login";
-import { MapPage } from "../../pages/map";
+import { HomePage } from "../../pages/home";
 import { SeekerDashboardPage } from "../../pages/seeker-dashboard";
 import { UiKitPage } from "../../pages/ui-kit";
 
@@ -104,7 +104,7 @@ function HomeRoute() {
     }
   }
 
-  return <MapPage />;
+  return <HomePage />;
 }
 
 function EmployerOnboardingRoute() {

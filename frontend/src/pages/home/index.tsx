@@ -5,26 +5,26 @@ import vkIcon from "../../assets/auth/vk.png";
 import { LogoutButton, useAuthStore } from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
 import "../../widgets/header/header.css";
-import "./map.css";
+import "./home.css";
 
-export function MapPage() {
+export function HomePage() {
   const navigate = useNavigate();
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
   const isAuthenticated = Boolean(accessToken || refreshToken);
-  const mapPageClassName =
+  const homePageClassName =
     role === "employer"
-      ? "map-page map-page--employer"
+      ? "home-page home-page--employer"
       : role === "applicant"
-        ? "map-page map-page--applicant"
-        : "map-page";
+        ? "home-page home-page--applicant"
+        : "home-page";
 
   return (
-    <main className={mapPageClassName}>
+    <main className={homePageClassName}>
       <header className="header">
         <div className="header__top">
-          <Container className="map-page__container header__top-container">
+          <Container className="home-page__container header__top-container">
             <div className="header__brand">
               <Link to="/" className="header__brand-name">
                 Трамплин
@@ -84,7 +84,7 @@ export function MapPage() {
         </div>
 
         <div className="header__bottom">
-          <Container className="map-page__container header__bottom-container">
+          <Container className="home-page__container header__bottom-container">
             <nav className="header__categories" aria-label="Категории">
               <a href="#vacancies" className="header__category-link">
                 Вакансии
@@ -108,12 +108,12 @@ export function MapPage() {
         </div>
       </header>
 
-      <section className="map-page__hero">
-        <Container className="map-page__container map-page__hero-container">
-          <div className="map-page__hero-card">
-            <span className="map-page__hero-eyebrow">Главная</span>
-            <h1 className="map-page__title">Карьерная платформа для студентов, выпускников и работодателей</h1>
-            <p className="map-page__text">
+      <section className="home-page__hero">
+        <Container className="home-page__container home-page__hero-container">
+          <div className="home-page__hero-card">
+            <span className="home-page__hero-eyebrow">Главная</span>
+            <h1 className="home-page__title">Карьерная платформа для студентов, выпускников и работодателей</h1>
+            <p className="home-page__text">
               Хедер и футер собраны по референсам. Контент главной страницы можно развивать дальше
               следующим этапом.
             </p>
@@ -121,91 +121,91 @@ export function MapPage() {
         </Container>
       </section>
 
-      <footer className="map-footer" id="about">
-        <Container className="map-page__container map-footer__container">
-          <div className="map-footer__main">
-            <div className="map-footer__logo-card">Лого</div>
+      <footer className="home-footer" id="about">
+        <Container className="home-page__container home-footer__container">
+          <div className="home-footer__main">
+            <div className="home-footer__logo-card">Лого</div>
 
-            <div className="map-footer__column">
-              <h2 className="map-footer__title">О платформе</h2>
-              <div className="map-footer__links">
-                <Link to="/" className="map-footer__link">
+            <div className="home-footer__column">
+              <h2 className="home-footer__title">О платформе</h2>
+              <div className="home-footer__links">
+                <Link to="/" className="home-footer__link">
                   Главная
                 </Link>
-                <a href="#about" className="map-footer__link">
+                <a href="#about" className="home-footer__link">
                   О проекте
                 </a>
               </div>
             </div>
 
-            <div className="map-footer__column">
-              <h2 className="map-footer__title">Категории</h2>
-              <div className="map-footer__links">
-                <a href="#all" className="map-footer__link">
+            <div className="home-footer__column">
+              <h2 className="home-footer__title">Категории</h2>
+              <div className="home-footer__links">
+                <a href="#all" className="home-footer__link">
                   Все
                 </a>
-                <a href="#vacancies" className="map-footer__link">
+                <a href="#vacancies" className="home-footer__link">
                   Вакансии
                 </a>
-                <a href="#internships" className="map-footer__link">
+                <a href="#internships" className="home-footer__link">
                   Стажировки
                 </a>
-                <a href="#events" className="map-footer__link">
+                <a href="#events" className="home-footer__link">
                   Мероприятия
                 </a>
-                <a href="#mentorship" className="map-footer__link">
+                <a href="#mentorship" className="home-footer__link">
                   Менторство
                 </a>
               </div>
             </div>
 
-            <div className="map-footer__column">
-              <h2 className="map-footer__title">Поддержка</h2>
-              <div className="map-footer__links">
-                <a href="#help" className="map-footer__link">
+            <div className="home-footer__column">
+              <h2 className="home-footer__title">Поддержка</h2>
+              <div className="home-footer__links">
+                <a href="#help" className="home-footer__link">
                   Помощь
                 </a>
-                <a href="#faq" className="map-footer__link">
+                <a href="#faq" className="home-footer__link">
                   FAQ
                 </a>
-                <a href="#support-contacts" className="map-footer__link">
+                <a href="#support-contacts" className="home-footer__link">
                   Контакты поддержки
                 </a>
-                <a href="#report" className="map-footer__link">
+                <a href="#report" className="home-footer__link">
                   Сообщить о проблеме
                 </a>
               </div>
             </div>
 
-            <div className="map-footer__column">
-              <h2 className="map-footer__title">Контакты</h2>
-              <div className="map-footer__contacts">
-                <a href="mailto:info@trampline.ru" className="map-footer__contact">
+            <div className="home-footer__column">
+              <h2 className="home-footer__title">Контакты</h2>
+              <div className="home-footer__contacts">
+                <a href="mailto:info@trampline.ru" className="home-footer__contact">
                   info@trampline.ru
                 </a>
-                <a href="tel:+79000000000" className="map-footer__contact">
+                <a href="tel:+79000000000" className="home-footer__contact">
                   +7 (900) 000 00-00
                 </a>
               </div>
-              <div className="map-footer__socials">
-                <a href="https://vk.com" className="map-footer__social-link" aria-label="VK">
-                  <img src={vkIcon} alt="" className="map-footer__social-icon" />
+              <div className="home-footer__socials">
+                <a href="https://vk.com" className="home-footer__social-link" aria-label="VK">
+                  <img src={vkIcon} alt="" className="home-footer__social-icon" />
                 </a>
-                <a href="https://max.ru" className="map-footer__social-link" aria-label="Max">
-                  <img src={maxIcon} alt="" className="map-footer__social-icon" />
+                <a href="https://max.ru" className="home-footer__social-link" aria-label="Max">
+                  <img src={maxIcon} alt="" className="home-footer__social-icon" />
                 </a>
               </div>
             </div>
           </div>
 
-          <div className="map-footer__bottom">
-            <span className="map-footer__copyright">
+          <div className="home-footer__bottom">
+            <span className="home-footer__copyright">
               © 2026 Платформа “Трамплин”. Все права защищены.
             </span>
-            <a href="#privacy" className="map-footer__legal-link">
+            <a href="#privacy" className="home-footer__legal-link">
               Политика конфиденциальности
             </a>
-            <a href="#terms" className="map-footer__legal-link">
+            <a href="#terms" className="home-footer__legal-link">
               Пользовательское соглашение
             </a>
           </div>

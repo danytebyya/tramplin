@@ -105,29 +105,30 @@
   transform: translateY(-50%);
 }
 
-.header__search-input {
+.header__search-input.input {
   width: 250px;
   border-color: var(--color-bg-primary);
   background: transparent;
   color: var(--color-bg-primary);
+  caret-color: var(--color-bg-primary);
   padding-left: 50px;
   padding-right: 40px;
 }
 
-.header__search-input::placeholder {
+.header__search-input.input::placeholder {
   color: var(--color-bg-primary);
 }
 
-.header__search-input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
+.header__search-input.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
   border-color: rgba(255, 255, 255, 0.92);
 }
 
-.header__search-input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover::placeholder {
+.header__search-input.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover::placeholder {
   color: rgba(255, 255, 255, 0.92);
 }
 
-.header__search-input:focus,
-.header__search-input:focus-visible {
+.header__search-input.input:focus,
+.header__search-input.input:focus-visible {
   border-color: var(--color-bg-primary);
   background: rgba(255, 255, 255, 0.08);
 }
@@ -147,55 +148,55 @@
   gap: 24px;
 }
 
-.header__action-button {
+.header__action-button.button {
   min-width: 92px;
   border-radius: 8px;
 }
 
-.header__action-button--login {
+.header__action-button.button.header__action-button--login {
   border-color: var(--color-bg-primary);
   background: transparent;
   color: var(--color-bg-primary);
 }
 
-.header__action-button--login:not(.button--loading):not(:disabled):hover {
+.header__action-button.button.header__action-button--login:not(.button--loading):not(:disabled):hover {
   border-color: rgba(255, 255, 255, 0.92);
   background: transparent;
   color: var(--color-bg-primary);
   box-shadow: none;
 }
 
-.header__action-button--login:not(.button--loading):not(:disabled):active {
+.header__action-button.button.header__action-button--login:not(.button--loading):not(:disabled):active {
   border-color: rgba(255, 255, 255, 0.92);
   background: transparent;
   color: var(--color-bg-primary);
   box-shadow: none;
 }
 
-.header__action-button--login:not(.button--loading):focus-visible {
+.header__action-button.button.header__action-button--login:not(.button--loading):focus-visible {
   border-color: var(--color-bg-primary);
   background: transparent;
   color: var(--color-bg-primary);
 }
 
-.header__action-button--register {
+.header__action-button.button.header__action-button--register {
   background: var(--color-bg-primary);
   color: var(--color-secondary);
 }
 
-.header__action-button--register:not(.button--loading):not(:disabled):hover {
+.header__action-button.button.header__action-button--register:not(.button--loading):not(:disabled):hover {
   background: var(--color-bg-primary);
   color: var(--color-secondary-hover);
   box-shadow: none;
 }
 
-.header__action-button--register:not(.button--loading):not(:disabled):active {
+.header__action-button.button.header__action-button--register:not(.button--loading):not(:disabled):active {
   background: var(--color-bg-primary);
   color: var(--color-secondary-active);
   box-shadow: none;
 }
 
-.header__action-button--register:not(.button--loading):focus-visible {
+.header__action-button.button.header__action-button--register:not(.button--loading):focus-visible {
   border-color: var(--color-bg-primary);
   background: var(--color-bg-primary);
   color: var(--color-primary);
