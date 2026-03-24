@@ -10,25 +10,29 @@ type OpportunityFiltersProps = {
 export function OpportunityFilters({ viewMode, onViewModeChange }: OpportunityFiltersProps) {
   return (
     <section className="opportunity-filters" aria-label="Переключение режима просмотра">
-      <h2 className="opportunity-filters__title">
-        Выберите <span className="opportunity-filters__title-accent">удобный</span> вариант просмотра
-      </h2>
+      <div className="opportunity-filters__primary-group">
+        <h2 className="opportunity-filters__title">
+          Выберите <span className="opportunity-filters__title-accent">удобный</span> вариант просмотра
+        </h2>
 
-      <SegmentedSwitch
-        ariaLabel="Выбор режима просмотра"
-        className="opportunity-filters__switch"
-        options={[...opportunityViewOptions]}
-        value={viewMode}
-        onChange={onViewModeChange}
-      />
-
-      <label className="opportunity-filters__search" aria-label="Поиск по возможностям">
-        <Input
-          placeholder="Поиск"
-          className="opportunity-filters__search-input"
-          clearable
+        <SegmentedSwitch
+          ariaLabel="Выбор режима просмотра"
+          className="opportunity-filters__switch"
+          options={[...opportunityViewOptions]}
+          value={viewMode}
+          onChange={onViewModeChange}
         />
-      </label>
+      </div>
+
+      <div className="opportunity-filters__search-group">
+        <label className="opportunity-filters__search" aria-label="Поиск по возможностям">
+          <Input
+            placeholder="Поиск"
+            className="input--secondary input--sm opportunity-filters__search-input"
+            clearable
+          />
+        </label>
+      </div>
 
       {viewMode === "list" ? (
         <div className="opportunity-filters__grid">

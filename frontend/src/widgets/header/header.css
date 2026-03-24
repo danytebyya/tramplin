@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 50px;
+  gap: 38px;
   grid-column: 3 / span 10;
   justify-self: end;
 }
@@ -55,11 +55,12 @@
 .header__nav {
   display: inline-flex;
   align-items: center;
-  gap: 24px;
 }
 
 .header__nav-link {
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--color-bg-primary);
+  padding: 8px 16px;
+  border-radius: 8px;
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
   text-decoration: none;
@@ -67,7 +68,13 @@
 }
 
 .header__nav-link:hover {
-  opacity: 0.82;
+  background-color: var(--color-white-hover);
+  box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.header__nav-link:active {
+  background-color: var(--color-white-active);
+  box-shadow: none;
 }
 
 .header__controls {
@@ -160,15 +167,15 @@
 }
 
 .header__action-button.button.header__action-button--login:not(.button--loading):not(:disabled):hover {
-  border-color: rgba(255, 255, 255, 0.92);
-  background: transparent;
+  border-color: var(--color-bg-primary);
+  background: var(--color-white-hover);
   color: var(--color-bg-primary);
   box-shadow: none;
 }
 
 .header__action-button.button.header__action-button--login:not(.button--loading):not(:disabled):active {
   border-color: rgba(255, 255, 255, 0.92);
-  background: transparent;
+  background: var(--color-white-active);
   color: var(--color-bg-primary);
   box-shadow: none;
 }
@@ -231,7 +238,11 @@
 }
 
 .header__category-link:hover {
-  color: #475569;
+  color: var(--color-secondary);
+}
+
+.header__category-link:active {
+  color: var(--color-secondary-active);
 }
 
 .header__location {
@@ -251,15 +262,15 @@
 }
 
 .header__location:hover {
-  color: var(--color-primary);
+  color: var(--color-secondary);
 }
 
 .header__location:active {
-  color: var(--color-primary-active);
+  color: var(--color-secondary-active);
 }
 
 .header__location:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-secondary);
   outline-offset: 4px;
 }
 
@@ -279,11 +290,11 @@
 }
 
 .header__location:hover .header__location-icon {
-  background-color: var(--color-primary);
+  background-color: var(--color-secondary);
 }
 
 .header__location:active .header__location-icon {
-  background-color: var(--color-primary-active);
+  background-color: var(--color-secondary-active);
 }
 
 @media (max-width: 1279px) {

@@ -25,6 +25,8 @@
   --color-success: #10B981;
   --color-success-hover: #059669;
   --color-success-active: #047857;
+  --color-white-hover: rgba(255, 255, 255, 0.1);
+  --color-white-active: rgba(255, 255, 255, 0.2);
 
   --font-family-base: "Inter", "Segoe UI", sans-serif;
 

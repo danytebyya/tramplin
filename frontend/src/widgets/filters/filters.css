@@ -1,15 +1,26 @@
 .opportunity-filters {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 32px;
+}
+
+.opportunity-filters__primary-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.opportunity-filters__search-group {
+  display: flex;
+  flex-direction: column;
 }
 
 .opportunity-filters__title {
   margin: 0;
   color: #0f172a;
-  font-size: 56px;
-  line-height: 1;
-  font-weight: 700;
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line);
+  font-weight: 400;
   letter-spacing: -0.05em;
   text-align: center;
 }
@@ -48,6 +59,8 @@
 
 .opportunity-filters__search-input.input {
   padding-left: 48px;
+  border-color: var(--color-bg-primary);
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .opportunity-filters__grid {
