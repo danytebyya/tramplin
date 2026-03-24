@@ -17,6 +17,39 @@
   height: 720px;
 }
 
+.map-view__state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.map-view__state-card {
+  max-width: 420px;
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.14);
+}
+
+.map-view__state-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+}
+
+.map-view__state-text {
+  margin: 12px 0 0;
+  color: #475569;
+  font-size: 16px;
+  line-height: 24px;
+}
+
 .map-view__filters {
   position: absolute;
   top: 24px;
@@ -323,27 +356,6 @@
 
 .map-view__marker--slate {
   background: #64748b;
-}
-
-.leaflet-control-zoom {
-  margin-right: 24px !important;
-  margin-bottom: 148px !important;
-  border: none !important;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12) !important;
-}
-
-.leaflet-control-zoom a {
-  width: 54px !important;
-  height: 54px !important;
-  border: none !important;
-  color: #0f172a !important;
-  font-size: 34px !important;
-  line-height: 50px !important;
-}
-
-.leaflet-touch .leaflet-control-layers,
-.leaflet-touch .leaflet-bar {
-  border: none;
 }
 
 @media (max-width: 1279px) {
