@@ -1,5 +1,5 @@
 import { Opportunity } from "../../entities/opportunity";
-import { Button } from "../../shared/ui";
+import { Badge, Button, Status } from "../../shared/ui";
 import "./opportunity-list.css";
 
 type OpportunityListProps = {
@@ -31,9 +31,9 @@ export function OpportunityList({ opportunities }: OpportunityListProps) {
             <p className="opportunity-list__meta">{opportunity.locationLabel}</p>
             <div className="opportunity-list__tags">
               {opportunity.tags.map((tag) => (
-                <span key={tag} className="opportunity-list__tag">
+                <Badge key={tag} variant="secondary" className="opportunity-list__tag">
                   {tag}
-                </span>
+                </Badge>
               ))}
             </div>
             <p className="opportunity-list__secondary">Уровень: {opportunity.levelLabel}</p>
@@ -44,7 +44,11 @@ export function OpportunityList({ opportunities }: OpportunityListProps) {
 
           <div className="opportunity-list__actions">
             <p className="opportunity-list__company">{opportunity.companyName}</p>
-            {opportunity.companyVerified ? <span className="opportunity-list__badge">Верифицировано</span> : null}
+            {opportunity.companyVerified ? (
+              <Status variant="verified-accent" className="opportunity-list__status">
+                Верифицировано
+              </Status>
+            ) : null}
             <Button type="button" variant="accent-outline">
               Показать контакты
             </Button>

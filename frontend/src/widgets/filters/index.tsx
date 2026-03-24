@@ -4,21 +4,24 @@ import "./filters.css";
 
 type OpportunityFiltersProps = {
   viewMode: "map" | "list";
+  isMapExpanded: boolean;
   onViewModeChange: (viewMode: "map" | "list") => void;
 };
 
-export function OpportunityFilters({ viewMode, onViewModeChange }: OpportunityFiltersProps) {
+export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }: OpportunityFiltersProps) {
   return (
-    <section className="opportunity-filters" aria-label="Переключение режима просмотра">
-      <div className="opportunity-filters__primary-group">
-        <SegmentedSwitch
-          ariaLabel="Выбор режима просмотра"
-          className="opportunity-filters__switch"
-          options={[...opportunityViewOptions]}
-          value={viewMode}
-          onChange={onViewModeChange}
-        />
-      </div>
+    <section className="opportunity-filters" aria-label="Фильтры возможностей">
+      {!isMapExpanded ? (
+        <div className="opportunity-filters__primary-group">
+          <SegmentedSwitch
+            ariaLabel="Выбор режима просмотра"
+            className="opportunity-filters__switch"
+            options={[...opportunityViewOptions]}
+            value={viewMode}
+            onChange={onViewModeChange}
+          />
+        </div>
+      ) : null}
 
       <div className="opportunity-filters__search-group">
         <label className="opportunity-filters__search" aria-label="Поиск по возможностям">
@@ -30,7 +33,7 @@ export function OpportunityFilters({ viewMode, onViewModeChange }: OpportunityFi
         </label>
       </div>
 
-      {viewMode === "list" ? (
+      {viewMode === "list" && !isMapExpanded ? (
         <div className="opportunity-filters__grid">
           <div>
             <div className="opportunity-filters__placeholder">

@@ -72,6 +72,20 @@
   gap: 16px;
 }
 
+.kit-statuses {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  gap: 80px 120px;
+  align-items: start;
+}
+
+.kit-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  align-items: center;
+}
+
 .kit-field {
   display: flex;
   flex-direction: column;
@@ -182,6 +196,17 @@
   }
 
   .kit-section--controls {
+    grid-template-columns: 1fr;
+  }
+
+  .kit-statuses {
+    grid-template-columns: repeat(2, max-content);
+    gap: 32px;
+  }
+}
+
+@media (max-width: 767px) {
+  .kit-statuses {
     grid-template-columns: 1fr;
   }
 }

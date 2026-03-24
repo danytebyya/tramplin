@@ -1,4 +1,14 @@
-import { Button, Checkbox, Container, Input, Radio, Select, Switch } from "../../shared/ui";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Container,
+  Input,
+  Radio,
+  Select,
+  Status,
+  Switch,
+} from "../../shared/ui";
 import "./ui-kit.css";
 
 const buttonSizes = [
@@ -37,6 +47,26 @@ const buttonGroups = [
 const statusButtonGroups = [
   { title: "Danger", variant: "danger" as const },
   { title: "Success", variant: "success" as const },
+];
+
+const statusItems = [
+  { label: "Активно", variant: "active" as const },
+  { label: "Одобрено", variant: "approved" as const },
+  { label: "На рассмотрении", variant: "pending-review" as const },
+  { label: "Отклонено", variant: "rejected" as const },
+  { label: "Запрос информации", variant: "info-request" as const },
+  { label: "Снято с публикации", variant: "unpublished" as const },
+  { label: "Верифицировано", variant: "verified" as const },
+  { label: "Верифицировано", variant: "verified-accent" as const },
+];
+
+const badgeItems = [
+  { label: "Label", variant: "primary" as const },
+  { label: "Label", variant: "secondary" as const },
+  { label: "Label", variant: "warning" as const },
+  { label: "Label", variant: "success" as const },
+  { label: "Label", variant: "danger" as const },
+  { label: "Label", variant: "info" as const },
 ];
 
 export function UiKitPage() {
@@ -123,6 +153,28 @@ export function UiKitPage() {
                   </Button>
                 ))}
               </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="kit-section">
+          <h1 className="kit-section__title">Statuses</h1>
+          <div className="kit-statuses">
+            {statusItems.map(({ label, variant }) => (
+              <Status key={`${variant}-${label}`} variant={variant}>
+                {label}
+              </Status>
+            ))}
+          </div>
+        </section>
+
+        <section className="kit-section">
+          <h1 className="kit-section__title">Badges</h1>
+          <div className="kit-badges">
+            {badgeItems.map(({ label, variant }) => (
+              <Badge key={`${variant}-${label}`} variant={variant}>
+                {label}
+              </Badge>
             ))}
           </div>
         </section>

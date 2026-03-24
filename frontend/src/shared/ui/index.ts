@@ -9,3 +9,5 @@ export { Switch } from "./switch/switch";
 export { SegmentedSwitch } from "./segmented-switch/segmented-switch";
 export { Select } from "./select/select";
 export { InfoTooltip } from "./info-tooltip/info-tooltip";
+export { Status } from "./status/status";
+export { Badge } from "./badge/badge";

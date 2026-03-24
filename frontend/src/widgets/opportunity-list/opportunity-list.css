@@ -64,16 +64,7 @@
 }
 
 .opportunity-list__tag {
-  display: inline-flex;
-  align-items: center;
   min-height: 28px;
-  padding: 4px 12px;
-  border-radius: 10px;
-  background: #06b6d4;
-  color: #ffffff;
-  font-size: 14px;
-  line-height: 18px;
-  font-weight: 600;
 }
 
 .opportunity-list__actions {
@@ -92,18 +83,13 @@
   font-weight: 600;
 }
 
-.opportunity-list__badge {
-  display: inline-flex;
-  align-items: center;
+.opportunity-list__status.status {
   width: max-content;
-  min-height: 28px;
-  padding: 4px 12px;
+  min-height: 32px;
+  padding: 6px 14px;
   border-radius: 999px;
-  background: #cffafe;
-  color: #0891b2;
   font-size: 14px;
   line-height: 18px;
-  font-weight: 500;
 }
 
 @media (max-width: 1023px) {

@@ -13,6 +13,43 @@ import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import "./home.css";
 
+function cloneMapSnapshot(source: HTMLElement) {
+  const snapshot = source.cloneNode(true) as HTMLElement;
+  const sourceCanvases = source.querySelectorAll("canvas");
+  const snapshotCanvases = snapshot.querySelectorAll("canvas");
+
+  sourceCanvases.forEach((sourceCanvas, index) => {
+    const snapshotCanvas = snapshotCanvases[index];
+
+    if (!(sourceCanvas instanceof HTMLCanvasElement) || !(snapshotCanvas instanceof HTMLCanvasElement)) {
+      return;
+    }
+
+    const frozenCanvas = document.createElement("canvas");
+    frozenCanvas.className = snapshotCanvas.className;
+    frozenCanvas.width = sourceCanvas.width;
+    frozenCanvas.height = sourceCanvas.height;
+    frozenCanvas.style.cssText = snapshotCanvas.style.cssText;
+
+    const context = frozenCanvas.getContext("2d");
+
+    if (context) {
+      try {
+        context.drawImage(sourceCanvas, 0, 0);
+      } catch {
+        return;
+      }
+    }
+
+    snapshotCanvas.replaceWith(frozenCanvas);
+  });
+
+  snapshot.setAttribute("aria-hidden", "true");
+  snapshot.classList.add("home-page__map-panel-snapshot");
+
+  return snapshot;
+}
+
 export function HomePage() {
   const MAP_EXPANDED_TOP_OFFSET = 106;
   const MAP_EXPAND_TRANSITION_MS = 520;
@@ -21,19 +58,23 @@ export function HomePage() {
   const [mapExpandMode, setMapExpandMode] = useState<"collapsed" | "expanding" | "expanded" | "collapsing">("collapsed");
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
-  const [mapContentStyle, setMapContentStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
+  const mapPanelLiveRef = useRef<HTMLDivElement | null>(null);
+  const mapPanelProxyContentRef = useRef<HTMLDivElement | null>(null);
   const collapsedMapPanelRectRef = useRef<DOMRect | null>(null);
+  const expandedFromScrollYRef = useRef(0);
+  const pendingRestoreScrollYRef = useRef<number | null>(null);
   const mapTransitionTimeoutRef = useRef<number | null>(null);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const isMapExpanded = mapExpandMode !== "collapsed";
-  const isMapExpandedLayout = mapExpandMode === "expanded" || mapExpandMode === "collapsing";
+  const isMapExpandedLayout = mapExpandMode === "expanded";
   const isMapFloating = mapExpandMode !== "collapsed";
   const isMapTransitioning = mapExpandMode === "expanding" || mapExpandMode === "collapsing";
+  const isMapCollapsing = mapExpandMode === "collapsing";
 
   const getExpandedRect = () => ({
     top: MAP_EXPANDED_TOP_OFFSET,
@@ -42,29 +83,25 @@ export function HomePage() {
     height: Math.max(window.innerHeight - MAP_EXPANDED_TOP_OFFSET, 0),
   });
 
-  const getCollapsedFrameStyle = (rect: DOMRect): CSSProperties => {
-    const expandedRect = getExpandedRect();
-    const scaleX = expandedRect.width > 0 ? rect.width / expandedRect.width : 1;
-    const scaleY = expandedRect.height > 0 ? rect.height / expandedRect.height : 1;
-    const expandedCenterX = expandedRect.left + expandedRect.width / 2;
-    const expandedCenterY = expandedRect.top + expandedRect.height / 2;
-    const collapsedCenterX = rect.left + rect.width / 2;
-    const collapsedCenterY = rect.top + rect.height / 2;
-
+  const getFloatingFrameStyle = (rect: Pick<DOMRect, "top" | "left" | "width" | "height">, borderRadius: string): CSSProperties => {
     return {
-      transform: `translate3d(${collapsedCenterX - expandedCenterX}px, ${collapsedCenterY - expandedCenterY}px, 0) scale(${scaleX}, ${scaleY})`,
-      borderRadius: "24px",
+      top: `${rect.top}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+      borderRadius,
     };
   };
 
-  const getCollapsedContentStyle = (rect: DOMRect): CSSProperties => {
-    const expandedRect = getExpandedRect();
-    const scaleX = expandedRect.width > 0 ? rect.width / expandedRect.width : 1;
-    const scaleY = expandedRect.height > 0 ? rect.height / expandedRect.height : 1;
+  const syncMapProxySnapshot = () => {
+    const source = mapPanelLiveRef.current;
+    const proxyContent = mapPanelProxyContentRef.current;
 
-    return {
-      transform: `scale(${scaleX > 0 ? 1 / scaleX : 1}, ${scaleY > 0 ? 1 / scaleY : 1})`,
-    };
+    if (!source || !proxyContent) {
+      return;
+    }
+
+    proxyContent.replaceChildren(cloneMapSnapshot(source));
   };
 
   const clearMapTransitionTimeout = () => {
@@ -80,38 +117,38 @@ export function HomePage() {
 
     if (nextMode === "collapsed") {
       setMapPanelFrameStyle(undefined);
-      setMapContentStyle(undefined);
       setMapPanelPlaceholderHeight(null);
       collapsedMapPanelRectRef.current = null;
+      mapPanelProxyContentRef.current?.replaceChildren();
       return;
     }
 
     setMapPanelFrameStyle(undefined);
-    setMapContentStyle(undefined);
+    mapPanelProxyContentRef.current?.replaceChildren();
   };
 
   const handleToggleMapExpand = () => {
     const panelShell = mapPanelShellRef.current;
+    const panelLive = mapPanelLiveRef.current;
 
-    if (!panelShell || mapExpandMode === "expanding" || mapExpandMode === "collapsing") {
+    if (!panelShell || !panelLive || mapExpandMode === "expanding" || mapExpandMode === "collapsing") {
       return;
     }
 
     const shellRect = panelShell.getBoundingClientRect();
 
     if (mapExpandMode === "collapsed") {
+      expandedFromScrollYRef.current = window.scrollY;
       collapsedMapPanelRectRef.current = shellRect;
       setMapPanelPlaceholderHeight(shellRect.height);
-      setMapPanelFrameStyle(getCollapsedFrameStyle(shellRect));
+      syncMapProxySnapshot();
+      setMapPanelFrameStyle(getFloatingFrameStyle(shellRect, "8px"));
       setMapExpandMode("expanding");
       clearMapTransitionTimeout();
 
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          setMapPanelFrameStyle({
-            transform: "translate3d(0, 0, 0) scale(1, 1)",
-            borderRadius: "0px",
-          });
+          setMapPanelFrameStyle(getFloatingFrameStyle(getExpandedRect(), "0px"));
         });
       });
 
@@ -123,22 +160,18 @@ export function HomePage() {
     }
 
     const collapsedRect = collapsedMapPanelRectRef.current ?? shellRect;
+    const liveRect = panelLive.getBoundingClientRect();
 
+    syncMapProxySnapshot();
     setMapPanelPlaceholderHeight(collapsedRect.height);
-    setMapPanelFrameStyle({
-      transform: "translate3d(0, 0, 0) scale(1, 1)",
-      borderRadius: "0px",
-    });
-    setMapContentStyle({
-      transform: "scale(1, 1)",
-    });
+    setMapPanelFrameStyle(getFloatingFrameStyle(liveRect, "0px"));
     setMapExpandMode("collapsing");
+    pendingRestoreScrollYRef.current = expandedFromScrollYRef.current;
     clearMapTransitionTimeout();
 
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        setMapPanelFrameStyle(getCollapsedFrameStyle(collapsedRect));
-        setMapContentStyle(getCollapsedContentStyle(collapsedRect));
+        setMapPanelFrameStyle(getFloatingFrameStyle(collapsedRect, "8px"));
       });
     });
 
@@ -149,10 +182,10 @@ export function HomePage() {
 
   const homePageClassName =
     role === "employer"
-      ? `home-page home-page--employer${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}`
+      ? `home-page home-page--employer${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}${isMapCollapsing ? " home-page--map-collapsing" : ""}`
       : role === "applicant"
-        ? `home-page home-page--applicant${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}`
-        : `home-page${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}`;
+        ? `home-page home-page--applicant${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}${isMapCollapsing ? " home-page--map-collapsing" : ""}`
+        : `home-page${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}${isMapCollapsing ? " home-page--map-collapsing" : ""}`;
   const explorerClassName = isMapExpandedLayout
     ? "home-page__explorer home-page__explorer--expanded"
     : "home-page__explorer";
@@ -160,12 +193,14 @@ export function HomePage() {
   useEffect(() => {
     document.body.classList.toggle("home-page--map-floating", isMapFloating);
     document.body.classList.toggle("home-page--map-expanded", isMapExpandedLayout);
+    document.body.classList.toggle("home-page--map-collapsing", isMapCollapsing);
 
     return () => {
       document.body.classList.remove("home-page--map-floating");
       document.body.classList.remove("home-page--map-expanded");
+      document.body.classList.remove("home-page--map-collapsing");
     };
-  }, [isMapExpandedLayout, isMapFloating]);
+  }, [isMapCollapsing, isMapExpandedLayout, isMapFloating]);
 
   useEffect(() => {
     if (!isMapExpanded || mapExpandMode === "expanded") {
@@ -179,11 +214,8 @@ export function HomePage() {
         }
 
         return mapExpandMode === "expanding"
-          ? {
-              transform: "translate3d(0, 0, 0) scale(1, 1)",
-              borderRadius: "0px",
-            }
-          : getCollapsedFrameStyle(collapsedMapPanelRectRef.current);
+          ? getFloatingFrameStyle(getExpandedRect(), "0px")
+          : getFloatingFrameStyle(collapsedMapPanelRectRef.current, "8px");
       });
     };
 
@@ -197,6 +229,22 @@ export function HomePage() {
   useEffect(() => () => {
     clearMapTransitionTimeout();
   }, []);
+
+  useEffect(() => {
+    if (mapExpandMode !== "collapsed" || pendingRestoreScrollYRef.current === null) {
+      return;
+    }
+
+    const restoreScrollY = pendingRestoreScrollYRef.current;
+    pendingRestoreScrollYRef.current = null;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({
+        top: Math.max(restoreScrollY, 0),
+        behavior: "auto",
+      });
+    });
+  }, [mapExpandMode]);
 
   return (
     <main className={homePageClassName}>
@@ -289,7 +337,7 @@ export function HomePage() {
       <section className="home-page__hero">
         <Container className="home-page__container home-page__hero-container">
           <div className={explorerClassName}>
-            <OpportunityFilters viewMode={viewMode} onViewModeChange={setViewMode} />
+            <OpportunityFilters viewMode={viewMode} isMapExpanded={isMapExpandedLayout} onViewModeChange={setViewMode} />
 
             <div className="home-page__explorer-content">
               <div
@@ -318,18 +366,25 @@ export function HomePage() {
                       ? `home-page__map-panel-overlay home-page__map-panel-overlay--${mapExpandMode}`
                       : "home-page__map-panel-overlay"
                   }
-                  style={isMapFloating && mapExpandMode !== "expanded" ? mapPanelFrameStyle : undefined}
                 >
-                  <MapView
-                    opportunities={mockOpportunities}
-                    selectedOpportunityId={selectedOpportunityId}
-                    isExpanded={isMapExpanded}
-                    isTransitioning={isMapTransitioning}
-                    mapContentStyle={mapContentStyle}
-                    onSelectOpportunity={setSelectedOpportunityId}
-                    onCloseDetails={() => setSelectedOpportunityId(null)}
-                    onToggleExpand={handleToggleMapExpand}
-                  />
+                  <div
+                    ref={mapPanelLiveRef}
+                    className={
+                      isMapTransitioning
+                        ? "home-page__map-panel-live home-page__map-panel-live--hidden"
+                        : "home-page__map-panel-live"
+                    }
+                  >
+                    <MapView
+                      opportunities={mockOpportunities}
+                      selectedOpportunityId={selectedOpportunityId}
+                      isExpanded={isMapExpanded}
+                      isTransitioning={isMapTransitioning}
+                      onSelectOpportunity={setSelectedOpportunityId}
+                      onCloseDetails={() => setSelectedOpportunityId(null)}
+                      onToggleExpand={handleToggleMapExpand}
+                    />
+                  </div>
                 </div>
               </div>
               <div
@@ -346,6 +401,17 @@ export function HomePage() {
           </div>
         </Container>
       </section>
+
+      <div
+        className={
+          isMapTransitioning
+            ? `home-page__map-panel-proxy home-page__map-panel-proxy--${mapExpandMode}`
+            : "home-page__map-panel-proxy home-page__map-panel-proxy--hidden"
+        }
+        style={mapPanelFrameStyle}
+      >
+        <div ref={mapPanelProxyContentRef} className="home-page__map-panel-proxy-content" />
+      </div>
 
       <footer className="home-footer" id="about">
         <Container className="home-page__container home-footer__container">

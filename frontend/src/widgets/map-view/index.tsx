@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 
 import { load } from "@2gis/mapgl";
 import type { HtmlMarker, Map } from "@2gis/mapgl/types";
 
 import { Opportunity } from "../../entities/opportunity";
 import { env } from "../../shared/config/env";
+import { Badge, Button, Status } from "../../shared/ui";
 import "./map-view.css";
 
 type MapViewProps = {
@@ -13,7 +13,6 @@ type MapViewProps = {
   selectedOpportunityId: string | null;
   isExpanded: boolean;
   isTransitioning: boolean;
-  mapContentStyle?: CSSProperties;
   onSelectOpportunity: (opportunityId: string) => void;
   onCloseDetails: () => void;
   onToggleExpand: () => void;
@@ -48,7 +47,6 @@ export function MapView({
   selectedOpportunityId,
   isExpanded,
   isTransitioning,
-  mapContentStyle,
   onSelectOpportunity,
   onCloseDetails,
   onToggleExpand,
@@ -67,9 +65,13 @@ export function MapView({
   const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
   const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved">(initialFormatValue);
   const [selectedCity, setSelectedCity] = useState("Чебоксары");
+  const [favoriteOpportunityIds, setFavoriteOpportunityIds] = useState<string[]>([]);
   const selectedOpportunity = opportunities.find(
     (opportunity) => opportunity.id === selectedOpportunityId,
   );
+  const isSelectedOpportunityFavorite = selectedOpportunity
+    ? favoriteOpportunityIds.includes(selectedOpportunity.id)
+    : false;
 
   useEffect(() => {
     onSelectOpportunityRef.current = onSelectOpportunity;
@@ -225,7 +227,23 @@ export function MapView({
       markerElement.classList.toggle("map-view__marker--active", markerId === selectedOpportunityId);
     });
 
-    if (!selectedOpportunity || !mapInstanceRef.current) {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    const rightPadding = selectedOpportunity ? (isExpanded ? 200 : 100) : 0;
+
+    mapInstanceRef.current.setPadding(
+      {
+        top: 0,
+        right: rightPadding,
+        bottom: 0,
+        left: 0,
+      },
+      { duration: 280 },
+    );
+
+    if (!selectedOpportunity) {
       return;
     }
 
@@ -234,7 +252,7 @@ export function MapView({
       { duration: 280 },
     );
     mapInstanceRef.current.setZoom(14, { duration: 280 });
-  }, [selectedOpportunity, selectedOpportunityId]);
+  }, [isExpanded, selectedOpportunity, selectedOpportunityId]);
 
   const handleZoomIn = () => {
     if (!mapInstanceRef.current) {
@@ -252,6 +270,14 @@ export function MapView({
     mapInstanceRef.current.setZoom(mapInstanceRef.current.getZoom() - 1, { duration: 220 });
   };
 
+  const handleToggleFavorite = (opportunityId: string) => {
+    setFavoriteOpportunityIds((current) =>
+      current.includes(opportunityId)
+        ? current.filter((id) => id !== opportunityId)
+        : [...current, opportunityId],
+    );
+  };
+
   return (
     <section
       className={isTransitioning ? "map-view map-view--transitioning" : "map-view"}
@@ -260,17 +286,35 @@ export function MapView({
       <div className="map-view__filters">
         <button
           type="button"
-          className="map-view__filter-card map-view__filter-card--compact map-view__filter-toggle"
+          className={
+            isFiltersVisible
+              ? "map-view__filter-card map-view__filter-card--compact map-view__filter-toggle"
+              : "map-view__filter-card map-view__filter-card--compact map-view__filter-toggle map-view__filter-toggle--collapsed"
+          }
           onClick={() => setIsFiltersVisible((current) => !current)}
         >
-          <span className="map-view__filter-toggle-label">
-            {isFiltersVisible ? "Скрыть фильтры" : "Показать фильтры"}
+          <span
+            className={
+              isFiltersVisible
+                ? "map-view__filter-toggle-content"
+                : "map-view__filter-toggle-content map-view__filter-toggle-content--collapsed"
+            }
+          >
+            <span className="map-view__filter-toggle-label">Скрыть фильтры</span>
+            <span
+              className={
+                isFiltersVisible
+                  ? "map-view__filter-toggle-icon"
+                  : "map-view__filter-toggle-icon map-view__filter-toggle-icon--collapsed"
+              }
+              aria-hidden="true"
+            />
           </span>
           <span
             className={
               isFiltersVisible
-                ? "map-view__filter-toggle-icon"
-                : "map-view__filter-toggle-icon map-view__filter-toggle-icon--collapsed"
+                ? "map-view__filter-icon map-view__filter-icon--hidden"
+                : "map-view__filter-icon"
             }
             aria-hidden="true"
           />
@@ -301,9 +345,6 @@ export function MapView({
                 }
                 aria-hidden="true"
               />
-            </button>
-            <button type="button" className="map-view__filter-reset">
-              Сбросить
             </button>
           </div>
 
@@ -346,47 +387,99 @@ export function MapView({
 
       {selectedOpportunity ? (
         <div className="map-view__details">
-          <div className="map-view__details-header">
-            <div>
-              <h3 className="map-view__details-title">
-                {getOpportunityKindLabel(selectedOpportunity.kind)}
-              </h3>
-              <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
+          <div className="map-view__details-content">
+            <div className="map-view__details-side">
+              <button
+                type="button"
+                className="map-view__details-favorite"
+                aria-label={
+                  isSelectedOpportunityFavorite ? "Убрать из избранного" : "Добавить в избранное"
+                }
+                aria-pressed={isSelectedOpportunityFavorite}
+                onClick={() => handleToggleFavorite(selectedOpportunity.id)}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 512 489"
+                  className="map-view__details-favorite-icon"
+                >
+                  <path
+                    d={
+                      isSelectedOpportunityFavorite
+                        ? "M256 403.578L118.839 486.44C115.369 488.299 111.837 489.146 108.243 488.979C104.644 488.813 101.378 487.697 98.4453 485.633C95.5124 483.564 93.3127 480.844 91.8463 477.474C90.3798 474.103 90.1838 470.352 91.2581 466.218L127.331 310.17L6.65522 204.796C3.38928 202.066 1.35345 198.935 0.54771 195.403C-0.258031 191.866 -0.174773 188.413 0.797488 185.042C1.76975 181.672 3.6713 178.872 6.50214 176.641C9.33298 174.405 12.8138 173.123 16.9445 172.795L176.602 158.717L238.709 11.1026C240.444 7.50653 242.891 4.75706 246.049 2.85423C249.213 0.951398 252.53 0 256 0C259.47 0 262.787 0.951398 265.951 2.85423C269.109 4.75706 271.556 7.50653 273.291 11.1026L335.398 158.717L495.055 172.795C499.186 173.123 502.667 174.405 505.498 176.641C508.329 178.872 510.23 181.672 511.203 185.042C512.175 188.413 512.258 191.866 511.452 195.403C510.647 198.935 508.611 202.066 505.345 204.796L384.669 310.17L421.048 466.218C421.918 470.352 421.62 474.103 420.154 477.474C418.687 480.844 416.488 483.564 413.555 485.633C410.622 487.697 407.356 488.813 403.757 488.979C400.163 489.146 396.631 488.299 393.161 486.44L256 403.578Z"
+                        : "M136.315 432.854L256 360.78L375.685 433.66L344.011 297.269L449.314 205.788L310.42 193.508L256 65.1881L201.58 192.702L62.6865 204.982L167.989 296.777L136.315 432.854ZM256 403.578L118.839 486.44C115.369 488.299 111.837 489.146 108.243 488.979C104.644 488.813 101.378 487.697 98.4453 485.633C95.5124 483.564 93.3127 480.844 91.8463 477.474C90.3798 474.103 90.1838 470.352 91.2581 466.218L127.331 310.17L6.65522 204.796C3.38928 202.066 1.35345 198.935 0.54771 195.403C-0.258031 191.866 -0.174773 188.413 0.797488 185.042C1.76975 181.672 3.6713 178.872 6.50214 176.641C9.33298 174.405 12.8138 173.123 16.9445 172.795L176.602 158.717L238.709 11.1026C240.444 7.50653 242.891 4.75706 246.049 2.85423C249.213 0.951398 252.53 0 256 0C259.47 0 262.787 0.951398 265.951 2.85423C269.109 4.75706 271.556 7.50653 273.291 11.1026L335.398 158.717L495.055 172.795C499.186 173.123 502.667 174.405 505.498 176.641C508.329 178.872 510.23 181.672 511.203 185.042C512.175 188.413 512.258 191.866 511.452 195.403C510.647 198.935 508.611 202.066 505.345 204.796L384.669 310.17L421.048 466.218C421.918 470.352 421.62 474.103 420.154 477.474C418.687 480.844 416.488 483.564 413.555 485.633C410.622 487.697 407.356 488.813 403.757 488.979C400.163 489.146 396.631 488.299 393.161 486.44L256 403.578Z"
+                    }
+                  />
+                </svg>
+              </button>
+              <div className="map-view__details-media" aria-hidden="true" />
             </div>
-            <button
-              type="button"
-              className="map-view__details-close"
-              aria-label="Закрыть карточку"
-              onClick={onCloseDetails}
-            >
-              ×
-            </button>
+
+            <div className="map-view__details-body">
+              <div className="map-view__details-header">
+                <h3 className="map-view__details-title">
+                  {getOpportunityKindLabel(selectedOpportunity.kind)}
+                </h3>
+                <button
+                  type="button"
+                  className="map-view__details-close"
+                  aria-label="Закрыть карточку"
+                  onClick={onCloseDetails}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 512 512"
+                    className="map-view__details-close-icon"
+                  >
+                    <path d="M256 297.195L50.023 503.172C44.1379 509.057 37.272 512 29.4253 512C21.5785 512 14.7126 509.057 8.82759 503.172C2.94253 497.287 0 490.421 0 482.575C0 474.728 2.94253 467.862 8.82759 461.977L214.805 256L8.82759 50.023C2.94253 44.1379 0 37.272 0 29.4253C0 21.5785 2.94253 14.7126 8.82759 8.82759C14.7126 2.94253 21.5785 0 29.4253 0C37.272 0 44.1379 2.94253 50.023 8.82759L256 214.805L461.977 8.82759C467.862 2.94253 474.728 0 482.575 0C490.421 0 497.287 2.94253 503.172 8.82759C509.057 14.7126 512 21.5785 512 29.4253C512 37.272 509.057 44.1379 503.172 50.023L297.195 256L503.172 461.977C509.057 467.862 512 474.728 512 482.575C512 490.421 509.057 497.287 503.172 503.172C497.287 509.057 490.421 512 482.575 512C474.728 512 467.862 509.057 461.977 503.172L256 297.195Z" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="map-view__details-group">
+                <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
+                {selectedOpportunity.companyVerified ? (
+                  <Status variant="verified-accent" className="map-view__details-status">
+                    Верифицировано
+                  </Status>
+                ) : null}
+              </div>
+
+              <div className="map-view__details-group">
+                <p className="map-view__details-price">{selectedOpportunity.salaryLabel}</p>
+                <p className="map-view__details-meta">{selectedOpportunity.locationLabel}</p>
+              </div>
+
+              <div className="map-view__details-group map-view__details-group--meta">
+                <div className="map-view__details-tags">
+                  {selectedOpportunity.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="map-view__details-tag">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="map-view__details-secondary-group">
+                  <p className="map-view__details-secondary">
+                    Уровень: {selectedOpportunity.levelLabel}
+                  </p>
+                  <p className="map-view__details-secondary">
+                    Занятость: {selectedOpportunity.employmentLabel}
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="secondary-ghost"
+                size="sm"
+                className="map-view__details-action"
+              >
+                <span>Подробнее</span>
+                <span className="map-view__details-action-icon" aria-hidden="true" />
+              </Button>
+            </div>
           </div>
 
-          <div className="map-view__details-content">
-            <div className="map-view__details-media" aria-hidden="true" />
-            <div className="map-view__details-body">
-              {selectedOpportunity.companyVerified ? (
-                <span className="map-view__badge">Верифицировано</span>
-              ) : null}
-              <p className="map-view__details-price">{selectedOpportunity.salaryLabel}</p>
-              <p className="map-view__details-meta">{selectedOpportunity.locationLabel}</p>
-              <div className="map-view__details-tags">
-                {selectedOpportunity.tags.map((tag) => (
-                  <span key={tag} className="map-view__details-tag">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <p className="map-view__details-secondary">Уровень: {selectedOpportunity.levelLabel}</p>
-              <p className="map-view__details-secondary">
-                Занятость: {selectedOpportunity.employmentLabel}
-              </p>
-              <a href="#details" className="map-view__details-link">
-                Подробнее
-              </a>
-            </div>
-          </div>
         </div>
       ) : null}
 
@@ -470,7 +563,6 @@ export function MapView({
 
       <div
         className={isMapVisible ? "map-view__map map-view__map--visible" : "map-view__map"}
-        style={mapContentStyle}
       >
         <div
           ref={mapContainerRef}
