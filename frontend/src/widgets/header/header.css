@@ -69,12 +69,11 @@
 
 .header__nav-link:hover {
   background-color: var(--color-white-hover);
-  box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .header__nav-link:active {
   background-color: var(--color-white-active);
-  box-shadow: none;
+  box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .header__controls {
@@ -134,10 +133,13 @@
   color: rgba(255, 255, 255, 0.92);
 }
 
+.header__search-input.input:hover {
+  background-color: var(--color-white-hover);
+}
+
 .header__search-input.input:focus,
 .header__search-input.input:focus-visible {
   border-color: var(--color-bg-primary);
-  background: rgba(255, 255, 255, 0.08);
 }
 
 .header__search .input-field__action {
@@ -200,7 +202,7 @@
 .header__action-button.button.header__action-button--register:not(.button--loading):not(:disabled):active {
   background: var(--color-bg-primary);
   color: var(--color-secondary-active);
-  box-shadow: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .header__action-button.button.header__action-button--register:not(.button--loading):focus-visible {

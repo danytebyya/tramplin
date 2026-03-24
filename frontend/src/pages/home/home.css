@@ -11,6 +11,28 @@
   color: #1e293b;
 }
 
+body.home-page--map-floating {
+  overflow: hidden;
+}
+
+.home-page--map-expanded .header__bottom {
+  display: none;
+}
+
+.home-page--map-expanded .home-footer {
+  display: none;
+}
+
+.home-page--map-expanded .home-page__hero {
+  padding: 0;
+}
+
+.home-page--map-expanded .home-page__hero-container {
+  max-width: none;
+  padding: 0;
+  display: block;
+}
+
 .home-page__container.container {
   width: 100%;
   max-width: 1080px;
@@ -50,10 +72,171 @@
   display: flex;
   flex-direction: column;
   gap: 28px;
+  transition:
+    inset 360ms ease,
+    padding 320ms ease,
+    border-radius 320ms ease,
+    box-shadow 320ms ease,
+    background-color 320ms ease;
+}
+
+.home-page__explorer--expanded {
+  position: fixed;
+  inset: 106px 0 0;
+  height: calc(100vh - 106px);
+  z-index: 1200;
+  padding: 0;
+  gap: 0;
+  border-radius: 0;
+  background: rgba(247, 251, 255, 0.98);
+  box-shadow: none;
+  backdrop-filter: blur(16px);
+  overflow: hidden;
 }
 
 .home-page__explorer-content {
+  position: relative;
   width: 100%;
+  overflow: hidden;
+  transition: height 320ms ease;
+}
+
+.home-page--map-floating .opportunity-filters {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 1300;
+  width: min(1032px, calc(100vw - 32px));
+  transform: translateX(-50%);
+}
+
+.home-page--map-floating .map-view__filters {
+  top: 168px;
+  left: max(16px, calc((100vw - 1032px) / 2));
+}
+
+.home-page--map-floating .map-view__expand-button {
+  top: 168px;
+  right: max(16px, calc((100vw - 1032px) / 2));
+}
+
+.home-page--map-floating .map-view__details {
+  top: 192px;
+  right: max(16px, calc((100vw - 1032px) / 2));
+}
+
+.home-page--map-floating .map-view__zoom-controls {
+  right: max(16px, calc((100vw - 1032px) / 2));
+}
+
+.home-page--map-floating .map-view__format-bar {
+  right: max(16px, calc((100vw - 1032px) / 2));
+}
+
+.home-page__explorer--expanded .home-page__explorer-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.home-page__explorer-panel {
+  width: 100%;
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition:
+    opacity 240ms ease,
+    transform 320ms ease;
+}
+
+.home-page__explorer-panel--active {
+  position: relative;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.home-page__explorer-panel--map-floating {
+  transform: none;
+}
+
+.home-page__map-panel-overlay {
+  width: 100%;
+}
+
+.home-page__map-panel-overlay--expanding,
+.home-page__map-panel-overlay--collapsing {
+  position: fixed;
+  top: 106px;
+  left: 0;
+  width: 100vw;
+  height: calc(100vh - 106px);
+  z-index: 1250;
+  overflow: hidden;
+  transform-origin: center center;
+  will-change: transform, border-radius, box-shadow;
+  transition:
+    transform 620ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 460ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 360ms ease;
+}
+
+.home-page__map-panel-overlay--expanding,
+.home-page__map-panel-overlay--collapsing {
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22);
+}
+
+.home-page__map-panel-overlay--expanded {
+  position: absolute;
+  inset: 0;
+  z-index: 1250;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.home-page--map-floating:not(.home-page--map-expanded) .opportunity-filters {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.home-page__explorer--expanded .home-page__explorer-panel {
+  height: 100%;
+  min-height: 100%;
+}
+
+.home-page__explorer-panel--hidden {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 16px, 0);
+}
+
+.home-page__explorer--expanded .map-view,
+.home-page__explorer--expanded .map-view__map,
+.home-page__explorer--expanded .map-view__canvas {
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+}
+
+.home-page__map-panel-overlay--expanding .map-view,
+.home-page__map-panel-overlay--expanded .map-view,
+.home-page__map-panel-overlay--collapsing .map-view,
+.home-page__map-panel-overlay--expanding .map-view__map,
+.home-page__map-panel-overlay--expanded .map-view__map,
+.home-page__map-panel-overlay--collapsing .map-view__map,
+.home-page__map-panel-overlay--expanding .map-view__canvas,
+.home-page__map-panel-overlay--expanded .map-view__canvas,
+.home-page__map-panel-overlay--collapsing .map-view__canvas {
+  height: 100%;
+  min-height: 100%;
+}
+
+.home-page--map-expanded .map-view {
+  box-shadow: none;
 }
 
 .home-page__hero-card {
@@ -258,6 +441,17 @@
 }
 
 @media (max-width: 1023px) {
+  .home-page--map-floating .map-view__filters,
+  .home-page--map-floating .map-view__expand-button {
+    top: 144px;
+  }
+
+  .home-page__explorer--expanded {
+    inset: 106px 0 0;
+    height: calc(100vh - 106px);
+    padding: 0;
+  }
+
   .home-page__container.container {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
@@ -304,6 +498,34 @@
 }
 
 @media (max-width: 767px) {
+  .home-page--map-floating .opportunity-filters {
+    width: calc(100vw - 24px);
+    top: 8px;
+  }
+
+  .home-page--map-floating .map-view__filters,
+  .home-page--map-floating .map-view__expand-button {
+    top: 136px;
+  }
+
+  .home-page--map-floating .map-view__details {
+    top: auto;
+    bottom: 112px;
+    right: 12px;
+  }
+
+  .home-page--map-floating .map-view__zoom-controls,
+  .home-page--map-floating .map-view__format-bar {
+    right: 12px;
+  }
+
+  .home-page__explorer--expanded {
+    inset: 106px 0 0;
+    height: calc(100vh - 106px);
+    padding: 0;
+    border-radius: 0;
+  }
+
   .home-page__title {
     font-size: 34px;
     line-height: 40px;

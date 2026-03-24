@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { load } from "@2gis/mapgl";
 import type { HtmlMarker, Map } from "@2gis/mapgl/types";
@@ -10,8 +11,12 @@ import "./map-view.css";
 type MapViewProps = {
   opportunities: Opportunity[];
   selectedOpportunityId: string | null;
+  isExpanded: boolean;
+  isTransitioning: boolean;
+  mapContentStyle?: CSSProperties;
   onSelectOpportunity: (opportunityId: string) => void;
   onCloseDetails: () => void;
+  onToggleExpand: () => void;
 };
 
 const mapCenter = [47.2512, 56.1287];
@@ -41,8 +46,12 @@ const initialFormatValue: Opportunity["format"] | "saved" = "office";
 export function MapView({
   opportunities,
   selectedOpportunityId,
+  isExpanded,
+  isTransitioning,
+  mapContentStyle,
   onSelectOpportunity,
   onCloseDetails,
+  onToggleExpand,
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapglApiRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
@@ -52,8 +61,9 @@ export function MapView({
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
-  const [isFiltersVisible, setIsFiltersVisible] = useState(true);
-  const [isCategoryOpen, setIsCategoryOpen] = useState(true);
+  const [isMapVisible, setIsMapVisible] = useState(false);
+  const [isFiltersVisible, setIsFiltersVisible] = useState(false);
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
   const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved">(initialFormatValue);
   const [selectedCity, setSelectedCity] = useState("Чебоксары");
@@ -98,6 +108,14 @@ export function MapView({
           copyright: "bottomLeft",
         });
         setIsMapReady(true);
+
+        window.requestAnimationFrame(() => {
+          mapInstanceRef.current?.invalidateSize();
+          window.requestAnimationFrame(() => {
+            mapInstanceRef.current?.invalidateSize();
+            setIsMapVisible(true);
+          });
+        });
       })
       .catch(() => {
         if (!isMounted) {
@@ -117,6 +135,38 @@ export function MapView({
       mapglApiRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isMapReady || !mapContainerRef.current || !mapInstanceRef.current) {
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const container = mapContainerRef.current;
+    let frameId = 0;
+
+    const syncSize = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        map.invalidateSize();
+      });
+    };
+
+    syncSize();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncSize();
+    });
+
+    resizeObserver.observe(container);
+    window.addEventListener("resize", syncSize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", syncSize);
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [isMapReady]);
 
   useEffect(() => {
     if (!isMapReady || !mapInstanceRef.current || !mapglApiRef.current) {
@@ -146,6 +196,29 @@ export function MapView({
       });
     });
   }, [isMapReady, opportunities]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    let animationFrameId = 0;
+    const startedAt = window.performance.now();
+
+    const syncDuringTransition = (now: number) => {
+      mapInstanceRef.current?.invalidateSize();
+
+      if (now - startedAt < 560) {
+        animationFrameId = window.requestAnimationFrame(syncDuringTransition);
+      }
+    };
+
+    animationFrameId = window.requestAnimationFrame(syncDuringTransition);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [isExpanded]);
 
   useEffect(() => {
     markerElementsRef.current.forEach((markerElement, markerId) => {
@@ -180,7 +253,10 @@ export function MapView({
   };
 
   return (
-    <section className="map-view" aria-label="Карта вакансий">
+    <section
+      className={isTransitioning ? "map-view map-view--transitioning" : "map-view"}
+      aria-label="Карта вакансий"
+    >
       <div className="map-view__filters">
         <button
           type="button"
@@ -314,6 +390,22 @@ export function MapView({
         </div>
       ) : null}
 
+      <button
+        type="button"
+        className="map-view__expand-button"
+        aria-label={isExpanded ? "Свернуть карту" : "Развернуть карту"}
+        onClick={onToggleExpand}
+      >
+        <span
+          className={
+            isExpanded
+              ? "map-view__expand-icon map-view__expand-icon--narrow"
+              : "map-view__expand-icon map-view__expand-icon--expand"
+          }
+          aria-hidden="true"
+        />
+      </button>
+
       <div className="map-view__zoom-controls">
         <button
           type="button"
@@ -376,8 +468,14 @@ export function MapView({
         </div>
       </div>
 
-      <div className="map-view__map">
-        <div ref={mapContainerRef} className="map-view__canvas" />
+      <div
+        className={isMapVisible ? "map-view__map map-view__map--visible" : "map-view__map"}
+        style={mapContentStyle}
+      >
+        <div
+          ref={mapContainerRef}
+          className={isMapVisible ? "map-view__canvas map-view__canvas--visible" : "map-view__canvas"}
+        />
         {mapError ? (
           <div className="map-view__state">
             <div className="map-view__state-card">

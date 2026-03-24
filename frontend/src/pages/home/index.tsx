@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import maxIcon from "../../assets/auth/max.png";
@@ -13,19 +14,189 @@ import { OpportunityList } from "../../widgets/opportunity-list";
 import "./home.css";
 
 export function HomePage() {
+  const MAP_EXPANDED_TOP_OFFSET = 106;
+  const MAP_EXPAND_TRANSITION_MS = 520;
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [mapExpandMode, setMapExpandMode] = useState<"collapsed" | "expanding" | "expanded" | "collapsing">("collapsed");
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
+  const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
+  const [mapContentStyle, setMapContentStyle] = useState<CSSProperties | undefined>(undefined);
+  const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
+  const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
+  const collapsedMapPanelRectRef = useRef<DOMRect | null>(null);
+  const mapTransitionTimeoutRef = useRef<number | null>(null);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
   const isAuthenticated = Boolean(accessToken || refreshToken);
+  const isMapExpanded = mapExpandMode !== "collapsed";
+  const isMapExpandedLayout = mapExpandMode === "expanded" || mapExpandMode === "collapsing";
+  const isMapFloating = mapExpandMode !== "collapsed";
+  const isMapTransitioning = mapExpandMode === "expanding" || mapExpandMode === "collapsing";
+
+  const getExpandedRect = () => ({
+    top: MAP_EXPANDED_TOP_OFFSET,
+    left: 0,
+    width: window.innerWidth,
+    height: Math.max(window.innerHeight - MAP_EXPANDED_TOP_OFFSET, 0),
+  });
+
+  const getCollapsedFrameStyle = (rect: DOMRect): CSSProperties => {
+    const expandedRect = getExpandedRect();
+    const scaleX = expandedRect.width > 0 ? rect.width / expandedRect.width : 1;
+    const scaleY = expandedRect.height > 0 ? rect.height / expandedRect.height : 1;
+    const expandedCenterX = expandedRect.left + expandedRect.width / 2;
+    const expandedCenterY = expandedRect.top + expandedRect.height / 2;
+    const collapsedCenterX = rect.left + rect.width / 2;
+    const collapsedCenterY = rect.top + rect.height / 2;
+
+    return {
+      transform: `translate3d(${collapsedCenterX - expandedCenterX}px, ${collapsedCenterY - expandedCenterY}px, 0) scale(${scaleX}, ${scaleY})`,
+      borderRadius: "24px",
+    };
+  };
+
+  const getCollapsedContentStyle = (rect: DOMRect): CSSProperties => {
+    const expandedRect = getExpandedRect();
+    const scaleX = expandedRect.width > 0 ? rect.width / expandedRect.width : 1;
+    const scaleY = expandedRect.height > 0 ? rect.height / expandedRect.height : 1;
+
+    return {
+      transform: `scale(${scaleX > 0 ? 1 / scaleX : 1}, ${scaleY > 0 ? 1 / scaleY : 1})`,
+    };
+  };
+
+  const clearMapTransitionTimeout = () => {
+    if (mapTransitionTimeoutRef.current !== null) {
+      window.clearTimeout(mapTransitionTimeoutRef.current);
+      mapTransitionTimeoutRef.current = null;
+    }
+  };
+
+  const finishMapTransition = (nextMode: "collapsed" | "expanded") => {
+    setMapExpandMode(nextMode);
+    clearMapTransitionTimeout();
+
+    if (nextMode === "collapsed") {
+      setMapPanelFrameStyle(undefined);
+      setMapContentStyle(undefined);
+      setMapPanelPlaceholderHeight(null);
+      collapsedMapPanelRectRef.current = null;
+      return;
+    }
+
+    setMapPanelFrameStyle(undefined);
+    setMapContentStyle(undefined);
+  };
+
+  const handleToggleMapExpand = () => {
+    const panelShell = mapPanelShellRef.current;
+
+    if (!panelShell || mapExpandMode === "expanding" || mapExpandMode === "collapsing") {
+      return;
+    }
+
+    const shellRect = panelShell.getBoundingClientRect();
+
+    if (mapExpandMode === "collapsed") {
+      collapsedMapPanelRectRef.current = shellRect;
+      setMapPanelPlaceholderHeight(shellRect.height);
+      setMapPanelFrameStyle(getCollapsedFrameStyle(shellRect));
+      setMapExpandMode("expanding");
+      clearMapTransitionTimeout();
+
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          setMapPanelFrameStyle({
+            transform: "translate3d(0, 0, 0) scale(1, 1)",
+            borderRadius: "0px",
+          });
+        });
+      });
+
+      mapTransitionTimeoutRef.current = window.setTimeout(() => {
+        finishMapTransition("expanded");
+      }, MAP_EXPAND_TRANSITION_MS);
+
+      return;
+    }
+
+    const collapsedRect = collapsedMapPanelRectRef.current ?? shellRect;
+
+    setMapPanelPlaceholderHeight(collapsedRect.height);
+    setMapPanelFrameStyle({
+      transform: "translate3d(0, 0, 0) scale(1, 1)",
+      borderRadius: "0px",
+    });
+    setMapContentStyle({
+      transform: "scale(1, 1)",
+    });
+    setMapExpandMode("collapsing");
+    clearMapTransitionTimeout();
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        setMapPanelFrameStyle(getCollapsedFrameStyle(collapsedRect));
+        setMapContentStyle(getCollapsedContentStyle(collapsedRect));
+      });
+    });
+
+    mapTransitionTimeoutRef.current = window.setTimeout(() => {
+      finishMapTransition("collapsed");
+    }, MAP_EXPAND_TRANSITION_MS);
+  };
+
   const homePageClassName =
     role === "employer"
-      ? "home-page home-page--employer"
+      ? `home-page home-page--employer${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}`
       : role === "applicant"
-        ? "home-page home-page--applicant"
-        : "home-page";
+        ? `home-page home-page--applicant${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}`
+        : `home-page${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}`;
+  const explorerClassName = isMapExpandedLayout
+    ? "home-page__explorer home-page__explorer--expanded"
+    : "home-page__explorer";
+
+  useEffect(() => {
+    document.body.classList.toggle("home-page--map-floating", isMapFloating);
+    document.body.classList.toggle("home-page--map-expanded", isMapExpandedLayout);
+
+    return () => {
+      document.body.classList.remove("home-page--map-floating");
+      document.body.classList.remove("home-page--map-expanded");
+    };
+  }, [isMapExpandedLayout, isMapFloating]);
+
+  useEffect(() => {
+    if (!isMapExpanded || mapExpandMode === "expanded") {
+      return;
+    }
+
+    const syncExpandedFrame = () => {
+      setMapPanelFrameStyle((currentStyle) => {
+        if (!currentStyle || !collapsedMapPanelRectRef.current) {
+          return currentStyle;
+        }
+
+        return mapExpandMode === "expanding"
+          ? {
+              transform: "translate3d(0, 0, 0) scale(1, 1)",
+              borderRadius: "0px",
+            }
+          : getCollapsedFrameStyle(collapsedMapPanelRectRef.current);
+      });
+    };
+
+    window.addEventListener("resize", syncExpandedFrame);
+
+    return () => {
+      window.removeEventListener("resize", syncExpandedFrame);
+    };
+  }, [isMapExpanded, mapExpandMode]);
+
+  useEffect(() => () => {
+    clearMapTransitionTimeout();
+  }, []);
 
   return (
     <main className={homePageClassName}>
@@ -117,20 +288,60 @@ export function HomePage() {
 
       <section className="home-page__hero">
         <Container className="home-page__container home-page__hero-container">
-          <div className="home-page__explorer">
+          <div className={explorerClassName}>
             <OpportunityFilters viewMode={viewMode} onViewModeChange={setViewMode} />
 
             <div className="home-page__explorer-content">
-              {viewMode === "map" ? (
-                <MapView
-                  opportunities={mockOpportunities}
-                  selectedOpportunityId={selectedOpportunityId}
-                  onSelectOpportunity={setSelectedOpportunityId}
-                  onCloseDetails={() => setSelectedOpportunityId(null)}
-                />
-              ) : (
+              <div
+                className={
+                  viewMode === "map"
+                    ? [
+                        "home-page__explorer-panel",
+                        "home-page__explorer-panel--active",
+                        isMapFloating ? "home-page__explorer-panel--map-floating" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
+                    : "home-page__explorer-panel home-page__explorer-panel--hidden"
+                }
+                ref={viewMode === "map" ? mapPanelShellRef : undefined}
+                style={
+                  viewMode === "map" && isMapFloating && mapPanelPlaceholderHeight !== null
+                    ? { minHeight: `${mapPanelPlaceholderHeight}px` }
+                    : undefined
+                }
+                aria-hidden={viewMode !== "map"}
+              >
+                <div
+                  className={
+                    isMapFloating
+                      ? `home-page__map-panel-overlay home-page__map-panel-overlay--${mapExpandMode}`
+                      : "home-page__map-panel-overlay"
+                  }
+                  style={isMapFloating && mapExpandMode !== "expanded" ? mapPanelFrameStyle : undefined}
+                >
+                  <MapView
+                    opportunities={mockOpportunities}
+                    selectedOpportunityId={selectedOpportunityId}
+                    isExpanded={isMapExpanded}
+                    isTransitioning={isMapTransitioning}
+                    mapContentStyle={mapContentStyle}
+                    onSelectOpportunity={setSelectedOpportunityId}
+                    onCloseDetails={() => setSelectedOpportunityId(null)}
+                    onToggleExpand={handleToggleMapExpand}
+                  />
+                </div>
+              </div>
+              <div
+                className={
+                  viewMode === "list"
+                    ? "home-page__explorer-panel home-page__explorer-panel--active"
+                    : "home-page__explorer-panel home-page__explorer-panel--hidden"
+                }
+                aria-hidden={viewMode !== "list"}
+              >
                 <OpportunityList opportunities={mockOpportunities} />
-              )}
+              </div>
             </div>
           </div>
         </Container>
