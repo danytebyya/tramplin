@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
@@ -136,6 +136,7 @@ function formatPhoneNumber(value: string) {
 
 export function EmployerOnboardingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
   const [apiError, setApiError] = useState<string | null>(null);
   const [documentFiles, setDocumentFiles] = useState<DocumentUploadItem[]>([]);
@@ -253,8 +254,10 @@ export function EmployerOnboardingPage() {
       await upsertEmployerProfile(payload.profile);
       return uploadEmployerVerificationDocuments(payload.documents);
     },
-    onSuccess: () => {
-      navigate("/");
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
+      navigate("/", { replace: true });
     },
     onError: (error: any) => {
       setApiError(

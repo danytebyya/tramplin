@@ -11,10 +11,6 @@ export function OpportunityFilters({ viewMode, onViewModeChange }: OpportunityFi
   return (
     <section className="opportunity-filters" aria-label="Переключение режима просмотра">
       <div className="opportunity-filters__primary-group">
-        <h2 className="opportunity-filters__title">
-          Выберите <span className="opportunity-filters__title-accent">удобный</span> вариант просмотра
-        </h2>
-
         <SegmentedSwitch
           ariaLabel="Выбор режима просмотра"
           className="opportunity-filters__switch"

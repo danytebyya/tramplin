@@ -15,9 +15,7 @@ import "./home.css";
 export function HomePage() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(
-    mockOpportunities[0]?.id ?? null,
-  );
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);

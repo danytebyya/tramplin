@@ -15,20 +15,6 @@
   flex-direction: column;
 }
 
-.opportunity-filters__title {
-  margin: 0;
-  color: #0f172a;
-  font-size: var(--type-h2-size);
-  line-height: var(--type-h2-line);
-  font-weight: 400;
-  letter-spacing: -0.05em;
-  text-align: center;
-}
-
-.opportunity-filters__title-accent {
-  color: #0ea5c6;
-}
-
 .opportunity-filters__switch {
   width: 100%;
 }
@@ -96,18 +82,7 @@
 }
 
 @media (max-width: 1023px) {
-  .opportunity-filters__title {
-    font-size: 42px;
-  }
-
   .opportunity-filters__grid {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 767px) {
-  .opportunity-filters__title {
-    font-size: 32px;
-    line-height: 36px;
   }
 }

@@ -35,6 +35,8 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
   { label: "Избранное", value: "saved" },
 ];
 
+const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
+
 export function MapView({
   opportunities,
   selectedOpportunityId,
@@ -43,6 +45,9 @@ export function MapView({
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [isFiltersVisible, setIsFiltersVisible] = useState(true);
+  const [isCategoryOpen, setIsCategoryOpen] = useState(true);
+  const [selectedCity, setSelectedCity] = useState("Чебоксары");
   const selectedOpportunity = opportunities.find(
     (opportunity) => opportunity.id === selectedOpportunityId,
   );
@@ -121,28 +126,80 @@ export function MapView({
   return (
     <section className="map-view" aria-label="Карта вакансий">
       <div className="map-view__filters">
-        <div className="map-view__filter-card map-view__filter-card--compact">
-          <div>
-            <h3 className="map-view__filter-title">Фильтры</h3>
-            <p className="map-view__filter-text">Следующим этапом добавим реальные фильтры и поиск.</p>
-          </div>
-          <span className="map-view__format-arrow" aria-hidden="true">
-            &lsaquo;
+        <button
+          type="button"
+          className="map-view__filter-card map-view__filter-card--compact map-view__filter-toggle"
+          onClick={() => setIsFiltersVisible((current) => !current)}
+        >
+          <span className="map-view__filter-toggle-label">
+            {isFiltersVisible ? "Скрыть фильтры" : "Показать фильтры"}
           </span>
-        </div>
+          <span
+            className={
+              isFiltersVisible
+                ? "map-view__filter-toggle-icon"
+                : "map-view__filter-toggle-icon map-view__filter-toggle-icon--collapsed"
+            }
+            aria-hidden="true"
+          />
+        </button>
 
-        <div className="map-view__filter-card">
-          <h3 className="map-view__filter-title">Вакансии и стажировки</h3>
-          <p className="map-view__filter-text">
-            На карте используются тестовые карточки, чтобы сначала оценить визуал и поведение.
-          </p>
-          <div className="map-view__filter-list">
-            <span className="map-view__filter-chip">Чебоксары</span>
-            <span className="map-view__filter-chip">Новочебоксарск</span>
-            <span className="map-view__filter-chip">Офлайн</span>
-            <span className="map-view__filter-chip">Гибрид</span>
+        {isFiltersVisible ? (
+          <div className="map-view__filter-stack">
+            <div className="map-view__filter-card map-view__filter-card--category">
+              <button
+                type="button"
+                className="map-view__filter-category-button"
+                onClick={() => setIsCategoryOpen((current) => !current)}
+              >
+                <span className="map-view__filter-title map-view__filter-title--lg">
+                  Вакансии и стажировки
+                </span>
+                <span
+                  className={
+                    isCategoryOpen
+                      ? "map-view__filter-category-icon"
+                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
+                  }
+                  aria-hidden="true"
+                />
+              </button>
+              <button type="button" className="map-view__filter-reset">
+                Сбросить
+              </button>
+            </div>
+
+            {isCategoryOpen ? (
+              <div className="map-view__filter-card map-view__filter-card--panel">
+                <div className="map-view__city-search">
+                  <span className="map-view__city-search-placeholder">Город</span>
+                  <span className="map-view__city-search-icon" aria-hidden="true" />
+                </div>
+
+                <div className="map-view__city-list" role="listbox" aria-label="Выбор города">
+                  {cityOptions.map((city) => (
+                    <button
+                      key={city}
+                      type="button"
+                      className={
+                        city === selectedCity
+                          ? "map-view__city-option map-view__city-option--active"
+                          : "map-view__city-option"
+                      }
+                      onClick={() => setSelectedCity(city)}
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </div>
+
+                <button type="button" className="map-view__filter-reset">
+                  Сбросить
+                </button>
+              </div>
+            ) : null}
           </div>
-        </div>
+        ) : null}
       </div>
 
       {selectedOpportunity ? (
@@ -192,7 +249,7 @@ export function MapView({
       ) : null}
 
       <div className="map-view__format-bar" aria-hidden="true">
-        <span className="map-view__format-arrow">&rsaquo;</span>
+        <span className="map-view__format-arrow" />
         {formatLabels.map((item) => (
           <span
             key={item.value}

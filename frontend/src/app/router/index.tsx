@@ -20,7 +20,7 @@ function useEmployerProfileAccess() {
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const shouldCheckEmployerProfile = isHydrated && isAuthenticated && role === "employer";
   const currentUserQuery = useQuery({
-    queryKey: ["auth", "me", "route-guard"],
+    queryKey: ["auth", "me"],
     queryFn: meRequest,
     enabled: shouldCheckEmployerProfile,
     staleTime: 5 * 60 * 1000,

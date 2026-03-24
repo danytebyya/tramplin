@@ -81,6 +81,13 @@ class EmailVerificationService:
             state.request_window_started_at = now
         self.db.flush()
 
+        if force_resend:
+            # Persist the rotated code before delivery so the previous code
+            # becomes invalid immediately after the resend request is made.
+            self.db.commit()
+            self._deliver_code(normalized_email, code, force_resend=True, state=state)
+            return
+
         try:
             self._deliver_code(normalized_email, code, force_resend=force_resend, state=state)
         except Exception:
