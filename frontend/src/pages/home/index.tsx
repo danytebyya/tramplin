@@ -1,14 +1,23 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
+import { mockOpportunities } from "../../entities/opportunity";
 import { LogoutButton, useAuthStore } from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
+import { OpportunityFilters } from "../../widgets/filters";
 import "../../widgets/header/header.css";
+import { MapView } from "../../widgets/map-view";
+import { OpportunityList } from "../../widgets/opportunity-list";
 import "./home.css";
 
 export function HomePage() {
   const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(
+    mockOpportunities[0]?.id ?? null,
+  );
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
@@ -110,13 +119,21 @@ export function HomePage() {
 
       <section className="home-page__hero">
         <Container className="home-page__container home-page__hero-container">
-          <div className="home-page__hero-card">
-            <span className="home-page__hero-eyebrow">Главная</span>
-            <h1 className="home-page__title">Карьерная платформа для студентов, выпускников и работодателей</h1>
-            <p className="home-page__text">
-              Хедер и футер собраны по референсам. Контент главной страницы можно развивать дальше
-              следующим этапом.
-            </p>
+          <div className="home-page__explorer">
+            <OpportunityFilters viewMode={viewMode} onViewModeChange={setViewMode} />
+
+            <div className="home-page__explorer-content">
+              {viewMode === "map" ? (
+                <MapView
+                  opportunities={mockOpportunities}
+                  selectedOpportunityId={selectedOpportunityId}
+                  onSelectOpportunity={setSelectedOpportunityId}
+                  onCloseDetails={() => setSelectedOpportunityId(null)}
+                />
+              ) : (
+                <OpportunityList opportunities={mockOpportunities} />
+              )}
+            </div>
           </div>
         </Container>
       </section>

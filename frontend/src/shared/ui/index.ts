@@ -6,5 +6,6 @@ export { Radio } from "./radio/radio";
 export { Card } from "./card/card";
 export { Container } from "./container/container";
 export { Switch } from "./switch/switch";
+export { SegmentedSwitch } from "./segmented-switch/segmented-switch";
 export { Select } from "./select/select";
 export { InfoTooltip } from "./info-tooltip/info-tooltip";

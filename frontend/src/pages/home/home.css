@@ -37,16 +37,27 @@
 }
 
 .home-page__hero {
-  padding: 84px 0 112px;
+  padding: 30px 0;
 }
 
 .home-page__hero-container {
   align-items: start;
 }
 
+.home-page__explorer {
+  grid-column: 1 / -1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.home-page__explorer-content {
+  width: 100%;
+}
+
 .home-page__hero-card {
   grid-column: 1 / span 8;
-  width: 100%;
   padding: 48px;
   border: 1px solid rgba(191, 219, 254, 0.66);
   border-radius: 30px;
@@ -256,6 +267,7 @@
   }
 
   .home-page__hero-card,
+  .home-page__explorer,
   .home-footer__logo-card,
   .home-footer__column,
   .home-footer__copyright,
