@@ -237,12 +237,30 @@
 .header__location {
   display: inline-flex;
   align-items: center;
+  min-height: 50px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
   justify-self: end;
   gap: 10px;
   grid-column: 10 / span 3;
   color: #94a3b8;
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
+}
+
+.header__location:hover {
+  color: var(--color-primary);
+}
+
+.header__location:active {
+  color: var(--color-primary-active);
+}
+
+.header__location:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
 }
 
 .header__location-icon {
@@ -258,6 +276,14 @@
   -webkit-mask-position: center;
   -webkit-mask-size: contain;
   flex: 0 0 22px;
+}
+
+.header__location:hover .header__location-icon {
+  background-color: var(--color-primary);
+}
+
+.header__location:active .header__location-icon {
+  background-color: var(--color-primary-active);
 }
 
 @media (max-width: 1279px) {

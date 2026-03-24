@@ -100,10 +100,10 @@ export function HomePage() {
               </a>
             </nav>
 
-            <div className="header__location">
+            <button type="button" className="header__location" aria-haspopup="menu">
               <span className="header__location-icon" aria-hidden="true" />
               <span>Чебоксары</span>
-            </div>
+            </button>
           </Container>
         </div>
       </header>
