@@ -324,10 +324,28 @@ def test_request_code_does_not_resend_while_code_is_active(client, db_session):
     assert active_code == first_code
 
 
-def test_request_code_force_resend_reuses_active_code(client, db_session):
+def test_request_code_force_resend_rotates_active_code(client, db_session):
     first_code = _request_code(client, db_session, "resend@example.com")
     second_code = _request_code(client, db_session, "resend@example.com", force_resend=True)
-    assert second_code == first_code
+    assert second_code != first_code
+
+
+def test_force_resend_invalidates_previous_code(client, db_session):
+    first_code = _request_code(client, db_session, "resend-invalidates@example.com")
+    second_code = _request_code(client, db_session, "resend-invalidates@example.com", force_resend=True)
+
+    first_verify_response = client.post(
+        "/api/v1/auth/email/verify-code",
+        json={"email": "resend-invalidates@example.com", "code": first_code},
+    )
+    assert first_verify_response.status_code == 400
+    assert first_verify_response.json()["error"]["code"] == "AUTH_OTP_INVALID"
+
+    second_verify_response = client.post(
+        "/api/v1/auth/email/verify-code",
+        json={"email": "resend-invalidates@example.com", "code": second_code},
+    )
+    assert second_verify_response.status_code == 200
 
 
 def test_register_is_blocked_after_too_many_invalid_verification_attempts(client, db_session):

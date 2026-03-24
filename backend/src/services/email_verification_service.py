@@ -65,22 +65,8 @@ class EmailVerificationService:
                 status_code=409,
             )
 
-        if self._has_active_code(state, now):
-            self.logger.info(
-                "auth.otp.request.reuse_active email=%s force_resend=%s",
-                normalized_email,
-                force_resend,
-            )
-            if not force_resend:
-                return
-
-            self._ensure_request_allowed(state, now)
-            state.request_count += 1
-            if state.request_window_started_at is None:
-                state.request_window_started_at = now
-            self.db.flush()
-            self._deliver_code(normalized_email, state.debug_code or "", force_resend=True, state=state)
-            self.db.commit()
+        if self._has_active_code(state, now) and not force_resend:
+            self.logger.info("auth.otp.request.skip_active email=%s", normalized_email)
             return
 
         self._ensure_request_allowed(state, now)
