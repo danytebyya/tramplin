@@ -84,6 +84,8 @@
 .map-view__map {
   width: 100%;
   min-height: 630px;
+  border-radius: inherit;
+  overflow: hidden;
   opacity: 0.01;
   transform-origin: center center;
   transition:
@@ -100,6 +102,8 @@
 .map-view__canvas {
   width: 100%;
   height: 630px;
+  border-radius: inherit;
+  overflow: hidden;
   opacity: 0.01;
   transform: translateZ(0);
   transition:
@@ -109,6 +113,12 @@
 
 .map-view__canvas--visible {
   opacity: 1;
+}
+
+.map-view__map > div,
+.map-view__canvas > div,
+.map-view__canvas canvas {
+  border-radius: inherit;
 }
 
 .map-view__state {
@@ -1000,7 +1010,6 @@
   border: none;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.26);
   cursor: pointer;
   transition:
     transform 180ms ease,
@@ -1043,6 +1052,36 @@
 
 .map-view__marker--slate {
   background: #64748b;
+}
+
+.map-view__marker-cluster {
+  min-width: 48px;
+  height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--color-secondary);
+  color: var(--color-text-inverse);
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.28);
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.map-view__marker-cluster:hover {
+  background: var(--color-secondary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.3);
+}
+
+.map-view__marker-cluster:active {
+  background: var(--color-secondary-active);
+  transform: translateY(0);
 }
 
 @media (max-width: 1279px) {

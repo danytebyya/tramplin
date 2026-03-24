@@ -29,6 +29,10 @@ function getOpportunityKindLabel(kind: Opportunity["kind"]) {
     return "Мероприятие";
   }
 
+  if (kind === "mentorship") {
+    return "Менторство";
+  }
+
   return "Вакансия";
 }
 
@@ -41,6 +45,114 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
 
 const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
 const initialFormatValue: Opportunity["format"] | "saved" = "office";
+const clusterZoomThreshold = 12;
+
+type MarkerDisplayItem =
+  | {
+      type: "opportunity";
+      key: string;
+      coordinates: [number, number];
+      opportunity: Opportunity;
+    }
+  | {
+      type: "cluster";
+      key: string;
+      coordinates: [number, number];
+      count: number;
+      opportunityIds: string[];
+    };
+
+function getClusterCellSize(zoom: number) {
+  if (zoom <= 8) {
+    return 112;
+  }
+
+  if (zoom <= 10) {
+    return 92;
+  }
+
+  return 76;
+}
+
+function projectToWorldCell(longitude: number, latitude: number, zoom: number, cellSize: number) {
+  const worldSize = 256 * 2 ** zoom;
+  const normalizedLongitude = (longitude + 180) / 360;
+  const latitudeInRadians = (latitude * Math.PI) / 180;
+  const mercatorY =
+    0.5 -
+    Math.log((1 + Math.sin(latitudeInRadians)) / (1 - Math.sin(latitudeInRadians))) /
+      (4 * Math.PI);
+
+  return {
+    x: Math.floor((normalizedLongitude * worldSize) / cellSize),
+    y: Math.floor((mercatorY * worldSize) / cellSize),
+  };
+}
+
+function buildMarkerDisplayItems(zoom: number, opportunities: Opportunity[]): MarkerDisplayItem[] {
+  
+  if (zoom > clusterZoomThreshold) {
+    return opportunities.map((opportunity) => ({
+      type: "opportunity",
+      key: opportunity.id,
+      coordinates: [opportunity.longitude, opportunity.latitude],
+      opportunity,
+    }));
+  }
+
+  const cellSize = getClusterCellSize(zoom);
+  const clusters = new globalThis.Map<
+    string,
+    {
+      opportunities: Opportunity[];
+      sumLongitude: number;
+      sumLatitude: number;
+    }
+  >();
+
+  opportunities.forEach((opportunity) => {
+    const { x, y } = projectToWorldCell(opportunity.longitude, opportunity.latitude, zoom, cellSize);
+    const cellKey = `${x}:${y}`;
+    const cluster = clusters.get(cellKey);
+
+    if (cluster) {
+      cluster.opportunities.push(opportunity);
+      cluster.sumLongitude += opportunity.longitude;
+      cluster.sumLatitude += opportunity.latitude;
+      return;
+    }
+
+    clusters.set(cellKey, {
+      opportunities: [opportunity],
+      sumLongitude: opportunity.longitude,
+      sumLatitude: opportunity.latitude,
+    });
+  });
+
+  return Array.from(clusters.entries()).map(([cellKey, cluster]) => {
+    if (cluster.opportunities.length === 1) {
+      const [opportunity] = cluster.opportunities;
+
+      return {
+        type: "opportunity",
+        key: opportunity.id,
+        coordinates: [opportunity.longitude, opportunity.latitude],
+        opportunity,
+      };
+    }
+
+    return {
+      type: "cluster",
+      key: `cluster:${cellKey}`,
+      coordinates: [
+        cluster.sumLongitude / cluster.opportunities.length,
+        cluster.sumLatitude / cluster.opportunities.length,
+      ],
+      count: cluster.opportunities.length,
+      opportunityIds: cluster.opportunities.map((opportunity) => opportunity.id),
+    };
+  });
+}
 
 export function MapView({
   opportunities,
@@ -54,9 +166,11 @@ export function MapView({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapglApiRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
   const mapInstanceRef = useRef<Map | null>(null);
+  const hasAlignedInitialViewportRef = useRef(false);
   const markersRef = useRef<HtmlMarker[]>([]);
   const markerElementsRef = useRef(new globalThis.Map<string, HTMLButtonElement>());
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
+  const [zoomVersion, setZoomVersion] = useState(0);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isMapVisible, setIsMapVisible] = useState(false);
@@ -139,6 +253,23 @@ export function MapView({
   }, []);
 
   useEffect(() => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const syncZoom = () => {
+      setZoomVersion((current) => current + 1);
+    };
+
+    map.on("zoomend", syncZoom);
+
+    return () => {
+      map.off("zoomend", syncZoom);
+    };
+  }, [isMapReady]);
+
+  useEffect(() => {
     if (!isMapReady || !mapContainerRef.current || !mapInstanceRef.current) {
       return;
     }
@@ -181,23 +312,50 @@ export function MapView({
     markersRef.current = [];
     markerElementsRef.current.clear();
 
-    markersRef.current = opportunities.map((opportunity) => {
+    const displayItems = buildMarkerDisplayItems(mapInstanceRef.current.getZoom(), opportunities);
+
+    markersRef.current = displayItems.map((item) => {
       const markerElement = document.createElement("button");
       markerElement.type = "button";
-      markerElement.className = ["map-view__marker", `map-view__marker--${opportunity.accent}`].join(" ");
-      markerElement.setAttribute("aria-label", `Открыть ${opportunity.title}`);
-      markerElement.addEventListener("click", () => onSelectOpportunityRef.current(opportunity.id));
-      markerElementsRef.current.set(opportunity.id, markerElement);
+
+      if (item.type === "cluster") {
+        markerElement.className = "map-view__marker-cluster";
+        markerElement.textContent = String(item.count);
+        markerElement.setAttribute("aria-label", `Показать ${item.count} результатов`);
+        markerElement.addEventListener("click", () => {
+          const map = mapInstanceRef.current;
+
+          if (!map) {
+            return;
+          }
+
+          map.setCenter(item.coordinates, { duration: 280 });
+          map.setZoom(Math.min(map.getZoom() + 2, 14), { duration: 280 });
+        });
+
+        return new mapglApi.HtmlMarker(mapInstanceRef.current as Map, {
+          coordinates: item.coordinates,
+          html: markerElement,
+          anchor: [24, 20],
+          interactive: true,
+          preventMapInteractions: true,
+        });
+      }
+
+      markerElement.className = ["map-view__marker", `map-view__marker--${item.opportunity.accent}`].join(" ");
+      markerElement.setAttribute("aria-label", `Открыть ${item.opportunity.title}`);
+      markerElement.addEventListener("click", () => onSelectOpportunityRef.current(item.opportunity.id));
+      markerElementsRef.current.set(item.opportunity.id, markerElement);
 
       return new mapglApi.HtmlMarker(mapInstanceRef.current as Map, {
-        coordinates: [opportunity.longitude, opportunity.latitude],
+        coordinates: item.coordinates,
         html: markerElement,
         anchor: [17, 34],
         interactive: true,
         preventMapInteractions: true,
       });
     });
-  }, [isMapReady, opportunities]);
+  }, [isMapReady, opportunities, zoomVersion]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -253,6 +411,41 @@ export function MapView({
     );
     mapInstanceRef.current.setZoom(14, { duration: 280 });
   }, [isExpanded, selectedOpportunity, selectedOpportunityId]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || selectedOpportunity || opportunities.length === 0 || hasAlignedInitialViewportRef.current) {
+      return;
+    }
+
+    const longitudeValues = opportunities.map((opportunity) => opportunity.longitude);
+    const latitudeValues = opportunities.map((opportunity) => opportunity.latitude);
+    const minLongitude = Math.min(...longitudeValues);
+    const maxLongitude = Math.max(...longitudeValues);
+    const minLatitude = Math.min(...latitudeValues);
+    const maxLatitude = Math.max(...latitudeValues);
+    const centerLongitude = (minLongitude + maxLongitude) / 2;
+    const centerLatitude = (minLatitude + maxLatitude) / 2;
+    const longitudeSpan = Math.abs(maxLongitude - minLongitude);
+    const latitudeSpan = Math.abs(maxLatitude - minLatitude);
+    const widestSpan = Math.max(longitudeSpan, latitudeSpan);
+
+    let zoom = 11;
+    if (widestSpan > 20) {
+      zoom = 3;
+    } else if (widestSpan > 12) {
+      zoom = 4;
+    } else if (widestSpan > 6) {
+      zoom = 5;
+    } else if (widestSpan > 3) {
+      zoom = 6;
+    } else if (widestSpan > 1.5) {
+      zoom = 7;
+    }
+
+    mapInstanceRef.current.setCenter([centerLongitude, centerLatitude], { duration: 0 });
+    mapInstanceRef.current.setZoom(zoom, { duration: 0 });
+    hasAlignedInitialViewportRef.current = true;
+  }, [opportunities, selectedOpportunity]);
 
   const handleZoomIn = () => {
     if (!mapInstanceRef.current) {
