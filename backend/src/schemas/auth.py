@@ -32,6 +32,8 @@ class RegisterRequest(BaseModel):
             raise ValueError("Пароль должен содержать минимум 8 символов")
         if any(char.isspace() for char in value):
             raise ValueError("Пароль не должен содержать пробелы")
+        if not any("a" <= char.lower() <= "z" for char in value):
+            raise ValueError("Пароль должен содержать латинские буквы")
         if not any(char.islower() for char in value):
             raise ValueError("Пароль должен содержать строчные буквы")
         if not any(char.isupper() for char in value):

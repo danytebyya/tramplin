@@ -223,6 +223,22 @@ def test_register_rejects_weak_password(client, db_session):
     assert response.json()["error"]["message"] == "Пароль должен содержать заглавные буквы"
 
 
+def test_register_rejects_password_without_latin_letters(client, db_session):
+    code = _request_code(client, db_session, "no-latin@example.com")
+    payload = {
+        "email": "no-latin@example.com",
+        "display_name": "No Latin User",
+        "password": "Пароль123Я",
+        "verification_code": code,
+        "role": "applicant",
+        "applicant_profile": {"full_name": "No Latin User"},
+    }
+
+    response = client.post("/api/v1/users", json=payload)
+    assert response.status_code == 422
+    assert response.json()["error"]["message"] == "Пароль должен содержать латинские буквы"
+
+
 def test_request_code_rate_limit(client):
     email = "limit@example.com"
     for _ in range(5):

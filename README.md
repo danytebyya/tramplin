@@ -31,6 +31,7 @@ Important:
 - `ALLOWED_ORIGINS=http://localhost:5173` is already set for local frontend access.
 - `EMAIL_TRANSPORT=log` means emails are not really sent in dev mode; OTP/login emails are written to backend logs.
 - `DADATA_API_KEY` is optional. Without it, company lookup features that depend on DaData will not work.
+- `VITE_2GIS_MAP_KEY` must be added to `frontend/.env` if you want the home page map to work.
 
 ### 3. Start PostgreSQL
 
@@ -80,12 +81,18 @@ npm run dev
 
 Frontend will be available at `http://localhost:5173`.
 
+Important for frontend map:
+- `npm install` installs the `@2gis/mapgl` package used by the map widget.
+- Add `VITE_2GIS_MAP_KEY=your_key` to `frontend/.env`.
+- Without a valid 2GIS key, the map widget will show a fallback state instead of the live map.
+
 ## First Run Checklist
 
 If something does not start, check this first:
 - PostgreSQL is running on port `5432`
 - `backend/.env` exists
 - `frontend/.env` exists
+- `frontend/.env` contains `VITE_2GIS_MAP_KEY` if you expect the 2GIS map to render
 - Alembic migrations were applied with `alembic upgrade head`
 - Backend is running on `http://localhost:8000`
 - Frontend uses `VITE_API_BASE_URL=http://localhost:8000/api/v1`
