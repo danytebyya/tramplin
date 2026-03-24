@@ -1,10 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
-import { mockOpportunities } from "../../entities/opportunity";
+import { listOpportunitiesRequest } from "../../entities/opportunity/api";
 import { LogoutButton, useAuthStore } from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
@@ -75,6 +76,11 @@ export function HomePage() {
   const isMapFloating = mapExpandMode !== "collapsed";
   const isMapTransitioning = mapExpandMode === "expanding" || mapExpandMode === "collapsing";
   const isMapCollapsing = mapExpandMode === "collapsing";
+  const { data: opportunities = [] } = useQuery({
+    queryKey: ["opportunities", "feed"],
+    queryFn: listOpportunitiesRequest,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const getExpandedRect = () => ({
     top: MAP_EXPANDED_TOP_OFFSET,
@@ -246,6 +252,12 @@ export function HomePage() {
     });
   }, [mapExpandMode]);
 
+  useEffect(() => {
+    if (selectedOpportunityId && !opportunities.some((opportunity) => opportunity.id === selectedOpportunityId)) {
+      setSelectedOpportunityId(null);
+    }
+  }, [opportunities, selectedOpportunityId]);
+
   return (
     <main className={homePageClassName}>
       <header className="header">
@@ -376,7 +388,7 @@ export function HomePage() {
                     }
                   >
                     <MapView
-                      opportunities={mockOpportunities}
+                      opportunities={opportunities}
                       selectedOpportunityId={selectedOpportunityId}
                       isExpanded={isMapExpanded}
                       isTransitioning={isMapTransitioning}
@@ -395,7 +407,7 @@ export function HomePage() {
                 }
                 aria-hidden={viewMode !== "list"}
               >
-                <OpportunityList opportunities={mockOpportunities} />
+                <OpportunityList opportunities={opportunities} />
               </div>
             </div>
           </div>

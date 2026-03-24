@@ -6,8 +6,13 @@ from src.models import (
     EmployerProfile,
     EmployerVerificationDocument,
     EmployerVerificationRequest,
+    Location,
     MediaFile,
+    Opportunity,
+    OpportunityCompensation,
+    OpportunityTag,
     RefreshSession,
+    Tag,
     User,
 )
 
@@ -22,4 +27,9 @@ __all__ = [
     "EmployerVerificationDocument",
     "MediaFile",
     "RefreshSession",
+    "Location",
+    "Tag",
+    "Opportunity",
+    "OpportunityCompensation",
+    "OpportunityTag",
 ]
