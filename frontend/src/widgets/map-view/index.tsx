@@ -36,6 +36,7 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
 ];
 
 const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
+const initialFormatValue: Opportunity["format"] | "saved" = "office";
 
 export function MapView({
   opportunities,
@@ -44,18 +45,30 @@ export function MapView({
   onCloseDetails,
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapglApiRef = useRef<Awaited<ReturnType<typeof load>> | null>(null);
+  const mapInstanceRef = useRef<Map | null>(null);
+  const markersRef = useRef<HtmlMarker[]>([]);
+  const markerElementsRef = useRef(new globalThis.Map<string, HTMLButtonElement>());
+  const onSelectOpportunityRef = useRef(onSelectOpportunity);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [isMapReady, setIsMapReady] = useState(false);
   const [isFiltersVisible, setIsFiltersVisible] = useState(true);
   const [isCategoryOpen, setIsCategoryOpen] = useState(true);
+  const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
+  const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved">(initialFormatValue);
   const [selectedCity, setSelectedCity] = useState("Чебоксары");
   const selectedOpportunity = opportunities.find(
     (opportunity) => opportunity.id === selectedOpportunityId,
   );
 
   useEffect(() => {
+    onSelectOpportunityRef.current = onSelectOpportunity;
+  }, [onSelectOpportunity]);
+
+  useEffect(() => {
     const container = mapContainerRef.current;
 
-    if (!container) {
+    if (!container || mapInstanceRef.current) {
       return;
     }
 
@@ -64,8 +77,6 @@ export function MapView({
       return;
     }
 
-    let mapInstance: Map | null = null;
-    let markers: HtmlMarker[] = [];
     let isMounted = true;
 
     setMapError(null);
@@ -76,7 +87,8 @@ export function MapView({
           return;
         }
 
-        mapInstance = new mapglAPI.Map(container, {
+        mapglApiRef.current = mapglAPI;
+        mapInstanceRef.current = new mapglAPI.Map(container, {
           center: mapCenter,
           zoom: 12,
           key: env.map2gisKey,
@@ -85,28 +97,7 @@ export function MapView({
           scaleControl: false,
           copyright: "bottomLeft",
         });
-
-        markers = opportunities.map((opportunity) => {
-          const markerElement = document.createElement("button");
-          markerElement.type = "button";
-          markerElement.className = [
-            "map-view__marker",
-            `map-view__marker--${opportunity.accent}`,
-            opportunity.id === selectedOpportunityId ? "map-view__marker--active" : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
-          markerElement.setAttribute("aria-label", `Открыть ${opportunity.title}`);
-          markerElement.addEventListener("click", () => onSelectOpportunity(opportunity.id));
-
-          return new mapglAPI.HtmlMarker(mapInstance as Map, {
-            coordinates: [opportunity.longitude, opportunity.latitude],
-            html: markerElement,
-            anchor: [17, 34],
-            interactive: true,
-            preventMapInteractions: true,
-          });
-        });
+        setIsMapReady(true);
       })
       .catch(() => {
         if (!isMounted) {
@@ -118,10 +109,75 @@ export function MapView({
 
     return () => {
       isMounted = false;
-      markers.forEach((marker) => marker.destroy());
-      mapInstance?.destroy();
+      markersRef.current.forEach((marker) => marker.destroy());
+      markersRef.current = [];
+      markerElementsRef.current.clear();
+      mapInstanceRef.current?.destroy();
+      mapInstanceRef.current = null;
+      mapglApiRef.current = null;
     };
-  }, [onSelectOpportunity, opportunities, selectedOpportunityId]);
+  }, []);
+
+  useEffect(() => {
+    if (!isMapReady || !mapInstanceRef.current || !mapglApiRef.current) {
+      return;
+    }
+
+    const mapglApi = mapglApiRef.current;
+
+    markersRef.current.forEach((marker) => marker.destroy());
+    markersRef.current = [];
+    markerElementsRef.current.clear();
+
+    markersRef.current = opportunities.map((opportunity) => {
+      const markerElement = document.createElement("button");
+      markerElement.type = "button";
+      markerElement.className = ["map-view__marker", `map-view__marker--${opportunity.accent}`].join(" ");
+      markerElement.setAttribute("aria-label", `Открыть ${opportunity.title}`);
+      markerElement.addEventListener("click", () => onSelectOpportunityRef.current(opportunity.id));
+      markerElementsRef.current.set(opportunity.id, markerElement);
+
+      return new mapglApi.HtmlMarker(mapInstanceRef.current as Map, {
+        coordinates: [opportunity.longitude, opportunity.latitude],
+        html: markerElement,
+        anchor: [17, 34],
+        interactive: true,
+        preventMapInteractions: true,
+      });
+    });
+  }, [isMapReady, opportunities]);
+
+  useEffect(() => {
+    markerElementsRef.current.forEach((markerElement, markerId) => {
+      markerElement.classList.toggle("map-view__marker--active", markerId === selectedOpportunityId);
+    });
+
+    if (!selectedOpportunity || !mapInstanceRef.current) {
+      return;
+    }
+
+    mapInstanceRef.current.setCenter(
+      [selectedOpportunity.longitude, selectedOpportunity.latitude],
+      { duration: 280 },
+    );
+    mapInstanceRef.current.setZoom(14, { duration: 280 });
+  }, [selectedOpportunity, selectedOpportunityId]);
+
+  const handleZoomIn = () => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    mapInstanceRef.current.setZoom(mapInstanceRef.current.getZoom() + 1, { duration: 220 });
+  };
+
+  const handleZoomOut = () => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    mapInstanceRef.current.setZoom(mapInstanceRef.current.getZoom() - 1, { duration: 220 });
+  };
 
   return (
     <section className="map-view" aria-label="Карта вакансий">
@@ -144,62 +200,72 @@ export function MapView({
           />
         </button>
 
-        {isFiltersVisible ? (
-          <div className="map-view__filter-stack">
-            <div className="map-view__filter-card map-view__filter-card--category">
-              <button
-                type="button"
-                className="map-view__filter-category-button"
-                onClick={() => setIsCategoryOpen((current) => !current)}
-              >
-                <span className="map-view__filter-title map-view__filter-title--lg">
-                  Вакансии и стажировки
-                </span>
-                <span
-                  className={
-                    isCategoryOpen
-                      ? "map-view__filter-category-icon"
-                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
-                  }
-                  aria-hidden="true"
-                />
-              </button>
-              <button type="button" className="map-view__filter-reset">
-                Сбросить
-              </button>
+        <div
+          className={
+            isFiltersVisible
+              ? "map-view__filter-stack"
+              : "map-view__filter-stack map-view__filter-stack--hidden"
+          }
+          aria-hidden={!isFiltersVisible}
+        >
+          <div className="map-view__filter-card map-view__filter-card--category">
+            <button
+              type="button"
+              className="map-view__filter-category-button"
+              onClick={() => setIsCategoryOpen((current) => !current)}
+            >
+              <span className="map-view__filter-title map-view__filter-title--lg">
+                Вакансии и стажировки
+              </span>
+              <span
+                className={
+                  isCategoryOpen
+                    ? "map-view__filter-category-icon"
+                    : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
+                }
+                aria-hidden="true"
+              />
+            </button>
+            <button type="button" className="map-view__filter-reset">
+              Сбросить
+            </button>
+          </div>
+
+          <div
+            className={
+              isCategoryOpen
+                ? "map-view__filter-card map-view__filter-card--panel"
+                : "map-view__filter-card map-view__filter-card--panel map-view__filter-card--panel-hidden"
+            }
+            aria-hidden={!isCategoryOpen}
+          >
+            <div className="map-view__city-search">
+              <span className="map-view__city-search-placeholder">Город</span>
+              <span className="map-view__city-search-icon" aria-hidden="true" />
             </div>
 
-            {isCategoryOpen ? (
-              <div className="map-view__filter-card map-view__filter-card--panel">
-                <div className="map-view__city-search">
-                  <span className="map-view__city-search-placeholder">Город</span>
-                  <span className="map-view__city-search-icon" aria-hidden="true" />
-                </div>
-
-                <div className="map-view__city-list" role="listbox" aria-label="Выбор города">
-                  {cityOptions.map((city) => (
-                    <button
-                      key={city}
-                      type="button"
-                      className={
-                        city === selectedCity
-                          ? "map-view__city-option map-view__city-option--active"
-                          : "map-view__city-option"
-                      }
-                      onClick={() => setSelectedCity(city)}
-                    >
-                      {city}
-                    </button>
-                  ))}
-                </div>
-
-                <button type="button" className="map-view__filter-reset">
-                  Сбросить
+            <div className="map-view__city-list" role="listbox" aria-label="Выбор города">
+              {cityOptions.map((city) => (
+                <button
+                  key={city}
+                  type="button"
+                  className={
+                    city === selectedCity
+                      ? "map-view__city-option map-view__city-option--active"
+                      : "map-view__city-option"
+                  }
+                  onClick={() => setSelectedCity(city)}
+                >
+                  {city}
                 </button>
-              </div>
-            ) : null}
+              ))}
+            </div>
+
+            <button type="button" className="map-view__filter-reset">
+              Сбросить
+            </button>
           </div>
-        ) : null}
+        </div>
       </div>
 
       {selectedOpportunity ? (
@@ -248,20 +314,66 @@ export function MapView({
         </div>
       ) : null}
 
-      <div className="map-view__format-bar" aria-hidden="true">
-        <span className="map-view__format-arrow" />
-        {formatLabels.map((item) => (
-          <span
-            key={item.value}
-            className={
-              item.value === selectedOpportunity?.format
-                ? "map-view__format-chip map-view__format-chip--active"
-                : "map-view__format-chip"
-            }
-          >
-            {item.label}
-          </span>
-        ))}
+      <div className="map-view__zoom-controls">
+        <button
+          type="button"
+          className="map-view__zoom-button"
+          aria-label="Приблизить карту"
+          onClick={handleZoomIn}
+        >
+          <span className="map-view__zoom-icon map-view__zoom-icon--plus" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="map-view__zoom-button"
+          aria-label="Отдалить карту"
+          onClick={handleZoomOut}
+        >
+          <span className="map-view__zoom-icon map-view__zoom-icon--minus" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div
+        className={
+          isFormatBarExpanded
+            ? "map-view__format-bar"
+            : "map-view__format-bar map-view__format-bar--collapsed"
+        }
+      >
+        <button
+          type="button"
+          className={
+            isFormatBarExpanded
+              ? "map-view__format-arrow map-view__format-arrow--expanded"
+              : "map-view__format-arrow"
+          }
+          aria-label={isFormatBarExpanded ? "Скрыть форматы" : "Показать форматы"}
+          aria-expanded={isFormatBarExpanded}
+          onClick={() => setIsFormatBarExpanded((current) => !current)}
+        />
+        <div
+          className={
+            isFormatBarExpanded
+              ? "map-view__format-content"
+              : "map-view__format-content map-view__format-content--collapsed"
+          }
+          aria-hidden={!isFormatBarExpanded}
+        >
+          {formatLabels.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              className={
+                item.value === selectedFormat
+                  ? "map-view__format-chip map-view__format-chip--active"
+                  : "map-view__format-chip"
+              }
+              onClick={() => setSelectedFormat(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="map-view__map">
