@@ -5,8 +5,10 @@ import { Link, useNavigate } from "react-router-dom";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
+import notificationsIcon from "../../assets/icons/notifications.svg";
+import profileIcon from "../../assets/icons/profile.svg";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
-import { LogoutButton, useAuthStore } from "../../features/auth";
+import { clearPersistedAuthSession, useAuthStore } from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import "../../widgets/header/header.css";
@@ -63,10 +65,14 @@ export function HomePage() {
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
   const mapPanelLiveRef = useRef<HTMLDivElement | null>(null);
   const mapPanelProxyContentRef = useRef<HTMLDivElement | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const profileMenuCloseTimeoutRef = useRef<number | null>(null);
   const collapsedMapPanelRectRef = useRef<DOMRect | null>(null);
   const expandedFromScrollYRef = useRef(0);
   const pendingRestoreScrollYRef = useRef<number | null>(null);
   const mapTransitionTimeoutRef = useRef<number | null>(null);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
@@ -115,6 +121,38 @@ export function HomePage() {
       window.clearTimeout(mapTransitionTimeoutRef.current);
       mapTransitionTimeoutRef.current = null;
     }
+  };
+
+  const clearProfileMenuCloseTimeout = () => {
+    if (profileMenuCloseTimeoutRef.current !== null) {
+      window.clearTimeout(profileMenuCloseTimeoutRef.current);
+      profileMenuCloseTimeoutRef.current = null;
+    }
+  };
+
+  const openProfileMenu = () => {
+    clearProfileMenuCloseTimeout();
+    setIsProfileMenuOpen(true);
+  };
+
+  const scheduleProfileMenuClose = () => {
+    if (isProfileMenuPinned) {
+      return;
+    }
+
+    clearProfileMenuCloseTimeout();
+    profileMenuCloseTimeoutRef.current = window.setTimeout(() => {
+      setIsProfileMenuOpen(false);
+      profileMenuCloseTimeoutRef.current = null;
+    }, 140);
+  };
+
+  const handleLogout = () => {
+    useAuthStore.getState().clearSession();
+    clearPersistedAuthSession();
+    setIsProfileMenuPinned(false);
+    setIsProfileMenuOpen(false);
+    navigate("/", { replace: true });
   };
 
   const finishMapTransition = (nextMode: "collapsed" | "expanded") => {
@@ -186,12 +224,19 @@ export function HomePage() {
     }, MAP_EXPAND_TRANSITION_MS);
   };
 
-  const homePageClassName =
-    role === "employer"
-      ? `home-page home-page--employer${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}${isMapCollapsing ? " home-page--map-collapsing" : ""}`
-      : role === "applicant"
-        ? `home-page home-page--applicant${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}${isMapCollapsing ? " home-page--map-collapsing" : ""}`
-        : `home-page${isMapFloating ? " home-page--map-floating" : ""}${isMapExpandedLayout ? " home-page--map-expanded" : ""}${isMapCollapsing ? " home-page--map-collapsing" : ""}`;
+  const roleName = String(role ?? "");
+  const isCurator = roleName === "curator";
+  const homePageClassName = [
+    "home-page",
+    roleName === "applicant" ? "home-page--applicant" : "",
+    roleName === "employer" ? "home-page--employer" : "",
+    roleName === "curator" ? "home-page--curator" : "",
+    isMapFloating ? "home-page--map-floating" : "",
+    isMapExpandedLayout ? "home-page--map-expanded" : "",
+    isMapCollapsing ? "home-page--map-collapsing" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const explorerClassName = isMapExpandedLayout
     ? "home-page__explorer home-page__explorer--expanded"
     : "home-page__explorer";
@@ -234,6 +279,7 @@ export function HomePage() {
 
   useEffect(() => () => {
     clearMapTransitionTimeout();
+    clearProfileMenuCloseTimeout();
   }, []);
 
   useEffect(() => {
@@ -257,6 +303,34 @@ export function HomePage() {
       setSelectedOpportunityId(null);
     }
   }, [opportunities, selectedOpportunityId]);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setIsProfileMenuPinned(false);
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileMenuPinned(false);
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isProfileMenuOpen]);
 
   return (
     <main className={homePageClassName}>
@@ -292,7 +366,86 @@ export function HomePage() {
 
                 <div className="header__actions">
                   {isAuthenticated ? (
-                    <LogoutButton className="header__action-button" variant="primary-outline" />
+                    <div className="header__account-actions" aria-label="Действия аккаунта">
+                      <button
+                        type="button"
+                        className="header__icon-button"
+                        aria-label="Уведомления"
+                      >
+                        <img
+                          src={notificationsIcon}
+                          alt=""
+                          aria-hidden="true"
+                          className="header__icon-button-image"
+                        />
+                      </button>
+
+                      <div
+                        ref={profileMenuRef}
+                        className="header__profile-menu"
+                      >
+                        <button
+                          type="button"
+                          className="header__icon-button"
+                          aria-label="Профиль"
+                          aria-expanded={isProfileMenuOpen}
+                          aria-haspopup="menu"
+                          onMouseEnter={openProfileMenu}
+                          onMouseLeave={scheduleProfileMenuClose}
+                          onClick={() => {
+                            clearProfileMenuCloseTimeout();
+                            setIsProfileMenuPinned((currentPinned) => {
+                              const nextPinned = !currentPinned;
+                              setIsProfileMenuOpen(nextPinned);
+                              return nextPinned;
+                            });
+                          }}
+                        >
+                          <img
+                            src={profileIcon}
+                            alt=""
+                            aria-hidden="true"
+                            className="header__icon-button-image"
+                          />
+                        </button>
+
+                        <div
+                          className={
+                            isProfileMenuOpen
+                              ? "header__profile-dropdown"
+                              : "header__profile-dropdown header__profile-dropdown--hidden"
+                          }
+                          role="menu"
+                          aria-hidden={!isProfileMenuOpen}
+                          onMouseEnter={openProfileMenu}
+                          onMouseLeave={scheduleProfileMenuClose}
+                        >
+                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
+                            Профиль
+                          </button>
+                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
+                            Мои отклики
+                          </button>
+                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
+                            Избранное
+                          </button>
+                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
+                            Нетворкинг
+                          </button>
+                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
+                            Настройки
+                          </button>
+                          <button
+                            type="button"
+                            className="header__profile-dropdown-item header__profile-dropdown-item--danger"
+                            role="menuitem"
+                            onClick={handleLogout}
+                          >
+                            Выход
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <>
                       <Button
@@ -323,25 +476,47 @@ export function HomePage() {
 
         <div className="header__bottom">
           <Container className="home-page__container header__bottom-container">
-            <nav className="header__categories" aria-label="Категории">
-              <a href="#vacancies" className="header__category-link">
-                Вакансии
-              </a>
-              <a href="#internships" className="header__category-link">
-                Стажировки
-              </a>
-              <a href="#events" className="header__category-link">
-                Мероприятия
-              </a>
-              <a href="#mentorship" className="header__category-link">
-                Менторство
-              </a>
-            </nav>
+            {isCurator ? (
+              <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
+                <a href="#dashboard" className="header__category-link">
+                  Дашборд
+                </a>
+                <a href="#employer-verification" className="header__category-link">
+                  Верификация работодателей
+                </a>
+                <a href="#content-moderation" className="header__category-link">
+                  Модерация контента
+                </a>
+                <a href="#curators" className="header__category-link">
+                  Управление кураторами
+                </a>
+                <a href="#settings" className="header__category-link">
+                  Настройки
+                </a>
+              </nav>
+            ) : (
+              <>
+                <nav className="header__categories" aria-label="Категории">
+                  <a href="#vacancies" className="header__category-link">
+                    Вакансии
+                  </a>
+                  <a href="#internships" className="header__category-link">
+                    Стажировки
+                  </a>
+                  <a href="#events" className="header__category-link">
+                    Мероприятия
+                  </a>
+                  <a href="#mentorship" className="header__category-link">
+                    Менторство
+                  </a>
+                </nav>
 
-            <button type="button" className="header__location" aria-haspopup="menu">
-              <span className="header__location-icon" aria-hidden="true" />
-              <span>Чебоксары</span>
-            </button>
+                <button type="button" className="header__location" aria-haspopup="menu">
+                  <span className="header__location-icon" aria-hidden="true" />
+                  <span>Чебоксары</span>
+                </button>
+              </>
+            )}
           </Container>
         </div>
       </header>
@@ -398,6 +573,7 @@ export function HomePage() {
                       selectedOpportunityId={selectedOpportunityId}
                       isExpanded={isMapExpanded}
                       isTransitioning={isMapTransitioning}
+                      roleName={roleName}
                       onSelectOpportunity={setSelectedOpportunityId}
                       onCloseDetails={() => setSelectedOpportunityId(null)}
                       onToggleExpand={handleToggleMapExpand}

@@ -1,7 +1,8 @@
 import { useState } from "react";
 
+import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
-import { Badge, Button, Status } from "../../shared/ui";
+import { Badge, Button } from "../../shared/ui";
 import "./opportunity-list.css";
 
 type OpportunityListProps = {
@@ -101,12 +102,17 @@ export function OpportunityList({ opportunities }: OpportunityListProps) {
           <div className="opportunity-list__side">
             <div className="opportunity-list__company-block">
               <div className="opportunity-list__company-row">
-                <p className="opportunity-list__company">{opportunity.companyName}</p>
-                {opportunity.companyVerified ? (
-                  <Status variant="verified-accent" className="opportunity-list__status">
-                    Верифицировано
-                  </Status>
-                ) : null}
+                <div className="opportunity-list__company-header">
+                  <p className="opportunity-list__company">{opportunity.companyName}</p>
+                  {opportunity.companyVerified ? (
+                    <img
+                      src={verifiedIcon}
+                      alt=""
+                      aria-hidden="true"
+                      className="opportunity-list__verified-icon"
+                    />
+                  ) : null}
+                </div>
               </div>
 
               <div className="opportunity-list__rating-block">

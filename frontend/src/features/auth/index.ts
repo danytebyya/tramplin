@@ -9,6 +9,7 @@ export {
   restoreAuthSession,
   useAuthStore,
 } from "./session";
+export { AccountActions } from "./account-actions";
 export { LogoutButton } from "./logout-button";
 
 export type RegisterPayload = {

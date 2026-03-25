@@ -1,9 +1,9 @@
 .home-page {
-  --home-header-start: #26c6da;
-  --home-header-mid: #2f6ee9;
-  --home-header-end: #9ab6f0;
-  --home-accent: #2563eb;
-  --home-accent-strong: #0ea5c6;
+  --home-header-start: var(--color-secondary);
+  --home-header-mid: var(--color-secondary-hover);
+  --home-header-end: var(--color-secondary-active);
+  --home-accent: var(--color-secondary);
+  --home-accent-strong: var(--color-secondary-active);
   min-height: 100vh;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 18%),
@@ -73,19 +73,27 @@ body.home-page--map-floating {
 }
 
 .home-page--applicant {
-  --home-header-start: #22c1dc;
-  --home-header-mid: #0ea5c6;
-  --home-header-end: #9ddff0;
-  --home-accent: #0891b2;
-  --home-accent-strong: #06b6d4;
+  --home-header-start: var(--color-secondary);
+  --home-header-mid: var(--color-secondary-hover);
+  --home-header-end: var(--color-secondary-active);
+  --home-accent: var(--color-secondary);
+  --home-accent-strong: var(--color-secondary-active);
 }
 
 .home-page--employer {
-  --home-header-start: #2563eb;
-  --home-header-mid: #1d4ed8;
-  --home-header-end: #7fb7ff;
-  --home-accent: #2563eb;
-  --home-accent-strong: #1d4ed8;
+  --home-header-start: var(--color-primary);
+  --home-header-mid: var(--color-primary-hover);
+  --home-header-end: var(--color-primary-active);
+  --home-accent: var(--color-primary);
+  --home-accent-strong: var(--color-primary-active);
+}
+
+.home-page--curator {
+  --home-header-start: var(--color-accent);
+  --home-header-mid: var(--color-accent-hover);
+  --home-header-end: var(--color-accent-active);
+  --home-accent: var(--color-accent);
+  --home-accent-strong: var(--color-accent-active);
 }
 
 .home-page__hero {
@@ -101,7 +109,7 @@ body.home-page--map-floating {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 20px;
   transition:
     inset 360ms ease,
     padding 320ms ease,
@@ -133,6 +141,82 @@ body.home-page--map-floating {
 
 .home-page__explorer-content--list {
   overflow: visible;
+}
+
+.home-page .segmented-switch__indicator {
+  background: var(--home-accent);
+}
+
+.home-page .map-view__marker-cluster {
+  background: var(--home-accent) !important;
+}
+
+.home-page .map-view__marker-cluster:hover {
+  background: var(--home-accent-strong) !important;
+}
+
+.home-page .map-view__marker-cluster:active {
+  background: var(--home-accent-strong) !important;
+}
+
+.home-page .map-view__format-chip:hover,
+.home-page .map-view__format-chip--active {
+  color: var(--home-accent);
+}
+
+.home-page .opportunity-list__title {
+  color: var(--home-accent);
+}
+
+.home-page .opportunity-list__favorite:hover,
+.home-page .opportunity-list__favorite[aria-pressed="true"] {
+  color: var(--home-accent);
+}
+
+.home-page .opportunity-list .badge--secondary {
+  background: var(--home-accent);
+}
+
+.home-page .opportunity-list .button--secondary {
+  background: var(--home-accent);
+  border-color: var(--home-accent);
+}
+
+.home-page .opportunity-list .button--secondary:not(.button--loading):not(:disabled):hover {
+  background: var(--home-accent);
+  border-color: var(--home-accent);
+}
+
+.home-page .opportunity-list .button--secondary:not(.button--loading):not(:disabled):active {
+  background: var(--home-accent-strong);
+  border-color: var(--home-accent-strong);
+}
+
+.home-page .opportunity-list .button--secondary-outline {
+  color: var(--home-accent);
+  border-color: var(--home-accent);
+}
+
+.home-page .opportunity-list .button--secondary-outline:not(.button--loading):not(:disabled):hover {
+  color: var(--home-accent);
+  border-color: var(--home-accent);
+}
+
+.home-page .opportunity-list .button--secondary-outline:not(.button--loading):not(:disabled):active {
+  color: var(--home-accent-strong);
+  border-color: var(--home-accent-strong);
+}
+
+.home-page .opportunity-filters__reset {
+  color: var(--home-accent);
+}
+
+.home-page .opportunity-filters__reset:hover {
+  color: var(--home-accent);
+}
+
+.home-page .opportunity-filters__reset:active {
+  color: var(--home-accent-strong);
 }
 
 .home-page--map-floating .opportunity-filters {

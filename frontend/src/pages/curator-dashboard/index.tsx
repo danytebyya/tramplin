@@ -1,9 +1,9 @@
-import { LogoutButton } from "../../features/auth";
+import { AccountActions } from "../../features/auth";
 
 export function CuratorDashboardPage() {
   return (
     <main className="page-placeholder">
-      <LogoutButton className="page-placeholder__logout" variant="primary-outline" />
+      <AccountActions className="page-placeholder__account-actions" />
       <h1 className="page-placeholder__title">Curator Dashboard</h1>
       <p className="page-placeholder__text">Role-based dashboard skeleton.</p>
     </main>

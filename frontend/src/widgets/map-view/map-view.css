@@ -604,12 +604,31 @@
   line-height: var(--type-h3-line);
   font-weight: 500;
   letter-spacing: -0.04em;
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.map-view__details-company-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .map-view__details-company {
+  margin: 0;
   color: var(--color-text-primary);
   font-size: var(--type-body-small-size);
   line-height: var(--type-body-small-line);
+}
+
+.map-view__details-verified-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
 
 .map-view__details-close {
@@ -730,12 +749,6 @@
 .map-view__details-meta {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: var(--type-caption-size);
-  line-height: var(--type-caption-line);
-}
-
-.status.map-view__details-status {
-  padding: 4px 8px;
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
 }
@@ -1122,8 +1135,7 @@
 
 .map-view__marker-cluster:hover {
   background: var(--color-secondary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.3);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
 }
 
 .map-view__marker-cluster:active {

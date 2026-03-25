@@ -79,6 +79,7 @@
 }
 
 .opportunity-filters__search {
+  --opportunity-filters-search-chrome: var(--color-text-tertiary);
   position: relative;
 }
 
@@ -90,7 +91,7 @@
   z-index: 1;
   width: 18px;
   height: 18px;
-  background-color: var(--color-text-tertiary);
+  background-color: var(--opportunity-filters-search-chrome);
   mask-image: url("../../assets/icons/search.svg");
   mask-repeat: no-repeat;
   mask-position: center;
@@ -100,11 +101,13 @@
   -webkit-mask-position: center;
   -webkit-mask-size: contain;
   transform: translateY(-50%);
-  transition: background-color var(--transition-base);
+  transition: background-color 180ms ease;
 }
 
-.opportunity-filters__search:hover::before {
-  background-color: var(--color-text-primary);
+.opportunity-filters__search:hover,
+.opportunity-filters__search:focus-within,
+.opportunity-filters__search:active {
+  --opportunity-filters-search-chrome: var(--color-text-primary);
 }
 
 .opportunity-filters__search-input.input {
@@ -113,20 +116,20 @@
   box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-.opportunity-filters__search:hover .opportunity-filters__search-input.input {
+.opportunity-filters__search
+  .opportunity-filters__search-input.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
   border-color: transparent;
 }
 
-.opportunity-filters__search:active .opportunity-filters__search-input.input {
+.opportunity-filters__search-input.input:focus,
+.opportunity-filters__search-input.input:focus-visible {
   border-color: transparent;
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-.opportunity-filters__search:hover .opportunity-filters__search-input.input::placeholder {
-  color: var(--color-text-primary);
-}
-
-.opportunity-filters__search:active .opportunity-filters__search-input.input::placeholder {
-  color: var(--color-text-primary);
+.opportunity-filters__search .opportunity-filters__search-input.input::placeholder {
+  color: var(--opportunity-filters-search-chrome) !important;
+  transition: color 180ms ease;
 }
 
 .opportunity-filters__placeholder {

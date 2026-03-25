@@ -5,9 +5,10 @@ import { Clusterer } from "@2gis/mapgl-clusterer";
 import type { ClusterStyle, InputMarker } from "@2gis/mapgl-clusterer";
 import type { Map } from "@2gis/mapgl/types";
 
+import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
 import { env } from "../../shared/config/env";
-import { Badge, Button, Status } from "../../shared/ui";
+import { Badge, Button } from "../../shared/ui";
 import "./map-view.css";
 
 type MapViewProps = {
@@ -15,6 +16,7 @@ type MapViewProps = {
   selectedOpportunityId: string | null;
   isExpanded: boolean;
   isTransitioning: boolean;
+  roleName?: string;
   onSelectOpportunity: (opportunityId: string) => void;
   onCloseDetails: () => void;
   onToggleExpand: () => void;
@@ -48,16 +50,86 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
 
 const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
 const initialFormatValue: Opportunity["format"] | "saved" | "all" = "all";
-function createClusterStyle(pointsCount: number): ClusterStyle {
-  const clusterElement = document.createElement("div");
-  clusterElement.className = "map-view__marker-cluster";
-  clusterElement.textContent = String(pointsCount);
+
+const markerPalette = {
+  cyan: "#06b6d4",
+  amber: "#f59e0b",
+  blue: "#2563eb",
+  slate: "#64748b",
+} as const;
+
+const clusterPaletteByRole = {
+  applicant: {
+    color: "#06b6d4",
+    hoverColor: "#0891b2",
+  },
+  employer: {
+    color: "#2563eb",
+    hoverColor: "#1d4ed8",
+  },
+  curator: {
+    color: "#f59e0b",
+    hoverColor: "#d97706",
+  },
+  default: {
+    color: "#06b6d4",
+    hoverColor: "#0891b2",
+  },
+} as const;
+
+function encodeSvg(svg: string) {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function createPinIcon(color: string, isActive = false) {
+  const width = isActive ? 38 : 34;
+  const height = isActive ? 38 : 34;
+
+  return encodeSvg(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 34 34" fill="none">
+      <path d="M17 2C10.0964 2 4.5 7.59644 4.5 14.5C4.5 19.9207 7.95667 24.5338 12.7858 26.2468L17 32L21.2142 26.2468C26.0433 24.5338 29.5 19.9207 29.5 14.5C29.5 7.59644 23.9036 2 17 2Z" fill="${color}"/>
+      <circle cx="17" cy="14.5" r="5.5" fill="white"/>
+    </svg>
+  `);
+}
+
+function createClusterIcon(color: string, hoverColor: string) {
+  const base = encodeSvg(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="56" height="48" viewBox="0 0 56 48" fill="none">
+      <rect x="4" y="4" width="48" height="40" rx="12" fill="${color}"/>
+    </svg>
+  `);
+
+  const hover = encodeSvg(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="56" height="48" viewBox="0 0 56 48" fill="none">
+      <rect x="4" y="4" width="48" height="40" rx="12" fill="${hoverColor}"/>
+    </svg>
+  `);
+
+  return { base, hover };
+}
+
+function createClusterStyle(pointsCount: number, roleName?: string): ClusterStyle {
+  const palette =
+    roleName === "applicant" || roleName === "employer" || roleName === "curator"
+      ? clusterPaletteByRole[roleName]
+      : clusterPaletteByRole.default;
+  const clusterIcons = createClusterIcon(palette.color, palette.hoverColor);
 
   return {
-    type: "html",
-    html: clusterElement,
-    anchor: [24, 20],
-    preventMapInteractions: true,
+    type: "webgl",
+    icon: clusterIcons.base,
+    hoverIcon: clusterIcons.hover,
+    size: [56, 48],
+    hoverSize: [58, 50],
+    anchor: [28, 24],
+    labelText: String(pointsCount),
+    labelColor: "#ffffff",
+    labelFontSize: 16,
+    labelHaloColor: "#00000000",
+    labelHaloRadius: 0,
+    labelRelativeAnchor: [0.5, 0.5],
+    labelOffset: [0, 0],
   };
 }
 
@@ -66,6 +138,7 @@ export function MapView({
   selectedOpportunityId,
   isExpanded,
   isTransitioning,
+  roleName,
   onSelectOpportunity,
   onCloseDetails,
   onToggleExpand,
@@ -74,7 +147,6 @@ export function MapView({
   const mapInstanceRef = useRef<Map | null>(null);
   const clustererRef = useRef<Clusterer | null>(null);
   const hasAlignedInitialViewportRef = useRef(false);
-  const markerElementsRef = useRef(new globalThis.Map<string, HTMLButtonElement>());
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
   const onCloseDetailsRef = useRef(onCloseDetails);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -165,7 +237,6 @@ export function MapView({
       isMounted = false;
       clustererRef.current?.destroy();
       clustererRef.current = null;
-      markerElementsRef.current.clear();
       mapInstanceRef.current?.destroy();
       mapInstanceRef.current = null;
     };
@@ -180,7 +251,7 @@ export function MapView({
     const clusterer = new Clusterer(map as never, {
       radius: 64,
       disableClusteringAtZoom: 13,
-      clusterStyle: (pointsCount) => createClusterStyle(pointsCount),
+      clusterStyle: (pointsCount) => createClusterStyle(pointsCount, roleName),
     });
 
     clusterer.on("click", (event) => {
@@ -205,7 +276,7 @@ export function MapView({
         clustererRef.current = null;
       }
     };
-  }, [isMapReady]);
+  }, [isMapReady, roleName]);
 
   useEffect(() => {
     if (!isMapReady || !mapContainerRef.current || !mapInstanceRef.current) {
@@ -265,21 +336,20 @@ export function MapView({
       return;
     }
 
-    markerElementsRef.current.clear();
-
     const inputMarkers: InputMarker[] = filteredOpportunities.map((opportunity) => {
-      const markerElement = document.createElement("button");
-      markerElement.type = "button";
-      markerElement.className = ["map-view__marker", `map-view__marker--${opportunity.accent}`].join(" ");
-      markerElement.setAttribute("aria-label", `Открыть ${opportunity.title}`);
-      markerElementsRef.current.set(opportunity.id, markerElement);
+      const markerColor = markerPalette[opportunity.accent];
+      const isSelected = opportunity.id === selectedOpportunityId;
 
       return {
-        type: "html",
+        type: "webgl",
         coordinates: [opportunity.longitude, opportunity.latitude],
-        html: markerElement,
-        anchor: [17, 34],
-        preventMapInteractions: true,
+        icon: createPinIcon(markerColor, isSelected),
+        hoverIcon: createPinIcon(markerColor, true),
+        size: isSelected ? [38, 38] : [34, 34],
+        hoverSize: [38, 38],
+        anchor: isSelected ? [19, 38] : [17, 34],
+        hoverAnchor: [19, 38],
+        zIndex: isSelected ? 3 : 2,
         userData: {
           opportunityId: opportunity.id,
         },
@@ -287,7 +357,7 @@ export function MapView({
     });
 
     clustererRef.current.load(inputMarkers);
-  }, [filteredOpportunities, isMapReady]);
+  }, [filteredOpportunities, isMapReady, selectedOpportunityId]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -313,10 +383,6 @@ export function MapView({
   }, [isExpanded]);
 
   useEffect(() => {
-    markerElementsRef.current.forEach((markerElement, markerId) => {
-      markerElement.classList.toggle("map-view__marker--active", markerId === selectedOpportunityId);
-    });
-
     if (!mapInstanceRef.current) {
       return;
     }
@@ -554,8 +620,8 @@ export function MapView({
 
             <div className="map-view__details-body">
               <div className="map-view__details-header">
-                <h3 className="map-view__details-title">
-                  {getOpportunityKindLabel(selectedOpportunity.kind)}
+                <h3 className="map-view__details-title" title={selectedOpportunity.title}>
+                  {selectedOpportunity.title}
                 </h3>
                 <button
                   type="button"
@@ -574,12 +640,17 @@ export function MapView({
               </div>
 
               <div className="map-view__details-group">
-                <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
-                {selectedOpportunity.companyVerified ? (
-                  <Status variant="verified-accent" className="map-view__details-status">
-                    Верифицировано
-                  </Status>
-                ) : null}
+                <div className="map-view__details-company-row">
+                  <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
+                  {selectedOpportunity.companyVerified ? (
+                    <img
+                      src={verifiedIcon}
+                      alt=""
+                      aria-hidden="true"
+                      className="map-view__details-verified-icon"
+                    />
+                  ) : null}
+                </div>
               </div>
 
               <div className="map-view__details-group">

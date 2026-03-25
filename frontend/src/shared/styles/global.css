@@ -1474,10 +1474,44 @@ a {
   padding: var(--space-24);
 }
 
-.page-placeholder__logout {
+.page-placeholder__account-actions {
   position: absolute;
   top: 24px;
   right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-placeholder__account-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-bg-primary);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.page-placeholder__account-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+}
+
+.page-placeholder__account-action:active {
+  transform: translateY(0);
+}
+
+.page-placeholder__account-action-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .page-placeholder__title {
