@@ -9,6 +9,7 @@ from typing import Sequence
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 revision: str = "20260325_0005"
 down_revision: str | None = "20260321_0004"
@@ -17,7 +18,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    notification_kind = sa.Enum(
+    notification_kind = postgresql.ENUM(
         "system",
         "profile",
         "opportunity",
@@ -25,13 +26,15 @@ def upgrade() -> None:
         "employer_verification",
         "candidates",
         name="notification_kind",
+        create_type=False,
     )
-    notification_severity = sa.Enum(
+    notification_severity = postgresql.ENUM(
         "info",
         "success",
         "warning",
         "attention",
         name="notification_severity",
+        create_type=False,
     )
     notification_kind.create(op.get_bind(), checkfirst=True)
     notification_severity.create(op.get_bind(), checkfirst=True)

@@ -43,9 +43,10 @@ def test_list_notifications_bootstraps_employer_feed(client, db_session):
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["data"]["unread_count"] == 3
-    assert len(body["data"]["items"]) == 3
+    assert body["data"]["unread_count"] == 4
+    assert len(body["data"]["items"]) == 4
     assert body["data"]["items"][0]["is_read"] is False
+    assert body["data"]["items"][-1]["title"] == "Добро пожаловать в кабинет работодателя"
 
 
 def test_mark_notification_as_read_updates_unread_count(client, db_session):
@@ -67,7 +68,7 @@ def test_mark_notification_as_read_updates_unread_count(client, db_session):
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == 200
-    assert response.json()["data"]["unread_count"] == 1
+    assert response.json()["data"]["unread_count"] == 2
 
     persisted_notification = db_session.execute(
         select(Notification).where(Notification.id == UUID(notification_id))
@@ -76,7 +77,7 @@ def test_mark_notification_as_read_updates_unread_count(client, db_session):
     assert persisted_notification.read_at is not None
 
 
-def test_mark_all_notifications_as_read(client, db_session):
+def test_clear_all_notifications(client, db_session):
     access_token = _register_and_login(
         client,
         db_session,
@@ -84,14 +85,55 @@ def test_mark_all_notifications_as_read(client, db_session):
         role="employer",
     )
 
-    response = client.post(
-        "/api/v1/notifications/read-all",
+    response = client.request(
+        "DELETE",
+        "/api/v1/notifications",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     assert response.status_code == 200
-    assert response.json()["data"]["unread_count"] == 0
+    assert response.json()["data"]["unread_count"] == 1
 
-    unread_notifications = db_session.execute(
-        select(Notification).where(Notification.is_read.is_(False))
-    ).scalars().all()
-    assert unread_notifications == []
+    notifications = db_session.execute(select(Notification)).scalars().all()
+    assert len(notifications) == 1
+    assert notifications[0].title == "Добро пожаловать в кабинет работодателя"
+
+
+def test_list_notifications_backfills_welcome_for_existing_feed(client, db_session):
+    access_token = _register_and_login(
+        client,
+        db_session,
+        email="notifications-legacy@example.com",
+        role="employer",
+    )
+
+    client.request(
+        "DELETE",
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    db_session.add(
+        Notification(
+            user_id=UUID(
+                client.get(
+                    "/api/v1/users/me",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                ).json()["data"]["user"]["id"]
+            ),
+            kind="system",
+            severity="info",
+            title="Легаси уведомление",
+            message="Старое уведомление без welcome.",
+        )
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+
+    titles = [item["title"] for item in response.json()["data"]["items"]]
+    assert "Добро пожаловать в кабинет работодателя" in titles
+    assert "Легаси уведомление" in titles

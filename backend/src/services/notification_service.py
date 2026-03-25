@@ -1,3 +1,4 @@
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -45,10 +46,13 @@ class NotificationService:
             unread_count=self.notification_repo.count_unread_for_user(current_user.id)
         )
 
-    def mark_all_as_read(self, current_user: User) -> NotificationUnreadCountResponse:
-        self.notification_repo.mark_all_as_read(current_user.id)
+    def clear_all(self, current_user: User) -> NotificationUnreadCountResponse:
+        self.notification_repo.delete_all_for_user(current_user.id)
+        self._create_welcome_notification_if_missing(current_user)
         self.db.commit()
-        return NotificationUnreadCountResponse(unread_count=0)
+        return NotificationUnreadCountResponse(
+            unread_count=self.notification_repo.count_unread_for_user(current_user.id)
+        )
 
     def create_notification(
         self,
@@ -61,6 +65,7 @@ class NotificationService:
         action_label: str | None = None,
         action_url: str | None = None,
         payload: dict | None = None,
+        created_at: datetime | None = None,
     ) -> Notification:
         notification = Notification(
             user_id=user_id,
@@ -71,24 +76,85 @@ class NotificationService:
             action_label=action_label,
             action_url=action_url,
             payload=payload,
+            created_at=created_at,
+            updated_at=created_at,
         )
         self.notification_repo.add(notification)
         return notification
 
     def _seed_demo_notifications_if_needed(self, current_user: User) -> None:
-        if self.notification_repo.has_any_for_user(current_user.id):
+        has_any_notifications = self.notification_repo.has_any_for_user(current_user.id)
+        has_welcome_notification = self._create_welcome_notification_if_missing(current_user)
+
+        if has_any_notifications:
+            if not has_welcome_notification:
+                self.db.commit()
             return
 
+        seed_started_at = datetime.now(UTC)
+
         if current_user.role == UserRole.APPLICANT:
-            self._create_applicant_defaults(current_user)
+            self._create_applicant_defaults(current_user, seed_started_at=seed_started_at)
         elif current_user.role == UserRole.EMPLOYER:
-            self._create_employer_defaults(current_user)
-        else:
-            return
+            self._create_employer_defaults(current_user, seed_started_at=seed_started_at)
 
         self.db.commit()
 
-    def _create_applicant_defaults(self, current_user: User) -> None:
+    def _get_welcome_content(self, current_user: User) -> tuple[str, str, str]:
+        role_message_map = {
+            UserRole.APPLICANT: (
+                "Добро пожаловать в Трамплин!",
+                "Здесь будут появляться новые вакансии, ответы работодателей и важные шаги по вашему профилю.",
+                "/dashboard/applicant",
+            ),
+            UserRole.EMPLOYER: (
+                "Добро пожаловать в кабинет работодателя",
+                "Здесь будут собираться новые отклики, статусы верификации компании и рекомендации по кандидатам.",
+                "/dashboard/employer",
+            ),
+            UserRole.CURATOR: (
+                "Добро пожаловать в кабинет куратора",
+                "Здесь будут появляться новые заявки на проверку, задачи модерации и системные события платформы.",
+                "/dashboard/curator",
+            ),
+            UserRole.ADMIN: (
+                "Добро пожаловать в панель администратора",
+                "Здесь будут собираться системные события, статусы модерации и критичные уведомления платформы.",
+                "/dashboard/curator",
+            ),
+        }
+        title, message, action_url = role_message_map.get(
+            current_user.role,
+            (
+                "Добро пожаловать в Трамплин!",
+                "Здесь будут появляться важные события платформы и персональные уведомления.",
+                "/",
+            ),
+        )
+        return title, message, action_url
+
+    def _create_welcome_notification_if_missing(self, current_user: User) -> bool:
+        welcome_title, welcome_message, welcome_action_url = self._get_welcome_content(current_user)
+        has_welcome_notification = self.notification_repo.has_notification_with_title(
+            current_user.id,
+            welcome_title,
+        )
+        if has_welcome_notification:
+            return True
+
+        self.create_notification(
+            user_id=current_user.id,
+            kind=NotificationKind.SYSTEM,
+            severity=NotificationSeverity.INFO,
+            title=welcome_title,
+            message=welcome_message,
+            action_label="Открыть",
+            action_url=welcome_action_url,
+            created_at=datetime.now(UTC) - timedelta(minutes=10),
+        )
+        return False
+
+    def _create_applicant_defaults(self, current_user: User, *, seed_started_at: datetime) -> None:
         self.create_notification(
             user_id=current_user.id,
             kind=NotificationKind.PROFILE,
@@ -97,18 +163,29 @@ class NotificationService:
             message="Заполните ключевые поля профиля, чтобы работодатели чаще находили вас в подборках.",
             action_label="Открыть профиль",
             action_url="/dashboard/applicant",
+            created_at=seed_started_at - timedelta(minutes=6),
         )
-        self.create_notification(
-            user_id=current_user.id,
-            kind=NotificationKind.OPPORTUNITY,
-            severity=NotificationSeverity.INFO,
-            title="Появились новые стажировки",
-            message="Подборка по вашему профилю обновилась. Есть 3 новых предложения с гибким графиком.",
-            action_label="Смотреть подборку",
-            action_url="/",
+        applicant_profile = current_user.applicant_profile
+        has_filled_profile = applicant_profile is not None and bool(
+            applicant_profile.full_name
+            or applicant_profile.university
+            or applicant_profile.graduation_year
+            or applicant_profile.resume_url
+            or applicant_profile.portfolio_url
         )
+        if has_filled_profile:
+            self.create_notification(
+                user_id=current_user.id,
+                kind=NotificationKind.OPPORTUNITY,
+                severity=NotificationSeverity.INFO,
+                title="Появились новые стажировки",
+                message="Подборка по вашему профилю обновилась. Есть 3 новых предложения с гибким графиком.",
+                action_label="Смотреть подборку",
+                action_url="/",
+                created_at=seed_started_at - timedelta(minutes=3),
+            )
 
-    def _create_employer_defaults(self, current_user: User) -> None:
+    def _create_employer_defaults(self, current_user: User, *, seed_started_at: datetime) -> None:
         self.create_notification(
             user_id=current_user.id,
             kind=NotificationKind.EMPLOYER_VERIFICATION,
@@ -117,6 +194,7 @@ class NotificationService:
             message="Загрузите документы и завершите верификацию, чтобы публиковать вакансии без ограничений.",
             action_label="Продолжить",
             action_url="/onboarding/employer",
+            created_at=seed_started_at - timedelta(minutes=6),
         )
         self.create_notification(
             user_id=current_user.id,
@@ -126,6 +204,7 @@ class NotificationService:
             message="Платформа подобрала 8 студентов, которые подходят под ваши направления стажировок.",
             action_label="Открыть дашборд",
             action_url="/dashboard/employer",
+            created_at=seed_started_at - timedelta(minutes=3),
         )
         self.create_notification(
             user_id=current_user.id,
@@ -135,4 +214,5 @@ class NotificationService:
             message="Добавьте описание компании, стек и преимущества. Это повышает конверсию в отклики.",
             action_label="Заполнить данные",
             action_url="/onboarding/employer",
+            created_at=seed_started_at - timedelta(minutes=1),
         )

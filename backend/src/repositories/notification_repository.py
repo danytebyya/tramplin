@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from src.models import Notification
@@ -18,6 +18,15 @@ class NotificationRepository:
     def has_any_for_user(self, user_id: str | UUID) -> bool:
         normalized_user_id = UUID(str(user_id))
         stmt = select(Notification.id).where(Notification.user_id == normalized_user_id).limit(1)
+        return self.db.execute(stmt).scalar_one_or_none() is not None
+
+    def has_notification_with_title(self, user_id: str | UUID, title: str) -> bool:
+        normalized_user_id = UUID(str(user_id))
+        stmt = (
+            select(Notification.id)
+            .where(Notification.user_id == normalized_user_id, Notification.title == title)
+            .limit(1)
+        )
         return self.db.execute(stmt).scalar_one_or_none() is not None
 
     def list_for_user(self, user_id: str | UUID, *, limit: int = 20) -> list[Notification]:
@@ -68,4 +77,9 @@ class NotificationRepository:
             .where(Notification.user_id == normalized_user_id, Notification.is_read.is_(False))
             .values(is_read=True, read_at=datetime.now(UTC))
         )
+        self.db.execute(stmt)
+
+    def delete_all_for_user(self, user_id: str | UUID) -> None:
+        normalized_user_id = UUID(str(user_id))
+        stmt = delete(Notification).where(Notification.user_id == normalized_user_id)
         self.db.execute(stmt)

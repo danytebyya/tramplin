@@ -38,10 +38,10 @@ def mark_notification_as_read(
     return success_response(payload.model_dump(mode="json"))
 
 
-@router.post("/read-all", status_code=status.HTTP_200_OK)
-def mark_all_notifications_as_read(
+@router.delete("", status_code=status.HTTP_200_OK)
+def clear_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = NotificationService(db).mark_all_as_read(current_user)
+    payload = NotificationService(db).clear_all(current_user)
     return success_response(payload.model_dump(mode="json"))
