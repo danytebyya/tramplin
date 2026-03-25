@@ -258,13 +258,13 @@
   opacity: 1;
   transform: translateY(0);
   transition:
-    opacity 180ms ease,
-    transform 220ms ease;
+    opacity 100ms ease,
+    transform 100ms ease;
 }
 
 .header__profile-dropdown--hidden {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(-4px);
   pointer-events: none;
 }
 

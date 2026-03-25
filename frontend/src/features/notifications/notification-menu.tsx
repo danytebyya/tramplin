@@ -4,10 +4,11 @@ import { useNavigate } from "react-router-dom";
 
 import notificationsIcon from "../../assets/icons/notifications.svg";
 import { cn } from "../../shared/lib";
+import { Button } from "../../shared/ui";
 import { useAuthStore } from "../auth";
 import {
+  clearNotificationsRequest,
   listNotificationsRequest,
-  markAllNotificationsAsReadRequest,
   markNotificationAsReadRequest,
   NotificationsResponse,
 } from "./api";
@@ -84,6 +85,7 @@ export function NotificationMenu({
   });
   const unreadCount = getUnreadCount(notificationsQuery.data);
   const items = notificationsQuery.data?.data?.items ?? [];
+  const hasLoadError = notificationsQuery.isError;
 
   const clearCloseTimeout = () => {
     if (closeTimeoutRef.current !== null) {
@@ -106,7 +108,7 @@ export function NotificationMenu({
     closeTimeoutRef.current = window.setTimeout(() => {
       setIsOpen(false);
       closeTimeoutRef.current = null;
-    }, 140);
+    }, 40);
   };
 
   const closeMenu = () => {
@@ -170,16 +172,18 @@ export function NotificationMenu({
     },
   });
 
-  const markAllAsReadMutation = useMutation({
-    mutationFn: markAllNotificationsAsReadRequest,
+  const clearNotificationsMutation = useMutation({
+    mutationFn: clearNotificationsRequest,
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["notifications", "feed"] });
       const previousFeed = queryClient.getQueryData<NotificationsResponse>(["notifications", "feed"]);
 
-      queryClient.setQueryData<NotificationsResponse>(
-        ["notifications", "feed"],
-        updateNotificationsCache(previousFeed),
-      );
+      queryClient.setQueryData<NotificationsResponse>(["notifications", "feed"], {
+        data: {
+          items: [],
+          unread_count: 0,
+        },
+      });
 
       return { previousFeed };
     },
@@ -261,66 +265,87 @@ export function NotificationMenu({
         <div className="notification-menu__header">
           <div className="notification-menu__heading">
             <h2 className="notification-menu__title">Уведомления</h2>
-            <span className="notification-menu__summary">
-              {unreadCount > 0 ? `${unreadCount} новых` : "Все прочитано"}
-            </span>
           </div>
 
           <button
             type="button"
             className="notification-menu__mark-all"
             onClick={() => {
-              void markAllAsReadMutation.mutateAsync();
+              void clearNotificationsMutation.mutateAsync();
             }}
-            disabled={unreadCount === 0 || markAllAsReadMutation.isPending}
+            disabled={hasLoadError || items.length === 0 || clearNotificationsMutation.isPending}
           >
-            Прочитать все
+            Очистить все
           </button>
         </div>
 
         <div className="notification-menu__content">
+          {hasLoadError ? (
+            <div className="notification-menu__empty">
+              Не удалось загрузить уведомления. Проверьте backend и обновите страницу.
+            </div>
+          ) : null}
+
           {notificationsQuery.isLoading ? (
             <div className="notification-menu__empty">Загружаем уведомления...</div>
           ) : null}
 
-          {!notificationsQuery.isLoading && items.length === 0 ? (
+          {!hasLoadError && !notificationsQuery.isLoading && items.length === 0 ? (
             <div className="notification-menu__empty">Новых уведомлений пока нет.</div>
           ) : null}
 
-          {items.map((item) => (
-            <button
+          {!hasLoadError && items.map((item) => (
+            <div
               key={item.id}
-              type="button"
               className={cn(
                 "notification-menu__item",
                 item.is_read && "notification-menu__item--read",
               )}
               role="menuitem"
-              onClick={() => {
-                void handleItemClick(item.id, item.action_url, item.is_read);
-              }}
             >
-              <span
-                className={cn(
-                  "notification-menu__item-indicator",
-                  `notification-menu__item-indicator--${item.severity}`,
-                )}
-                aria-hidden="true"
-              />
-
+              <button
+                type="button"
+                className="notification-menu__item-main"
+                onClick={() => {
+                  void handleItemClick(item.id, item.action_url, item.is_read);
+                }}
+              >
               <span className="notification-menu__item-body">
                 <span className="notification-menu__item-title-row">
-                  <span className="notification-menu__item-title">{item.title}</span>
-                  <span className="notification-menu__item-date">
-                    {formatNotificationDate(item.created_at)}
+                  <span className="notification-menu__item-heading">
+                    <span className="notification-menu__item-title">{item.title}</span>
+                    <span className="notification-menu__item-date-row">
+                      <span className="notification-menu__item-date-icon" aria-hidden="true" />
+                      <span className="notification-menu__item-date">
+                        {formatNotificationDate(item.created_at)}
+                      </span>
+                    </span>
                   </span>
+                  {!item.is_read ? (
+                    <span className="notification-menu__item-indicator" aria-hidden="true" />
+                  ) : (
+                    <span className="notification-menu__item-indicator-placeholder" aria-hidden="true" />
+                  )}
                 </span>
                 <span className="notification-menu__item-message">{item.message}</span>
-                {item.action_label ? (
-                  <span className="notification-menu__item-action">{item.action_label}</span>
+                {item.action_label && item.action_url ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="notification-menu__item-action"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handleItemClick(item.id, item.action_url, item.is_read);
+                    }}
+                  >
+                    <span className="notification-menu__item-action-label">{item.action_label}</span>
+                    <span className="notification-menu__item-action-icon" aria-hidden="true" />
+                  </Button>
                 ) : null}
               </span>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       </div>

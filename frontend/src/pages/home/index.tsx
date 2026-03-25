@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import profileIcon from "../../assets/icons/profile.svg";
+import { CitySelector } from "../../features/city-selector";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
 import { clearPersistedAuthSession, useAuthStore } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
@@ -60,6 +61,7 @@ export function HomePage() {
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [mapExpandMode, setMapExpandMode] = useState<"collapsed" | "expanding" | "expanded" | "collapsing">("collapsed");
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
+  const [selectedCity, setSelectedCity] = useState("Чебоксары");
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
@@ -144,7 +146,7 @@ export function HomePage() {
     profileMenuCloseTimeoutRef.current = window.setTimeout(() => {
       setIsProfileMenuOpen(false);
       profileMenuCloseTimeoutRef.current = null;
-    }, 140);
+    }, 40);
   };
 
   const handleLogout = () => {
@@ -503,10 +505,7 @@ export function HomePage() {
                   </a>
                 </nav>
 
-                <button type="button" className="header__location" aria-haspopup="menu">
-                  <span className="header__location-icon" aria-hidden="true" />
-                  <span>Чебоксары</span>
-                </button>
+                <CitySelector value={selectedCity} onChange={setSelectedCity} />
               </>
             )}
           </Container>
@@ -563,10 +562,12 @@ export function HomePage() {
                     <MapView
                       opportunities={opportunities}
                       selectedOpportunityId={selectedOpportunityId}
+                      selectedCity={selectedCity}
                       isExpanded={isMapExpanded}
                       isTransitioning={isMapTransitioning}
                       roleName={roleName}
                       onSelectOpportunity={setSelectedOpportunityId}
+                      onSelectCity={setSelectedCity}
                       onCloseDetails={() => setSelectedOpportunityId(null)}
                       onToggleExpand={handleToggleMapExpand}
                     />

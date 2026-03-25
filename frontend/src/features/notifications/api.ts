@@ -52,7 +52,7 @@ export async function markNotificationAsReadRequest(notificationId: string) {
   return response.data;
 }
 
-export async function markAllNotificationsAsReadRequest() {
-  const response = await apiClient.post<NotificationsUnreadCountResponse>("/notifications/read-all");
+export async function clearNotificationsRequest() {
+  const response = await apiClient.delete<NotificationsUnreadCountResponse>("/notifications");
   return response.data;
 }

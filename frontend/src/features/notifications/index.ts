@@ -1,7 +1,7 @@
 export {
+  clearNotificationsRequest,
   getUnreadNotificationsCountRequest,
   listNotificationsRequest,
-  markAllNotificationsAsReadRequest,
   markNotificationAsReadRequest,
 } from "./api";
 export type {

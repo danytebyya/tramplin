@@ -14,15 +14,56 @@ import "./map-view.css";
 type MapViewProps = {
   opportunities: Opportunity[];
   selectedOpportunityId: string | null;
+  selectedCity: string;
   isExpanded: boolean;
   isTransitioning: boolean;
   roleName?: string;
   onSelectOpportunity: (opportunityId: string) => void;
+  onSelectCity: (city: string) => void;
   onCloseDetails: () => void;
   onToggleExpand: () => void;
 };
 
 const mapCenter = [47.2512, 56.1287];
+const cityViewportByName: Record<string, { center: [number, number]; zoom: number }> = {
+  Москва: { center: [37.6176, 55.7558], zoom: 11 },
+  "Санкт-Петербург": { center: [30.3159, 59.9391], zoom: 11 },
+  Казань: { center: [49.1221, 55.7887], zoom: 11 },
+  Новосибирск: { center: [82.9204, 55.0302], zoom: 11 },
+  Чебоксары: { center: [47.2512, 56.1287], zoom: 12 },
+};
+
+function getViewportByCoordinates(opportunities: Opportunity[]) {
+  const longitudeValues = opportunities.map((opportunity) => opportunity.longitude);
+  const latitudeValues = opportunities.map((opportunity) => opportunity.latitude);
+  const minLongitude = Math.min(...longitudeValues);
+  const maxLongitude = Math.max(...longitudeValues);
+  const minLatitude = Math.min(...latitudeValues);
+  const maxLatitude = Math.max(...latitudeValues);
+  const centerLongitude = (minLongitude + maxLongitude) / 2;
+  const centerLatitude = (minLatitude + maxLatitude) / 2;
+  const longitudeSpan = Math.abs(maxLongitude - minLongitude);
+  const latitudeSpan = Math.abs(maxLatitude - minLatitude);
+  const widestSpan = Math.max(longitudeSpan, latitudeSpan);
+
+  let zoom = 11;
+  if (widestSpan > 20) {
+    zoom = 3;
+  } else if (widestSpan > 12) {
+    zoom = 4;
+  } else if (widestSpan > 6) {
+    zoom = 5;
+  } else if (widestSpan > 3) {
+    zoom = 6;
+  } else if (widestSpan > 1.5) {
+    zoom = 7;
+  }
+
+  return {
+    center: [centerLongitude, centerLatitude] as [number, number],
+    zoom,
+  };
+}
 
 function getOpportunityKindLabel(kind: Opportunity["kind"]) {
   if (kind === "internship") {
@@ -48,7 +89,6 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
   { label: "Избранное", value: "saved" },
 ];
 
-const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
 const initialFormatValue: Opportunity["format"] | "saved" | "all" = "all";
 
 const markerPalette = {
@@ -136,10 +176,12 @@ function createClusterStyle(pointsCount: number, roleName?: string): ClusterStyl
 export function MapView({
   opportunities,
   selectedOpportunityId,
+  selectedCity,
   isExpanded,
   isTransitioning,
   roleName,
   onSelectOpportunity,
+  onSelectCity,
   onCloseDetails,
   onToggleExpand,
 }: MapViewProps) {
@@ -156,8 +198,10 @@ export function MapView({
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
   const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved" | "all">(initialFormatValue);
-  const [selectedCity, setSelectedCity] = useState("Чебоксары");
   const [favoriteOpportunityIds, setFavoriteOpportunityIds] = useState<string[]>([]);
+  const cityOptions = Array.from(
+    new Set(["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары", selectedCity]),
+  );
   const filteredOpportunities = opportunities.filter((opportunity) => {
     if (selectedFormat === "all") {
       return true;
@@ -169,6 +213,9 @@ export function MapView({
 
     return opportunity.format === selectedFormat;
   });
+  const cityMatchedOpportunities = filteredOpportunities.filter((opportunity) =>
+    opportunity.locationLabel.toLowerCase().includes(selectedCity.toLowerCase()),
+  );
   const selectedOpportunity = filteredOpportunities.find(
     (opportunity) => opportunity.id === selectedOpportunityId,
   );
@@ -411,37 +458,32 @@ export function MapView({
   }, [isExpanded, selectedOpportunity, selectedOpportunityId]);
 
   useEffect(() => {
+    if (!mapInstanceRef.current || selectedOpportunity) {
+      return;
+    }
+
+    const cityViewport =
+      cityMatchedOpportunities.length > 0
+        ? getViewportByCoordinates(cityMatchedOpportunities)
+        : cityViewportByName[selectedCity];
+
+    if (!cityViewport) {
+      return;
+    }
+
+    mapInstanceRef.current.setCenter(cityViewport.center, { duration: 320 });
+    mapInstanceRef.current.setZoom(cityViewport.zoom, { duration: 320 });
+    hasAlignedInitialViewportRef.current = true;
+  }, [cityMatchedOpportunities, selectedCity, selectedOpportunity]);
+
+  useEffect(() => {
     if (!mapInstanceRef.current || selectedOpportunity || filteredOpportunities.length === 0 || hasAlignedInitialViewportRef.current) {
       return;
     }
 
-    const longitudeValues = filteredOpportunities.map((opportunity) => opportunity.longitude);
-    const latitudeValues = filteredOpportunities.map((opportunity) => opportunity.latitude);
-    const minLongitude = Math.min(...longitudeValues);
-    const maxLongitude = Math.max(...longitudeValues);
-    const minLatitude = Math.min(...latitudeValues);
-    const maxLatitude = Math.max(...latitudeValues);
-    const centerLongitude = (minLongitude + maxLongitude) / 2;
-    const centerLatitude = (minLatitude + maxLatitude) / 2;
-    const longitudeSpan = Math.abs(maxLongitude - minLongitude);
-    const latitudeSpan = Math.abs(maxLatitude - minLatitude);
-    const widestSpan = Math.max(longitudeSpan, latitudeSpan);
-
-    let zoom = 11;
-    if (widestSpan > 20) {
-      zoom = 3;
-    } else if (widestSpan > 12) {
-      zoom = 4;
-    } else if (widestSpan > 6) {
-      zoom = 5;
-    } else if (widestSpan > 3) {
-      zoom = 6;
-    } else if (widestSpan > 1.5) {
-      zoom = 7;
-    }
-
-    mapInstanceRef.current.setCenter([centerLongitude, centerLatitude], { duration: 0 });
-    mapInstanceRef.current.setZoom(zoom, { duration: 0 });
+    const viewport = getViewportByCoordinates(filteredOpportunities);
+    mapInstanceRef.current.setCenter(viewport.center, { duration: 0 });
+    mapInstanceRef.current.setZoom(viewport.zoom, { duration: 0 });
     hasAlignedInitialViewportRef.current = true;
   }, [filteredOpportunities, selectedOpportunity]);
 
@@ -574,7 +616,7 @@ export function MapView({
                       ? "map-view__city-option map-view__city-option--active"
                       : "map-view__city-option"
                   }
-                  onClick={() => setSelectedCity(city)}
+                  onClick={() => onSelectCity(city)}
                 >
                   {city}
                 </button>
