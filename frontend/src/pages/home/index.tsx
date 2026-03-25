@@ -351,7 +351,13 @@ export function HomePage() {
           <div className={explorerClassName}>
             <OpportunityFilters viewMode={viewMode} isMapExpanded={isMapExpandedLayout} onViewModeChange={setViewMode} />
 
-            <div className="home-page__explorer-content">
+            <div
+              className={
+                viewMode === "list"
+                  ? "home-page__explorer-content home-page__explorer-content--list"
+                  : "home-page__explorer-content"
+              }
+            >
               <div
                 className={
                   viewMode === "map"

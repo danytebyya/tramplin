@@ -6,6 +6,8 @@ type OpportunityApiItem = {
   title: string;
   company_name: string;
   company_verified: boolean;
+  company_rating: number | null;
+  company_reviews_count: number;
   salary_label: string;
   location_label: string;
   format: Opportunity["format"];
@@ -34,6 +36,8 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
     title: item.title,
     companyName: item.company_name,
     companyVerified: item.company_verified,
+    companyRating: item.company_rating,
+    companyReviewsCount: item.company_reviews_count,
     salaryLabel: item.salary_label,
     locationLabel: item.location_label,
     format: item.format,

@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from src.models import Opportunity, OpportunityStatus, OpportunityTag, OpportunityType, ModerationStatus
+from src.models import ModerationStatus, Opportunity, OpportunityStatus, OpportunityTag
 
 
 class OpportunityRepository:
@@ -15,7 +15,6 @@ class OpportunityRepository:
                 Opportunity.deleted_at.is_(None),
                 Opportunity.business_status == OpportunityStatus.ACTIVE,
                 Opportunity.moderation_status == ModerationStatus.APPROVED,
-                Opportunity.opportunity_type == OpportunityType.VACANCY,
             )
             .options(
                 selectinload(Opportunity.employer),

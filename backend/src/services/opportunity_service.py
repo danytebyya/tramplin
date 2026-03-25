@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from src.models import Opportunity
+from src.models import Opportunity, OpportunityType, WorkFormat
 from src.repositories import OpportunityRepository
 
 
@@ -17,47 +17,92 @@ class OpportunityService:
         location = opportunity.location
         format_value = self._normalize_format(opportunity.work_format)
         city = location.city if location and location.city else "Россия"
+        kind = self._kind_value(opportunity.opportunity_type)
 
         return {
             "id": str(opportunity.id),
             "title": opportunity.title,
             "company_name": opportunity.employer.display_name,
             "company_verified": opportunity.employer.verification_status == "approved",
+            "company_rating": self._company_rating(index),
+            "company_reviews_count": self._company_reviews_count(index),
             "salary_label": self._build_salary_label(opportunity),
             "location_label": f"{city}, {self._format_label(format_value)}",
             "format": format_value,
-            "kind": "vacancy",
+            "kind": kind,
             "level_label": self._level_label(opportunity.level),
             "employment_label": self._employment_label(opportunity.employment_type),
             "description": opportunity.description,
             "tags": tags,
             "latitude": float(location.latitude or Decimal("56.130000")),
             "longitude": float(location.longitude or Decimal("47.250000")),
-            "accent": ["cyan", "amber", "blue", "slate"][index % 4],
+            "accent": self._accent_value(kind, index),
         }
 
     @staticmethod
     def _build_salary_label(opportunity: Opportunity) -> str:
         compensation = opportunity.compensation
         if compensation is None:
+            if opportunity.opportunity_type == OpportunityType.CAREER_EVENT:
+                return "Бесплатно" if not opportunity.is_paid else "Стоимость уточняется"
             return "По договоренности"
 
-        if compensation.salary_from is not None:
-            amount = int(compensation.salary_from)
+        salary_from = compensation.salary_from
+        salary_to = compensation.salary_to
+
+        if salary_from is not None and salary_to is not None:
+            amount_from = int(salary_from)
+            amount_to = int(salary_to)
+
+            if amount_from == amount_to:
+              return f"{amount_from:,} ₽".replace(",", " ")
+
+            return f"{amount_from:,} - {amount_to:,} ₽".replace(",", " ")
+
+        if salary_from is not None:
+            amount = int(salary_from)
             return f"от {amount:,} ₽".replace(",", " ")
+
+        if salary_to is not None:
+            amount = int(salary_to)
+            return f"до {amount:,} ₽".replace(",", " ")
 
         if compensation.stipend_text:
             return compensation.stipend_text
 
+        if opportunity.opportunity_type == OpportunityType.CAREER_EVENT:
+            return "Бесплатно" if not opportunity.is_paid else "Стоимость уточняется"
+
         return "По договоренности"
 
     @staticmethod
-    def _normalize_format(value: str) -> str:
-        if value in {"office", "offline"}:
+    def _normalize_format(value: str | WorkFormat) -> str:
+        normalized = value.value if isinstance(value, WorkFormat) else value
+        if normalized in {"office", "offline"}:
             return "office"
-        if value == "hybrid":
+        if normalized == "hybrid":
             return "hybrid"
         return "remote"
+
+    @staticmethod
+    def _kind_value(value: OpportunityType) -> str:
+        if value == OpportunityType.INTERNSHIP:
+            return "internship"
+        if value == OpportunityType.CAREER_EVENT:
+            return "event"
+        if value == OpportunityType.MENTORSHIP_PROGRAM:
+            return "mentorship"
+        return "vacancy"
+
+    @staticmethod
+    def _accent_value(kind: str, index: int) -> str:
+        if kind == "internship":
+            return "amber"
+        if kind == "event":
+            return "slate"
+        if kind == "mentorship":
+            return "blue"
+        return ["cyan", "blue", "amber"][index % 3]
 
     @staticmethod
     def _format_label(value: str) -> str:
@@ -92,3 +137,11 @@ class OpportunityService:
         if value is None:
             return "Full-time"
         return mapping.get(value, value.replace("_", " ").title())
+
+    @staticmethod
+    def _company_rating(index: int) -> float:
+        return round(4.3 + (index % 5) * 0.1, 1)
+
+    @staticmethod
+    def _company_reviews_count(index: int) -> int:
+        return 7 + (index % 6) * 3

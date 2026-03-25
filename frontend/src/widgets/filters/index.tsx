@@ -9,6 +9,8 @@ type OpportunityFiltersProps = {
 };
 
 export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }: OpportunityFiltersProps) {
+  const isListControlsVisible = viewMode === "list" && !isMapExpanded;
+
   return (
     <section className="opportunity-filters" aria-label="Фильтры возможностей">
       {!isMapExpanded ? (
@@ -23,41 +25,62 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
         </div>
       ) : null}
 
-      <div className="opportunity-filters__search-group">
-        <label className="opportunity-filters__search" aria-label="Поиск по возможностям">
-          <Input
-            placeholder="Поиск"
-            className="input--secondary input--sm opportunity-filters__search-input"
-            clearable
-          />
-        </label>
-      </div>
+      <div
+        className={
+          isListControlsVisible
+            ? "opportunity-filters__controls opportunity-filters__controls--list"
+            : "opportunity-filters__controls"
+        }
+      >
+        <div className="opportunity-filters__search-group">
+          <label className="opportunity-filters__search" aria-label="Поиск по возможностям">
+            <Input
+              placeholder="Поиск"
+              className="input--secondary input--sm opportunity-filters__search-input"
+              clearable
+            />
+          </label>
+          <button
+            type="button"
+            className={
+              isListControlsVisible
+                ? "opportunity-filters__reset"
+                : "opportunity-filters__reset opportunity-filters__reset--hidden"
+            }
+          >
+            Сбросить
+          </button>
+        </div>
 
-      {viewMode === "list" && !isMapExpanded ? (
-        <div className="opportunity-filters__grid">
-          <div>
-            <div className="opportunity-filters__placeholder">
-              <span>Поиск</span>
-              <span className="opportunity-filters__placeholder-arrow">×</span>
-            </div>
-            <span className="opportunity-filters__reset">Сбросить</span>
-          </div>
-          <div>
-            <div className="opportunity-filters__placeholder">
+        <div
+          className={
+            isListControlsVisible
+              ? "opportunity-filters__aux-group"
+              : "opportunity-filters__aux-group opportunity-filters__aux-group--hidden"
+          }
+          aria-hidden={!isListControlsVisible}
+        >
+          <div className="opportunity-filters__aux-item">
+            <button type="button" className="opportunity-filters__placeholder">
               <span>Сортировка</span>
-              <span className="opportunity-filters__placeholder-arrow">⌄</span>
-            </div>
-            <span className="opportunity-filters__reset">Сбросить</span>
+              <span className="opportunity-filters__placeholder-arrow" aria-hidden="true" />
+            </button>
+            <button type="button" className="opportunity-filters__reset">
+              Сбросить
+            </button>
           </div>
-          <div>
-            <div className="opportunity-filters__placeholder">
+
+          <div className="opportunity-filters__aux-item">
+            <button type="button" className="opportunity-filters__placeholder">
               <span>Фильтры</span>
-              <span className="opportunity-filters__placeholder-arrow">⌄</span>
-            </div>
-            <span className="opportunity-filters__reset">Сбросить</span>
+              <span className="opportunity-filters__placeholder-arrow" aria-hidden="true" />
+            </button>
+            <button type="button" className="opportunity-filters__reset">
+              Сбросить
+            </button>
           </div>
         </div>
-      ) : null}
+      </div>
     </section>
   );
 }

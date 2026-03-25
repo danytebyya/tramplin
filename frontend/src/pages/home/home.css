@@ -131,6 +131,10 @@ body.home-page--map-floating {
   transition: height 320ms ease;
 }
 
+.home-page__explorer-content--list {
+  overflow: visible;
+}
+
 .home-page--map-floating .opportunity-filters {
   position: absolute;
   top: 8px;

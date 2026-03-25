@@ -6,6 +6,8 @@ class OpportunityPublicRead(BaseModel):
     title: str
     company_name: str
     company_verified: bool
+    company_rating: float | None = None
+    company_reviews_count: int = 0
     salary_label: str
     location_label: str
     format: str

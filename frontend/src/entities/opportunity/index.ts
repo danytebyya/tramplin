@@ -1,11 +1,13 @@
 export type OpportunityFormat = "office" | "hybrid" | "remote";
-export type OpportunityKind = "vacancy" | "internship" | "event";
+export type OpportunityKind = "vacancy" | "internship" | "event" | "mentorship";
 
 export type Opportunity = {
   id: string;
   title: string;
   companyName: string;
   companyVerified: boolean;
+  companyRating: number | null;
+  companyReviewsCount: number;
   salaryLabel: string;
   locationLabel: string;
   format: OpportunityFormat;

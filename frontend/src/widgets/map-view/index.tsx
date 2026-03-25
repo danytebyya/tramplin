@@ -38,7 +38,8 @@ function getOpportunityKindLabel(kind: Opportunity["kind"]) {
   return "Вакансия";
 }
 
-const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved" }> = [
+const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved" | "all" }> = [
+  { label: "Все", value: "all" },
   { label: "Офлайн", value: "office" },
   { label: "Гибрид", value: "hybrid" },
   { label: "Удаленно", value: "remote" },
@@ -46,7 +47,7 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
 ];
 
 const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
-const initialFormatValue: Opportunity["format"] | "saved" = "office";
+const initialFormatValue: Opportunity["format"] | "saved" | "all" = "all";
 function createClusterStyle(pointsCount: number): ClusterStyle {
   const clusterElement = document.createElement("div");
   clusterElement.className = "map-view__marker-cluster";
@@ -75,16 +76,28 @@ export function MapView({
   const hasAlignedInitialViewportRef = useRef(false);
   const markerElementsRef = useRef(new globalThis.Map<string, HTMLButtonElement>());
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
+  const onCloseDetailsRef = useRef(onCloseDetails);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isMapVisible, setIsMapVisible] = useState(false);
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
-  const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved">(initialFormatValue);
+  const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved" | "all">(initialFormatValue);
   const [selectedCity, setSelectedCity] = useState("Чебоксары");
   const [favoriteOpportunityIds, setFavoriteOpportunityIds] = useState<string[]>([]);
-  const selectedOpportunity = opportunities.find(
+  const filteredOpportunities = opportunities.filter((opportunity) => {
+    if (selectedFormat === "all") {
+      return true;
+    }
+
+    if (selectedFormat === "saved") {
+      return favoriteOpportunityIds.includes(opportunity.id);
+    }
+
+    return opportunity.format === selectedFormat;
+  });
+  const selectedOpportunity = filteredOpportunities.find(
     (opportunity) => opportunity.id === selectedOpportunityId,
   );
   const isSelectedOpportunityFavorite = selectedOpportunity
@@ -94,6 +107,10 @@ export function MapView({
   useEffect(() => {
     onSelectOpportunityRef.current = onSelectOpportunity;
   }, [onSelectOpportunity]);
+
+  useEffect(() => {
+    onCloseDetailsRef.current = onCloseDetails;
+  }, [onCloseDetails]);
 
   useEffect(() => {
     const container = mapContainerRef.current;
@@ -174,7 +191,7 @@ export function MapView({
         return;
       }
 
-      const opportunityId = event.target.userData?.opportunityId as string | undefined;
+      const opportunityId = event.target.data.userData?.opportunityId as string | undefined;
       if (opportunityId) {
         onSelectOpportunityRef.current(opportunityId);
       }
@@ -223,13 +240,34 @@ export function MapView({
   }, [isMapReady]);
 
   useEffect(() => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    const map = mapInstanceRef.current;
+    const handleMoveStart = (event: { isUser: boolean }) => {
+      if (!event.isUser || !selectedOpportunityId) {
+        return;
+      }
+
+      onCloseDetailsRef.current();
+    };
+
+    map.on("movestart", handleMoveStart);
+
+    return () => {
+      map.off("movestart", handleMoveStart);
+    };
+  }, [selectedOpportunityId]);
+
+  useEffect(() => {
     if (!isMapReady || !clustererRef.current) {
       return;
     }
 
     markerElementsRef.current.clear();
 
-    const inputMarkers: InputMarker[] = opportunities.map((opportunity) => {
+    const inputMarkers: InputMarker[] = filteredOpportunities.map((opportunity) => {
       const markerElement = document.createElement("button");
       markerElement.type = "button";
       markerElement.className = ["map-view__marker", `map-view__marker--${opportunity.accent}`].join(" ");
@@ -249,7 +287,7 @@ export function MapView({
     });
 
     clustererRef.current.load(inputMarkers);
-  }, [isMapReady, opportunities]);
+  }, [filteredOpportunities, isMapReady]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -307,12 +345,12 @@ export function MapView({
   }, [isExpanded, selectedOpportunity, selectedOpportunityId]);
 
   useEffect(() => {
-    if (!mapInstanceRef.current || selectedOpportunity || opportunities.length === 0 || hasAlignedInitialViewportRef.current) {
+    if (!mapInstanceRef.current || selectedOpportunity || filteredOpportunities.length === 0 || hasAlignedInitialViewportRef.current) {
       return;
     }
 
-    const longitudeValues = opportunities.map((opportunity) => opportunity.longitude);
-    const latitudeValues = opportunities.map((opportunity) => opportunity.latitude);
+    const longitudeValues = filteredOpportunities.map((opportunity) => opportunity.longitude);
+    const latitudeValues = filteredOpportunities.map((opportunity) => opportunity.latitude);
     const minLongitude = Math.min(...longitudeValues);
     const maxLongitude = Math.max(...longitudeValues);
     const minLatitude = Math.min(...latitudeValues);
@@ -339,7 +377,19 @@ export function MapView({
     mapInstanceRef.current.setCenter([centerLongitude, centerLatitude], { duration: 0 });
     mapInstanceRef.current.setZoom(zoom, { duration: 0 });
     hasAlignedInitialViewportRef.current = true;
-  }, [opportunities, selectedOpportunity]);
+  }, [filteredOpportunities, selectedOpportunity]);
+
+  useEffect(() => {
+    if (!selectedOpportunityId) {
+      return;
+    }
+
+    if (filteredOpportunities.some((opportunity) => opportunity.id === selectedOpportunityId)) {
+      return;
+    }
+
+    onCloseDetails();
+  }, [filteredOpportunities, onCloseDetails, selectedOpportunityId]);
 
   const handleZoomIn = () => {
     if (!mapInstanceRef.current) {
@@ -473,7 +523,7 @@ export function MapView({
       </div>
 
       {selectedOpportunity ? (
-        <div className="map-view__details">
+        <div className={`map-view__details map-view__details--${selectedOpportunity.accent}`}>
           <div className="map-view__details-content">
             <div className="map-view__details-side">
               <button
