@@ -7,6 +7,7 @@ Create Date: 2026-03-25 22:30:00
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision = "20260325_0006"
@@ -16,8 +17,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("preferred_city", sa.String(length=120), nullable=True))
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    if "preferred_city" not in columns:
+        op.add_column("users", sa.Column("preferred_city", sa.String(length=120), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("users", "preferred_city")
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    if "preferred_city" in columns:
+        op.drop_column("users", "preferred_city")
