@@ -12,6 +12,8 @@ from src.utils.errors import AppError
 
 
 class NotificationService:
+    _WELCOME_SUPPRESSED_MARKER_TITLE = "__welcome_suppressed__"
+
     def __init__(self, db: Session) -> None:
         self.db = db
         self.notification_repo = NotificationRepository(db)
@@ -48,7 +50,15 @@ class NotificationService:
 
     def clear_all(self, current_user: User) -> NotificationUnreadCountResponse:
         self.notification_repo.delete_all_for_user(current_user.id)
-        self._create_welcome_notification_if_missing(current_user)
+        self.create_notification(
+            user_id=current_user.id,
+            kind=NotificationKind.SYSTEM,
+            severity=NotificationSeverity.INFO,
+            title=self._WELCOME_SUPPRESSED_MARKER_TITLE,
+            message="Welcome notification suppressed by user action.",
+            payload={"system_key": "welcome_suppressed"},
+            created_at=datetime.now(UTC),
+        )
         self.db.commit()
         return NotificationUnreadCountResponse(
             unread_count=self.notification_repo.count_unread_for_user(current_user.id)
@@ -84,7 +94,12 @@ class NotificationService:
 
     def _seed_demo_notifications_if_needed(self, current_user: User) -> None:
         has_any_notifications = self.notification_repo.has_any_for_user(current_user.id)
-        has_welcome_notification = self._create_welcome_notification_if_missing(current_user)
+        has_welcome_suppressed = self.notification_repo.has_welcome_suppressed_marker(current_user.id)
+        has_welcome_notification = (
+            True
+            if has_welcome_suppressed
+            else self._create_welcome_notification_if_missing(current_user)
+        )
 
         if has_any_notifications:
             if not has_welcome_notification:
@@ -108,17 +123,17 @@ class NotificationService:
                 "/dashboard/applicant",
             ),
             UserRole.EMPLOYER: (
-                "Добро пожаловать в кабинет работодателя",
+                "Добро пожаловать в Трамплин!",
                 "Здесь будут собираться новые отклики, статусы верификации компании и рекомендации по кандидатам.",
                 "/dashboard/employer",
             ),
             UserRole.CURATOR: (
-                "Добро пожаловать в кабинет куратора",
+                "Добро пожаловать в Трамплин!",
                 "Здесь будут появляться новые заявки на проверку, задачи модерации и системные события платформы.",
                 "/dashboard/curator",
             ),
             UserRole.ADMIN: (
-                "Добро пожаловать в панель администратора",
+                "Добро пожаловать в Трамплин!",
                 "Здесь будут собираться системные события, статусы модерации и критичные уведомления платформы.",
                 "/dashboard/curator",
             ),

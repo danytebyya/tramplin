@@ -10,7 +10,7 @@ class RefreshSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "refresh_sessions"
 
     user_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
     jti: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)

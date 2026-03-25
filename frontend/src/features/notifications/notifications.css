@@ -127,6 +127,9 @@
 
 .notification-menu__item {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   width: 100%;
   padding: 8px 24px;
   background: var(--color-bg-primary);
@@ -147,7 +150,7 @@
 .notification-menu__item-main {
   display: flex;
   flex: 1 1 auto;
-  width: 100%;
+  min-width: 0;
   padding: 0;
   border: none;
   background: transparent;
@@ -188,6 +191,7 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
+  margin-top: 9px;
   background: var(--notification-menu-primary);
   flex: 0 0 8px;
 }
@@ -237,6 +241,7 @@
 .notification-menu__item-action.button.button--ghost {
   height: auto;
   min-height: 0;
+  margin-top: 0;
   padding-right: 0;
   padding-left: 0;
   align-self: flex-start;

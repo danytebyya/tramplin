@@ -1,7 +1,3 @@
-.header {
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-}
-
 .header__top {
   background:
     linear-gradient(
@@ -211,6 +207,7 @@
 .header__profile-menu {
   position: relative;
   display: inline-flex;
+  z-index: 60;
 }
 
 .header__icon-button {
@@ -362,7 +359,10 @@
 }
 
 .header__bottom {
+  position: relative;
+  z-index: 10;
   background: var(--color-bg-primary);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
 }
 
 .header__bottom-container {
@@ -380,9 +380,9 @@
 
 .header__categories--curator {
   grid-column: 1 / -1;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: nowrap;
-  gap: 32px;
+  gap: 24px;
 }
 
 .header__category-link {

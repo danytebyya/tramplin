@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
-import { clearPersistedAuthSession, meRequest, useAuthStore } from "../../features/auth";
+import { meRequest, performLogout, useAuthStore } from "../../features/auth";
 import {
   upsertEmployerProfile,
   uploadEmployerVerificationDocuments,
@@ -446,9 +446,7 @@ export function EmployerOnboardingPage() {
       return;
     }
 
-    useAuthStore.getState().clearSession();
-    clearPersistedAuthSession();
-    navigate("/login", { replace: true });
+    void performLogout({ redirectTo: "/login" });
   };
 
   useEffect(() => {

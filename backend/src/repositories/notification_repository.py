@@ -1,15 +1,30 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from src.models import Notification
 
 
 class NotificationRepository:
+    _HIDDEN_SYSTEM_KEY = "welcome_suppressed"
+
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _is_hidden_system_notification(self, notification: Notification) -> bool:
+        if not notification.payload:
+            return False
+
+        return notification.payload.get("system_key") == self._HIDDEN_SYSTEM_KEY
+
+    def _filter_visible(self, notifications: list[Notification]) -> list[Notification]:
+        return [
+            notification
+            for notification in notifications
+            if not self._is_hidden_system_notification(notification)
+        ]
 
     def add(self, notification: Notification) -> Notification:
         self.db.add(notification)
@@ -35,17 +50,19 @@ class NotificationRepository:
             select(Notification)
             .where(Notification.user_id == normalized_user_id)
             .order_by(Notification.is_read.asc(), Notification.created_at.desc())
-            .limit(limit)
+            .limit(limit + 10)
         )
-        return list(self.db.execute(stmt).scalars().all())
+        notifications = list(self.db.execute(stmt).scalars().all())
+        return self._filter_visible(notifications)[:limit]
 
     def count_unread_for_user(self, user_id: str | UUID) -> int:
         normalized_user_id = UUID(str(user_id))
-        stmt = select(func.count(Notification.id)).where(
+        stmt = select(Notification).where(
             Notification.user_id == normalized_user_id,
             Notification.is_read.is_(False),
         )
-        return int(self.db.execute(stmt).scalar_one())
+        notifications = list(self.db.execute(stmt).scalars().all())
+        return len(self._filter_visible(notifications))
 
     def get_by_id_for_user(self, notification_id: str | UUID, user_id: str | UUID) -> Notification | None:
         normalized_notification_id = UUID(str(notification_id))
@@ -83,3 +100,9 @@ class NotificationRepository:
         normalized_user_id = UUID(str(user_id))
         stmt = delete(Notification).where(Notification.user_id == normalized_user_id)
         self.db.execute(stmt)
+
+    def has_welcome_suppressed_marker(self, user_id: str | UUID) -> bool:
+        normalized_user_id = UUID(str(user_id))
+        stmt = select(Notification).where(Notification.user_id == normalized_user_id)
+        notifications = list(self.db.execute(stmt).scalars().all())
+        return any(self._is_hidden_system_notification(notification) for notification in notifications)

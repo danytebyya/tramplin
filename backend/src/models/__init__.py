@@ -1,3 +1,4 @@
+from src.models.auth_login_event import AuthLoginEvent
 from src.models.employer_verification import (
     Employer,
     EmployerMembership,
@@ -6,6 +7,8 @@ from src.models.employer_verification import (
     MediaFile,
 )
 from src.models.email_verification_state import EmailVerificationState
+from src.models.favorite import FavoriteOpportunity
+from src.models.moderation_settings import ModerationSettings
 from src.models.notification import Notification
 from src.models.opportunity import (
     EmploymentType,
@@ -24,9 +27,11 @@ from src.models.opportunity import (
 from src.models.profile import ApplicantProfile, CuratorProfile, EmployerProfile
 from src.models.refresh_session import RefreshSession
 from src.models.user import User
+from src.models.user_notification_preference import UserNotificationPreference
 
 __all__ = [
     "User",
+    "AuthLoginEvent",
     "ApplicantProfile",
     "EmployerProfile",
     "CuratorProfile",
@@ -36,7 +41,10 @@ __all__ = [
     "EmployerVerificationDocument",
     "MediaFile",
     "RefreshSession",
+    "UserNotificationPreference",
     "EmailVerificationState",
+    "FavoriteOpportunity",
+    "ModerationSettings",
     "Notification",
     "Location",
     "Tag",

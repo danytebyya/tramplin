@@ -1,4 +1,8 @@
 from src.schemas.auth import (
+    AuthLoginHistoryItemRead,
+    AuthLoginHistoryResponse,
+    AuthSessionListResponse,
+    AuthSessionRead,
     EmailCheckRequest,
     EmailCheckResponse,
     LoginRequest,
@@ -12,13 +16,25 @@ from src.schemas.auth import (
 from src.schemas.company import EmployerOnboardingRequest
 from src.schemas.notification import NotificationFeedResponse, NotificationRead, NotificationUnreadCountResponse
 from src.schemas.opportunity import OpportunityFeedResponse, OpportunityPublicRead
-from src.schemas.user import UserRead
+from src.schemas.user import (
+    ModerationSettingsRead,
+    ModerationSettingsUpdateRequest,
+    NotificationPreferenceChannelRead,
+    UserNotificationPreferencesRead,
+    UserNotificationPreferencesUpdateRequest,
+    UserPreferredCityUpdateRequest,
+    UserRead,
+)
 
 __all__ = [
     "RegisterRequest",
     "LoginRequest",
     "RefreshRequest",
     "LogoutRequest",
+    "AuthSessionRead",
+    "AuthSessionListResponse",
+    "AuthLoginHistoryItemRead",
+    "AuthLoginHistoryResponse",
     "TokenPairResponse",
     "EmailCheckRequest",
     "EmailCheckResponse",
@@ -28,7 +44,13 @@ __all__ = [
     "NotificationRead",
     "NotificationFeedResponse",
     "NotificationUnreadCountResponse",
+    "NotificationPreferenceChannelRead",
     "UserRead",
+    "UserPreferredCityUpdateRequest",
+    "UserNotificationPreferencesRead",
+    "UserNotificationPreferencesUpdateRequest",
+    "ModerationSettingsRead",
+    "ModerationSettingsUpdateRequest",
     "OpportunityPublicRead",
     "OpportunityFeedResponse",
 ]

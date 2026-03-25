@@ -11,3 +11,4 @@ export { Select } from "./select/select";
 export { InfoTooltip } from "./info-tooltip/info-tooltip";
 export { Status } from "./status/status";
 export { Badge } from "./badge/badge";
+export { Modal } from "./modal/modal";

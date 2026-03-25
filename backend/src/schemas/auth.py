@@ -111,3 +111,29 @@ class TokenPairResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: dict
+
+
+class AuthSessionRead(BaseModel):
+    id: str
+    user_agent: str | None = None
+    ip_address: str | None = None
+    created_at: str
+    expires_at: str
+    is_current: bool = False
+
+
+class AuthSessionListResponse(BaseModel):
+    items: list[AuthSessionRead]
+
+
+class AuthLoginHistoryItemRead(BaseModel):
+    id: str
+    created_at: str
+    is_success: bool
+    failure_reason: str | None = None
+    user_agent: str | None = None
+    ip_address: str | None = None
+
+
+class AuthLoginHistoryResponse(BaseModel):
+    items: list[AuthLoginHistoryItemRead]

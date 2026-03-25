@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { load } from "@2gis/mapgl";
 import { Clusterer } from "@2gis/mapgl-clusterer";
@@ -7,18 +7,25 @@ import type { Map } from "@2gis/mapgl/types";
 
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
+import { getCityViewportByName } from "../../features/city-selector/api";
 import { env } from "../../shared/config/env";
 import { Badge, Button } from "../../shared/ui";
 import "./map-view.css";
 
 type MapViewProps = {
   opportunities: Opportunity[];
+  favoriteOpportunityIds: string[];
   selectedOpportunityId: string | null;
   selectedCity: string;
+  selectedCityViewport?: {
+    center: [number, number];
+    zoom: number;
+  } | null;
   isExpanded: boolean;
   isTransitioning: boolean;
   roleName?: string;
   onSelectOpportunity: (opportunityId: string) => void;
+  onToggleFavorite: (opportunityId: string) => void;
   onSelectCity: (city: string) => void;
   onCloseDetails: () => void;
   onToggleExpand: () => void;
@@ -32,6 +39,32 @@ const cityViewportByName: Record<string, { center: [number, number]; zoom: numbe
   Новосибирск: { center: [82.9204, 55.0302], zoom: 11 },
   Чебоксары: { center: [47.2512, 56.1287], zoom: 12 },
 };
+
+function normalizeCityValue(city: string) {
+  return city.trim().toLowerCase();
+}
+
+function resolveViewportByCityName(selectedCity: string) {
+  const normalizedSelectedCity = normalizeCityValue(selectedCity);
+
+  const exactMatch = Object.entries(cityViewportByName).find(
+    ([cityName]) => normalizeCityValue(cityName) === normalizedSelectedCity,
+  );
+
+  if (exactMatch) {
+    return exactMatch[1];
+  }
+
+  const partialMatch = Object.entries(cityViewportByName).find(([cityName]) => {
+    const normalizedCityName = normalizeCityValue(cityName);
+    return (
+      normalizedSelectedCity.includes(normalizedCityName) ||
+      normalizedCityName.includes(normalizedSelectedCity)
+    );
+  });
+
+  return partialMatch?.[1];
+}
 
 function getViewportByCoordinates(opportunities: Opportunity[]) {
   const longitudeValues = opportunities.map((opportunity) => opportunity.longitude);
@@ -173,14 +206,38 @@ function createClusterStyle(pointsCount: number, roleName?: string): ClusterStyl
   };
 }
 
+function applyViewport(
+  map: Map,
+  viewport: {
+    center: [number, number];
+    zoom: number;
+  },
+  {
+    duration,
+    shouldUpdateZoom,
+  }: {
+    duration: number;
+    shouldUpdateZoom: boolean;
+  },
+) {
+  map.setCenter(viewport.center, { duration });
+
+  if (shouldUpdateZoom) {
+    map.setZoom(viewport.zoom, { duration });
+  }
+}
+
 export function MapView({
   opportunities,
+  favoriteOpportunityIds,
   selectedOpportunityId,
   selectedCity,
+  selectedCityViewport,
   isExpanded,
   isTransitioning,
   roleName,
   onSelectOpportunity,
+  onToggleFavorite,
   onSelectCity,
   onCloseDetails,
   onToggleExpand,
@@ -189,6 +246,7 @@ export function MapView({
   const mapInstanceRef = useRef<Map | null>(null);
   const clustererRef = useRef<Clusterer | null>(null);
   const hasAlignedInitialViewportRef = useRef(false);
+  const previousSelectedOpportunityIdRef = useRef<string | null>(null);
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
   const onCloseDetailsRef = useRef(onCloseDetails);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -198,24 +256,28 @@ export function MapView({
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
   const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved" | "all">(initialFormatValue);
-  const [favoriteOpportunityIds, setFavoriteOpportunityIds] = useState<string[]>([]);
   const cityOptions = Array.from(
     new Set(["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары", selectedCity]),
   );
-  const filteredOpportunities = opportunities.filter((opportunity) => {
-    if (selectedFormat === "all") {
-      return true;
-    }
+  const filteredOpportunities = useMemo(() => {
+    return opportunities.filter((opportunity) => {
+      if (selectedFormat === "all") {
+        return true;
+      }
 
-    if (selectedFormat === "saved") {
-      return favoriteOpportunityIds.includes(opportunity.id);
-    }
+      if (selectedFormat === "saved") {
+        return favoriteOpportunityIds.includes(opportunity.id);
+      }
 
-    return opportunity.format === selectedFormat;
-  });
-  const cityMatchedOpportunities = filteredOpportunities.filter((opportunity) =>
-    opportunity.locationLabel.toLowerCase().includes(selectedCity.toLowerCase()),
-  );
+      return opportunity.format === selectedFormat;
+    });
+  }, [favoriteOpportunityIds, opportunities, selectedFormat]);
+  const normalizedSelectedCity = normalizeCityValue(selectedCity);
+  const cityMatchedOpportunities = useMemo(() => {
+    return filteredOpportunities.filter((opportunity) =>
+      normalizeCityValue(opportunity.locationLabel).includes(normalizedSelectedCity),
+    );
+  }, [filteredOpportunities, normalizedSelectedCity]);
   const selectedOpportunity = filteredOpportunities.find(
     (opportunity) => opportunity.id === selectedOpportunityId,
   );
@@ -454,7 +516,7 @@ export function MapView({
       [selectedOpportunity.longitude, selectedOpportunity.latitude],
       { duration: 280 },
     );
-    mapInstanceRef.current.setZoom(14, { duration: 280 });
+    mapInstanceRef.current.setZoom(isExpanded ? 16.5 : 15.5, { duration: 280 });
   }, [isExpanded, selectedOpportunity, selectedOpportunityId]);
 
   useEffect(() => {
@@ -462,19 +524,44 @@ export function MapView({
       return;
     }
 
-    const cityViewport =
-      cityMatchedOpportunities.length > 0
-        ? getViewportByCoordinates(cityMatchedOpportunities)
-        : cityViewportByName[selectedCity];
+    const shouldUpdateZoom = !hasAlignedInitialViewportRef.current;
 
-    if (!cityViewport) {
+    if (previousSelectedOpportunityIdRef.current && !selectedOpportunityId) {
       return;
     }
 
-    mapInstanceRef.current.setCenter(cityViewport.center, { duration: 320 });
-    mapInstanceRef.current.setZoom(cityViewport.zoom, { duration: 320 });
-    hasAlignedInitialViewportRef.current = true;
-  }, [cityMatchedOpportunities, selectedCity, selectedOpportunity]);
+    if (cityMatchedOpportunities.length > 0) {
+      const viewport = getViewportByCoordinates(cityMatchedOpportunities);
+      applyViewport(mapInstanceRef.current, viewport, { duration: 320, shouldUpdateZoom });
+      hasAlignedInitialViewportRef.current = true;
+      return;
+    }
+
+    const knownViewport = selectedCityViewport ?? resolveViewportByCityName(selectedCity);
+
+    if (knownViewport) {
+      applyViewport(mapInstanceRef.current, knownViewport, { duration: 320, shouldUpdateZoom });
+      hasAlignedInitialViewportRef.current = true;
+      return;
+    }
+
+    let isActive = true;
+
+    void getCityViewportByName(selectedCity)
+      .then((fetchedViewport) => {
+        if (!isActive || !mapInstanceRef.current || !fetchedViewport) {
+          return;
+        }
+
+        applyViewport(mapInstanceRef.current, fetchedViewport, { duration: 320, shouldUpdateZoom });
+        hasAlignedInitialViewportRef.current = true;
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isActive = false;
+    };
+  }, [cityMatchedOpportunities, selectedCity, selectedCityViewport, selectedOpportunity, selectedOpportunityId]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || selectedOpportunity || filteredOpportunities.length === 0 || hasAlignedInitialViewportRef.current) {
@@ -486,6 +573,10 @@ export function MapView({
     mapInstanceRef.current.setZoom(viewport.zoom, { duration: 0 });
     hasAlignedInitialViewportRef.current = true;
   }, [filteredOpportunities, selectedOpportunity]);
+
+  useEffect(() => {
+    previousSelectedOpportunityIdRef.current = selectedOpportunityId;
+  }, [selectedOpportunityId]);
 
   useEffect(() => {
     if (!selectedOpportunityId) {
@@ -513,14 +604,6 @@ export function MapView({
     }
 
     mapInstanceRef.current.setZoom(mapInstanceRef.current.getZoom() - 1, { duration: 220 });
-  };
-
-  const handleToggleFavorite = (opportunityId: string) => {
-    setFavoriteOpportunityIds((current) =>
-      current.includes(opportunityId)
-        ? current.filter((id) => id !== opportunityId)
-        : [...current, opportunityId],
-    );
   };
 
   return (
@@ -631,17 +714,90 @@ export function MapView({
       </div>
 
       {selectedOpportunity ? (
-        <div className={`map-view__details map-view__details--${selectedOpportunity.accent}`}>
+        <div className="map-view__details">
           <div className="map-view__details-content">
-            <div className="map-view__details-side">
+            <div className="map-view__details-header">
+              <div className="map-view__details-title-group">
+                <h3 className="map-view__details-title" title={selectedOpportunity.title}>
+                  {selectedOpportunity.title}
+                </h3>
+                <p className="map-view__details-kind">
+                  {getOpportunityKindLabel(selectedOpportunity.kind)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="map-view__details-close"
+                aria-label="Закрыть карточку"
+                onClick={onCloseDetails}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 512 512"
+                  className="map-view__details-close-icon"
+                >
+                  <path d="M256 297.195L50.023 503.172C44.1379 509.057 37.272 512 29.4253 512C21.5785 512 14.7126 509.057 8.82759 503.172C2.94253 497.287 0 490.421 0 482.575C0 474.728 2.94253 467.862 8.82759 461.977L214.805 256L8.82759 50.023C2.94253 44.1379 0 37.272 0 29.4253C0 21.5785 2.94253 14.7126 8.82759 8.82759C14.7126 2.94253 21.5785 0 29.4253 0C37.272 0 44.1379 2.94253 50.023 8.82759L256 214.805L461.977 8.82759C467.862 2.94253 474.728 0 482.575 0C490.421 0 497.287 2.94253 503.172 8.82759C509.057 14.7126 512 21.5785 512 29.4253C512 37.272 509.057 44.1379 503.172 50.023L297.195 256L503.172 461.977C509.057 467.862 512 474.728 512 482.575C512 490.421 509.057 497.287 503.172 503.172C497.287 509.057 490.421 512 482.575 512C474.728 512 467.862 509.057 461.977 503.172L256 297.195Z" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="map-view__details-group">
+              <div className="map-view__details-company-row">
+                <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
+                {selectedOpportunity.companyVerified ? (
+                  <img
+                    src={verifiedIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="map-view__details-verified-icon"
+                  />
+                ) : null}
+              </div>
+            </div>
+
+            <div className="map-view__details-group">
+              <p className="map-view__details-price">{selectedOpportunity.salaryLabel}</p>
+              <p className="map-view__details-meta">{selectedOpportunity.locationLabel}</p>
+            </div>
+
+            <div className="map-view__details-group map-view__details-group--meta">
+              <div className="map-view__details-tags">
+                {selectedOpportunity.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="map-view__details-tag">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+              <div className="map-view__details-secondary-group">
+                <p className="map-view__details-secondary">
+                  Уровень: {selectedOpportunity.levelLabel}
+                </p>
+                <p className="map-view__details-secondary">
+                  Занятость: {selectedOpportunity.employmentLabel}
+                </p>
+              </div>
+            </div>
+
+            <div className="map-view__details-actions">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="map-view__details-apply"
+              >
+                Откликнуться
+              </Button>
               <button
                 type="button"
                 className="map-view__details-favorite"
                 aria-label={
                   isSelectedOpportunityFavorite ? "Убрать из избранного" : "Добавить в избранное"
                 }
+                title={
+                  isSelectedOpportunityFavorite ? "Убрать из избранного" : "Добавить в избранное"
+                }
                 aria-pressed={isSelectedOpportunityFavorite}
-                onClick={() => handleToggleFavorite(selectedOpportunity.id)}
+                onClick={() => onToggleFavorite(selectedOpportunity.id)}
               >
                 <svg
                   aria-hidden="true"
@@ -657,79 +813,8 @@ export function MapView({
                   />
                 </svg>
               </button>
-              <div className="map-view__details-media" aria-hidden="true" />
-            </div>
-
-            <div className="map-view__details-body">
-              <div className="map-view__details-header">
-                <h3 className="map-view__details-title" title={selectedOpportunity.title}>
-                  {selectedOpportunity.title}
-                </h3>
-                <button
-                  type="button"
-                  className="map-view__details-close"
-                  aria-label="Закрыть карточку"
-                  onClick={onCloseDetails}
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 512 512"
-                    className="map-view__details-close-icon"
-                  >
-                    <path d="M256 297.195L50.023 503.172C44.1379 509.057 37.272 512 29.4253 512C21.5785 512 14.7126 509.057 8.82759 503.172C2.94253 497.287 0 490.421 0 482.575C0 474.728 2.94253 467.862 8.82759 461.977L214.805 256L8.82759 50.023C2.94253 44.1379 0 37.272 0 29.4253C0 21.5785 2.94253 14.7126 8.82759 8.82759C14.7126 2.94253 21.5785 0 29.4253 0C37.272 0 44.1379 2.94253 50.023 8.82759L256 214.805L461.977 8.82759C467.862 2.94253 474.728 0 482.575 0C490.421 0 497.287 2.94253 503.172 8.82759C509.057 14.7126 512 21.5785 512 29.4253C512 37.272 509.057 44.1379 503.172 50.023L297.195 256L503.172 461.977C509.057 467.862 512 474.728 512 482.575C512 490.421 509.057 497.287 503.172 503.172C497.287 509.057 490.421 512 482.575 512C474.728 512 467.862 509.057 461.977 503.172L256 297.195Z" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="map-view__details-group">
-                <div className="map-view__details-company-row">
-                  <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
-                  {selectedOpportunity.companyVerified ? (
-                    <img
-                      src={verifiedIcon}
-                      alt=""
-                      aria-hidden="true"
-                      className="map-view__details-verified-icon"
-                    />
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="map-view__details-group">
-                <p className="map-view__details-price">{selectedOpportunity.salaryLabel}</p>
-                <p className="map-view__details-meta">{selectedOpportunity.locationLabel}</p>
-              </div>
-
-              <div className="map-view__details-group map-view__details-group--meta">
-                <div className="map-view__details-tags">
-                  {selectedOpportunity.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="map-view__details-tag">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="map-view__details-secondary-group">
-                  <p className="map-view__details-secondary">
-                    Уровень: {selectedOpportunity.levelLabel}
-                  </p>
-                  <p className="map-view__details-secondary">
-                    Занятость: {selectedOpportunity.employmentLabel}
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                variant="secondary-ghost"
-                size="sm"
-                className="map-view__details-action"
-              >
-                <span>Подробнее</span>
-                <span className="map-view__details-action-icon" aria-hidden="true" />
-              </Button>
             </div>
           </div>
-
         </div>
       ) : null}
 

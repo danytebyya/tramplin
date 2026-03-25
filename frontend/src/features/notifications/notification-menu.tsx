@@ -310,41 +310,40 @@ export function NotificationMenu({
                   void handleItemClick(item.id, item.action_url, item.is_read);
                 }}
               >
-              <span className="notification-menu__item-body">
-                <span className="notification-menu__item-title-row">
-                  <span className="notification-menu__item-heading">
-                    <span className="notification-menu__item-title">{item.title}</span>
-                    <span className="notification-menu__item-date-row">
-                      <span className="notification-menu__item-date-icon" aria-hidden="true" />
-                      <span className="notification-menu__item-date">
-                        {formatNotificationDate(item.created_at)}
+                <span className="notification-menu__item-body">
+                  <span className="notification-menu__item-title-row">
+                    <span className="notification-menu__item-heading">
+                      <span className="notification-menu__item-title">{item.title}</span>
+                      <span className="notification-menu__item-date-row">
+                        <span className="notification-menu__item-date-icon" aria-hidden="true" />
+                        <span className="notification-menu__item-date">
+                          {formatNotificationDate(item.created_at)}
+                        </span>
                       </span>
                     </span>
+                    {!item.is_read ? (
+                      <span className="notification-menu__item-indicator" aria-hidden="true" />
+                    ) : (
+                      <span className="notification-menu__item-indicator-placeholder" aria-hidden="true" />
+                    )}
                   </span>
-                  {!item.is_read ? (
-                    <span className="notification-menu__item-indicator" aria-hidden="true" />
-                  ) : (
-                    <span className="notification-menu__item-indicator-placeholder" aria-hidden="true" />
-                  )}
+                  <span className="notification-menu__item-message">{item.message}</span>
                 </span>
-                <span className="notification-menu__item-message">{item.message}</span>
-                {item.action_label && item.action_url ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="notification-menu__item-action"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleItemClick(item.id, item.action_url, item.is_read);
-                    }}
-                  >
-                    <span className="notification-menu__item-action-label">{item.action_label}</span>
-                    <span className="notification-menu__item-action-icon" aria-hidden="true" />
-                  </Button>
-                ) : null}
-              </span>
               </button>
+              {item.action_label && item.action_url ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="notification-menu__item-action"
+                  onClick={() => {
+                    void handleItemClick(item.id, item.action_url, item.is_read);
+                  }}
+                >
+                  <span className="notification-menu__item-action-label">{item.action_label}</span>
+                  <span className="notification-menu__item-action-icon" aria-hidden="true" />
+                </Button>
+              ) : null}
             </div>
           ))}
         </div>

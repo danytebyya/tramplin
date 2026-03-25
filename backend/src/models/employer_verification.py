@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, String, Text, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from src.enums import (
@@ -47,6 +47,8 @@ class Employer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     updated_by: Mapped[str | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    verification_requests = relationship("EmployerVerificationRequest", back_populates="employer")
+
 
 class EmployerMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "employer_memberships"
@@ -77,6 +79,8 @@ class MediaFile(UUIDPrimaryKeyMixin, Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    verification_documents = relationship("EmployerVerificationDocument", back_populates="media_file")
+
 
 class EmployerVerificationRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "employer_verification_requests"
@@ -105,6 +109,9 @@ class EmployerVerificationRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     moderator_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    employer = relationship("Employer", back_populates="verification_requests")
+    documents = relationship("EmployerVerificationDocument", back_populates="verification_request")
+
 
 class EmployerVerificationDocument(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "employer_verification_documents"
@@ -125,3 +132,6 @@ class EmployerVerificationDocument(UUIDPrimaryKeyMixin, Base):
     )
     source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    verification_request = relationship("EmployerVerificationRequest", back_populates="documents")
+    media_file = relationship("MediaFile", back_populates="verification_documents")

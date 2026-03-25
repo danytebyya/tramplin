@@ -1,7 +1,5 @@
-import { useNavigate } from "react-router-dom";
-
 import { Button } from "../../shared/ui";
-import { clearPersistedAuthSession, useAuthStore } from "./session";
+import { performLogout } from "./logout";
 
 type LogoutButtonProps = {
   className?: string;
@@ -20,12 +18,8 @@ type LogoutButtonProps = {
 };
 
 export function LogoutButton({ className, variant = "ghost" }: LogoutButtonProps) {
-  const navigate = useNavigate();
-
   const handleLogout = () => {
-    useAuthStore.getState().clearSession();
-    clearPersistedAuthSession();
-    navigate("/", { replace: true });
+    void performLogout();
   };
 
   return (

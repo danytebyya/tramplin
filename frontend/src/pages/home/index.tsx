@@ -1,17 +1,34 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import maxIcon from "../../assets/auth/max.png";
-import vkIcon from "../../assets/auth/vk.png";
 import profileIcon from "../../assets/icons/profile.svg";
-import { CitySelector } from "../../features/city-selector";
+import {
+  CitySelector,
+  CitySelection,
+  readSelectedCityCookie,
+  removeSelectedCityCookie,
+  writeSelectedCityCookie,
+} from "../../features/city-selector";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
-import { clearPersistedAuthSession, useAuthStore } from "../../features/auth";
+import {
+  addFavoriteOpportunityRequest,
+  FavoriteAuthModal,
+  listFavoriteOpportunitiesRequest,
+  removeFavoriteOpportunityRequest,
+} from "../../features/favorites";
+import {
+  meRequest,
+  performLogout,
+  updatePreferredCityRequest,
+  useAuthStore,
+} from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
+import { ModerationDashboardContent } from "../curator-dashboard";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
+import { Footer } from "../../widgets/footer";
 import "../../widgets/header/header.css";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
@@ -57,13 +74,20 @@ function cloneMapSnapshot(source: HTMLElement) {
 export function HomePage() {
   const MAP_EXPANDED_TOP_OFFSET = 106;
   const MAP_EXPAND_TRANSITION_MS = 520;
+  const DEFAULT_CITY = "Чебоксары";
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [mapExpandMode, setMapExpandMode] = useState<"collapsed" | "expanding" | "expanded" | "collapsing">("collapsed");
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
-  const [selectedCity, setSelectedCity] = useState("Чебоксары");
+  const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? DEFAULT_CITY);
+  const [selectedCityViewport, setSelectedCityViewport] = useState<{
+    center: [number, number];
+    zoom: number;
+  } | null>(null);
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
+  const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
   const mapPanelLiveRef = useRef<HTMLDivElement | null>(null);
   const mapPanelProxyContentRef = useRef<HTMLDivElement | null>(null);
@@ -78,6 +102,10 @@ export function HomePage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
+  const roleName = String(role ?? "");
+  const isCurator = roleName === "curator";
+  const isAdmin = roleName === "admin";
+  const isModerationRole = isCurator || isAdmin;
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const isMapExpanded = mapExpandMode !== "collapsed";
   const isMapExpandedLayout = mapExpandMode === "expanded";
@@ -87,8 +115,46 @@ export function HomePage() {
   const { data: opportunities = [] } = useQuery({
     queryKey: ["opportunities", "feed"],
     queryFn: listOpportunitiesRequest,
+    enabled: !isModerationRole,
     staleTime: 5 * 60 * 1000,
   });
+  const currentUserQuery = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: meRequest,
+    enabled: isAuthenticated && !isModerationRole,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const favoriteOpportunitiesQuery = useQuery({
+    queryKey: ["favorites", "opportunities"],
+    queryFn: listFavoriteOpportunitiesRequest,
+    enabled: isAuthenticated && !isModerationRole,
+    staleTime: 60 * 1000,
+  });
+  const updatePreferredCityMutation = useMutation({
+    mutationFn: updatePreferredCityRequest,
+    onSuccess: (response) => {
+      queryClient.setQueryData(["auth", "me"], response);
+      removeSelectedCityCookie();
+    },
+  });
+  const favoriteOpportunityMutation = useMutation({
+    mutationFn: async ({
+      opportunityId,
+      shouldFavorite,
+    }: {
+      opportunityId: string;
+      shouldFavorite: boolean;
+    }) => {
+      return shouldFavorite
+        ? addFavoriteOpportunityRequest(opportunityId)
+        : removeFavoriteOpportunityRequest(opportunityId);
+    },
+    onSuccess: (response) => {
+      queryClient.setQueryData(["favorites", "opportunities"], response);
+    },
+  });
+  const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
 
   const getExpandedRect = () => ({
     top: MAP_EXPANDED_TOP_OFFSET,
@@ -150,11 +216,12 @@ export function HomePage() {
   };
 
   const handleLogout = () => {
-    useAuthStore.getState().clearSession();
-    clearPersistedAuthSession();
-    setIsProfileMenuPinned(false);
-    setIsProfileMenuOpen(false);
-    navigate("/", { replace: true });
+    void performLogout({
+      beforeRedirect: () => {
+        setIsProfileMenuPinned(false);
+        setIsProfileMenuOpen(false);
+      },
+    });
   };
 
   const finishMapTransition = (nextMode: "collapsed" | "expanded") => {
@@ -226,13 +293,31 @@ export function HomePage() {
     }, MAP_EXPAND_TRANSITION_MS);
   };
 
-  const roleName = String(role ?? "");
-  const isCurator = roleName === "curator";
+  const profileMenuItems = isModerationRole
+    ? [
+        { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
+        { label: "Выход", isDanger: true, onClick: handleLogout },
+      ]
+    : roleName === "employer"
+      ? [
+          { label: "Профиль компании", isDanger: false, onClick: () => navigate("/dashboard/employer") },
+          { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
+          { label: "Выход", isDanger: true, onClick: handleLogout },
+        ]
+      : [
+          { label: "Профиль", isDanger: false },
+          { label: "Мои отклики", isDanger: false },
+          { label: "Избранное", isDanger: false },
+          { label: "Нетворкинг", isDanger: false },
+          { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
+          { label: "Выход", isDanger: true, onClick: handleLogout },
+        ];
   const homePageClassName = [
     "home-page",
     roleName === "applicant" ? "home-page--applicant" : "",
     roleName === "employer" ? "home-page--employer" : "",
     roleName === "curator" ? "home-page--curator" : "",
+    roleName === "admin" ? "home-page--admin" : "",
     isMapFloating ? "home-page--map-floating" : "",
     isMapExpandedLayout ? "home-page--map-expanded" : "",
     isMapCollapsing ? "home-page--map-collapsing" : "",
@@ -307,6 +392,18 @@ export function HomePage() {
   }, [opportunities, selectedOpportunityId]);
 
   useEffect(() => {
+    const preferredCity = currentUserQuery.data?.data?.user?.preferred_city?.trim();
+
+    if (!isAuthenticated || !preferredCity) {
+      return;
+    }
+
+    setSelectedCity(preferredCity);
+    setSelectedCityViewport(null);
+    removeSelectedCityCookie();
+  }, [currentUserQuery.data, isAuthenticated]);
+
+  useEffect(() => {
     if (!isProfileMenuOpen) {
       return;
     }
@@ -333,6 +430,33 @@ export function HomePage() {
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isProfileMenuOpen]);
+
+  const handleCityChange = (city: string | CitySelection) => {
+    const nextCity = typeof city === "string" ? city : city.name;
+    const nextViewport = typeof city === "string" ? null : city.viewport ?? null;
+
+    setSelectedCity(nextCity);
+    setSelectedCityViewport(nextViewport);
+
+    if (!isAuthenticated) {
+      writeSelectedCityCookie(nextCity);
+      return;
+    }
+
+    updatePreferredCityMutation.mutate(nextCity);
+  };
+
+  const handleToggleFavorite = (opportunityId: string) => {
+    if (!isAuthenticated) {
+      setIsFavoriteAuthModalOpen(true);
+      return;
+    }
+
+    favoriteOpportunityMutation.mutate({
+      opportunityId,
+      shouldFavorite: !favoriteOpportunityIds.includes(opportunityId),
+    });
+  };
 
   return (
     <main className={homePageClassName}>
@@ -377,6 +501,8 @@ export function HomePage() {
                       <div
                         ref={profileMenuRef}
                         className="header__profile-menu"
+                        onMouseEnter={openProfileMenu}
+                        onMouseLeave={scheduleProfileMenuClose}
                       >
                         <button
                           type="button"
@@ -384,8 +510,6 @@ export function HomePage() {
                           aria-label="Профиль"
                           aria-expanded={isProfileMenuOpen}
                           aria-haspopup="menu"
-                          onMouseEnter={openProfileMenu}
-                          onMouseLeave={scheduleProfileMenuClose}
                           onClick={() => {
                             clearProfileMenuCloseTimeout();
                             setIsProfileMenuPinned((currentPinned) => {
@@ -411,32 +535,22 @@ export function HomePage() {
                           }
                           role="menu"
                           aria-hidden={!isProfileMenuOpen}
-                          onMouseEnter={openProfileMenu}
-                          onMouseLeave={scheduleProfileMenuClose}
                         >
-                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
-                            Профиль
-                          </button>
-                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
-                            Мои отклики
-                          </button>
-                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
-                            Избранное
-                          </button>
-                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
-                            Нетворкинг
-                          </button>
-                          <button type="button" className="header__profile-dropdown-item" role="menuitem">
-                            Настройки
-                          </button>
-                          <button
-                            type="button"
-                            className="header__profile-dropdown-item header__profile-dropdown-item--danger"
-                            role="menuitem"
-                            onClick={handleLogout}
-                          >
-                            Выход
-                          </button>
+                          {profileMenuItems.map((item) => (
+                            <button
+                              key={item.label}
+                              type="button"
+                              className={
+                                item.isDanger
+                                  ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
+                                  : "header__profile-dropdown-item"
+                              }
+                              role="menuitem"
+                              onClick={item.onClick}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -470,23 +584,23 @@ export function HomePage() {
 
         <div className="header__bottom">
           <Container className="home-page__container header__bottom-container">
-            {isCurator ? (
+            {isModerationRole ? (
               <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-                <a href="#dashboard" className="header__category-link">
+                <Link to="/" className="header__category-link">
                   Дашборд
-                </a>
-                <a href="#employer-verification" className="header__category-link">
+                </Link>
+                <Link to="/moderation/employers" className="header__category-link">
                   Верификация работодателей
-                </a>
+                </Link>
                 <a href="#content-moderation" className="header__category-link">
                   Модерация контента
                 </a>
                 <a href="#curators" className="header__category-link">
                   Управление кураторами
                 </a>
-                <a href="#settings" className="header__category-link">
+                <Link to="/settings" className="header__category-link">
                   Настройки
-                </a>
+                </Link>
               </nav>
             ) : (
               <>
@@ -505,191 +619,132 @@ export function HomePage() {
                   </a>
                 </nav>
 
-                <CitySelector value={selectedCity} onChange={setSelectedCity} />
+                <CitySelector value={selectedCity} onChange={handleCityChange} />
               </>
             )}
           </Container>
         </div>
       </header>
 
-      <section className="home-page__hero">
-        <Container className="home-page__container home-page__hero-container">
-          <div className={explorerClassName}>
-            <OpportunityFilters viewMode={viewMode} isMapExpanded={isMapExpandedLayout} onViewModeChange={setViewMode} />
+      {isModerationRole ? (
+        <ModerationDashboardContent footerTheme={isAdmin ? "admin" : "curator"} />
+      ) : null}
 
-            <div
-              className={
-                viewMode === "list"
-                  ? "home-page__explorer-content home-page__explorer-content--list"
-                  : "home-page__explorer-content"
-              }
-            >
-              <div
-                className={
-                  viewMode === "map"
-                    ? [
-                        "home-page__explorer-panel",
-                        "home-page__explorer-panel--active",
-                        isMapFloating ? "home-page__explorer-panel--map-floating" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")
-                    : "home-page__explorer-panel home-page__explorer-panel--hidden"
-                }
-                ref={viewMode === "map" ? mapPanelShellRef : undefined}
-                style={
-                  viewMode === "map" && isMapFloating && mapPanelPlaceholderHeight !== null
-                    ? { minHeight: `${mapPanelPlaceholderHeight}px` }
-                    : undefined
-                }
-                aria-hidden={viewMode !== "map"}
-              >
+      {isModerationRole ? null : (
+        <>
+          <section className="home-page__hero">
+            <Container className="home-page__container home-page__hero-container">
+              <div className={explorerClassName}>
+                <OpportunityFilters viewMode={viewMode} isMapExpanded={isMapExpandedLayout} onViewModeChange={setViewMode} />
+
                 <div
                   className={
-                    isMapFloating
-                      ? `home-page__map-panel-overlay home-page__map-panel-overlay--${mapExpandMode}`
-                      : "home-page__map-panel-overlay"
+                    viewMode === "list"
+                      ? "home-page__explorer-content home-page__explorer-content--list"
+                      : "home-page__explorer-content"
                   }
                 >
                   <div
-                    ref={mapPanelLiveRef}
                     className={
-                      isMapTransitioning
-                        ? "home-page__map-panel-live home-page__map-panel-live--hidden"
-                        : "home-page__map-panel-live"
+                      viewMode === "map"
+                        ? [
+                            "home-page__explorer-panel",
+                            "home-page__explorer-panel--active",
+                            isMapFloating ? "home-page__explorer-panel--map-floating" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")
+                        : "home-page__explorer-panel home-page__explorer-panel--hidden"
                     }
+                    ref={viewMode === "map" ? mapPanelShellRef : undefined}
+                    style={
+                      viewMode === "map" && isMapFloating && mapPanelPlaceholderHeight !== null
+                        ? { minHeight: `${mapPanelPlaceholderHeight}px` }
+                        : undefined
+                    }
+                    aria-hidden={viewMode !== "map"}
                   >
-                    <MapView
+                    <div
+                      className={
+                        isMapFloating
+                          ? `home-page__map-panel-overlay home-page__map-panel-overlay--${mapExpandMode}`
+                          : "home-page__map-panel-overlay"
+                      }
+                    >
+                      <div
+                        ref={mapPanelLiveRef}
+                        className={
+                          isMapTransitioning
+                            ? "home-page__map-panel-live home-page__map-panel-live--hidden"
+                            : "home-page__map-panel-live"
+                        }
+                      >
+                        <MapView
+                          opportunities={opportunities}
+                          favoriteOpportunityIds={favoriteOpportunityIds}
+                          selectedOpportunityId={selectedOpportunityId}
+                          selectedCity={selectedCity}
+                          selectedCityViewport={selectedCityViewport}
+                          isExpanded={isMapExpanded}
+                          isTransitioning={isMapTransitioning}
+                          roleName={roleName}
+                          onSelectOpportunity={setSelectedOpportunityId}
+                          onToggleFavorite={handleToggleFavorite}
+                          onSelectCity={handleCityChange}
+                          onCloseDetails={() => setSelectedOpportunityId(null)}
+                          onToggleExpand={handleToggleMapExpand}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={
+                      viewMode === "list"
+                        ? "home-page__explorer-panel home-page__explorer-panel--active"
+                        : "home-page__explorer-panel home-page__explorer-panel--hidden"
+                    }
+                    aria-hidden={viewMode !== "list"}
+                  >
+                    <OpportunityList
                       opportunities={opportunities}
-                      selectedOpportunityId={selectedOpportunityId}
-                      selectedCity={selectedCity}
-                      isExpanded={isMapExpanded}
-                      isTransitioning={isMapTransitioning}
+                      favoriteOpportunityIds={favoriteOpportunityIds}
                       roleName={roleName}
-                      onSelectOpportunity={setSelectedOpportunityId}
-                      onSelectCity={setSelectedCity}
-                      onCloseDetails={() => setSelectedOpportunityId(null)}
-                      onToggleExpand={handleToggleMapExpand}
+                      onToggleFavorite={handleToggleFavorite}
                     />
                   </div>
                 </div>
               </div>
-              <div
-                className={
-                  viewMode === "list"
-                    ? "home-page__explorer-panel home-page__explorer-panel--active"
-                    : "home-page__explorer-panel home-page__explorer-panel--hidden"
-                }
-                aria-hidden={viewMode !== "list"}
-              >
-                <OpportunityList opportunities={opportunities} />
-              </div>
-            </div>
-          </div>
-        </Container>
-      </section>
+            </Container>
+          </section>
 
-      <div
-        className={
-          isMapTransitioning
-            ? `home-page__map-panel-proxy home-page__map-panel-proxy--${mapExpandMode}`
-            : "home-page__map-panel-proxy home-page__map-panel-proxy--hidden"
+          <div
+            className={
+              isMapTransitioning
+                ? `home-page__map-panel-proxy home-page__map-panel-proxy--${mapExpandMode}`
+                : "home-page__map-panel-proxy home-page__map-panel-proxy--hidden"
+            }
+            style={mapPanelFrameStyle}
+          >
+            <div ref={mapPanelProxyContentRef} className="home-page__map-panel-proxy-content" />
+          </div>
+        </>
+      )}
+
+      <FavoriteAuthModal
+        isOpen={isFavoriteAuthModalOpen}
+        onClose={() => setIsFavoriteAuthModalOpen(false)}
+      />
+
+      <Footer
+        theme={
+          roleName === "applicant" ||
+          roleName === "employer" ||
+          roleName === "curator" ||
+          roleName === "admin"
+            ? roleName
+            : "guest"
         }
-        style={mapPanelFrameStyle}
-      >
-        <div ref={mapPanelProxyContentRef} className="home-page__map-panel-proxy-content" />
-      </div>
-
-      <footer className="home-footer" id="about">
-        <Container className="home-page__container home-footer__container">
-          <div className="home-footer__main">
-            <div className="home-footer__logo-card">Лого</div>
-
-            <div className="home-footer__column">
-              <h2 className="home-footer__title">О платформе</h2>
-              <div className="home-footer__links">
-                <Link to="/" className="home-footer__link">
-                  Главная
-                </Link>
-                <a href="#about" className="home-footer__link">
-                  О проекте
-                </a>
-              </div>
-            </div>
-
-            <div className="home-footer__column">
-              <h2 className="home-footer__title">Категории</h2>
-              <div className="home-footer__links">
-                <a href="#all" className="home-footer__link">
-                  Все
-                </a>
-                <a href="#vacancies" className="home-footer__link">
-                  Вакансии
-                </a>
-                <a href="#internships" className="home-footer__link">
-                  Стажировки
-                </a>
-                <a href="#events" className="home-footer__link">
-                  Мероприятия
-                </a>
-                <a href="#mentorship" className="home-footer__link">
-                  Менторство
-                </a>
-              </div>
-            </div>
-
-            <div className="home-footer__column">
-              <h2 className="home-footer__title">Поддержка</h2>
-              <div className="home-footer__links">
-                <a href="#help" className="home-footer__link">
-                  Помощь
-                </a>
-                <a href="#faq" className="home-footer__link">
-                  FAQ
-                </a>
-                <a href="#support-contacts" className="home-footer__link">
-                  Контакты поддержки
-                </a>
-                <a href="#report" className="home-footer__link">
-                  Сообщить о проблеме
-                </a>
-              </div>
-            </div>
-
-            <div className="home-footer__column">
-              <h2 className="home-footer__title">Контакты</h2>
-              <div className="home-footer__contacts">
-                <a href="mailto:info@trampline.ru" className="home-footer__contact">
-                  info@trampline.ru
-                </a>
-                <a href="tel:+79000000000" className="home-footer__contact">
-                  +7 (900) 000 00-00
-                </a>
-              </div>
-              <div className="home-footer__socials">
-                <a href="https://vk.com" className="home-footer__social-link" aria-label="VK">
-                  <img src={vkIcon} alt="" className="home-footer__social-icon" />
-                </a>
-                <a href="https://max.ru" className="home-footer__social-link" aria-label="Max">
-                  <img src={maxIcon} alt="" className="home-footer__social-icon" />
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div className="home-footer__bottom">
-            <span className="home-footer__copyright">
-              © 2026 Платформа “Трамплин”. Все права защищены.
-            </span>
-            <a href="#privacy" className="home-footer__legal-link">
-              Политика конфиденциальности
-            </a>
-            <a href="#terms" className="home-footer__legal-link">
-              Пользовательское соглашение
-            </a>
-          </div>
-        </Container>
-      </footer>
+      />
     </main>
   );
 }

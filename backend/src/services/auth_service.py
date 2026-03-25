@@ -15,9 +15,16 @@ from src.core.security import (
     verify_password,
 )
 from src.enums import TokenType, UserRole, UserStatus
-from src.models import ApplicantProfile, RefreshSession, User
+from src.models import ApplicantProfile, AuthLoginEvent, RefreshSession, User
 from src.repositories import AuthRepository, UserRepository
-from src.schemas.auth import LoginRequest, RegisterRequest
+from src.schemas.auth import (
+    AuthLoginHistoryItemRead,
+    AuthLoginHistoryResponse,
+    AuthSessionListResponse,
+    AuthSessionRead,
+    LoginRequest,
+    RegisterRequest,
+)
 from src.services.email_verification_service import EmailVerificationService
 from src.services.rate_limit_service import rate_limit_service
 from src.utils.errors import AppError
@@ -94,6 +101,14 @@ class AuthService:
 
         user = self.user_repo.get_by_email(normalized_email, with_profiles=False)
         if user is None or not verify_password(payload.password, user.password_hash):
+            self._record_login_event(
+                user=user,
+                email=normalized_email,
+                user_agent=user_agent,
+                ip_address=ip_address,
+                is_success=False,
+                failure_reason="invalid_credentials",
+            )
             self._register_login_failure(normalized_email, normalized_ip)
             raise AppError(
                 code="AUTH_INVALID_CREDENTIALS",
@@ -122,6 +137,13 @@ class AuthService:
             expires_at=refresh_exp,
         )
         self.auth_repo.create_session(session)
+        self._record_login_event(
+            user=user,
+            email=normalized_email,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            is_success=True,
+        )
         self.db.commit()
 
         return {
@@ -201,6 +223,78 @@ class AuthService:
         self.auth_repo.revoke_all_user_sessions(user_id)
         self.db.commit()
 
+    def logout_others(
+        self,
+        user_id: str,
+        *,
+        current_user_agent: str | None,
+        current_ip_address: str | None,
+    ) -> None:
+        self.auth_repo.revoke_other_user_sessions(
+            user_id,
+            current_user_agent=current_user_agent,
+            current_ip_address=current_ip_address,
+        )
+        self.db.commit()
+
+    def revoke_session(self, user_id: str, session_id: str) -> None:
+        session = self.auth_repo.get_active_session_for_user(user_id, session_id)
+        if session is None:
+            raise AppError(
+                code="AUTH_SESSION_NOT_FOUND",
+                message="Сессия не найдена или уже завершена",
+                status_code=404,
+            )
+
+        self.auth_repo.revoke_session(session.id)
+        self.db.commit()
+
+    def list_sessions(
+        self,
+        current_user: User,
+        *,
+        current_user_agent: str | None,
+        current_ip_address: str | None,
+    ) -> AuthSessionListResponse:
+        sessions = self.auth_repo.list_active_sessions_for_user(current_user.id)
+        normalized_current_ip = self._normalize_optional_value(current_ip_address)
+        normalized_current_agent = self._normalize_optional_value(current_user_agent)
+
+        items = [
+            AuthSessionRead(
+                id=str(session.id),
+                user_agent=session.user_agent,
+                ip_address=session.ip_address,
+                created_at=session.created_at.isoformat(),
+                expires_at=session.expires_at.isoformat(),
+                is_current=(
+                    self._normalize_optional_value(session.ip_address) == normalized_current_ip
+                    and self._normalize_optional_value(session.user_agent) == normalized_current_agent
+                ),
+            )
+            for session in sessions
+        ]
+        return AuthSessionListResponse(items=items)
+
+    def list_login_history(self, current_user: User) -> AuthLoginHistoryResponse:
+        events = self.auth_repo.list_login_events_for_user(
+            current_user.id,
+            current_user.email,
+        )
+        return AuthLoginHistoryResponse(
+            items=[
+                AuthLoginHistoryItemRead(
+                    id=str(event.id),
+                    created_at=event.created_at.isoformat(),
+                    is_success=event.is_success,
+                    failure_reason=event.failure_reason,
+                    user_agent=event.user_agent,
+                    ip_address=event.ip_address,
+                )
+                for event in events
+            ]
+        )
+
     def _ensure_login_allowed(self, email: str, ip_address: str) -> None:
         rate_limit_service.ensure_allowed(
             "auth_login_email",
@@ -244,3 +338,30 @@ class AuthService:
     @staticmethod
     def _normalize_ip(ip_address: str | None) -> str:
         return (ip_address or "unknown").strip().lower()
+
+    @staticmethod
+    def _normalize_optional_value(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized_value = value.strip().lower()
+        return normalized_value or None
+
+    def _record_login_event(
+        self,
+        *,
+        user: User | None,
+        email: str,
+        user_agent: str | None,
+        ip_address: str | None,
+        is_success: bool,
+        failure_reason: str | None = None,
+    ) -> None:
+        event = AuthLoginEvent(
+            user_id=user.id if user is not None else None,
+            email=email.lower(),
+            user_agent=user_agent,
+            ip_address=ip_address,
+            is_success=is_success,
+            failure_reason=failure_reason,
+        )
+        self.auth_repo.create_login_event(event)

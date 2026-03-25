@@ -101,6 +101,29 @@ def create_tokens(payload: RefreshRequest, request: Request, db: Session = Depen
     return success_response(token_data)
 
 
+@router.get("/sessions", status_code=status.HTTP_200_OK)
+def list_active_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = AuthService(db).list_sessions(
+        current_user,
+        current_user_agent=request.headers.get("User-Agent"),
+        current_ip_address=request.client.host if request.client else None,
+    )
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.get("/login-history", status_code=status.HTTP_200_OK)
+def list_login_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = AuthService(db).list_login_history(current_user)
+    return success_response(payload.model_dump(mode="json"))
+
+
 @router.delete("/sessions/current", status_code=status.HTTP_200_OK)
 def delete_current_session(
     payload: LogoutRequest,
@@ -108,6 +131,30 @@ def delete_current_session(
     db: Session = Depends(get_db),
 ) -> dict:
     AuthService(db).logout(user_id=str(current_user.id), refresh_token=payload.refresh_token)
+    return success_response({"message": "Session revoked"})
+
+
+@router.delete("/sessions/others", status_code=status.HTTP_200_OK)
+def delete_other_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    AuthService(db).logout_others(
+        user_id=str(current_user.id),
+        current_user_agent=request.headers.get("User-Agent"),
+        current_ip_address=request.client.host if request.client else None,
+    )
+    return success_response({"message": "Other sessions revoked"})
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_200_OK)
+def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    AuthService(db).revoke_session(str(current_user.id), session_id)
     return success_response({"message": "Session revoked"})
 
 

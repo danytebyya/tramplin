@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import maxIcon from "../../assets/auth/max.png";
@@ -129,7 +129,9 @@ function blurActiveElement() {
 
 export function AuthPage() {
   const initialPersistedState = getInitialPersistedVerificationState();
+  const location = useLocation();
   const navigate = useNavigate();
+  const returnTo = `${location.pathname}${location.search}${location.hash}`;
   const [step, setStep] = useState<VerificationStep>(initialPersistedState?.step ?? "form");
   const [apiError, setApiError] = useState<string | null>(initialPersistedState?.apiError ?? null);
   const [apiErrorCode, setApiErrorCode] = useState<string | null>(
@@ -637,9 +639,9 @@ export function AuthPage() {
                       )}
                     />
                     <span>
-                      Я согласен с условиями <Link to="/terms">пользовательского соглашения</Link> и даю
+                      Я согласен с условиями <Link to="/rules" state={{ returnTo }}>согласия на обработку данных</Link> и даю
                       согласие на обработку моей персональной информации на условиях, определенных{" "}
-                      <Link to="/privacy">политикой конфиденциальности</Link>
+                      <Link to="/confidential" state={{ returnTo }}>политикой конфиденциальности</Link>
                     </span>
                   </label>
                   {apiError && <span className="auth-form__error">{apiError}</span>}

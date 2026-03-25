@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -29,3 +31,12 @@ class OpportunityRepository:
     def count(self) -> int:
         stmt = select(Opportunity.id)
         return len(self.db.execute(stmt).scalars().all())
+
+    def exists_public_by_id(self, opportunity_id: str) -> bool:
+        stmt = select(Opportunity.id).where(
+            Opportunity.id == UUID(str(opportunity_id)),
+            Opportunity.deleted_at.is_(None),
+            Opportunity.business_status == OpportunityStatus.ACTIVE,
+            Opportunity.moderation_status == ModerationStatus.APPROVED,
+        )
+        return self.db.execute(stmt).scalar_one_or_none() is not None

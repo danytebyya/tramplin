@@ -7,8 +7,11 @@ import { AuthPage } from "../../pages/auth";
 import { CuratorDashboardPage } from "../../pages/curator-dashboard";
 import { EmployerDashboardPage } from "../../pages/employer-dashboard";
 import { EmployerOnboardingPage } from "../../pages/employer-onboarding";
+import { EmployerVerificationPage } from "../../pages/employer-verification";
 import { LoginPage } from "../../pages/login";
+import { LegalDocumentPage } from "../../pages/legal/index";
 import { HomePage } from "../../pages/home";
+import { SettingsPage } from "../../pages/settings";
 import { SeekerDashboardPage } from "../../pages/seeker-dashboard";
 import { UiKitPage } from "../../pages/ui-kit";
 
@@ -185,6 +188,10 @@ export function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<HomeRoute />} />
+      <Route path="/confidential" element={<LegalDocumentPage documentType="confidential" />} />
+      <Route path="/rules" element={<LegalDocumentPage documentType="rules" />} />
+      <Route path="/privacy" element={<Navigate to="/confidential" replace />} />
+      <Route path="/terms" element={<Navigate to="/rules" replace />} />
       <Route
         path="/register"
         element={
@@ -213,6 +220,22 @@ export function AppRouter() {
         path="/onboarding/employer"
         element={
           <EmployerOnboardingRoute />
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/moderation/employers"
+        element={
+          <ProtectedRoute>
+            <EmployerVerificationPage />
+          </ProtectedRoute>
         }
       />
       <Route

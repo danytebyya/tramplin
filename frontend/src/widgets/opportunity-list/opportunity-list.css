@@ -8,26 +8,12 @@
 
 .opportunity-list__card {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 200px;
+  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 32px;
   padding: 32px;
   border-radius: 8px;
   background: var(--color-bg-primary);
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-}
-
-.opportunity-list__media {
-  width: 240px;
-  min-width: 240px;
-  height: 240px;
-  min-height: 240px;
-  border-radius: 8px;
-  background:
-    linear-gradient(45deg, rgba(203, 213, 225, 0.82) 25%, transparent 25%, transparent 75%, rgba(203, 213, 225, 0.82) 75%),
-    linear-gradient(45deg, rgba(203, 213, 225, 0.82) 25%, transparent 25%, transparent 75%, rgba(203, 213, 225, 0.82) 75%),
-    #e2e8f0;
-  background-position: 0 0, 12px 12px;
-  background-size: 24px 24px;
 }
 
 .opportunity-list__content {
@@ -47,7 +33,7 @@
 
 .opportunity-list__title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
@@ -62,6 +48,7 @@
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line);
   font-weight: 700;
+  flex: 1 1 auto;
 }
 
 .opportunity-list__price {
@@ -104,11 +91,21 @@
 .opportunity-list__description-block {
   flex: 1 1 auto;
   min-height: 0;
+  gap: 16px;
+}
+
+.opportunity-list__content-actions {
+  display: flex;
+  padding-top: 8px;
+}
+
+.opportunity-list__content-actions .button {
+  min-width: 180px;
 }
 
 .opportunity-list__kind {
   margin: 0;
-  margin-top: auto;
+  margin-top: 4px;
   color: var(--color-text-tertiary);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
@@ -119,8 +116,8 @@
   flex-direction: column;
   justify-content: space-between;
   gap: 24px;
-  width: 200px;
-  padding: 10px;
+  width: 280px;
+  padding: 10px 10px 0;
   box-sizing: border-box;
 }
 
@@ -128,6 +125,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 280px;
 }
 
 .opportunity-list__company-row {
@@ -186,8 +184,16 @@
 
 .opportunity-list__rating-block {
   display: flex;
-  flex-direction: column;
-  gap: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.opportunity-list__rating-separator {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--home-accent, var(--color-secondary));
 }
 
 .opportunity-list__actions {

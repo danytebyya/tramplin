@@ -435,6 +435,107 @@ def test_login_and_refresh_flow(client, db_session):
     assert refresh_body["refresh_token"] != login_body["refresh_token"]
 
 
+def test_list_and_revoke_sessions(client, db_session):
+    code = _request_code(client, db_session, "sessions@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "sessions@example.com",
+            "display_name": "Sessions User",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Sessions User"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    first_login = client.post(
+        "/api/v1/auth/sessions",
+        headers={"User-Agent": "Browser One"},
+        json={"email": "sessions@example.com", "password": "StrongPass123"},
+    )
+    assert first_login.status_code == 201
+
+    second_login = client.post(
+        "/api/v1/auth/sessions",
+        headers={"User-Agent": "Browser Two"},
+        json={"email": "sessions@example.com", "password": "StrongPass123"},
+    )
+    assert second_login.status_code == 201
+
+    access_token = second_login.json()["data"]["access_token"]
+    sessions_response = client.get(
+        "/api/v1/auth/sessions",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "Browser Two",
+        },
+    )
+    assert sessions_response.status_code == 200
+    items = sessions_response.json()["data"]["items"]
+    assert len(items) == 2
+    assert any(item["is_current"] is True for item in items)
+
+    target_session_id = next(item["id"] for item in items if item["user_agent"] == "Browser One")
+    revoke_response = client.delete(
+        f"/api/v1/auth/sessions/{target_session_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert revoke_response.status_code == 200
+
+    after_revoke_response = client.get(
+        "/api/v1/auth/sessions",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "Browser Two",
+        },
+    )
+    assert after_revoke_response.status_code == 200
+    assert len(after_revoke_response.json()["data"]["items"]) == 1
+
+
+def test_login_history_returns_real_events(client, db_session):
+    code = _request_code(client, db_session, "history@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "history@example.com",
+            "display_name": "History User",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "History User"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    failed_login = client.post(
+        "/api/v1/auth/sessions",
+        headers={"User-Agent": "History Browser"},
+        json={"email": "history@example.com", "password": "WrongPass123"},
+    )
+    assert failed_login.status_code == 401
+
+    successful_login = client.post(
+        "/api/v1/auth/sessions",
+        headers={"User-Agent": "History Browser"},
+        json={"email": "history@example.com", "password": "StrongPass123"},
+    )
+    assert successful_login.status_code == 201
+    access_token = successful_login.json()["data"]["access_token"]
+
+    history_response = client.get(
+        "/api/v1/auth/login-history",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert history_response.status_code == 200
+    items = history_response.json()["data"]["items"]
+    assert len(items) >= 2
+    assert any(item["is_success"] is True for item in items)
+    assert any(item["is_success"] is False for item in items)
+
+
 def test_employer_onboarding_flow(client, db_session):
     code = _request_code(client, db_session, "company-owner@example.com")
     register_payload = {
@@ -476,6 +577,44 @@ def test_employer_onboarding_flow(client, db_session):
     )
     assert me_response.status_code == 200
     assert me_response.json()["data"]["user"]["employer_profile"]["inn"] == "7707083893"
+
+
+def test_update_preferred_city(client, db_session):
+    code = _request_code(client, db_session, "preferred-city@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "preferred-city@example.com",
+            "display_name": "Preferred City User",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Preferred City User"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "preferred-city@example.com", "password": "StrongPass123"},
+    )
+    assert login_response.status_code == 201
+    access_token = login_response.json()["data"]["access_token"]
+
+    update_response = client.put(
+        "/api/v1/users/me/preferred-city",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"preferred_city": "Казань"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["data"]["user"]["preferred_city"] == "Казань"
+
+    me_response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert me_response.status_code == 200
+    assert me_response.json()["data"]["user"]["preferred_city"] == "Казань"
 
 
 def test_login_rate_limit(client, db_session):

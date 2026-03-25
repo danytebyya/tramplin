@@ -1,5 +1,6 @@
 import { apiClient } from "../../shared/api/client";
 import { AUTH_STORAGE_KEY, clearPersistedAuthSession, isAccessTokenExpired, restoreAuthSession, useAuthStore } from "./session";
+export { logoutCurrentSessionRequest, performLogout } from "./logout";
 
 export type { AuthRole } from "./session";
 export {
@@ -38,9 +39,70 @@ export type AuthSuccessResponse = {
     refresh_token?: string;
     expires_in?: number;
     user?: {
-      role?: "applicant" | "employer";
+      role?: "applicant" | "employer" | "curator" | "admin";
       has_employer_profile?: boolean;
     };
+  };
+};
+
+export type MeResponse = {
+  data?: {
+    user?: {
+      id?: string;
+      email?: string;
+      display_name?: string;
+      preferred_city?: string | null;
+      role?: "applicant" | "employer" | "curator" | "admin";
+      employer_profile?: unknown;
+    };
+  };
+};
+
+export type AuthSessionItem = {
+  id: string;
+  user_agent?: string | null;
+  ip_address?: string | null;
+  created_at: string;
+  expires_at: string;
+  is_current: boolean;
+};
+
+export type AuthSessionListResponse = {
+  data?: {
+    items?: AuthSessionItem[];
+  };
+};
+
+export type AuthLoginHistoryItem = {
+  id: string;
+  created_at: string;
+  is_success: boolean;
+  failure_reason?: string | null;
+  user_agent?: string | null;
+  ip_address?: string | null;
+};
+
+export type AuthLoginHistoryResponse = {
+  data?: {
+    items?: AuthLoginHistoryItem[];
+  };
+};
+
+export type NotificationPreferenceKey =
+  | "new_verification_requests"
+  | "content_complaints"
+  | "overdue_reviews"
+  | "company_profile_changes"
+  | "publication_changes"
+  | "daily_digest"
+  | "weekly_report";
+
+export type NotificationPreferenceGroup = Record<NotificationPreferenceKey, boolean>;
+
+export type UserNotificationPreferencesResponse = {
+  data?: {
+    email_notifications?: NotificationPreferenceGroup;
+    push_notifications?: NotificationPreferenceGroup;
   };
 };
 
@@ -79,7 +141,52 @@ export async function refreshSessionRequest(payload: RefreshPayload) {
 }
 
 export async function meRequest() {
-  const response = await apiClient.get("/users/me");
+  const response = await apiClient.get<MeResponse>("/users/me");
+  return response.data;
+}
+
+export async function updatePreferredCityRequest(preferredCity: string) {
+  const response = await apiClient.put<MeResponse>("/users/me/preferred-city", {
+    preferred_city: preferredCity,
+  });
+  return response.data;
+}
+
+export async function listActiveSessionsRequest() {
+  const response = await apiClient.get<AuthSessionListResponse>("/auth/sessions");
+  return response.data;
+}
+
+export async function revokeSessionRequest(sessionId: string) {
+  const response = await apiClient.delete(`/auth/sessions/${sessionId}`);
+  return response.data;
+}
+
+export async function revokeOtherSessionsRequest() {
+  const response = await apiClient.delete("/auth/sessions/others");
+  return response.data;
+}
+
+export async function listLoginHistoryRequest() {
+  const response = await apiClient.get<AuthLoginHistoryResponse>("/auth/login-history");
+  return response.data;
+}
+
+export async function getNotificationPreferencesRequest() {
+  const response = await apiClient.get<UserNotificationPreferencesResponse>(
+    "/users/me/notification-preferences",
+  );
+  return response.data;
+}
+
+export async function updateNotificationPreferencesRequest(payload: {
+  email_notifications: NotificationPreferenceGroup;
+  push_notifications: NotificationPreferenceGroup;
+}) {
+  const response = await apiClient.put<UserNotificationPreferencesResponse>(
+    "/users/me/notification-preferences",
+    payload,
+  );
   return response.data;
 }
 
@@ -97,7 +204,10 @@ export function applyAuthSession(response: AuthSuccessResponse) {
   return true;
 }
 
-export function resolvePostAuthRoute(role: "applicant" | "employer", hasEmployerProfile?: boolean) {
+export function resolvePostAuthRoute(
+  role: "applicant" | "employer" | "curator" | "admin",
+  hasEmployerProfile?: boolean,
+) {
   if (role === "employer") {
     return hasEmployerProfile ? "/" : "/onboarding/employer";
   }

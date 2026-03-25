@@ -15,6 +15,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    preferred_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", values_callable=enum_values),
         nullable=False,
@@ -28,5 +29,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     applicant_profile = relationship("ApplicantProfile", back_populates="user", uselist=False)
     employer_profile = relationship("EmployerProfile", back_populates="user", uselist=False)
     curator_profile = relationship("CuratorProfile", back_populates="user", uselist=False)
+    favorite_opportunities = relationship("FavoriteOpportunity", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
     refresh_sessions = relationship("RefreshSession", back_populates="user")
+    login_events = relationship("AuthLoginEvent", back_populates="user")
+    notification_preferences = relationship(
+        "UserNotificationPreference",
+        back_populates="user",
+        uselist=False,
+    )

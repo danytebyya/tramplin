@@ -198,6 +198,7 @@ class Opportunity(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     location = relationship("Location")
     compensation = relationship("OpportunityCompensation", back_populates="opportunity", uselist=False)
     tag_links = relationship("OpportunityTag", back_populates="opportunity")
+    favorite_users = relationship("FavoriteOpportunity", back_populates="opportunity")
 
 
 class OpportunityCompensation(UUIDPrimaryKeyMixin, TimestampMixin, Base):

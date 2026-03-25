@@ -2,13 +2,21 @@ import { useEffect, useRef, useState } from "react";
 
 import { Input } from "../../shared/ui";
 import { cn } from "../../shared/lib";
-import { getCitySuggestions } from "./api";
+import { CitySuggestion, getCitySuggestions } from "./api";
 import "./city-selector.css";
+
+export type CitySelection = {
+  name: string;
+  viewport?: {
+    center: [number, number];
+    zoom: number;
+  };
+};
 
 type CitySelectorProps = {
   value: string;
   className?: string;
-  onChange: (city: string) => void;
+  onChange: (city: CitySelection) => void;
 };
 
 export function CitySelector({ value, className, onChange }: CitySelectorProps) {
@@ -17,7 +25,7 @@ export function CitySelector({ value, className, onChange }: CitySelectorProps) 
   const [isOpen, setIsOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string }>>([]);
+  const [suggestions, setSuggestions] = useState<CitySuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const normalizedQuery = query.trim();
@@ -174,45 +182,48 @@ export function CitySelector({ value, className, onChange }: CitySelectorProps) 
             />
           </div>
 
-          <div className="city-selector__list" role="listbox" aria-label="Список городов">
-            {!hasQuery ? (
-              <div className="city-selector__empty">Начните вводить название города.</div>
-            ) : null}
+          {hasQuery ? (
+            <div className="city-selector__list" role="listbox" aria-label="Список городов">
+              {isLoading ? <div className="city-selector__empty">Ищем города...</div> : null}
 
-            {hasQuery && isLoading ? (
-              <div className="city-selector__empty">Ищем города...</div>
-            ) : null}
+              {!isLoading && hasError ? (
+                <div className="city-selector__empty">Не удалось загрузить список городов.</div>
+              ) : null}
 
-            {hasQuery && !isLoading && hasError ? (
-              <div className="city-selector__empty">Не удалось загрузить список городов.</div>
-            ) : null}
+              {!isLoading && !hasError && suggestions.length === 0 ? (
+                <div className="city-selector__empty">Ничего не найдено.</div>
+              ) : null}
 
-            {hasQuery && !isLoading && !hasError && suggestions.length === 0 ? (
-              <div className="city-selector__empty">Ничего не найдено.</div>
-            ) : null}
-
-            {hasQuery &&
-              !isLoading &&
-              !hasError &&
-              suggestions.map((city) => (
-                <button
-                  key={city.id}
-                  type="button"
-                  className={
-                    city.name === value
-                      ? "city-selector__option city-selector__option--active"
-                      : "city-selector__option"
-                  }
-                  onClick={() => {
-                    onChange(city.name);
-                    setQuery("");
-                    closeSelector();
-                  }}
-                >
-                  <span className="city-selector__option-label">{city.name}</span>
-                </button>
-              ))}
-          </div>
+              {!isLoading &&
+                !hasError &&
+                suggestions.map((city) => (
+                  <button
+                    key={city.id}
+                    type="button"
+                    className={
+                      city.name === value
+                        ? "city-selector__option city-selector__option--active"
+                        : "city-selector__option"
+                    }
+                    onClick={() => {
+                      onChange({
+                        name: city.name,
+                        viewport: city.point
+                          ? {
+                              center: [city.point.lon, city.point.lat],
+                              zoom: 11,
+                            }
+                          : undefined,
+                      });
+                      setQuery("");
+                      closeSelector();
+                    }}
+                  >
+                    <span className="city-selector__option-label">{city.name}</span>
+                  </button>
+                ))}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

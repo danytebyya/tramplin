@@ -13,7 +13,7 @@ class ApplicantProfile(TimestampMixin, Base):
     __tablename__ = "applicant_profiles"
 
     user_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     full_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
     university: Mapped[str | None] = mapped_column(String(180), nullable=True)
@@ -28,7 +28,7 @@ class EmployerProfile(TimestampMixin, Base):
     __tablename__ = "employer_profiles"
 
     user_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     employer_type: Mapped[EmployerType] = mapped_column(
         Enum(EmployerType, name="employer_type", values_callable=enum_values),
@@ -56,7 +56,7 @@ class CuratorProfile(TimestampMixin, Base):
     __tablename__ = "curator_profiles"
 
     user_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id"), primary_key=True
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     full_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
 
