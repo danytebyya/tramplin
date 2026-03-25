@@ -28,4 +28,5 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     applicant_profile = relationship("ApplicantProfile", back_populates="user", uselist=False)
     employer_profile = relationship("EmployerProfile", back_populates="user", uselist=False)
     curator_profile = relationship("CuratorProfile", back_populates="user", uselist=False)
+    notifications = relationship("Notification", back_populates="user")
     refresh_sessions = relationship("RefreshSession", back_populates="user")

@@ -10,6 +10,7 @@ from src.schemas.auth import (
     VerificationCodeVerifyRequest,
 )
 from src.schemas.company import EmployerOnboardingRequest
+from src.schemas.notification import NotificationFeedResponse, NotificationRead, NotificationUnreadCountResponse
 from src.schemas.opportunity import OpportunityFeedResponse, OpportunityPublicRead
 from src.schemas.user import UserRead
 
@@ -24,6 +25,9 @@ __all__ = [
     "VerificationCodeRequest",
     "VerificationCodeVerifyRequest",
     "EmployerOnboardingRequest",
+    "NotificationRead",
+    "NotificationFeedResponse",
+    "NotificationUnreadCountResponse",
     "UserRead",
     "OpportunityPublicRead",
     "OpportunityFeedResponse",

@@ -10,6 +10,8 @@ from src.enums import (
     EmployerVerificationStatus,
     EmployerType,
     MembershipRole,
+    NotificationKind,
+    NotificationSeverity,
     UserRole,
     VerificationDocumentType,
 )
@@ -23,6 +25,7 @@ from src.models import (
     User,
 )
 from src.schemas.company import EmployerOnboardingRequest
+from src.services.notification_service import NotificationService
 from src.utils.errors import AppError
 
 
@@ -232,6 +235,16 @@ class EmployerService:
             )
 
         employer_profile.verification_status = EmployerVerificationStatus.PENDING_REVIEW
+        NotificationService(self.db).create_notification(
+            user_id=current_user.id,
+            kind=NotificationKind.EMPLOYER_VERIFICATION,
+            severity=NotificationSeverity.SUCCESS,
+            title="Документы отправлены",
+            message="Заявка на верификацию компании принята. Мы уведомим вас после проверки куратором.",
+            action_label="Открыть профиль",
+            action_url="/onboarding/employer",
+            payload={"verification_request_id": str(verification_request.id)},
+        )
         self.db.commit()
         self.db.refresh(verification_request)
 

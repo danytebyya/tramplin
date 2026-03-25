@@ -6,6 +6,7 @@ from src.models.employer_verification import (
     MediaFile,
 )
 from src.models.email_verification_state import EmailVerificationState
+from src.models.notification import Notification
 from src.models.opportunity import (
     EmploymentType,
     Location,
@@ -36,6 +37,7 @@ __all__ = [
     "MediaFile",
     "RefreshSession",
     "EmailVerificationState",
+    "Notification",
     "Location",
     "Tag",
     "Opportunity",
