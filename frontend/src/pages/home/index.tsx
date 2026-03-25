@@ -5,10 +5,10 @@ import { Link, useNavigate } from "react-router-dom";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
-import notificationsIcon from "../../assets/icons/notifications.svg";
 import profileIcon from "../../assets/icons/profile.svg";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
 import { clearPersistedAuthSession, useAuthStore } from "../../features/auth";
+import { NotificationMenu } from "../../features/notifications";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import "../../widgets/header/header.css";
@@ -367,18 +367,10 @@ export function HomePage() {
                 <div className="header__actions">
                   {isAuthenticated ? (
                     <div className="header__account-actions" aria-label="Действия аккаунта">
-                      <button
-                        type="button"
-                        className="header__icon-button"
-                        aria-label="Уведомления"
-                      >
-                        <img
-                          src={notificationsIcon}
-                          alt=""
-                          aria-hidden="true"
-                          className="header__icon-button-image"
-                        />
-                      </button>
+                      <NotificationMenu
+                        buttonClassName="header__icon-button"
+                        iconClassName="header__icon-button-image"
+                      />
 
                       <div
                         ref={profileMenuRef}
