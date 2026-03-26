@@ -566,6 +566,16 @@
     contrast(94%);
 }
 
+.curator-management-page__action-button:disabled {
+  cursor: not-allowed;
+}
+
+.curator-management-page__action-button:disabled img {
+  opacity: 0.4;
+  filter: brightness(0) saturate(100%) invert(58%) sepia(10%) saturate(370%) hue-rotate(182deg) brightness(91%)
+    contrast(88%);
+}
+
 .curator-management-page__action-button img {
   width: 17px;
   height: 17px;

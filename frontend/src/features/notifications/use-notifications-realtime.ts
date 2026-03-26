@@ -14,6 +14,125 @@ type UseNotificationsRealtimeOptions = {
   onMessage?: () => void;
 };
 
+type MessageListener = () => void;
+
+type NotificationsSocketManager = {
+  accessToken: string | null;
+  socket: WebSocket | null;
+  reconnectTimeoutId: number | null;
+  listeners: Set<MessageListener>;
+  shouldReconnect: boolean;
+};
+
+const socketManager: NotificationsSocketManager = {
+  accessToken: null,
+  socket: null,
+  reconnectTimeoutId: null,
+  listeners: new Set(),
+  shouldReconnect: false,
+};
+
+function clearReconnectTimeout() {
+  if (socketManager.reconnectTimeoutId !== null) {
+    window.clearTimeout(socketManager.reconnectTimeoutId);
+    socketManager.reconnectTimeoutId = null;
+  }
+}
+
+function notifyListeners() {
+  socketManager.listeners.forEach((listener) => {
+    listener();
+  });
+}
+
+function closeSocket() {
+  clearReconnectTimeout();
+
+  const activeSocket = socketManager.socket;
+  if (!activeSocket) {
+    return;
+  }
+
+  socketManager.socket = null;
+  activeSocket.onopen = null;
+  activeSocket.onmessage = null;
+  activeSocket.onclose = null;
+  activeSocket.onerror = null;
+
+  if (
+    activeSocket.readyState === WebSocket.OPEN ||
+    activeSocket.readyState === WebSocket.CONNECTING
+  ) {
+    activeSocket.close();
+  }
+}
+
+function scheduleReconnect() {
+  clearReconnectTimeout();
+
+  if (!socketManager.shouldReconnect || !socketManager.accessToken || socketManager.listeners.size === 0) {
+    return;
+  }
+
+  socketManager.reconnectTimeoutId = window.setTimeout(() => {
+    connectSocket();
+  }, 2_000);
+}
+
+function connectSocket() {
+  if (!socketManager.accessToken || socketManager.listeners.size === 0) {
+    return;
+  }
+
+  const currentSocket = socketManager.socket;
+  if (
+    currentSocket &&
+    (currentSocket.readyState === WebSocket.OPEN || currentSocket.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
+
+  const nextSocket = new WebSocket(getNotificationsWebSocketUrl(socketManager.accessToken));
+  socketManager.socket = nextSocket;
+
+  nextSocket.onmessage = () => {
+    notifyListeners();
+  };
+
+  nextSocket.onclose = () => {
+    if (socketManager.socket === nextSocket) {
+      socketManager.socket = null;
+    }
+
+    scheduleReconnect();
+  };
+
+  nextSocket.onerror = () => {
+    nextSocket.close();
+  };
+}
+
+function ensureSocketForToken(accessToken: string) {
+  if (socketManager.accessToken !== accessToken) {
+    socketManager.shouldReconnect = false;
+    closeSocket();
+    socketManager.accessToken = accessToken;
+  }
+
+  socketManager.shouldReconnect = true;
+  connectSocket();
+}
+
+function releaseSocketIfUnused() {
+  if (socketManager.listeners.size > 0) {
+    return;
+  }
+
+  socketManager.shouldReconnect = false;
+  socketManager.accessToken = null;
+  closeSocket();
+}
+
 export function useNotificationsRealtime(options: UseNotificationsRealtimeOptions = {}) {
   const accessToken = useAuthStore((state) => state.accessToken);
   const enabled = options.enabled ?? true;
@@ -29,59 +148,16 @@ export function useNotificationsRealtime(options: UseNotificationsRealtimeOption
       return;
     }
 
-    let isDisposed = false;
-    let reconnectTimeoutId: number | null = null;
-    let socket: WebSocket | null = null;
-
-    const connect = () => {
-      if (isDisposed) {
-        return;
-      }
-
-      socket = new WebSocket(getNotificationsWebSocketUrl(accessToken));
-
-      socket.onopen = () => {
-        if (isDisposed) {
-          socket?.close();
-        }
-      };
-
-      socket.onmessage = () => {
-        onMessageRef.current?.();
-      };
-
-      socket.onclose = () => {
-        if (isDisposed) {
-          return;
-        }
-
-        reconnectTimeoutId = window.setTimeout(() => {
-          connect();
-        }, 2_000);
-      };
-
-      socket.onerror = () => {
-        socket?.close();
-      };
+    const listener = () => {
+      onMessageRef.current?.();
     };
 
-    connect();
+    socketManager.listeners.add(listener);
+    ensureSocketForToken(accessToken);
 
     return () => {
-      isDisposed = true;
-      if (reconnectTimeoutId !== null) {
-        window.clearTimeout(reconnectTimeoutId);
-      }
-      if (socket) {
-        socket.onopen = null;
-        socket.onmessage = null;
-        socket.onclose = null;
-        socket.onerror = null;
-
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.close();
-        }
-      }
+      socketManager.listeners.delete(listener);
+      releaseSocketIfUnused();
     };
   }, [accessToken, enabled]);
 }

@@ -1488,7 +1488,7 @@ export function EmployerVerificationPage() {
               : sortedItems.map((item) => {
               const statusMeta = resolveStatusMeta(item.status);
               const isExpanded = expandedRequestId === item.id;
-              const canReviewItem = item.status === "pending" || item.status === "under_review";
+              const isVerifiedItem = item.status === "approved";
 
               return (
                 <article key={item.id} className="employer-verification-page__row">
@@ -1523,7 +1523,7 @@ export function EmployerVerificationPage() {
                         <strong className="employer-verification-page__row-title">
                           {abbreviateLegalEntityName(item.employer_name)}
                         </strong>
-                        {!isExpanded && canReviewItem ? (
+                        {!isExpanded ? (
                           <div className="employer-verification-page__row-actions">
                             <Button
                               type="button"
@@ -1534,6 +1534,7 @@ export function EmployerVerificationPage() {
                                 event.stopPropagation();
                                 approveMutation.mutate({ requestId: item.id, comment: "" });
                               }}
+                              disabled={anyMutationPending || isVerifiedItem}
                             >
                               <span>Одобрить</span>
                               <span
@@ -1550,6 +1551,7 @@ export function EmployerVerificationPage() {
                                 event.stopPropagation();
                                 rejectMutation.mutate({ requestId: item.id, comment: "" });
                               }}
+                              disabled={anyMutationPending || isVerifiedItem}
                             >
                               <span>Отклонить</span>
                               <span
@@ -1642,45 +1644,43 @@ export function EmployerVerificationPage() {
                               placeholder=""
                             />
                           </div>
-                          {canReviewItem ? (
-                            <div className="employer-verification-page__detail-actions employer-verification-page__detail-actions--stacked">
+                          <div className="employer-verification-page__detail-actions employer-verification-page__detail-actions--stacked">
+                            <Button
+                              type="button"
+                              variant="accent-outline"
+                              size="sm"
+                              className="employer-verification-page__detail-action-request"
+                              onClick={() => handleRequestChanges(item.id)}
+                              loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
+                              disabled={anyMutationPending || isVerifiedItem}
+                            >
+                              Запросить дополнительную информацию
+                            </Button>
+                            <div className="employer-verification-page__detail-actions-group">
                               <Button
                                 type="button"
-                                variant="accent-outline"
+                                variant="danger"
                                 size="sm"
-                                className="employer-verification-page__detail-action-request"
-                                onClick={() => handleRequestChanges(item.id)}
-                                loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
-                                disabled={anyMutationPending}
+                                className="employer-verification-page__decision-button"
+                                onClick={() => handleReject(item.id)}
+                                loading={rejectMutation.isPending && currentExpandedItem?.id === item.id}
+                                disabled={anyMutationPending || isVerifiedItem}
                               >
-                                Запросить дополнительную информацию
+                                Отклонить
                               </Button>
-                              <div className="employer-verification-page__detail-actions-group">
-                                <Button
-                                  type="button"
-                                  variant="danger"
-                                  size="sm"
-                                  className="employer-verification-page__decision-button"
-                                  onClick={() => handleReject(item.id)}
-                                  loading={rejectMutation.isPending && currentExpandedItem?.id === item.id}
-                                  disabled={anyMutationPending}
-                                >
-                                  Отклонить
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="success"
-                                  size="sm"
-                                  className="employer-verification-page__decision-button"
-                                  onClick={() => handleApprove(item.id)}
-                                  loading={approveMutation.isPending && currentExpandedItem?.id === item.id}
-                                  disabled={anyMutationPending}
-                                >
-                                  Одобрить
-                                </Button>
-                              </div>
+                              <Button
+                                type="button"
+                                variant="success"
+                                size="sm"
+                                className="employer-verification-page__decision-button"
+                                onClick={() => handleApprove(item.id)}
+                                loading={approveMutation.isPending && currentExpandedItem?.id === item.id}
+                                disabled={anyMutationPending || isVerifiedItem}
+                              >
+                                Одобрить
+                              </Button>
                             </div>
-                          ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>

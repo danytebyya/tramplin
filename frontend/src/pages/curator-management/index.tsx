@@ -338,7 +338,10 @@ export function CuratorManagementPage() {
   const safePage = Math.min(page, totalPages);
   const pageNumbers = buildPageNumbers(safePage, totalPages);
   const paginatedItems = sortedItems.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  const allRowsSelected = paginatedItems.length > 0 && selectedIds.length === paginatedItems.length;
+  const selectablePaginatedItems = paginatedItems.filter((item) => item.role !== "admin");
+  const allRowsSelected =
+    selectablePaginatedItems.length > 0 &&
+    selectablePaginatedItems.every((item) => selectedIds.includes(item.id));
   const hasAppliedFilters =
     appliedSearch.length > 0 || !appliedRoles.includes("all") || !appliedStatuses.includes("all");
   const metrics = curatorsQuery.data?.data?.metrics;
@@ -450,13 +453,27 @@ export function CuratorManagementPage() {
   };
 
   const toggleSelectedId = (curatorId: string) => {
+    if (paginatedItems.find((item) => item.id === curatorId)?.role === "admin") {
+      return;
+    }
+
     setSelectedIds((current) =>
       current.includes(curatorId) ? current.filter((item) => item !== curatorId) : [...current, curatorId],
     );
   };
 
   const toggleSelectAll = () => {
-    setSelectedIds(allRowsSelected ? [] : paginatedItems.map((item) => item.id));
+    setSelectedIds((current) => {
+      if (allRowsSelected) {
+        return current.filter((id) => !selectablePaginatedItems.some((item) => item.id === id));
+      }
+
+      const nextIds = new Set(current);
+      selectablePaginatedItems.forEach((item) => {
+        nextIds.add(item.id);
+      });
+      return Array.from(nextIds);
+    });
   };
 
   const handleCreateCurator = () => {
@@ -903,6 +920,7 @@ export function CuratorManagementPage() {
               : paginatedItems.map((item) => {
                   const roleMeta = resolveRoleMeta(item.role);
                   const activityMeta = formatActivityMeta(item.last_activity_at);
+                  const isSeniorCurator = item.role === "admin";
 
                   return (
                     <article key={item.id} className="curator-management-page__row">
@@ -912,6 +930,7 @@ export function CuratorManagementPage() {
                             checked={selectedIds.includes(item.id)}
                             onChange={() => toggleSelectedId(item.id)}
                             variant="accent"
+                            disabled={isSeniorCurator}
                           />
                         </div>
 
@@ -947,6 +966,7 @@ export function CuratorManagementPage() {
                               type="button"
                               className="curator-management-page__action-button"
                               aria-label={`Удалить ${item.full_name}`}
+                              disabled={isSeniorCurator}
                             >
                               <img src={deleteIcon} alt="" aria-hidden="true" />
                             </button>

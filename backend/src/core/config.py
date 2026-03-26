@@ -1,8 +1,16 @@
 import json
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+DEFAULT_DEV_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+]
 
 
 class Settings(BaseSettings):
@@ -119,6 +127,16 @@ class Settings(BaseSettings):
             return [str(item).strip() for item in parsed_value if str(item).strip()]
 
         return [item.strip() for item in normalized_value.split(",") if item.strip()]
+
+    @model_validator(mode="after")
+    def apply_default_allowed_origins_for_dev(self) -> "Settings":
+        if self.allowed_origins:
+            return self
+
+        if self.app_env.lower() in {"development", "dev", "local"} or self.app_debug:
+            self.allowed_origins = DEFAULT_DEV_ALLOWED_ORIGINS.copy()
+
+        return self
 
 
 @lru_cache(maxsize=1)
