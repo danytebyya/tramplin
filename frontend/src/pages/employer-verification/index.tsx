@@ -142,7 +142,7 @@ function DocumentPreview({ fileName, blobUrl, mimeType, unavailable = false }: D
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: 1 });
-        const targetHeight = 86;
+        const targetHeight = canvas.parentElement?.clientHeight ?? 85;
         const scale = targetHeight / viewport.height;
         const scaledViewport = page.getViewport({ scale });
         const context = canvas.getContext("2d");
@@ -188,7 +188,9 @@ function DocumentPreview({ fileName, blobUrl, mimeType, unavailable = false }: D
   return (
     <span className="employer-verification-page__document-preview-fallback">
       {unavailable
-        ? "Нет файла"
+        ? isPdfDocument(mimeType, fileName)
+          ? "PDF"
+          : fileName.split(".").pop()?.toUpperCase() ?? "FILE"
         : isPdfDocument(mimeType, fileName)
           ? "PDF"
           : fileName.split(".").pop()?.toUpperCase() ?? "FILE"}
@@ -878,7 +880,13 @@ export function EmployerVerificationPage() {
 
               return (
                 <article key={item.id} className="employer-verification-page__row">
-                  <div className="employer-verification-page__row-summary">
+                  <div
+                    className={
+                      isExpanded
+                        ? "employer-verification-page__row-summary employer-verification-page__row-summary--expanded"
+                        : "employer-verification-page__row-summary"
+                    }
+                  >
                     <div className="employer-verification-page__row-leading">
                       <Checkbox
                         checked={selectedIds.includes(item.id)}

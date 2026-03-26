@@ -1,5 +1,7 @@
 import os
+import shutil
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -55,3 +57,14 @@ def reset_otp_state() -> Generator[None, None, None]:
     rate_limit_service.reset()
     yield
     rate_limit_service.reset()
+
+
+@pytest.fixture(autouse=True)
+def isolate_verification_document_storage(tmp_path: Path) -> Generator[None, None, None]:
+    storage_dir = tmp_path / "verification-documents"
+    os.environ["VERIFICATION_DOCUMENTS_STORAGE_DIR"] = str(storage_dir)
+    try:
+        yield
+    finally:
+        os.environ.pop("VERIFICATION_DOCUMENTS_STORAGE_DIR", None)
+        shutil.rmtree(storage_dir, ignore_errors=True)

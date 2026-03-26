@@ -293,7 +293,7 @@
 .employer-verification-page__content {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .employer-verification-page__table-head {
@@ -339,11 +339,20 @@
   padding: 16px;
 }
 
+.employer-verification-page__row-summary--expanded {
+  align-items: center;
+}
+
 .employer-verification-page__row-leading {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-start ;
   justify-content: center;
   padding-top: 2px;
+}
+
+.employer-verification-page__row-summary--expanded .employer-verification-page__row-leading {
+  align-items: center;
+  padding-top: 0;
 }
 
 .employer-verification-page__row-main {
@@ -470,7 +479,7 @@
   display: grid;
   grid-template-columns: 1.5fr 1.2fr;
   gap: 24px;
-  padding: 20px 24px;
+  padding: 20px 0;
   border-radius: 12px;
   background: var(--color-bg-primary);
 }
@@ -507,10 +516,11 @@
 
 .employer-verification-page__document {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  width: auto;
+  width: 132px;
   max-width: 100%;
-  gap: 12px;
+  gap: 8px;
   color: var(--color-text-primary);
   text-decoration: none;
 }
@@ -523,9 +533,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 86px;
-  flex: 0 0 56px;
+  width: 60px;
+  aspect-ratio: 210 / 297;
+  height: auto;
+  flex: 0 0 auto;
   overflow: hidden;
   border-radius: 8px;
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -540,9 +551,11 @@
 }
 
 .employer-verification-page__document-preview-canvas {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: 100%;
   display: block;
+  margin: 0 auto;
 }
 
 .employer-verification-page__document-preview-fallback {
@@ -561,14 +574,17 @@
 .employer-verification-page__document-meta {
   display: flex;
   flex-direction: column;
+  align-items: center;
   min-width: 0;
+  width: 100%;
 }
 
 .employer-verification-page__document-name {
   font-size: var(--type-body-small-size);
   line-height: var(--type-body-small-line);
   color: var(--color-text-primary);
-  text-align: left;
+  text-align: center;
+  width: 100%;
 }
 
 .employer-verification-page__document-caption,
@@ -577,10 +593,12 @@
   color: var(--color-text-secondary);
   font-size: 12px;
   line-height: 16px;
+  text-align: center;
 }
 
 .employer-verification-page__document-unavailable {
   color: var(--color-danger);
+  white-space: nowrap;
 }
 
 .employer-verification-page__comment {

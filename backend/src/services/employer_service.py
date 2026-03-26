@@ -1,4 +1,6 @@
 import hashlib
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -32,6 +34,13 @@ from src.utils.errors import AppError
 class EmployerService:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    @staticmethod
+    def _get_verification_storage_dir() -> Path:
+        configured_path = os.getenv("VERIFICATION_DOCUMENTS_STORAGE_DIR")
+        if configured_path:
+            return Path(configured_path).expanduser().resolve()
+        return Path(__file__).resolve().parents[2] / "storage" / "verification-documents"
 
     def upsert_profile(self, current_user: User, payload: EmployerOnboardingRequest) -> EmployerProfile:
         if current_user.role != UserRole.EMPLOYER:
@@ -162,6 +171,7 @@ class EmployerService:
         files: list[tuple[str, str, bytes]],
         *,
         verification_request_id: str | None = None,
+        deleted_document_ids: list[str] | None = None,
     ) -> dict:
         if current_user.role != UserRole.EMPLOYER:
             raise AppError(
@@ -175,13 +185,6 @@ class EmployerService:
             raise AppError(
                 code="EMPLOYER_PROFILE_REQUIRED",
                 message="Сначала заполните профиль работодателя",
-                status_code=400,
-            )
-
-        if not files:
-            raise AppError(
-                code="EMPLOYER_VERIFICATION_DOCUMENTS_REQUIRED",
-                message="Загрузите хотя бы один документ",
                 status_code=400,
             )
 
@@ -239,10 +242,18 @@ class EmployerService:
             self.db.add(verification_request)
             self.db.flush()
         else:
+            try:
+                verification_request_uuid = UUID(str(verification_request_id))
+            except ValueError as exc:
+                raise AppError(
+                    code="EMPLOYER_VERIFICATION_REQUEST_NOT_FOUND",
+                    message="Заявка на верификацию не найдена",
+                    status_code=404,
+                ) from exc
             verification_request = (
                 self.db.query(EmployerVerificationRequest)
                 .filter(
-                    EmployerVerificationRequest.id == verification_request_id,
+                    EmployerVerificationRequest.id == verification_request_uuid,
                     EmployerVerificationRequest.employer_id == employer.id,
                 )
                 .one_or_none()
@@ -253,8 +264,53 @@ class EmployerService:
                     message="Заявка на верификацию не найдена",
                     status_code=404,
                 )
+            verification_request.employer_id = employer.id
+            verification_request.legal_name = employer_profile.company_name
+            verification_request.employer_type = EmployerType(employer_profile.employer_type)
+            verification_request.inn = employer_profile.inn
+            verification_request.corporate_email = employer_profile.corporate_email
+            verification_request.status = EmployerVerificationRequestStatus.PENDING
+            verification_request.submitted_by = current_user.id
+            verification_request.submitted_at = datetime.now(UTC)
+            verification_request.reviewed_by = None
+            verification_request.reviewed_at = None
+            verification_request.rejection_reason = None
+            verification_request.moderator_comment = None
 
-        storage_dir = Path(__file__).resolve().parents[2] / "storage" / "verification-documents"
+        existing_documents = list(verification_request.documents or [])
+        documents_to_delete: list[EmployerVerificationDocument] = []
+        deleted_document_ids_set: set[str] = set()
+
+        for document_id in deleted_document_ids or []:
+            document = self.get_verification_document_or_raise(
+                current_user=current_user,
+                document_id=document_id,
+            )
+            if document.verification_request_id != verification_request.id:
+                raise AppError(
+                    code="EMPLOYER_VERIFICATION_DOCUMENT_FORBIDDEN",
+                    message="Недостаточно прав для удаления документа",
+                    status_code=403,
+                )
+            if document.id in deleted_document_ids_set:
+                continue
+            deleted_document_ids_set.add(document.id)
+            documents_to_delete.append(document)
+
+        remaining_existing_documents = [
+            document for document in existing_documents if document.id not in deleted_document_ids_set
+        ]
+        if not files and not remaining_existing_documents:
+            raise AppError(
+                code="EMPLOYER_VERIFICATION_DOCUMENTS_REQUIRED",
+                message="Загрузите хотя бы один документ",
+                status_code=400,
+            )
+
+        for document in documents_to_delete:
+            self._delete_verification_document_record(document)
+
+        storage_dir = self._get_verification_storage_dir()
         storage_dir.mkdir(parents=True, exist_ok=True)
 
         for original_filename, mime_type, content in files:
@@ -377,7 +433,10 @@ class EmployerService:
             current_user=current_user,
             document_id=document_id,
         )
+        self._delete_verification_document_record(document)
+        self.db.commit()
 
+    def _delete_verification_document_record(self, document: EmployerVerificationDocument) -> None:
         media_file = document.media_file
         if media_file is not None and media_file.public_url:
             file_path = Path(media_file.public_url)
@@ -387,4 +446,3 @@ class EmployerService:
         self.db.delete(document)
         if media_file is not None:
             self.db.delete(media_file)
-        self.db.commit()

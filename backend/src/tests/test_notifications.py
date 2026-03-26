@@ -143,3 +143,22 @@ def test_list_notifications_backfills_welcome_for_existing_feed(client, db_sessi
     titles = [item["title"] for item in response.json()["data"]["items"]]
     assert "Добро пожаловать в Трамплин!" in titles
     assert "Легаси уведомление" in titles
+
+
+def test_notifications_websocket_receives_push_event_on_new_notification(client, db_session):
+    access_token = _register_and_login(
+        client,
+        db_session,
+        email="notifications-websocket@example.com",
+        role="employer",
+    )
+
+    with client.websocket_connect(f"/api/v1/notifications/stream?token={access_token}") as websocket:
+        response = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == 200
+
+        event = websocket.receive_json()
+        assert event["type"] == "notification_created"

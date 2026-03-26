@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import notificationsIcon from "../../assets/icons/notifications.svg";
+import { env } from "../../shared/config/env";
 import { cn } from "../../shared/lib";
 import { Button } from "../../shared/ui";
 import { useAuthStore } from "../auth";
@@ -63,6 +64,12 @@ function updateNotificationsCache(
   };
 }
 
+function getNotificationsWebSocketUrl(accessToken: string) {
+  const apiOrigin = env.apiBaseUrl.replace(/\/api\/v1$/, "");
+  const wsOrigin = apiOrigin.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+  return `${wsOrigin}/api/v1/notifications/stream?token=${encodeURIComponent(accessToken)}`;
+}
+
 export function NotificationMenu({
   className,
   buttonClassName,
@@ -81,16 +88,18 @@ export function NotificationMenu({
     queryKey: ["notifications", "feed"],
     queryFn: listNotificationsRequest,
     enabled: isAuthenticated,
-    staleTime: 60_000,
+    staleTime: 5_000,
     refetchInterval: () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") {
         return false;
       }
 
-      return 15_000;
+      return 60_000;
     },
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: "always",
   });
   const unreadCount = getUnreadCount(notificationsQuery.data);
   const items = notificationsQuery.data?.data?.items ?? [];
@@ -106,6 +115,7 @@ export function NotificationMenu({
   const openMenu = () => {
     clearCloseTimeout();
     setIsOpen(true);
+    void notificationsQuery.refetch();
   };
 
   const scheduleClose = () => {
@@ -158,6 +168,61 @@ export function NotificationMenu({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen || !isAuthenticated) {
+      return;
+    }
+
+    void notificationsQuery.refetch();
+  }, [isAuthenticated, isOpen, notificationsQuery]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    let isDisposed = false;
+    let reconnectTimeoutId: number | null = null;
+    let socket: WebSocket | null = null;
+
+    const connect = () => {
+      if (isDisposed) {
+        return;
+      }
+
+      socket = new WebSocket(getNotificationsWebSocketUrl(accessToken));
+
+      socket.onmessage = () => {
+        void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+        void queryClient.refetchQueries({ queryKey: ["notifications", "feed"], type: "active" });
+      };
+
+      socket.onclose = () => {
+        if (isDisposed) {
+          return;
+        }
+
+        reconnectTimeoutId = window.setTimeout(() => {
+          connect();
+        }, 2_000);
+      };
+
+      socket.onerror = () => {
+        socket?.close();
+      };
+    };
+
+    connect();
+
+    return () => {
+      isDisposed = true;
+      if (reconnectTimeoutId !== null) {
+        window.clearTimeout(reconnectTimeoutId);
+      }
+      socket?.close();
+    };
+  }, [accessToken, queryClient]);
+
   const markAsReadMutation = useMutation({
     mutationFn: markNotificationAsReadRequest,
     onMutate: async (notificationId: string) => {
@@ -209,6 +274,11 @@ export function NotificationMenu({
   const handleItemClick = async (notificationId: string, actionUrl?: string | null, isRead?: boolean) => {
     if (!isRead) {
       await markAsReadMutation.mutateAsync(notificationId);
+    }
+
+    if (actionUrl?.startsWith("/onboarding/employer")) {
+      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
     }
 
     closeMenu();

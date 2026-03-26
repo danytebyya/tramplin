@@ -7,6 +7,7 @@ from src.enums import UserRole
 from src.enums.notifications import NotificationKind, NotificationSeverity
 from src.models import Notification, User
 from src.repositories.notification_repository import NotificationRepository
+from src.realtime.notification_hub import notification_hub
 from src.schemas.notification import NotificationFeedResponse, NotificationRead, NotificationUnreadCountResponse
 from src.utils.errors import AppError
 
@@ -90,6 +91,8 @@ class NotificationService:
             updated_at=created_at,
         )
         self.notification_repo.add(notification)
+        pending_notification_user_ids = self.db.info.setdefault("pending_notification_user_ids", set())
+        pending_notification_user_ids.add(str(user_id))
         return notification
 
     def _seed_demo_notifications_if_needed(self, current_user: User) -> None:

@@ -835,7 +835,7 @@ class ModerationService:
         if status == EmployerVerificationRequestStatus.REJECTED:
             return "Отклонена верификация", "rejected"
         if status == EmployerVerificationRequestStatus.SUSPENDED:
-            return "Нужны уточнения", "info-request"
+            return "Запрос информации", "info-request"
         return "На рассмотрении", "pending-review"
 
     @staticmethod

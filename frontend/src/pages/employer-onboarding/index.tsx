@@ -8,7 +8,6 @@ import { z } from "zod";
 import arrowIcon from "../../assets/icons/arrow.svg";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
 import {
-  deleteEmployerVerificationDocument,
   EmployerVerificationDraftDocument,
   getEmployerVerificationDraft,
   upsertEmployerProfile,
@@ -149,6 +148,7 @@ export function EmployerOnboardingPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const [apiError, setApiError] = useState<string | null>(null);
   const [documentFiles, setDocumentFiles] = useState<DocumentUploadItem[]>([]);
+  const [deletedDocumentIds, setDeletedDocumentIds] = useState<string[]>([]);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const [isDocumentDragActive, setIsDocumentDragActive] = useState(false);
   const [selectedEmployerType, setSelectedEmployerType] = useState<"company" | "sole_proprietor">(
@@ -279,9 +279,14 @@ export function EmployerOnboardingPage() {
       profile: Parameters<typeof upsertEmployerProfile>[0];
       documents: File[];
       verificationRequestId?: string;
+      deletedDocumentIds?: string[];
     }) => {
       await upsertEmployerProfile(payload.profile);
-      return uploadEmployerVerificationDocuments(payload.documents, payload.verificationRequestId);
+      return uploadEmployerVerificationDocuments({
+        files: payload.documents,
+        verificationRequestId: payload.verificationRequestId,
+        deletedDocumentIds: payload.deletedDocumentIds,
+      });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
@@ -383,6 +388,7 @@ export function EmployerOnboardingPage() {
       },
       documents: documentFiles.flatMap((item) => (item.source === "local" && item.file ? [item.file] : [])),
       verificationRequestId: verificationDraft?.verification_request_id ?? undefined,
+      deletedDocumentIds,
     });
   };
 
@@ -459,28 +465,18 @@ export function EmployerOnboardingPage() {
     mergeDocumentFiles(nextFiles);
   };
 
-  const deleteDocumentMutation = useMutation({
-    mutationFn: deleteEmployerVerificationDocument,
-    onSuccess: async (_response, documentId) => {
-      setDocumentFiles((currentFiles) =>
-        currentFiles.filter((item) => !(item.source === "existing" && item.documentId === documentId)),
-      );
-      await queryClient.invalidateQueries({ queryKey: ["companies", "verification-draft"] });
-    },
-    onError: (error: any) => {
-      setDocumentError(
-        error?.response?.data?.error?.message ?? "Не удалось удалить документ. Попробуйте ещё раз.",
-      );
-    },
-  });
-
   const handleDocumentRemove = (itemToRemove: DocumentUploadItem) => {
     if (itemToRemove.source === "existing" && itemToRemove.documentId) {
-      deleteDocumentMutation.mutate(itemToRemove.documentId);
+      setDeletedDocumentIds((currentIds) =>
+        currentIds.includes(itemToRemove.documentId!) ? currentIds : [...currentIds, itemToRemove.documentId!],
+      );
+      setDocumentFiles((currentFiles) => currentFiles.filter((item) => item.key !== itemToRemove.key));
+      setDocumentError(null);
       return;
     }
 
     setDocumentFiles((currentFiles) => currentFiles.filter((item) => item.key !== itemToRemove.key));
+    setDocumentError(null);
   };
 
   const handleContinue = () => {
@@ -1024,10 +1020,7 @@ export function EmployerOnboardingPage() {
                                   className="employer-onboarding-upload__file-remove"
                                   aria-label={`Удалить файл ${item.fileName}`}
                                   onClick={() => handleDocumentRemove(item)}
-                                  disabled={
-                                    deleteDocumentMutation.isPending &&
-                                    deleteDocumentMutation.variables === item.documentId
-                                  }
+                                  disabled={onboardingMutation.isPending}
                                 >
                                   <span
                                     className="employer-onboarding-upload__file-remove-icon"

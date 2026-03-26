@@ -63,13 +63,14 @@ def read_employer_verification_draft(
 
 @router.post("/verification-documents", status_code=status.HTTP_200_OK)
 async def upload_employer_verification_documents(
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] | None = File(default=None),
     verification_request_id: str | None = Form(default=None),
+    deleted_document_ids: list[str] | None = Form(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     documents = []
-    for item in files:
+    for item in files or []:
         content = await item.read()
         documents.append((item.filename or "document", item.content_type or "application/octet-stream", content))
 
@@ -77,6 +78,7 @@ async def upload_employer_verification_documents(
         current_user=current_user,
         files=documents,
         verification_request_id=verification_request_id,
+        deleted_document_ids=deleted_document_ids,
     )
     return success_response(result)
 

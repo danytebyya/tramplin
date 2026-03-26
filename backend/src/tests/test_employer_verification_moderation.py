@@ -260,3 +260,64 @@ def test_request_employer_verification_changes_reverts_status_when_email_deliver
     assert "Не удалось запросить доп. информацию" in (verification_request.moderator_comment or "")
     assert employer_profile.verification_status == EmployerVerificationStatus.PENDING_REVIEW
     assert notification is None or notification.title != "Запрос дополнительной информации"
+
+
+def test_resubmitting_changed_employer_verification_returns_request_to_pending(client, db_session):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="curator-verification-resubmit@example.com",
+    )
+    employer_email = "employer-verification-resubmit@example.com"
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email=employer_email,
+        company_name="Resubmit Corp",
+        inn="7707083898",
+    )
+
+    request_changes_response = client.post(
+        f"/api/v1/moderation/employer-verification-requests/{request_id}/request-changes",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={"moderator_comment": "Добавьте недостающий документ"},
+    )
+    assert request_changes_response.status_code == 200
+
+    employer_token = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": employer_email, "password": "StrongPass123"},
+    ).json()["data"]["access_token"]
+
+    verification_request_before_resubmit = db_session.execute(
+        select(EmployerVerificationRequest).where(EmployerVerificationRequest.id == UUID(request_id))
+    ).scalar_one()
+    initial_reviewed_at = verification_request_before_resubmit.reviewed_at
+    assert initial_reviewed_at is not None
+
+    resubmit_response = client.post(
+        "/api/v1/companies/verification-documents",
+        headers={"Authorization": f"Bearer {employer_token}"},
+        files=[
+            ("files", ("updated-registration.pdf", b"updated-registration-document", "application/pdf")),
+        ],
+        data={"verification_request_id": request_id},
+    )
+
+    assert resubmit_response.status_code == 200
+
+    verification_request = db_session.execute(
+        select(EmployerVerificationRequest).where(EmployerVerificationRequest.id == UUID(request_id))
+    ).scalar_one()
+    employer_profile = db_session.execute(
+        select(EmployerProfile).where(EmployerProfile.inn == "7707083898")
+    ).scalar_one()
+
+    assert verification_request.status == EmployerVerificationRequestStatus.PENDING
+    assert verification_request.reviewed_by is None
+    assert verification_request.reviewed_at is None
+    assert verification_request.rejection_reason is None
+    assert verification_request.moderator_comment is None
+    assert verification_request.submitted_at >= initial_reviewed_at
+    assert employer_profile.verification_status == EmployerVerificationStatus.PENDING_REVIEW
+    assert employer_profile.moderator_comment is None

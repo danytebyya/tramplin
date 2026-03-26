@@ -1,13 +1,35 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_user
+from src.core.security import TokenPayloadError, decode_token, ensure_token_type
 from src.db import get_db
+from src.enums import TokenType
 from src.models import User
+from src.realtime import notification_hub
+from src.repositories import UserRepository
 from src.services.notification_service import NotificationService
+from src.utils.errors import AppError
 from src.utils.responses import success_response
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+def get_current_user_by_access_token(token: str, db: Session) -> User:
+    try:
+        payload = ensure_token_type(decode_token(token), TokenType.ACCESS)
+    except TokenPayloadError as exc:
+        raise AppError(code="AUTH_UNAUTHORIZED", message=str(exc), status_code=401) from exc
+
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise AppError(code="AUTH_UNAUTHORIZED", message="Некорректный токен доступа", status_code=401)
+
+    user = UserRepository(db).get_by_id(user_id)
+    if user is None:
+        raise AppError(code="AUTH_UNAUTHORIZED", message="Пользователь не найден", status_code=401)
+
+    return user
 
 
 @router.get("", status_code=status.HTTP_200_OK)
@@ -45,3 +67,23 @@ def clear_notifications(
 ) -> dict:
     payload = NotificationService(db).clear_all(current_user)
     return success_response(payload.model_dump(mode="json"))
+
+
+@router.websocket("/stream")
+async def notifications_stream(
+    websocket: WebSocket,
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        current_user = get_current_user_by_access_token(token, db)
+    except AppError:
+        await websocket.close(code=1008)
+        return
+
+    await notification_hub.connect(current_user.id, websocket)
+    try:
+        while True:
+            await websocket.receive()
+    except WebSocketDisconnect:
+        await notification_hub.disconnect(current_user.id, websocket)

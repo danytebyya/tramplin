@@ -1,3 +1,5 @@
+import { AxiosProgressEvent } from "axios";
+
 import { apiClient } from "../../shared/api/client";
 import { useAuthStore } from "../auth";
 
@@ -81,35 +83,46 @@ export async function upsertEmployerProfile(payload: EmployerOnboardingPayload) 
   return response.data;
 }
 
-export async function uploadEmployerVerificationDocuments(
-  files: File[],
-  verificationRequestId?: string,
-) {
-  let nextVerificationRequestId = verificationRequestId;
+export async function uploadEmployerVerificationDocuments(payload: {
+  files: File[];
+  verificationRequestId?: string;
+  deletedDocumentIds?: string[];
+}) {
+  const formData = new FormData();
 
-  for (const file of files) {
-    let latestProgress = 1;
-    const formData = new FormData();
+  payload.files.forEach((file) => {
     formData.append("files", file);
-    if (nextVerificationRequestId) {
-      formData.append("verification_request_id", nextVerificationRequestId);
-    }
+    dispatchEmployerDocumentUploadProgress(file, 1);
+  });
 
-    dispatchEmployerDocumentUploadProgress(file, latestProgress);
-
-    const response = await apiClient.post("/companies/verification-documents", formData, {
-      headers: getAuthorizedHeaders(),
-      onUploadProgress: (event) => {
-        latestProgress = event.total
-          ? Math.min(Math.max(Math.round((event.loaded / event.total) * 100), 1), 95)
-          : latestProgress;
-        dispatchEmployerDocumentUploadProgress(file, latestProgress);
-      },
-    });
-
-    dispatchEmployerDocumentUploadProgress(file, 100);
-    nextVerificationRequestId = response.data?.data?.verification_request_id ?? nextVerificationRequestId;
+  if (payload.verificationRequestId) {
+    formData.append("verification_request_id", payload.verificationRequestId);
   }
+
+  payload.deletedDocumentIds?.forEach((documentId) => {
+    formData.append("deleted_document_ids", documentId);
+  });
+
+  const handleProgress = (event: AxiosProgressEvent) => {
+    const progress = event.total
+      ? Math.min(Math.max(Math.round((event.loaded / event.total) * 100), 1), 95)
+      : 1;
+
+    payload.files.forEach((file) => {
+      dispatchEmployerDocumentUploadProgress(file, progress);
+    });
+  };
+
+  const response = await apiClient.post("/companies/verification-documents", formData, {
+    headers: getAuthorizedHeaders(),
+    onUploadProgress: handleProgress,
+  });
+
+  payload.files.forEach((file) => {
+    dispatchEmployerDocumentUploadProgress(file, 100);
+  });
+
+  return response.data;
 }
 
 export async function verifyEmployerInn(

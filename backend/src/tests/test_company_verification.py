@@ -290,3 +290,59 @@ def test_employer_can_delete_existing_verification_document(client, db_session):
     )
     assert next_draft_response.status_code == 200
     assert next_draft_response.json()["data"]["documents"] == []
+
+
+def test_submit_verification_documents_applies_deleted_document_ids_only_on_submit(client, db_session):
+    access_token = _register_and_login_employer(client, db_session, email="pending-delete@example.com")
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Pending Delete Corp",
+            "inn": "7707083896",
+            "corporate_email": "hr@pending-delete.example",
+            "website": "https://pending-delete.example",
+        },
+    )
+    assert profile_response.status_code == 200
+
+    initial_upload_response = client.post(
+        "/api/v1/companies/verification-documents",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files=[
+            ("files", ("old-a.pdf", b"old-a-document", "application/pdf")),
+            ("files", ("old-b.pdf", b"old-b-document", "application/pdf")),
+        ],
+    )
+    assert initial_upload_response.status_code == 200
+    verification_request_id = initial_upload_response.json()["data"]["verification_request_id"]
+
+    draft_response = client.get(
+        "/api/v1/companies/verification-draft",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert draft_response.status_code == 200
+    old_document_id = draft_response.json()["data"]["documents"][0]["id"]
+
+    resubmit_response = client.post(
+        "/api/v1/companies/verification-documents",
+        headers={"Authorization": f"Bearer {access_token}"},
+        data={
+            "verification_request_id": verification_request_id,
+            "deleted_document_ids": old_document_id,
+        },
+        files=[
+            ("files", ("new-c.pdf", b"new-c-document", "application/pdf")),
+        ],
+    )
+    assert resubmit_response.status_code == 200
+
+    next_draft_response = client.get(
+        "/api/v1/companies/verification-draft",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert next_draft_response.status_code == 200
+    file_names = sorted(document["file_name"] for document in next_draft_response.json()["data"]["documents"])
+    assert file_names == ["new-c.pdf", "old-b.pdf"]
