@@ -1523,7 +1523,7 @@ export function EmployerVerificationPage() {
                         <strong className="employer-verification-page__row-title">
                           {abbreviateLegalEntityName(item.employer_name)}
                         </strong>
-                        {!isExpanded ? (
+                        {!isExpanded && !isVerifiedItem ? (
                           <div className="employer-verification-page__row-actions">
                             <Button
                               type="button"
@@ -1534,7 +1534,7 @@ export function EmployerVerificationPage() {
                                 event.stopPropagation();
                                 approveMutation.mutate({ requestId: item.id, comment: "" });
                               }}
-                              disabled={anyMutationPending || isVerifiedItem}
+                              disabled={anyMutationPending}
                             >
                               <span>Одобрить</span>
                               <span
@@ -1551,7 +1551,7 @@ export function EmployerVerificationPage() {
                                 event.stopPropagation();
                                 rejectMutation.mutate({ requestId: item.id, comment: "" });
                               }}
-                              disabled={anyMutationPending || isVerifiedItem}
+                              disabled={anyMutationPending}
                             >
                               <span>Отклонить</span>
                               <span
@@ -1644,43 +1644,45 @@ export function EmployerVerificationPage() {
                               placeholder=""
                             />
                           </div>
-                          <div className="employer-verification-page__detail-actions employer-verification-page__detail-actions--stacked">
-                            <Button
-                              type="button"
-                              variant="accent-outline"
-                              size="sm"
-                              className="employer-verification-page__detail-action-request"
-                              onClick={() => handleRequestChanges(item.id)}
-                              loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
-                              disabled={anyMutationPending || isVerifiedItem}
-                            >
-                              Запросить дополнительную информацию
-                            </Button>
-                            <div className="employer-verification-page__detail-actions-group">
+                          {!isVerifiedItem ? (
+                            <div className="employer-verification-page__detail-actions employer-verification-page__detail-actions--stacked">
                               <Button
                                 type="button"
-                                variant="danger"
+                                variant="accent-outline"
                                 size="sm"
-                                className="employer-verification-page__decision-button"
-                                onClick={() => handleReject(item.id)}
-                                loading={rejectMutation.isPending && currentExpandedItem?.id === item.id}
-                                disabled={anyMutationPending || isVerifiedItem}
+                                className="employer-verification-page__detail-action-request"
+                                onClick={() => handleRequestChanges(item.id)}
+                                loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
+                                disabled={anyMutationPending}
                               >
-                                Отклонить
+                                Запросить дополнительную информацию
                               </Button>
-                              <Button
-                                type="button"
-                                variant="success"
-                                size="sm"
-                                className="employer-verification-page__decision-button"
-                                onClick={() => handleApprove(item.id)}
-                                loading={approveMutation.isPending && currentExpandedItem?.id === item.id}
-                                disabled={anyMutationPending || isVerifiedItem}
-                              >
-                                Одобрить
-                              </Button>
+                              <div className="employer-verification-page__detail-actions-group">
+                                <Button
+                                  type="button"
+                                  variant="danger"
+                                  size="sm"
+                                  className="employer-verification-page__decision-button"
+                                  onClick={() => handleReject(item.id)}
+                                  loading={rejectMutation.isPending && currentExpandedItem?.id === item.id}
+                                  disabled={anyMutationPending}
+                                >
+                                  Отклонить
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="success"
+                                  size="sm"
+                                  className="employer-verification-page__decision-button"
+                                  onClick={() => handleApprove(item.id)}
+                                  loading={approveMutation.isPending && currentExpandedItem?.id === item.id}
+                                  disabled={anyMutationPending}
+                                >
+                                  Одобрить
+                                </Button>
+                              </div>
                             </div>
-                          </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
