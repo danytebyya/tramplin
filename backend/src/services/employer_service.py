@@ -62,8 +62,6 @@ class EmployerService:
                 inn=payload.inn,
                 corporate_email=payload.corporate_email,
                 website=payload.website,
-                phone=payload.phone,
-                social_link=payload.social_link,
                 verification_status=EmployerVerificationStatus.UNVERIFIED,
             )
             self.db.add(employer_profile)
@@ -73,8 +71,6 @@ class EmployerService:
             employer_profile.inn = payload.inn
             employer_profile.corporate_email = payload.corporate_email
             employer_profile.website = payload.website
-            employer_profile.phone = payload.phone
-            employer_profile.social_link = payload.social_link
 
         employer_profile.moderator_comment = None
 
@@ -172,6 +168,8 @@ class EmployerService:
         *,
         verification_request_id: str | None = None,
         deleted_document_ids: list[str] | None = None,
+        phone: str | None = None,
+        social_link: str | None = None,
     ) -> dict:
         if current_user.role != UserRole.EMPLOYER:
             raise AppError(
@@ -236,6 +234,8 @@ class EmployerService:
                 employer_type=EmployerType(employer_profile.employer_type),
                 inn=employer_profile.inn,
                 corporate_email=employer_profile.corporate_email,
+                phone=phone,
+                social_link=social_link,
                 status=EmployerVerificationRequestStatus.PENDING,
                 submitted_by=current_user.id,
             )
@@ -269,6 +269,8 @@ class EmployerService:
             verification_request.employer_type = EmployerType(employer_profile.employer_type)
             verification_request.inn = employer_profile.inn
             verification_request.corporate_email = employer_profile.corporate_email
+            verification_request.phone = phone
+            verification_request.social_link = social_link
             verification_request.status = EmployerVerificationRequestStatus.PENDING
             verification_request.submitted_by = current_user.id
             verification_request.submitted_at = datetime.now(UTC)
@@ -404,8 +406,8 @@ class EmployerService:
         return {
             "verification_request_id": str(verification_request.id) if verification_request is not None else None,
             "website": employer_profile.website,
-            "phone": employer_profile.phone,
-            "social_link": employer_profile.social_link,
+            "phone": verification_request.phone if verification_request is not None else None,
+            "social_link": verification_request.social_link if verification_request is not None else None,
             "documents": [
                 {
                     "id": str(document.id),

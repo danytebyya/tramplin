@@ -35,6 +35,8 @@ def _create_verification_request(client, db_session, *, email: str, company_name
             "inn": inn,
             "corporate_email": f"hr@{company_name.lower().replace(' ', '-')}.example",
             "website": f"https://{company_name.lower().replace(' ', '-')}.example",
+            "phone": "+7 (999) 111-22-33",
+            "social_link": f"https://t.me/{company_name.lower().replace(' ', '-')}",
         },
     )
     assert profile_response.status_code == 200
@@ -42,6 +44,10 @@ def _create_verification_request(client, db_session, *, email: str, company_name
     upload_response = client.post(
         "/api/v1/companies/verification-documents",
         headers={"Authorization": f"Bearer {access_token}"},
+        data={
+            "phone": "+7 (999) 111-22-33",
+            "social_link": f"https://t.me/{company_name.lower().replace(' ', '-')}",
+        },
         files=[
             ("files", ("registration.pdf", b"registration-document", "application/pdf")),
         ],
@@ -78,6 +84,8 @@ def test_list_employer_verification_requests_returns_pending_requests(client, db
     assert body["total"] == 1
     assert body["items"][0]["employer_name"] == "Acme Labs"
     assert body["items"][0]["status"] == EmployerVerificationRequestStatus.PENDING.value
+    assert body["items"][0]["phone"] == "+7 (999) 111-22-33"
+    assert body["items"][0]["social_link"] == "https://t.me/acme-labs"
     assert body["items"][0]["documents"][0]["file_name"] == "registration.pdf"
 
 
@@ -202,6 +210,46 @@ def test_reject_employer_verification_request_keeps_profile_unverified_and_notif
     assert notification.title == "Верификация отклонена"
     assert notification.action_url == "/onboarding/employer?mode=rejected"
     assert notification.action_label == "Исправить данные"
+
+
+def test_request_employer_verification_changes_uses_default_comment_when_empty(client, db_session):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="curator-verification-default-comment@example.com",
+    )
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email="employer-verification-default-comment@example.com",
+        company_name="Default Comment Corp",
+        inn="7707083891",
+    )
+
+    response = client.post(
+        f"/api/v1/moderation/employer-verification-requests/{request_id}/request-changes",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={"moderator_comment": ""},
+    )
+
+    assert response.status_code == 200
+
+    employer_profile = db_session.execute(
+        select(EmployerProfile).where(EmployerProfile.inn == "7707083891")
+    ).scalar_one()
+    notification = db_session.execute(
+        select(Notification)
+        .where(Notification.user_id == employer_profile.user_id)
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
+
+    expected_message = (
+        "Требуется дополнить заявку: проверьте полноту заполнения данных, "
+        "контактную информацию и приложенные документы."
+    )
+    assert employer_profile.moderator_comment == expected_message
+    assert notification is not None
+    assert notification.message == expected_message
 
 
 def test_request_employer_verification_changes_reverts_status_when_email_delivery_fails(

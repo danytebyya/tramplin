@@ -19,6 +19,8 @@ class EmployerVerificationRequestRead(BaseModel):
     inn: str
     corporate_email: str | None = None
     website_url: str | None = None
+    phone: str | None = None
+    social_link: str | None = None
     employer_type: str
     submitted_at: str
     status: EmployerVerificationRequestStatus

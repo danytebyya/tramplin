@@ -31,6 +31,10 @@ class ModerationSettingsFallback:
 
 
 class ModerationService:
+    DEFAULT_REQUEST_CHANGES_COMMENT = (
+        "Требуется дополнить заявку: проверьте полноту заполнения данных, контактную информацию и приложенные документы."
+    )
+
     def __init__(self, repo: ModerationRepository) -> None:
         self.repo = repo
         self.logger = logging.getLogger(__name__)
@@ -267,6 +271,7 @@ class ModerationService:
         self._ensure_moderation_access(current_user)
         verification_request = self._get_verification_request_or_raise(request_id)
         employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
+        resolved_moderator_comment = self._resolve_request_changes_comment(payload.moderator_comment)
         previous_status = verification_request.status
         previous_reviewed_by = verification_request.reviewed_by
         previous_reviewed_at = verification_request.reviewed_at
@@ -277,18 +282,16 @@ class ModerationService:
             self._send_request_changes_email_with_retry(
                 verification_request=verification_request,
                 employer_profile=employer_profile,
-                moderator_comment=payload.moderator_comment,
+                moderator_comment=resolved_moderator_comment,
             )
         except Exception as exc:
             failure_comment = self._build_request_changes_delivery_failure_comment(
-                payload.moderator_comment
+                resolved_moderator_comment
             )
             verification_request.status = previous_status
             verification_request.reviewed_by = previous_reviewed_by
             verification_request.reviewed_at = previous_reviewed_at
-            verification_request.moderator_comment = (
-                failure_comment if payload.moderator_comment else previous_moderator_comment or failure_comment
-            )
+            verification_request.moderator_comment = failure_comment or previous_moderator_comment
             verification_request.rejection_reason = previous_rejection_reason
             self.repo.db.add(verification_request)
             self.repo.db.commit()
@@ -302,7 +305,7 @@ class ModerationService:
         verification_request.status = EmployerVerificationRequestStatus.SUSPENDED
         verification_request.reviewed_by = current_user.id
         verification_request.reviewed_at = datetime.now(UTC)
-        verification_request.moderator_comment = payload.moderator_comment
+        verification_request.moderator_comment = resolved_moderator_comment
         verification_request.rejection_reason = None
 
         if verification_request.employer is not None:
@@ -311,7 +314,7 @@ class ModerationService:
 
         if employer_profile is not None:
             employer_profile.verification_status = EmployerVerificationStatus.CHANGES_REQUESTED
-            employer_profile.moderator_comment = payload.moderator_comment
+            employer_profile.moderator_comment = resolved_moderator_comment
             self.repo.db.add(employer_profile)
 
         if verification_request.submitted_by is not None:
@@ -320,7 +323,7 @@ class ModerationService:
                 kind=NotificationKind.EMPLOYER_VERIFICATION,
                 severity=NotificationSeverity.WARNING,
                 title="Запрос дополнительной информации",
-                message=payload.moderator_comment or "Куратор запросил дополнительные данные для верификации.",
+                message=resolved_moderator_comment,
                 action_label="Открыть заявку",
                 action_url="/onboarding/employer?mode=changes-requested",
                 payload={
@@ -335,6 +338,11 @@ class ModerationService:
         self.repo.db.commit()
         self.repo.db.refresh(verification_request)
         return self._serialize_verification_request(verification_request, employer_profile=employer_profile)
+
+    @classmethod
+    def _resolve_request_changes_comment(cls, moderator_comment: str | None) -> str:
+        normalized_comment = (moderator_comment or "").strip()
+        return normalized_comment or cls.DEFAULT_REQUEST_CHANGES_COMMENT
 
     def update_settings(
         self,
@@ -799,6 +807,16 @@ class ModerationService:
                 request.employer.website_url
                 if request.employer is not None and request.employer.website_url
                 else employer_profile.website if employer_profile is not None else None
+            ),
+            phone=(
+                request.phone
+                if request.phone
+                else None
+            ),
+            social_link=(
+                request.social_link
+                if request.social_link
+                else None
             ),
             employer_type=request.employer_type.value,
             submitted_at=self._normalize_datetime(request.submitted_at).isoformat(),

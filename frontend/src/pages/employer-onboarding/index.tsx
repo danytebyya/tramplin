@@ -280,12 +280,16 @@ export function EmployerOnboardingPage() {
       documents: File[];
       verificationRequestId?: string;
       deletedDocumentIds?: string[];
+      phone?: string;
+      socialLink?: string;
     }) => {
       await upsertEmployerProfile(payload.profile);
       return uploadEmployerVerificationDocuments({
         files: payload.documents,
         verificationRequestId: payload.verificationRequestId,
         deletedDocumentIds: payload.deletedDocumentIds,
+        phone: payload.phone,
+        socialLink: payload.socialLink,
       });
     },
     onSuccess: async () => {
@@ -389,6 +393,8 @@ export function EmployerOnboardingPage() {
       documents: documentFiles.flatMap((item) => (item.source === "local" && item.file ? [item.file] : [])),
       verificationRequestId: verificationDraft?.verification_request_id ?? undefined,
       deletedDocumentIds,
+      phone: values.phone.trim() || undefined,
+      socialLink: values.socialLink?.trim() || undefined,
     });
   };
 

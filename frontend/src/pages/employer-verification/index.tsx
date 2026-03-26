@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { renderAsync } from "docx-preview";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 
+import arrowIcon from "../../assets/icons/arrow.svg";
 import profileIcon from "../../assets/icons/profile.svg";
 import {
   meRequest,
@@ -31,7 +33,7 @@ import "./employer-verification.css";
 type VerificationStatusFilter = "all" | EmployerVerificationRequestStatus;
 type VerificationPeriodFilter = "all" | "today" | "week" | "month";
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 5;
 const statusOptions: Array<{ value: EmployerVerificationRequestStatus; label: string }> = [
   { value: "pending", label: "На рассмотрении" },
   { value: "under_review", label: "На рассмотрении" },
@@ -98,6 +100,13 @@ function isPdfDocument(mimeType: string, fileName: string) {
   return mimeType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 }
 
+function isDocxDocument(mimeType: string, fileName: string) {
+  return (
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    fileName.toLowerCase().endsWith(".docx")
+  );
+}
+
 function resolveDocumentUrl(fileUrl: string | null) {
   if (!fileUrl) {
     return null;
@@ -119,13 +128,23 @@ GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 type DocumentPreviewProps = {
   fileName: string;
   blobUrl: string | null;
+  fileBlob: Blob | null;
   mimeType: string;
   unavailable?: boolean;
 };
 
-function DocumentPreview({ fileName, blobUrl, mimeType, unavailable = false }: DocumentPreviewProps) {
+function DocumentPreview({
+  fileName,
+  blobUrl,
+  fileBlob,
+  mimeType,
+  unavailable = false,
+}: DocumentPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const docxHostRef = useRef<HTMLDivElement | null>(null);
+  const docxStageRef = useRef<HTMLDivElement | null>(null);
   const [pdfPreviewFailed, setPdfPreviewFailed] = useState(false);
+  const [docxPreviewFailed, setDocxPreviewFailed] = useState(false);
 
   useEffect(() => {
     if (!blobUrl || !isPdfDocument(mimeType, fileName) || !canvasRef.current) {
@@ -171,6 +190,84 @@ function DocumentPreview({ fileName, blobUrl, mimeType, unavailable = false }: D
     };
   }, [blobUrl, fileName, mimeType]);
 
+  useEffect(() => {
+    if (!fileBlob || !isDocxDocument(mimeType, fileName) || !docxHostRef.current || !docxStageRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    const host = docxHostRef.current;
+    const stage = docxStageRef.current;
+    stage.innerHTML = "";
+    stage.style.transform = "";
+    stage.style.width = "";
+    stage.style.height = "";
+    setDocxPreviewFailed(false);
+
+    void (async () => {
+      try {
+        await renderAsync(fileBlob, stage, undefined, {
+          inWrapper: true,
+          breakPages: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          renderHeaders: false,
+          renderFooters: false,
+          renderFootnotes: false,
+          renderEndnotes: false,
+          useBase64URL: true,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+
+        if (!host.clientWidth || !host.clientHeight) {
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
+        }
+
+        const renderedNode =
+          (stage.querySelector(".docx-wrapper") as HTMLElement | null) ??
+          (stage.firstElementChild as HTMLElement | null);
+
+        if (!renderedNode) {
+          setDocxPreviewFailed(true);
+          return;
+        }
+
+        const contentWidth = renderedNode.scrollWidth;
+        const contentHeight = renderedNode.scrollHeight;
+
+        if (!contentWidth || !contentHeight) {
+          setDocxPreviewFailed(true);
+          return;
+        }
+
+        const scale = Math.min(host.clientWidth / contentWidth, host.clientHeight / contentHeight);
+        stage.style.width = `${contentWidth}px`;
+        stage.style.height = `${contentHeight}px`;
+        stage.style.transform = `scale(${scale})`;
+      } catch {
+        if (!cancelled) {
+          setDocxPreviewFailed(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (stage) {
+        stage.innerHTML = "";
+      }
+    };
+  }, [fileBlob, fileName, mimeType]);
+
   if (blobUrl && isImageDocument(mimeType)) {
     return (
       <img
@@ -185,14 +282,26 @@ function DocumentPreview({ fileName, blobUrl, mimeType, unavailable = false }: D
     return <canvas ref={canvasRef} className="employer-verification-page__document-preview-canvas" />;
   }
 
+  if (fileBlob && isDocxDocument(mimeType, fileName) && !docxPreviewFailed) {
+    return (
+      <div ref={docxHostRef} className="employer-verification-page__document-preview-docx-host">
+        <div ref={docxStageRef} className="employer-verification-page__document-preview-docx-stage" />
+      </div>
+    );
+  }
+
   return (
     <span className="employer-verification-page__document-preview-fallback">
       {unavailable
         ? isPdfDocument(mimeType, fileName)
           ? "PDF"
+          : isDocxDocument(mimeType, fileName)
+            ? "DOCX"
           : fileName.split(".").pop()?.toUpperCase() ?? "FILE"
         : isPdfDocument(mimeType, fileName)
           ? "PDF"
+          : isDocxDocument(mimeType, fileName)
+            ? "DOCX"
           : fileName.split(".").pop()?.toUpperCase() ?? "FILE"}
     </span>
   );
@@ -212,6 +321,7 @@ function VerificationDocumentCard({
   fileSize,
 }: VerificationDocumentCardProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [fileBlob, setFileBlob] = useState<Blob | null>(null);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const resolvedFileUrl = resolveDocumentUrl(fileUrl);
@@ -219,6 +329,7 @@ function VerificationDocumentCard({
   useEffect(() => {
     if (!resolvedFileUrl) {
       setBlobUrl(null);
+      setFileBlob(null);
       setIsUnavailable(true);
       setIsLoading(false);
       return;
@@ -228,6 +339,7 @@ function VerificationDocumentCard({
     let nextObjectUrl: string | null = null;
 
     setBlobUrl(null);
+    setFileBlob(null);
     setIsUnavailable(false);
     setIsLoading(true);
 
@@ -242,10 +354,12 @@ function VerificationDocumentCard({
         }
 
         nextObjectUrl = URL.createObjectURL(response.data);
+        setFileBlob(response.data);
         setBlobUrl(nextObjectUrl);
         setIsLoading(false);
       } catch {
         if (!cancelled) {
+          setFileBlob(null);
           setBlobUrl(null);
           setIsUnavailable(true);
           setIsLoading(false);
@@ -267,13 +381,15 @@ function VerificationDocumentCard({
         <DocumentPreview
           fileName={fileName}
           blobUrl={blobUrl}
+          fileBlob={fileBlob}
           mimeType={mimeType}
           unavailable={isUnavailable}
         />
       </div>
       <div className="employer-verification-page__document-meta">
-        <span className="employer-verification-page__document-name">
-          {fileName} ({formatFileSize(fileSize)})
+        <span className="employer-verification-page__document-name">{fileName}</span>
+        <span className="employer-verification-page__document-size">
+          ({formatFileSize(fileSize)})
         </span>
         {isLoading ? (
           <span className="employer-verification-page__document-caption">Загрузка предпросмотра...</span>
@@ -292,8 +408,7 @@ function VerificationDocumentCard({
   return (
     <a
       href={blobUrl}
-      target="_blank"
-      rel="noreferrer"
+      download={fileName}
       className="employer-verification-page__document"
     >
       {content}
@@ -435,6 +550,49 @@ export function EmployerVerificationPage() {
     onSettled: handleMutationSettled,
   });
 
+  const bulkActionMutation = useMutation({
+    mutationFn: async ({
+      action,
+      requestIds,
+    }: {
+      action: "request-changes" | "reject" | "approve";
+      requestIds: string[];
+    }) => {
+      if (action === "request-changes") {
+        await Promise.all(
+          requestIds.map((requestId) =>
+            requestEmployerVerificationChanges(requestId, { moderator_comment: null }),
+          ),
+        );
+        return;
+      }
+
+      if (action === "reject") {
+        await Promise.all(
+          requestIds.map((requestId) =>
+            rejectEmployerVerificationRequest(requestId, { moderator_comment: null }),
+          ),
+        );
+        return;
+      }
+
+      await Promise.all(
+        requestIds.map((requestId) =>
+          approveEmployerVerificationRequest(requestId, { moderator_comment: null }),
+        ),
+      );
+    },
+    onMutate: () => {
+      setReviewError(null);
+    },
+    onSuccess: async () => {
+      await handleMutationSuccess();
+      setSelectedIds([]);
+    },
+    onError: handleMutationError,
+    onSettled: handleMutationSettled,
+  });
+
   const user = meData?.data?.user;
   const items = verificationRequestsQuery.data?.data?.items ?? EMPTY_VERIFICATION_ITEMS;
   const sortedItems = useMemo(() => {
@@ -450,7 +608,10 @@ export function EmployerVerificationPage() {
   const allRowsSelected = sortedItems.length > 0 && selectedIds.length === sortedItems.length;
   const currentExpandedItem = sortedItems.find((item) => item.id === expandedRequestId) ?? null;
   const anyMutationPending =
-    approveMutation.isPending || rejectMutation.isPending || requestChangesMutation.isPending;
+    approveMutation.isPending ||
+    rejectMutation.isPending ||
+    requestChangesMutation.isPending ||
+    bulkActionMutation.isPending;
 
   if (!isModerationRole) {
     return <Navigate to="/" replace />;
@@ -600,6 +761,17 @@ export function EmployerVerificationPage() {
 
   const handleRequestChanges = (requestId: string) => {
     requestChangesMutation.mutate({ requestId, comment: moderatorComment.trim() });
+  };
+
+  const handleBulkAction = (action: "request-changes" | "reject" | "approve") => {
+    if (selectedIds.length === 0) {
+      return;
+    }
+
+    bulkActionMutation.mutate({
+      action,
+      requestIds: selectedIds,
+    });
   };
 
   return (
@@ -862,6 +1034,55 @@ export function EmployerVerificationPage() {
           </div>
         </section>
 
+        <div
+          className={
+            selectedIds.length > 0
+              ? "employer-verification-page__bulk-bar-shell employer-verification-page__bulk-bar-shell--visible"
+              : "employer-verification-page__bulk-bar-shell"
+          }
+          aria-hidden={selectedIds.length === 0}
+        >
+          <div className="employer-verification-page__bulk-bar">
+            <div className="employer-verification-page__bulk-bar-selection">
+              <Checkbox checked={selectedIds.length > 0} variant="accent" disabled readOnly />
+              <span className="employer-verification-page__bulk-bar-count">Выбрано: {selectedIds.length}</span>
+            </div>
+
+            <div className="employer-verification-page__bulk-bar-actions">
+              <Button
+                type="button"
+                variant="accent-outline"
+                className="employer-verification-page__bulk-bar-button employer-verification-page__bulk-bar-button--request"
+                onClick={() => handleBulkAction("request-changes")}
+                loading={bulkActionMutation.isPending}
+                disabled={anyMutationPending}
+              >
+                Запросить информацию
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                className="employer-verification-page__bulk-bar-button"
+                onClick={() => handleBulkAction("reject")}
+                loading={bulkActionMutation.isPending}
+                disabled={anyMutationPending}
+              >
+                Отклонить
+              </Button>
+              <Button
+                type="button"
+                variant="success"
+                className="employer-verification-page__bulk-bar-button"
+                onClick={() => handleBulkAction("approve")}
+                loading={bulkActionMutation.isPending}
+                disabled={anyMutationPending}
+              >
+                Одобрить
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <section className="employer-verification-page__content">
           <div className="employer-verification-page__table-head">
             <div className="employer-verification-page__table-cell employer-verification-page__table-cell--check">
@@ -1000,51 +1221,66 @@ export function EmployerVerificationPage() {
                             </div>
                           </div>
                           <div className="employer-verification-page__detail">
+                            <div className="employer-verification-page__detail-label">Соцсеть</div>
+                            <div className="employer-verification-page__detail-value">
+                              {item.social_link ?? "Не указано"}
+                            </div>
+                          </div>
+                          <div className="employer-verification-page__detail">
+                            <div className="employer-verification-page__detail-label">Телефон</div>
+                            <div className="employer-verification-page__detail-value">
+                              {item.phone ?? "Не указано"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="employer-verification-page__details-column employer-verification-page__details-column--actions">
+                          <div className="employer-verification-page__detail">
                             <div className="employer-verification-page__detail-label">Комментарий</div>
                             <textarea
                               className="employer-verification-page__comment"
                               value={currentExpandedItem?.id === item.id ? moderatorComment : ""}
                               onChange={(event) => setModeratorComment(event.target.value)}
-                              placeholder="Добавьте комментарий для работодателя"
+                              placeholder=""
                             />
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="employer-verification-page__detail-actions">
-                        <Button
-                          type="button"
-                          variant="accent-outline"
-                          size="md"
-                          onClick={() => handleRequestChanges(item.id)}
-                          loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
-                          disabled={anyMutationPending}
-                        >
-                          Запросить дополнительную информацию
-                        </Button>
-                        <div className="employer-verification-page__detail-actions-group">
-                          <Button
-                            type="button"
-                            variant="danger"
-                            size="md"
-                            className="employer-verification-page__decision-button"
-                            onClick={() => handleReject(item.id)}
-                            loading={rejectMutation.isPending && currentExpandedItem?.id === item.id}
-                            disabled={anyMutationPending}
-                          >
-                            Отклонить
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="success"
-                            size="md"
-                            className="employer-verification-page__decision-button"
-                            onClick={() => handleApprove(item.id)}
-                            loading={approveMutation.isPending && currentExpandedItem?.id === item.id}
-                            disabled={anyMutationPending}
-                          >
-                            Одобрить
-                          </Button>
+                          <div className="employer-verification-page__detail-actions employer-verification-page__detail-actions--stacked">
+                            <Button
+                              type="button"
+                              variant="accent-outline"
+                              size="sm"
+                              className="employer-verification-page__detail-action-request"
+                              onClick={() => handleRequestChanges(item.id)}
+                              loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
+                              disabled={anyMutationPending}
+                            >
+                              Запросить дополнительную информацию
+                            </Button>
+                            <div className="employer-verification-page__detail-actions-group">
+                              <Button
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                className="employer-verification-page__decision-button"
+                                onClick={() => handleReject(item.id)}
+                                loading={rejectMutation.isPending && currentExpandedItem?.id === item.id}
+                                disabled={anyMutationPending}
+                              >
+                                Отклонить
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="success"
+                                size="sm"
+                                className="employer-verification-page__decision-button"
+                                onClick={() => handleApprove(item.id)}
+                                loading={approveMutation.isPending && currentExpandedItem?.id === item.id}
+                                disabled={anyMutationPending}
+                              >
+                                Одобрить
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1067,8 +1303,14 @@ export function EmployerVerificationPage() {
                 className="employer-verification-page__pagination-arrow"
                 onClick={() => setPage((current) => Math.max(current - 1, 1))}
                 disabled={page === 1}
+                aria-label="Предыдущая страница"
               >
-                &lt;
+                <img
+                  src={arrowIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="employer-verification-page__pagination-arrow-icon employer-verification-page__pagination-arrow-icon--prev"
+                />
               </button>
               {pageNumbers.map((item, index) =>
                 item === "ellipsis" ? (
@@ -1095,8 +1337,14 @@ export function EmployerVerificationPage() {
                 className="employer-verification-page__pagination-arrow"
                 onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
                 disabled={page === totalPages}
+                aria-label="Следующая страница"
               >
-                &gt;
+                <img
+                  src={arrowIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="employer-verification-page__pagination-arrow-icon"
+                />
               </button>
             </nav>
           ) : null}

@@ -104,7 +104,7 @@
   transition: background-color 180ms ease;
 }
 
-.opportunity-filters__search:hover,
+.opportunity-filters__search:hover:not(:focus-within),
 .opportunity-filters__search:focus-within,
 .opportunity-filters__search:active {
   --opportunity-filters-search-chrome: var(--color-text-primary);

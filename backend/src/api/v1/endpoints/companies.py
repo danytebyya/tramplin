@@ -66,6 +66,8 @@ async def upload_employer_verification_documents(
     files: list[UploadFile] | None = File(default=None),
     verification_request_id: str | None = Form(default=None),
     deleted_document_ids: list[str] | None = Form(default=None),
+    phone: str | None = Form(default=None),
+    social_link: str | None = Form(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -79,6 +81,8 @@ async def upload_employer_verification_documents(
         files=documents,
         verification_request_id=verification_request_id,
         deleted_document_ids=deleted_document_ids,
+        phone=phone.strip() or None if phone is not None else None,
+        social_link=social_link.strip() or None if social_link is not None else None,
     )
     return success_response(result)
 

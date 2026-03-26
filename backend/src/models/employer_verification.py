@@ -93,6 +93,8 @@ class EmployerVerificationRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     inn: Mapped[str] = mapped_column(String(12), nullable=False)
     corporate_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    social_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[EmployerVerificationRequestStatus] = mapped_column(
         Enum(
             EmployerVerificationRequestStatus,

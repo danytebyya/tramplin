@@ -174,7 +174,7 @@
   color: rgba(255, 255, 255, 0.92);
 }
 
-.header__search-input.input:hover {
+.header__search-input.input:not(.input--error):not(:disabled):not(:focus):not(:focus-visible):hover {
   background-color: var(--color-white-hover);
 }
 

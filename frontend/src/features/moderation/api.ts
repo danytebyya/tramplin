@@ -91,6 +91,8 @@ export type EmployerVerificationRequestItem = {
   inn: string;
   corporate_email: string | null;
   website_url: string | null;
+  phone: string | null;
+  social_link: string | null;
   employer_type: string;
   submitted_at: string;
   status: EmployerVerificationRequestStatus;

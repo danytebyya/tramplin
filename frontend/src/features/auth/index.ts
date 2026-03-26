@@ -59,8 +59,6 @@ export type MeResponse = {
         inn?: string;
         corporate_email?: string;
         website?: string | null;
-        phone?: string | null;
-        social_link?: string | null;
         verification_status?:
           | "unverified"
           | "pending_review"

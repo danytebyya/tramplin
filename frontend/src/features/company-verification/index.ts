@@ -87,6 +87,8 @@ export async function uploadEmployerVerificationDocuments(payload: {
   files: File[];
   verificationRequestId?: string;
   deletedDocumentIds?: string[];
+  phone?: string;
+  socialLink?: string;
 }) {
   const formData = new FormData();
 
@@ -102,6 +104,14 @@ export async function uploadEmployerVerificationDocuments(payload: {
   payload.deletedDocumentIds?.forEach((documentId) => {
     formData.append("deleted_document_ids", documentId);
   });
+
+  if (payload.phone) {
+    formData.append("phone", payload.phone);
+  }
+
+  if (payload.socialLink) {
+    formData.append("social_link", payload.socialLink);
+  }
 
   const handleProgress = (event: AxiosProgressEvent) => {
     const progress = event.total

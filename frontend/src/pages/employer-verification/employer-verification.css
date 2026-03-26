@@ -120,7 +120,7 @@
   outline: none;
 }
 
-.employer-verification-page__search.header__search:hover::before {
+.employer-verification-page__search.header__search:hover:not(:focus-within)::before {
   background-color: var(--color-text-primary);
 }
 
@@ -128,7 +128,7 @@
   background-color: var(--color-text-secondary);
 }
 
-.employer-verification-page__search:hover .input-field__action::before {
+.employer-verification-page__search:hover:not(:focus-within) .input-field__action::before {
   background-color: var(--color-text-primary);
 }
 
@@ -136,6 +136,66 @@
   display: flex;
   align-items: flex-start;
   gap: 16px;
+}
+
+.employer-verification-page__bulk-bar-shell {
+  max-height: 0;
+  margin-bottom: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 0.32s ease,
+    margin-bottom 0.32s ease,
+    opacity 0.24s ease;
+}
+
+.employer-verification-page__bulk-bar-shell--visible {
+  max-height: 120px;
+  margin-bottom: 24px;
+  opacity: 1;
+}
+
+.employer-verification-page__bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  transform: translateY(16px);
+  transition: transform 0.32s ease, opacity 0.24s ease;
+}
+
+.employer-verification-page__bulk-bar-shell--visible .employer-verification-page__bulk-bar {
+  transform: translateY(0);
+}
+
+.employer-verification-page__bulk-bar-selection {
+  margin-left: 27px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.employer-verification-page__bulk-bar-count {
+  color: var(--color-text-primary);
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
+}
+
+.employer-verification-page__bulk-bar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.employer-verification-page__bulk-bar-button.button {
+  width: auto;
+  min-width: 0;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
 }
 
 .employer-verification-page__filters {
@@ -477,9 +537,9 @@
 
 .employer-verification-page__details-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1.2fr;
+  grid-template-columns: minmax(0, 354px) minmax(240px, 1fr) minmax(280px, 1fr);
   gap: 24px;
-  padding: 20px 0;
+  padding: 20px 0 0;
   border-radius: 12px;
   background: var(--color-bg-primary);
 }
@@ -512,6 +572,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
+  max-height: 292px;
+  overflow: auto;
+  align-content: flex-start;
+  padding-right: 8px;
 }
 
 .employer-verification-page__document {
@@ -539,7 +603,6 @@
   flex: 0 0 auto;
   overflow: hidden;
   border-radius: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
   background: #f8fafc;
   box-shadow: var(--shadow-sm);
 }
@@ -556,6 +619,30 @@
   height: 100%;
   display: block;
   margin: 0 auto;
+}
+
+.employer-verification-page__document-preview-docx-host {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.employer-verification-page__document-preview-docx-stage {
+  flex: 0 0 auto;
+  transform-origin: top left;
+}
+
+.employer-verification-page__document-preview-docx-stage .docx-wrapper {
+  padding: 0;
+  background: transparent;
+}
+
+.employer-verification-page__document-preview-docx-stage .docx {
+  margin: 0;
+  box-shadow: none;
 }
 
 .employer-verification-page__document-preview-fallback {
@@ -585,8 +672,12 @@
   color: var(--color-text-primary);
   text-align: center;
   width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+.employer-verification-page__document-size,
 .employer-verification-page__document-caption,
 .employer-verification-page__document-unavailable {
   margin-top: 2px;
@@ -610,7 +701,16 @@
   border-radius: 12px;
   outline: none;
   color: var(--color-text-primary);
-  font: inherit;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  font-family: inherit;
+}
+
+.employer-verification-page__comment::placeholder {
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  font-family: inherit;
 }
 
 .employer-verification-page__comment:focus {
@@ -619,20 +719,45 @@
 
 .employer-verification-page__detail-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   gap: 16px;
-  padding: 16px 0 0;
+  width: 100%;
+  padding: 0;
 }
 
 .employer-verification-page__detail-actions-group {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 16px;
+  width: 100%;
+}
+
+.employer-verification-page__details-column--actions {
+  min-width: 0;
+}
+
+.employer-verification-page__detail-actions--stacked {
+  margin-top: auto;
+}
+
+.employer-verification-page__detail-action-request.button {
+  width: 100%;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  padding: 12px 16px;
+}
+
+.employer-verification-page__detail-actions-group .button {
+  flex: 1 1 0;
 }
 
 .employer-verification-page__decision-button.button {
   gap: 0;
+  width: 100%;
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
 }
 
 .employer-verification-page__decision-button .button__label {
@@ -672,15 +797,32 @@
   font-size: var(--type-body-large-size);
   line-height: var(--type-body-large-line);
   cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.employer-verification-page__pagination-arrow-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+  transform: rotate(270deg);
+}
+
+.employer-verification-page__pagination-arrow-icon--prev {
+  transform: rotate(90deg);
 }
 
 .employer-verification-page__pagination-page--active {
-  color: var(--color-accent);
+  color: var(--color-text-primary);
 }
 
 .employer-verification-page__pagination-arrow:disabled {
   opacity: 0.4;
-  cursor: default;
+  cursor: not-allowed;
+}
+
+.employer-verification-page__pagination-arrow:not(:disabled):hover,
+.employer-verification-page__pagination-page:hover {
+  color: var(--color-accent);
 }
 
 .employer-verification-page__pagination-ellipsis {
@@ -694,6 +836,19 @@
 
   .employer-verification-page__toolbar-actions {
     justify-content: flex-end;
+  }
+
+  .employer-verification-page__bulk-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .employer-verification-page__bulk-bar-actions {
+    justify-content: stretch;
+  }
+
+  .employer-verification-page__bulk-bar-button.button {
+    width: 100%;
   }
 
   .employer-verification-page__table-head {

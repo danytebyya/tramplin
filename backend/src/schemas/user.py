@@ -21,8 +21,6 @@ class EmployerProfileRead(BaseModel):
     inn: str
     corporate_email: EmailStr
     website: str | None = None
-    phone: str | None = None
-    social_link: str | None = None
     verification_status: EmployerVerificationStatus
     moderator_comment: str | None = None
     model_config = {"from_attributes": True}

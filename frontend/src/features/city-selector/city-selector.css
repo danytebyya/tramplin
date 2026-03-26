@@ -53,7 +53,7 @@
   display: block;
 }
 
-.city-selector__search:hover,
+.city-selector__search:hover:not(:focus-within),
 .city-selector__search:focus-within,
 .city-selector__search:active {
   --opportunity-filters-search-chrome: var(--color-text-primary);

@@ -226,6 +226,10 @@ def test_employer_verification_draft_returns_saved_fields_and_documents(client, 
     upload_response = client.post(
         "/api/v1/companies/verification-documents",
         headers={"Authorization": f"Bearer {access_token}"},
+        data={
+            "phone": "+7 (999) 111-22-33",
+            "social_link": "https://max.chat/draft",
+        },
         files=[
             ("files", ("registration.pdf", b"registration-document", "application/pdf")),
         ],
