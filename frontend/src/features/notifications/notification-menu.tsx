@@ -192,6 +192,12 @@ export function NotificationMenu({
 
       socket = new WebSocket(getNotificationsWebSocketUrl(accessToken));
 
+      socket.onopen = () => {
+        if (isDisposed) {
+          socket?.close();
+        }
+      };
+
       socket.onmessage = () => {
         void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
         void queryClient.refetchQueries({ queryKey: ["notifications", "feed"], type: "active" });
@@ -219,7 +225,16 @@ export function NotificationMenu({
       if (reconnectTimeoutId !== null) {
         window.clearTimeout(reconnectTimeoutId);
       }
-      socket?.close();
+      if (socket) {
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onclose = null;
+        socket.onerror = null;
+
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.close();
+        }
+      }
     };
   }, [accessToken, queryClient]);
 

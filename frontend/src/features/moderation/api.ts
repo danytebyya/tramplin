@@ -140,17 +140,29 @@ export async function updateModerationSettingsRequest(payload: ModerationSetting
 export async function listEmployerVerificationRequestsRequest(
   filters: EmployerVerificationRequestListFilters,
 ) {
+  const params = new URLSearchParams();
+
+  if (filters.search) {
+    params.set("search", filters.search);
+  }
+
+  if (filters.statuses && filters.statuses.length > 0) {
+    filters.statuses.forEach((status) => {
+      params.append("statuses", status);
+    });
+  }
+
+  if (filters.period && filters.period !== "all") {
+    params.set("period", filters.period);
+  }
+
+  params.set("page", String(filters.page ?? 1));
+  params.set("page_size", String(filters.pageSize ?? 6));
+
   const response = await apiClient.get<EmployerVerificationRequestListResponse>(
     "/moderation/employer-verification-requests",
     {
-      params: {
-        search: filters.search || undefined,
-        statuses:
-          filters.statuses && filters.statuses.length > 0 ? filters.statuses : undefined,
-        period: filters.period && filters.period !== "all" ? filters.period : undefined,
-        page: filters.page ?? 1,
-        page_size: filters.pageSize ?? 6,
-      },
+      params,
     },
   );
   return response.data;

@@ -34,6 +34,10 @@ type ModerationDashboardContentProps = {
   showFooter?: boolean;
 };
 
+function DashboardSkeleton({ className }: { className: string }) {
+  return <span className={`curator-dashboard__skeleton ${className}`} aria-hidden="true" />;
+}
+
 export function ModerationDashboardContent({
   footerTheme = "curator",
   showFooter = false,
@@ -74,6 +78,7 @@ export function ModerationDashboardContent({
   const visibleLatestActivity = latestActivity.slice(0, MAX_VISIBLE_ACTIVITY_ITEMS);
   const maxDayCount = Math.max(...chartDays.map((item) => item.count), 1);
   const maxCategoryCount = Math.max(...chartCategories.map((item) => item.count), 1);
+  const isLoading = dashboardQuery.isPending;
 
   return (
     <section className="curator-dashboard" id="dashboard">
@@ -87,28 +92,21 @@ export function ModerationDashboardContent({
             Ключевые метрики
           </h2>
           <div className="curator-dashboard__metrics">
-            <article className="curator-dashboard__metric-card">
-              <span className="curator-dashboard__metric-label">Всего на модерации:</span>
-              <strong className="curator-dashboard__metric-value">
-                {metrics?.total_on_moderation ?? 0}
-              </strong>
-            </article>
-            <article className="curator-dashboard__metric-card">
-              <span className="curator-dashboard__metric-label">В очереди:</span>
-              <strong className="curator-dashboard__metric-value">{metrics?.in_queue ?? 0}</strong>
-            </article>
-            <article className="curator-dashboard__metric-card">
-              <span className="curator-dashboard__metric-label">Сегодня проверено:</span>
-              <strong className="curator-dashboard__metric-value">
-                {metrics?.reviewed_today ?? 0}
-              </strong>
-            </article>
-            <article className="curator-dashboard__metric-card">
-              <span className="curator-dashboard__metric-label">Кураторов онлайн:</span>
-              <strong className="curator-dashboard__metric-value">
-                {metrics?.curators_online ?? 0}
-              </strong>
-            </article>
+            {[
+              ["Всего на модерации:", metrics?.total_on_moderation ?? 0],
+              ["В очереди:", metrics?.in_queue ?? 0],
+              ["Сегодня проверено:", metrics?.reviewed_today ?? 0],
+              ["Кураторов онлайн:", metrics?.curators_online ?? 0],
+            ].map(([label, value]) => (
+              <article key={label} className="curator-dashboard__metric-card">
+                <span className="curator-dashboard__metric-label">{label}</span>
+                {isLoading ? (
+                  <DashboardSkeleton className="curator-dashboard__skeleton--metric-value" />
+                ) : (
+                  <strong className="curator-dashboard__metric-value">{value}</strong>
+                )}
+              </article>
+            ))}
           </div>
         </section>
 
@@ -119,19 +117,31 @@ export function ModerationDashboardContent({
           <div className="curator-dashboard__week-grid">
             <article className="curator-dashboard__week-card">
               <span className="curator-dashboard__week-label">Проверено заявок:</span>
-              <strong className="curator-dashboard__week-total">
-                {weeklyActivity?.total_reviewed ?? 0}
-              </strong>
+              {isLoading ? (
+                <DashboardSkeleton className="curator-dashboard__skeleton--week-total" />
+              ) : (
+                <strong className="curator-dashboard__week-total">
+                  {weeklyActivity?.total_reviewed ?? 0}
+                </strong>
+              )}
             </article>
 
             <article className="curator-dashboard__week-card">
               <div className="curator-dashboard__chart">
-                {chartDays.map((item) => (
+                {(isLoading ? DEFAULT_WEEK_ACTIVITY_DAYS.map((label) => ({ label, count: 0 })) : chartDays).map((item, index) => (
                   <div key={item.label} className="curator-dashboard__chart-column">
-                    <span className="curator-dashboard__chart-value">{item.count}</span>
+                    {isLoading ? (
+                      <DashboardSkeleton className="curator-dashboard__skeleton--chart-value" />
+                    ) : (
+                      <span className="curator-dashboard__chart-value">{item.count}</span>
+                    )}
                     <div
-                      className="curator-dashboard__chart-bar"
-                      style={{ height: `${Math.max((item.count / maxDayCount) * 120, item.count > 0 ? 10 : 0)}px` }}
+                      className={isLoading ? "curator-dashboard__chart-bar curator-dashboard__chart-bar--skeleton" : "curator-dashboard__chart-bar"}
+                      style={
+                        isLoading
+                          ? { height: `${56 + (index % 4) * 16}px` }
+                          : { height: `${Math.max((item.count / maxDayCount) * 120, item.count > 0 ? 10 : 0)}px` }
+                      }
                     />
                     <span className="curator-dashboard__chart-label">{item.label}</span>
                   </div>
@@ -141,18 +151,24 @@ export function ModerationDashboardContent({
 
             <article className="curator-dashboard__week-card">
               <div className="curator-dashboard__category-list">
-                {chartCategories.map((item) => (
+                {(isLoading ? DEFAULT_WEEK_ACTIVITY_CATEGORIES.map((label) => ({ label, count: 0 })) : chartCategories).map((item, index) => (
                   <div key={item.label} className="curator-dashboard__category-item">
                     <span className="curator-dashboard__category-label">{item.label}</span>
                     <div className="curator-dashboard__category-track">
                       <div
-                        className="curator-dashboard__category-fill"
+                        className={isLoading ? "curator-dashboard__category-fill curator-dashboard__category-fill--skeleton" : "curator-dashboard__category-fill"}
                         style={{
-                          width: `${Math.max((item.count / maxCategoryCount) * 100, 12)}%`,
+                          width: isLoading
+                            ? `${42 + index * 12}%`
+                            : `${Math.max((item.count / maxCategoryCount) * 100, 12)}%`,
                         }}
                       />
                     </div>
-                    <span className="curator-dashboard__category-value">{item.count}</span>
+                    {isLoading ? (
+                      <DashboardSkeleton className="curator-dashboard__skeleton--category-value" />
+                    ) : (
+                      <span className="curator-dashboard__category-value">{item.count}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -164,8 +180,18 @@ export function ModerationDashboardContent({
           <div className="curator-dashboard__bottom-section">
             <h2 className="curator-dashboard__section-title">Последняя активность</h2>
               <article className="curator-dashboard__activity-card">
-                <div className="curator-dashboard__activity-list">
-                {visibleLatestActivity.length > 0 ? (
+              <div className="curator-dashboard__activity-list">
+                {isLoading ? (
+                  Array.from({ length: MAX_VISIBLE_ACTIVITY_ITEMS }, (_, index) => (
+                    <div key={`activity-skeleton-${index}`} className="curator-dashboard__activity-item">
+                      <DashboardSkeleton className="curator-dashboard__skeleton--status" />
+                      <div className="curator-dashboard__activity-content">
+                        <DashboardSkeleton className="curator-dashboard__skeleton--activity-line" />
+                        <DashboardSkeleton className="curator-dashboard__skeleton--activity-time" />
+                      </div>
+                    </div>
+                  ))
+                ) : visibleLatestActivity.length > 0 ? (
                   visibleLatestActivity.map((item) => (
                     <div key={item.id} className="curator-dashboard__activity-item">
                       <div className="curator-dashboard__activity-status">
@@ -198,7 +224,24 @@ export function ModerationDashboardContent({
             <h2 className="curator-dashboard__section-title">Срочные задачи</h2>
             <article className="curator-dashboard__urgent-card">
               <div className="curator-dashboard__urgent-groups">
-                {urgentTaskGroups.length > 0 ? (
+                {isLoading ? (
+                  Array.from({ length: 3 }, (_, groupIndex) => (
+                    <section key={`urgent-skeleton-${groupIndex}`} className="curator-dashboard__urgent-group">
+                      <div className="curator-dashboard__urgent-group-title">
+                        <DashboardSkeleton className="curator-dashboard__skeleton--dot" />
+                        <DashboardSkeleton className="curator-dashboard__skeleton--urgent-title" />
+                      </div>
+                      <div className="curator-dashboard__urgent-list">
+                        {Array.from({ length: MAX_VISIBLE_URGENT_ITEMS }, (_, itemIndex) => (
+                          <div key={`urgent-item-skeleton-${groupIndex}-${itemIndex}`} className="curator-dashboard__urgent-item">
+                            <DashboardSkeleton className="curator-dashboard__skeleton--urgent-subject" />
+                            <DashboardSkeleton className="curator-dashboard__skeleton--urgent-meta" />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))
+                ) : urgentTaskGroups.length > 0 ? (
                   urgentTaskGroups.map((group) => (
                     <section key={group.title} className="curator-dashboard__urgent-group">
                       <div className="curator-dashboard__urgent-group-title">

@@ -86,6 +86,78 @@
   font-weight: 500;
 }
 
+.curator-dashboard__skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.curator-dashboard__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.85) 50%, transparent 100%);
+  animation: curator-dashboard-skeleton-shimmer 1.3s ease-in-out infinite;
+}
+
+.curator-dashboard__skeleton--metric-value,
+.curator-dashboard__skeleton--week-total {
+  width: 96px;
+  height: 44px;
+  margin: 0 auto;
+}
+
+.curator-dashboard__skeleton--chart-value,
+.curator-dashboard__skeleton--category-value {
+  width: 22px;
+  height: 16px;
+}
+
+.curator-dashboard__skeleton--status {
+  width: 148px;
+  height: 32px;
+}
+
+.curator-dashboard__skeleton--activity-line {
+  width: 100%;
+  height: 18px;
+}
+
+.curator-dashboard__skeleton--activity-time {
+  width: 128px;
+  height: 16px;
+}
+
+.curator-dashboard__skeleton--dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+.curator-dashboard__skeleton--urgent-title {
+  width: 140px;
+  height: 20px;
+}
+
+.curator-dashboard__skeleton--urgent-subject {
+  width: 100%;
+  height: 20px;
+}
+
+.curator-dashboard__skeleton--urgent-meta {
+  width: 172px;
+  height: 16px;
+}
+
+@keyframes curator-dashboard-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .curator-dashboard__week-grid {
   display: grid;
   grid-template-columns: 0.9fr 1.4fr 1.3fr;
@@ -149,6 +221,10 @@
   background: var(--color-accent);
 }
 
+.curator-dashboard__chart-bar--skeleton {
+  background: rgba(148, 163, 184, 0.28);
+}
+
 .curator-dashboard__chart-label {
   color: var(--color-text-primary);
   font-size: var(--type-body-small-size);
@@ -185,6 +261,10 @@
   min-width: 10px;
   border-radius: 10px;
   background: var(--color-accent);
+}
+
+.curator-dashboard__category-fill--skeleton {
+  background: rgba(148, 163, 184, 0.28);
 }
 
 .curator-dashboard__category-value {

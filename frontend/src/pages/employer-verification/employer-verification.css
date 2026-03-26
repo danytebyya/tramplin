@@ -202,6 +202,10 @@
   position: relative;
 }
 
+.employer-verification-page__sorting {
+  position: relative;
+}
+
 .employer-verification-page__icon-button {
   --employer-verification-icon-color: var(--color-text-secondary);
   display: inline-flex;
@@ -263,15 +267,15 @@
   transform: rotate(180deg);
 }
 
-.employer-verification-page__filters-popover {
+.employer-verification-page__filters-popover,
+.employer-verification-page__sorting-popover {
   position: absolute;
-  top: calc(100% + 12px);
+  top: calc(100% + 5px);
   right: 0;
   z-index: 50;
-  width: 380px;
+  width: 330px;
   padding: 28px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--color-bg-primary);
   box-shadow: var(--shadow-sm);
 }
@@ -283,17 +287,17 @@
 }
 
 .employer-verification-page__filters-section {
-  gap: 16px;
+  gap: 4px;
 }
 
 .employer-verification-page__filters-section + .employer-verification-page__filters-section {
-  margin-top: 28px;
+  margin-top: 24px;
 }
 
 .employer-verification-page__filters-head {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   align-items: flex-start;
 }
 
@@ -301,17 +305,9 @@
 .employer-verification-page__filters-group-title {
   margin: 0;
   color: var(--color-text-primary);
-  font-weight: 700;
-}
-
-.employer-verification-page__filters-title {
-  font-size: var(--type-h3-size);
-  line-height: var(--type-h3-line);
-}
-
-.employer-verification-page__filters-group-title {
-  font-size: var(--type-h3-size);
-  line-height: var(--type-h3-line);
+  font-weight: 500;
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
 }
 
 .employer-verification-page__filters-reset {
@@ -319,8 +315,8 @@
   border: none;
   background: transparent;
   color: var(--color-accent);
-  font-size: var(--type-body-regular-size);
-  line-height: var(--type-body-regular-line);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
   cursor: pointer;
 }
 
@@ -330,24 +326,34 @@
 }
 
 .employer-verification-page__filters-options--checkboxes {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .employer-verification-page__filters-options--radio {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .employer-verification-page__filter-option {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   color: var(--color-text-primary);
   cursor: pointer;
+  padding: 5px 0;
 }
 
 .employer-verification-page__filters-footer {
-  gap: 12px;
-  margin-top: 28px;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.employer-verification-page__filters-footer .button {
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
 }
 
 .employer-verification-page__content {
@@ -389,6 +395,10 @@
   border-radius: 12px;
   background: var(--color-bg-primary);
   box-shadow: var(--shadow-sm);
+}
+
+.employer-verification-page__row--skeleton {
+  pointer-events: none;
 }
 
 .employer-verification-page__row-summary {
@@ -773,6 +783,51 @@
   box-shadow: var(--shadow-sm);
   color: var(--color-text-secondary);
   text-align: center;
+}
+
+.employer-verification-page__skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.employer-verification-page__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
+  animation: employer-verification-skeleton-shimmer 1.3s ease-in-out infinite;
+}
+
+.employer-verification-page__skeleton--checkbox {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
+.employer-verification-page__skeleton--title {
+  width: min(240px, 92%);
+  height: 18px;
+}
+
+.employer-verification-page__skeleton--actions {
+  width: 180px;
+  height: 14px;
+  margin-top: 12px;
+}
+
+.employer-verification-page__skeleton--cell {
+  width: 88%;
+  height: 16px;
+}
+
+@keyframes employer-verification-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .employer-verification-page__pagination {

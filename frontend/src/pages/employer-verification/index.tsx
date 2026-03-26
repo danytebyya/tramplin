@@ -32,11 +32,13 @@ import "./employer-verification.css";
 
 type VerificationStatusFilter = "all" | EmployerVerificationRequestStatus;
 type VerificationPeriodFilter = "all" | "today" | "week" | "month";
+type VerificationSortField = "date" | "alphabet";
+type VerificationSortDirection = "asc" | "desc";
 
 const PAGE_SIZE = 5;
+const SKELETON_ROW_COUNT = 3;
 const statusOptions: Array<{ value: EmployerVerificationRequestStatus; label: string }> = [
   { value: "pending", label: "На рассмотрении" },
-  { value: "under_review", label: "На рассмотрении" },
   { value: "approved", label: "Одобрено" },
   { value: "rejected", label: "Отклонено" },
   { value: "suspended", label: "Запрос информации" },
@@ -47,6 +49,11 @@ const periodOptions: Array<{ value: VerificationPeriodFilter; label: string }> =
   { value: "today", label: "За сегодня" },
   { value: "week", label: "За неделю" },
   { value: "month", label: "За месяц" },
+];
+
+const sortFieldOptions: Array<{ value: VerificationSortField; label: string }> = [
+  { value: "date", label: "По дате" },
+  { value: "alphabet", label: "По алфавиту" },
 ];
 
 const EMPTY_VERIFICATION_ITEMS: EmployerVerificationRequestItem[] = [];
@@ -432,6 +439,27 @@ function buildPageNumbers(currentPage: number, totalPages: number) {
   return [1, currentPage - 1, currentPage, currentPage + 1, "ellipsis", totalPages] as const;
 }
 
+function EmployerVerificationRowSkeleton() {
+  return (
+    <article className="employer-verification-page__row employer-verification-page__row--skeleton" aria-hidden="true">
+      <div className="employer-verification-page__row-summary">
+        <div className="employer-verification-page__row-leading">
+          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--checkbox" />
+        </div>
+        <div className="employer-verification-page__row-main">
+          <div className="employer-verification-page__row-company">
+            <span className="employer-verification-page__skeleton employer-verification-page__skeleton--title" />
+            <span className="employer-verification-page__skeleton employer-verification-page__skeleton--actions" />
+          </div>
+          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--cell" />
+          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--cell" />
+          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--cell" />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function EmployerVerificationPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -442,6 +470,8 @@ export function EmployerVerificationPage() {
   const themeRole = role === "admin" ? "admin" : "curator";
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const filtersRef = useRef<HTMLDivElement | null>(null);
+  const sortingRef = useRef<HTMLDivElement | null>(null);
   const profileMenuCloseTimeoutRef = useRef<number | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
@@ -455,7 +485,11 @@ export function EmployerVerificationPage() {
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isDescending, setIsDescending] = useState(true);
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const [selectedSortField, setSelectedSortField] = useState<VerificationSortField>("date");
+  const [appliedSortField, setAppliedSortField] = useState<VerificationSortField>("date");
+  const [selectedSortDirection, setSelectedSortDirection] = useState<VerificationSortDirection>("desc");
+  const [appliedSortDirection, setAppliedSortDirection] = useState<VerificationSortDirection>("desc");
   const [moderatorComment, setModeratorComment] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
 
@@ -481,7 +515,13 @@ export function EmployerVerificationPage() {
         statuses:
           appliedStatuses.includes("all")
             ? []
-            : (appliedStatuses as EmployerVerificationRequestStatus[]),
+            : Array.from(
+                new Set(
+                  (appliedStatuses as EmployerVerificationRequestStatus[]).flatMap((status) =>
+                    status === "pending" ? ["pending", "under_review"] : [status],
+                  ),
+                ),
+              ),
         period: appliedPeriod,
         page,
         pageSize: PAGE_SIZE,
@@ -597,21 +637,34 @@ export function EmployerVerificationPage() {
   const items = verificationRequestsQuery.data?.data?.items ?? EMPTY_VERIFICATION_ITEMS;
   const sortedItems = useMemo(() => {
     return [...items].sort((left, right) => {
+      if (appliedSortField === "alphabet") {
+        const comparison = abbreviateLegalEntityName(left.employer_name).localeCompare(
+          abbreviateLegalEntityName(right.employer_name),
+          "ru",
+        );
+        return appliedSortDirection === "asc" ? comparison : -comparison;
+      }
+
       const leftTime = new Date(left.submitted_at).getTime();
       const rightTime = new Date(right.submitted_at).getTime();
-      return isDescending ? rightTime - leftTime : leftTime - rightTime;
+      return appliedSortDirection === "desc" ? rightTime - leftTime : leftTime - rightTime;
     });
-  }, [isDescending, items]);
+  }, [appliedSortDirection, appliedSortField, items]);
   const total = verificationRequestsQuery.data?.data?.total ?? 0;
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
   const pageNumbers = buildPageNumbers(page, totalPages);
   const allRowsSelected = sortedItems.length > 0 && selectedIds.length === sortedItems.length;
   const currentExpandedItem = sortedItems.find((item) => item.id === expandedRequestId) ?? null;
+  const hasAppliedFilters =
+    appliedSearch.length > 0 ||
+    !appliedStatuses.includes("all") ||
+    appliedPeriod !== "all";
   const anyMutationPending =
     approveMutation.isPending ||
     rejectMutation.isPending ||
     requestChangesMutation.isPending ||
     bulkActionMutation.isPending;
+  const isTableLoading = verificationRequestsQuery.isPending || verificationRequestsQuery.isFetching;
 
   if (!isModerationRole) {
     return <Navigate to="/" replace />;
@@ -682,13 +735,46 @@ export function EmployerVerificationPage() {
     };
   }, [isProfileMenuOpen]);
 
+  useEffect(() => {
+    if (!isFilterOpen && !isSortOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (isFilterOpen && !filtersRef.current?.contains(target)) {
+        setIsFilterOpen(false);
+      }
+
+      if (isSortOpen && !sortingRef.current?.contains(target)) {
+        setIsSortOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFilterOpen(false);
+        setIsSortOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isFilterOpen, isSortOpen]);
+
   useEffect(() => () => {
     clearProfileMenuCloseTimeout();
   }, []);
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [verificationRequestsQuery.data?.data?.items, isDescending]);
+  }, [verificationRequestsQuery.data?.data?.items, appliedSortDirection, appliedSortField]);
 
   const profileMenuItems = [
     { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
@@ -714,6 +800,26 @@ export function EmployerVerificationPage() {
     setAppliedPeriod("all");
     setPage(1);
     setIsFilterOpen(false);
+  };
+
+  const applySorting = () => {
+    setAppliedSortField(selectedSortField);
+    setAppliedSortDirection(selectedSortDirection);
+    setPage(1);
+    setExpandedRequestId(null);
+    setSelectedIds([]);
+    setIsSortOpen(false);
+  };
+
+  const resetSorting = () => {
+    setSelectedSortField("date");
+    setAppliedSortField("date");
+    setSelectedSortDirection("desc");
+    setAppliedSortDirection("desc");
+    setPage(1);
+    setExpandedRequestId(null);
+    setSelectedIds([]);
+    setIsSortOpen(false);
   };
 
   const toggleStatusFilter = (nextStatus: VerificationStatusFilter) => {
@@ -916,13 +1022,16 @@ export function EmployerVerificationPage() {
           </label>
 
           <div className="employer-verification-page__toolbar-actions">
-            <div className="employer-verification-page__filters">
+            <div ref={filtersRef} className="employer-verification-page__filters">
               <button
                 type="button"
                 className="employer-verification-page__icon-button employer-verification-page__icon-button--filter"
                 aria-label="Фильтры"
                 aria-expanded={isFilterOpen}
-                onClick={() => setIsFilterOpen((current) => !current)}
+                onClick={() => {
+                  setIsSortOpen(false);
+                  setIsFilterOpen((current) => !current);
+                }}
               />
 
               {isFilterOpen ? (
@@ -999,13 +1108,13 @@ export function EmployerVerificationPage() {
                   </div>
 
                   <div className="employer-verification-page__filters-footer">
-                    <Button type="button" variant="accent" size="md" fullWidth onClick={applyFilters}>
+                    <Button type="button" variant="accent" size="sm" fullWidth onClick={applyFilters}>
                       Показать результаты
                     </Button>
                     <Button
                       type="button"
                       variant="accent-outline"
-                      size="md"
+                      size="sm"
                       fullWidth
                       onClick={resetFilters}
                     >
@@ -1016,21 +1125,99 @@ export function EmployerVerificationPage() {
               ) : null}
             </div>
 
-            <button
-              type="button"
-              className="employer-verification-page__icon-button employer-verification-page__icon-button--sorting"
-              aria-label="Поменять порядок сортировки"
-              onClick={() => setIsDescending((current) => !current)}
-            >
-              <span
-                aria-hidden="true"
-                className={
-                  isDescending
-                    ? "employer-verification-page__icon employer-verification-page__icon--descending"
-                    : "employer-verification-page__icon employer-verification-page__icon--ascending"
-                }
-              />
-            </button>
+            <div ref={sortingRef} className="employer-verification-page__sorting">
+              <button
+                type="button"
+                className="employer-verification-page__icon-button employer-verification-page__icon-button--sorting"
+                aria-label="Сортировка"
+                aria-expanded={isSortOpen}
+                onClick={() => {
+                  setIsFilterOpen(false);
+                  setIsSortOpen((current) => !current);
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className={
+                    appliedSortDirection === "desc"
+                      ? "employer-verification-page__icon employer-verification-page__icon--descending"
+                      : "employer-verification-page__icon employer-verification-page__icon--ascending"
+                  }
+                />
+              </button>
+
+              {isSortOpen ? (
+                <div className="employer-verification-page__sorting-popover">
+                  <div className="employer-verification-page__filters-section">
+                    <div className="employer-verification-page__filters-head">
+                      <h2 className="employer-verification-page__filters-title">Сортировка</h2>
+                      <button
+                        type="button"
+                        className="employer-verification-page__filters-reset"
+                        onClick={resetSorting}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="employer-verification-page__filters-section">
+                    <div className="employer-verification-page__filters-options employer-verification-page__filters-options--radio">
+                      {sortFieldOptions.map((option) => (
+                        <label key={option.value} className="employer-verification-page__filter-option">
+                          <Radio
+                            checked={selectedSortField === option.value}
+                            onChange={() => setSelectedSortField(option.value)}
+                            variant="accent"
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="employer-verification-page__filters-section">
+                    <div className="employer-verification-page__filters-options employer-verification-page__filters-options--radio">
+                      <label className="employer-verification-page__filter-option">
+                        <Radio
+                          checked={selectedSortDirection === "desc"}
+                          onChange={() => setSelectedSortDirection("desc")}
+                          variant="accent"
+                        />
+                        <span>
+                          {selectedSortField === "alphabet" ? "Я-А" : "Сначала новые"}
+                        </span>
+                      </label>
+                      <label className="employer-verification-page__filter-option">
+                        <Radio
+                          checked={selectedSortDirection === "asc"}
+                          onChange={() => setSelectedSortDirection("asc")}
+                          variant="accent"
+                        />
+                        <span>
+                          {selectedSortField === "alphabet" ? "А-Я" : "Сначала старые"}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="employer-verification-page__filters-footer">
+                    <Button type="button" variant="accent" size="sm" fullWidth onClick={applySorting}>
+                      Показать результаты
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="accent-outline"
+                      size="sm"
+                      fullWidth
+                      onClick={resetSorting}
+                    >
+                      Сбросить сортировку
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </section>
 
@@ -1095,7 +1282,11 @@ export function EmployerVerificationPage() {
           </div>
 
           <div className="employer-verification-page__rows">
-            {sortedItems.map((item) => {
+            {isTableLoading
+              ? Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
+                  <EmployerVerificationRowSkeleton key={`skeleton-${index}`} />
+                ))
+              : sortedItems.map((item) => {
               const statusMeta = resolveStatusMeta(item.status);
               const isExpanded = expandedRequestId === item.id;
 
@@ -1289,14 +1480,16 @@ export function EmployerVerificationPage() {
               );
             })}
 
-            {sortedItems.length === 0 ? (
+            {!isTableLoading && sortedItems.length === 0 ? (
               <div className="employer-verification-page__empty">
-                По текущим фильтрам заявок на верификацию нет.
+                {hasAppliedFilters
+                  ? "По выбранным параметрам записи не найдены."
+                  : "Заявок на верификацию пока нет."}
               </div>
             ) : null}
           </div>
 
-          {sortedItems.length > 0 ? (
+          {!isTableLoading && sortedItems.length > 0 ? (
             <nav className="employer-verification-page__pagination" aria-label="Пагинация">
               <button
                 type="button"
