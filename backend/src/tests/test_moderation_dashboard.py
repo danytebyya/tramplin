@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from src.core.security import hash_password
 from src.models import CuratorProfile, Employer, EmployerVerificationRequest, Opportunity, User
@@ -238,6 +239,80 @@ def test_curator_dashboard_weekly_activity_labels_match_real_weekdays(client, db
 
     assert weekly_activity["days"][-1]["label"] == "Чт"
     assert weekly_activity["days"][-1]["count"] == 1
+
+
+def test_curator_dashboard_latest_activity_keeps_request_changes_as_history_after_resubmission(
+    client,
+    db_session,
+):
+    curator = _create_curator(db_session, email="curator-dashboard-history@example.com")
+    access_token = _login(client, email=curator.email, password="CuratorPass123")
+
+    employer = Employer(
+        employer_type=EmployerType.COMPANY,
+        display_name="History Corp",
+        legal_name='ООО "History Corp"',
+        inn="7701234575",
+        corporate_email="hr@history.example",
+        verification_status=EmployerVerificationRequestStatus.PENDING,
+    )
+    db_session.add(employer)
+    db_session.commit()
+    db_session.refresh(employer)
+
+    submitted_at = datetime.now(UTC) - timedelta(days=2)
+    reviewed_at = datetime.now(UTC) - timedelta(days=1)
+    request = EmployerVerificationRequest(
+        employer_id=employer.id,
+        legal_name=employer.legal_name,
+        employer_type=EmployerType.COMPANY,
+        inn=employer.inn,
+        corporate_email=employer.corporate_email,
+        status=EmployerVerificationRequestStatus.PENDING,
+        submitted_at=submitted_at,
+        reviewed_by=None,
+        reviewed_at=None,
+        moderator_comment=None,
+    )
+    db_session.add(request)
+    db_session.commit()
+    db_session.refresh(request)
+
+    from src.services.notification_service import NotificationService
+    from src.enums.notifications import NotificationKind, NotificationSeverity
+
+    NotificationService(db_session).create_notification(
+        user_id=curator.id,
+        kind=NotificationKind.SYSTEM,
+        severity=NotificationSeverity.INFO,
+        title="Добро пожаловать в Трамплин!",
+        message="ignored",
+        created_at=submitted_at - timedelta(minutes=5),
+    )
+    NotificationService(db_session).create_notification(
+        user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        kind=NotificationKind.EMPLOYER_VERIFICATION,
+        severity=NotificationSeverity.INFO,
+        title="Запрос дополнительной информации",
+        message="Нужно дополнить документы",
+        payload={
+            "verification_request_id": str(request.id),
+            "status": EmployerVerificationRequestStatus.SUSPENDED.value,
+        },
+        created_at=reviewed_at,
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/moderation/dashboard",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    latest_activity = response.json()["data"]["latest_activity"]
+    assert len(latest_activity) == 1
+    assert latest_activity[0]["status_label"] == "Запрос информации"
+    assert latest_activity[0]["subject"] == "History Corp"
 
 
 def test_curator_dashboard_changes_group_shows_only_requests_older_than_one_day(client, db_session):

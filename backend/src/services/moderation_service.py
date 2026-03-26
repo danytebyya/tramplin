@@ -50,6 +50,7 @@ class ModerationService:
         now = datetime.now(UTC)
         verification_requests = self.repo.list_verification_requests()
         opportunities = self.repo.list_opportunities()
+        notifications = self.repo.list_notifications_by_kind(NotificationKind.EMPLOYER_VERIFICATION)
         moderation_settings = self._get_or_create_settings()
         employer_name_by_id = {
             str(employer.id): employer.display_name for employer in self.repo.list_employers()
@@ -99,6 +100,7 @@ class ModerationService:
             "latest_activity": self._build_latest_activity(
                 verification_requests=verification_requests,
                 opportunities=opportunities,
+                notifications=notifications,
                 employer_name_by_id=employer_name_by_id,
             ),
             "urgent_task_groups": self._build_urgent_task_groups(
@@ -437,12 +439,54 @@ class ModerationService:
         *,
         verification_requests: list,
         opportunities: list,
+        notifications: list,
         employer_name_by_id: dict[str, str],
     ) -> list[dict]:
         items: list[dict] = []
+        verification_request_by_id = {str(request.id): request for request in verification_requests}
+        notification_backed_request_statuses: set[tuple[str, str]] = set()
+
+        for notification in notifications:
+            payload = notification.payload or {}
+            request_id = payload.get("verification_request_id")
+            payload_status = payload.get("status")
+            if request_id is None or payload_status not in {
+                EmployerVerificationRequestStatus.SUSPENDED.value,
+                EmployerVerificationRequestStatus.REJECTED.value,
+            }:
+                continue
+
+            request = verification_request_by_id.get(str(request_id))
+            if request is None:
+                continue
+
+            status = EmployerVerificationRequestStatus(payload_status)
+            status_label, status_variant = self._serialize_verification_status(status)
+            notification_backed_request_statuses.add((str(request.id), payload_status))
+            items.append(
+                {
+                    "id": f"verification-event:{notification.id}",
+                    "title": status_label,
+                    "status_label": status_label,
+                    "status_variant": status_variant,
+                    "subject": self._abbreviate_legal_entity_name(
+                        employer_name_by_id.get(str(request.employer_id), request.legal_name)
+                    ),
+                    "meta": "Верификация работодателя",
+                    "created_at": self._normalize_datetime(notification.created_at).isoformat(),
+                }
+            )
 
         for request in verification_requests:
             if request.reviewed_at is None or request.reviewed_by is None:
+                continue
+            if (
+                request.status in {
+                    EmployerVerificationRequestStatus.SUSPENDED,
+                    EmployerVerificationRequestStatus.REJECTED,
+                }
+                and (str(request.id), request.status.value) in notification_backed_request_statuses
+            ):
                 continue
             status_label, status_variant = self._serialize_verification_status(request.status)
             items.append(

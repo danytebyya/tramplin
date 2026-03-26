@@ -11,10 +11,12 @@ from src.models import (
     EmployerVerificationDocument,
     EmployerVerificationRequest,
     ModerationSettings,
+    Notification,
     Opportunity,
     RefreshSession,
     User,
 )
+from src.enums.notifications import NotificationKind
 from src.models.opportunity import ModerationStatus
 class ModerationRepository:
     def __init__(self, db: Session) -> None:
@@ -60,6 +62,14 @@ class ModerationRepository:
 
     def list_employers(self) -> list[Employer]:
         stmt = select(Employer)
+        return list(self.db.execute(stmt).scalars().all())
+
+    def list_notifications_by_kind(self, kind: NotificationKind) -> list[Notification]:
+        stmt = (
+            select(Notification)
+            .where(Notification.kind == kind)
+            .order_by(Notification.created_at.desc())
+        )
         return list(self.db.execute(stmt).scalars().all())
 
     def get_settings(self) -> ModerationSettings | None:
