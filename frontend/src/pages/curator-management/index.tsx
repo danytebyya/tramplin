@@ -823,7 +823,7 @@ export function CuratorManagementPage() {
                           onChange={() => setSelectedSortDirection("asc")}
                           variant="accent"
                         />
-                        <span>{selectedSortField === "alphabet" ? "А-Я" : "По возрастанию"}</span>
+                        <span>{selectedSortField === "alphabet" ? "Я-А" : "По возрастанию"}</span>
                       </label>
                       <label className="curator-management-page__filter-option">
                         <Radio
@@ -831,7 +831,7 @@ export function CuratorManagementPage() {
                           onChange={() => setSelectedSortDirection("desc")}
                           variant="accent"
                         />
-                        <span>{selectedSortField === "alphabet" ? "Я-А" : "По убыванию"}</span>
+                        <span>{selectedSortField === "alphabet" ? "А-Я" : "По убыванию"}</span>
                       </label>
                     </div>
                   </div>
