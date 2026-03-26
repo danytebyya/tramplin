@@ -1,11 +1,17 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi.responses import FileResponse
+from pathlib import Path
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_user
 from src.db import get_db
 from src.enums import UserRole
 from src.models import User
-from src.schemas.company import EmployerInnVerificationRequest, EmployerOnboardingRequest
+from src.schemas.company import (
+    EmployerInnVerificationRequest,
+    EmployerOnboardingRequest,
+    EmployerVerificationDraftRead,
+)
 from src.schemas.user import UserRead
 from src.services import DadataService, EmployerService
 from src.utils.errors import AppError
@@ -46,6 +52,15 @@ def upsert_employer_profile(
     return success_response({"user": UserRead.model_validate(current_user).model_dump(mode="json")})
 
 
+@router.get("/verification-draft", status_code=status.HTTP_200_OK)
+def read_employer_verification_draft(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = EmployerService(db).get_verification_draft(current_user)
+    return success_response(EmployerVerificationDraftRead.model_validate(payload).model_dump(mode="json"))
+
+
 @router.post("/verification-documents", status_code=status.HTTP_200_OK)
 async def upload_employer_verification_documents(
     files: list[UploadFile] = File(...),
@@ -64,3 +79,49 @@ async def upload_employer_verification_documents(
         verification_request_id=verification_request_id,
     )
     return success_response(result)
+
+
+@router.get("/verification-documents/{document_id}/file", status_code=status.HTTP_200_OK)
+def read_employer_verification_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    document = EmployerService(db).get_verification_document_or_raise(
+        current_user=current_user,
+        document_id=document_id,
+    )
+    media_file = document.media_file
+    if media_file is None or media_file.public_url is None:
+        raise AppError(
+            code="EMPLOYER_VERIFICATION_DOCUMENT_NOT_FOUND",
+            message="Документ не найден",
+            status_code=404,
+        )
+
+    file_path = Path(media_file.public_url)
+    if not file_path.exists() or not file_path.is_file():
+        raise AppError(
+            code="EMPLOYER_VERIFICATION_DOCUMENT_NOT_FOUND",
+            message="Файл документа не найден в хранилище",
+            status_code=404,
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_file.mime_type or "application/octet-stream",
+        filename=media_file.original_filename,
+    )
+
+
+@router.delete("/verification-documents/{document_id}", status_code=status.HTTP_200_OK)
+def delete_employer_verification_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    EmployerService(db).delete_verification_document(
+        current_user=current_user,
+        document_id=document_id,
+    )
+    return success_response({"deleted": True})

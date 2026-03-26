@@ -38,6 +38,8 @@ class EmployerProfile(TimestampMixin, Base):
     inn: Mapped[str] = mapped_column(String(12), nullable=False, index=True)
     corporate_email: Mapped[str] = mapped_column(String(320), nullable=False)
     website: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    social_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     verification_status: Mapped[EmployerVerificationStatus] = mapped_column(
         Enum(
             EmployerVerificationStatus,

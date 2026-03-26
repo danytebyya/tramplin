@@ -9,6 +9,8 @@ class EmployerOnboardingRequest(BaseModel):
     inn: str = Field(min_length=10, max_length=12)
     corporate_email: EmailStr
     website: str | None = Field(default=None, max_length=500)
+    phone: str | None = Field(default=None, max_length=32)
+    social_link: str | None = Field(default=None, max_length=500)
 
     @field_validator("company_name")
     @classmethod
@@ -29,6 +31,24 @@ class EmployerOnboardingRequest(BaseModel):
     @field_validator("website")
     @classmethod
     def validate_website(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+        return normalized_value or None
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+        return normalized_value or None
+
+    @field_validator("social_link")
+    @classmethod
+    def validate_social_link(cls, value: str | None) -> str | None:
         if value is None:
             return None
 
@@ -68,3 +88,19 @@ class EmployerInnVerificationRequest(BaseModel):
                 raise ValueError("ИНН физического лица должен содержать 12 цифр")
             raise ValueError("ИНН организации должен содержать 10 цифр")
         return self
+
+
+class EmployerVerificationDraftDocumentRead(BaseModel):
+    id: str
+    file_name: str
+    file_size: int
+    mime_type: str
+    file_url: str | None = None
+
+
+class EmployerVerificationDraftRead(BaseModel):
+    verification_request_id: str | None = None
+    website: str | None = None
+    phone: str | None = None
+    social_link: str | None = None
+    documents: list[EmployerVerificationDraftDocumentRead]

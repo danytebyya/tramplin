@@ -479,14 +479,16 @@ export function SettingsPage() {
             </div>
 
             <div className="header__main">
-              <nav className="header__nav" aria-label="Основная навигация">
-                <Link to="/" className="header__nav-link">
-                  Главная
-                </Link>
-                <a href="#about" className="header__nav-link">
-                  О проекте
-                </a>
-              </nav>
+              {isModerationRole ? null : (
+                <nav className="header__nav" aria-label="Основная навигация">
+                  <Link to="/" className="header__nav-link">
+                    Главная
+                  </Link>
+                  <a href="#about" className="header__nav-link">
+                    О проекте
+                  </a>
+                </nav>
+              )}
 
               <div className="header__controls">
                 <label className="header__search" aria-label="Поиск">

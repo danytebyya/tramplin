@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getModerationDashboardRequest } from "../../features/moderation";
+import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Container, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import "./curator-dashboard.css";
@@ -25,6 +26,8 @@ function formatRelativeMinutes(timestamp: string) {
 
 const MAX_VISIBLE_ACTIVITY_ITEMS = 4;
 const MAX_VISIBLE_URGENT_ITEMS = 2;
+const DEFAULT_WEEK_ACTIVITY_DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const DEFAULT_WEEK_ACTIVITY_CATEGORIES = ["Вакансии", "Стажировки", "Мероприятия", "Менторства"];
 
 type ModerationDashboardContentProps = {
   footerTheme?: "curator" | "admin";
@@ -52,14 +55,25 @@ export function ModerationDashboardContent({
 
   const metrics = dashboardQuery.data?.data?.metrics;
   const weeklyActivity = dashboardQuery.data?.data?.weekly_activity;
+  const chartDays =
+    weeklyActivity?.days && weeklyActivity.days.length > 0
+      ? weeklyActivity.days
+      : DEFAULT_WEEK_ACTIVITY_DAYS.map((label) => ({
+          label,
+          count: 0,
+        }));
+  const chartCategories =
+    weeklyActivity?.categories && weeklyActivity.categories.length > 0
+      ? weeklyActivity.categories
+      : DEFAULT_WEEK_ACTIVITY_CATEGORIES.map((label) => ({
+          label,
+          count: 0,
+        }));
   const latestActivity = dashboardQuery.data?.data?.latest_activity ?? [];
   const urgentTaskGroups = dashboardQuery.data?.data?.urgent_task_groups ?? [];
   const visibleLatestActivity = latestActivity.slice(0, MAX_VISIBLE_ACTIVITY_ITEMS);
-  const maxDayCount = Math.max(...(weeklyActivity?.days?.map((item) => item.count) ?? [0]), 1);
-  const maxCategoryCount = Math.max(
-    ...(weeklyActivity?.categories?.map((item) => item.count) ?? [0]),
-    1,
-  );
+  const maxDayCount = Math.max(...chartDays.map((item) => item.count), 1);
+  const maxCategoryCount = Math.max(...chartCategories.map((item) => item.count), 1);
 
   return (
     <section className="curator-dashboard" id="dashboard">
@@ -112,7 +126,7 @@ export function ModerationDashboardContent({
 
             <article className="curator-dashboard__week-card">
               <div className="curator-dashboard__chart">
-                {(weeklyActivity?.days ?? []).map((item) => (
+                {chartDays.map((item) => (
                   <div key={item.label} className="curator-dashboard__chart-column">
                     <span className="curator-dashboard__chart-value">{item.count}</span>
                     <div
@@ -127,13 +141,15 @@ export function ModerationDashboardContent({
 
             <article className="curator-dashboard__week-card">
               <div className="curator-dashboard__category-list">
-                {(weeklyActivity?.categories ?? []).map((item) => (
+                {chartCategories.map((item) => (
                   <div key={item.label} className="curator-dashboard__category-item">
                     <span className="curator-dashboard__category-label">{item.label}</span>
                     <div className="curator-dashboard__category-track">
                       <div
                         className="curator-dashboard__category-fill"
-                        style={{ width: `${Math.max((item.count / maxCategoryCount) * 100, item.count > 0 ? 18 : 0)}%` }}
+                        style={{
+                          width: `${Math.max((item.count / maxCategoryCount) * 100, 12)}%`,
+                        }}
                       />
                     </div>
                     <span className="curator-dashboard__category-value">{item.count}</span>
@@ -157,7 +173,9 @@ export function ModerationDashboardContent({
                       </div>
                       <div className="curator-dashboard__activity-content">
                         <div className="curator-dashboard__activity-subject-line">
-                          <span className="curator-dashboard__activity-subject">{item.subject}</span>
+                          <span className="curator-dashboard__activity-subject">
+                            {abbreviateLegalEntityName(item.subject)}
+                          </span>
                           <span className="curator-dashboard__activity-separator" aria-hidden="true">
                             •
                           </span>
@@ -194,7 +212,9 @@ export function ModerationDashboardContent({
                       <div className="curator-dashboard__urgent-list">
                         {group.items.slice(0, MAX_VISIBLE_URGENT_ITEMS).map((item) => (
                           <div key={item.id} className="curator-dashboard__urgent-item">
-                            <div className="curator-dashboard__urgent-subject">{item.subject}</div>
+                            <div className="curator-dashboard__urgent-subject">
+                              {abbreviateLegalEntityName(item.subject)}
+                            </div>
                             <div className="curator-dashboard__urgent-meta">
                               {item.meta} · {item.age_days} дн. без решения
                             </div>

@@ -7,6 +7,8 @@ export type EmployerOnboardingPayload = {
   inn: string;
   corporate_email: string;
   website?: string;
+  phone?: string;
+  social_link?: string;
 };
 
 export type EmployerInnVerificationPayload = {
@@ -30,6 +32,24 @@ export type EmployerInnVerificationResponse = {
       registration_date?: string | null;
       director_name?: string | null;
     };
+  };
+};
+
+export type EmployerVerificationDraftDocument = {
+  id: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  file_url?: string | null;
+};
+
+export type EmployerVerificationDraftResponse = {
+  data?: {
+    verification_request_id?: string | null;
+    website?: string | null;
+    phone?: string | null;
+    social_link?: string | null;
+    documents?: EmployerVerificationDraftDocument[];
   };
 };
 
@@ -61,15 +81,18 @@ export async function upsertEmployerProfile(payload: EmployerOnboardingPayload) 
   return response.data;
 }
 
-export async function uploadEmployerVerificationDocuments(files: File[]) {
-  let verificationRequestId: string | undefined;
+export async function uploadEmployerVerificationDocuments(
+  files: File[],
+  verificationRequestId?: string,
+) {
+  let nextVerificationRequestId = verificationRequestId;
 
   for (const file of files) {
     let latestProgress = 1;
     const formData = new FormData();
     formData.append("files", file);
-    if (verificationRequestId) {
-      formData.append("verification_request_id", verificationRequestId);
+    if (nextVerificationRequestId) {
+      formData.append("verification_request_id", nextVerificationRequestId);
     }
 
     dispatchEmployerDocumentUploadProgress(file, latestProgress);
@@ -85,7 +108,7 @@ export async function uploadEmployerVerificationDocuments(files: File[]) {
     });
 
     dispatchEmployerDocumentUploadProgress(file, 100);
-    verificationRequestId = response.data?.data?.verification_request_id ?? verificationRequestId;
+    nextVerificationRequestId = response.data?.data?.verification_request_id ?? nextVerificationRequestId;
   }
 }
 
@@ -93,6 +116,20 @@ export async function verifyEmployerInn(
   payload: EmployerInnVerificationPayload,
 ): Promise<EmployerInnVerificationResponse> {
   const response = await apiClient.post("/companies/verify-inn", payload, {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
+export async function getEmployerVerificationDraft() {
+  const response = await apiClient.get<EmployerVerificationDraftResponse>("/companies/verification-draft", {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
+export async function deleteEmployerVerificationDocument(documentId: string) {
+  const response = await apiClient.delete(`/companies/verification-documents/${documentId}`, {
     headers: getAuthorizedHeaders(),
   });
   return response.data;

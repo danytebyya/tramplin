@@ -1,9 +1,9 @@
 import hashlib
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import and_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from src.enums import (
     EmployerVerificationRequestStatus,
@@ -53,6 +53,8 @@ class EmployerService:
                 inn=payload.inn,
                 corporate_email=payload.corporate_email,
                 website=payload.website,
+                phone=payload.phone,
+                social_link=payload.social_link,
                 verification_status=EmployerVerificationStatus.UNVERIFIED,
             )
             self.db.add(employer_profile)
@@ -62,6 +64,10 @@ class EmployerService:
             employer_profile.inn = payload.inn
             employer_profile.corporate_email = payload.corporate_email
             employer_profile.website = payload.website
+            employer_profile.phone = payload.phone
+            employer_profile.social_link = payload.social_link
+
+        employer_profile.moderator_comment = None
 
         self.db.commit()
         self.db.refresh(employer_profile)
@@ -107,6 +113,49 @@ class EmployerService:
                 status_code=409,
             )
 
+    def get_verification_document_or_raise(
+        self,
+        *,
+        current_user: User,
+        document_id: str,
+    ) -> EmployerVerificationDocument:
+        document = (
+            self.db.query(EmployerVerificationDocument)
+            .options(
+                selectinload(EmployerVerificationDocument.media_file),
+                selectinload(EmployerVerificationDocument.verification_request),
+            )
+            .filter(EmployerVerificationDocument.id == UUID(str(document_id)))
+            .one_or_none()
+        )
+
+        if document is None or document.media_file is None:
+            raise AppError(
+                code="EMPLOYER_VERIFICATION_DOCUMENT_NOT_FOUND",
+                message="Документ не найден",
+                status_code=404,
+            )
+
+        if current_user.role in {UserRole.CURATOR, UserRole.ADMIN}:
+            return document
+
+        if current_user.role != UserRole.EMPLOYER:
+            raise AppError(
+                code="EMPLOYER_VERIFICATION_DOCUMENT_FORBIDDEN",
+                message="Недостаточно прав для просмотра документа",
+                status_code=403,
+            )
+
+        verification_request = document.verification_request
+        if verification_request is None or verification_request.submitted_by != current_user.id:
+            raise AppError(
+                code="EMPLOYER_VERIFICATION_DOCUMENT_FORBIDDEN",
+                message="Недостаточно прав для просмотра документа",
+                status_code=403,
+            )
+
+        return document
+
     def submit_verification_documents(
         self,
         current_user: User,
@@ -145,6 +194,7 @@ class EmployerService:
                 inn=employer_profile.inn,
                 website_url=employer_profile.website,
                 corporate_email=employer_profile.corporate_email,
+                phone=employer_profile.phone,
                 verification_status=EmployerVerificationRequestStatus.PENDING,
                 created_by=current_user.id,
                 updated_by=current_user.id,
@@ -157,6 +207,7 @@ class EmployerService:
             employer.legal_name = employer_profile.company_name
             employer.website_url = employer_profile.website
             employer.corporate_email = employer_profile.corporate_email
+            employer.phone = employer_profile.phone
             employer.verification_status = EmployerVerificationRequestStatus.PENDING
             employer.updated_by = current_user.id
 
@@ -235,6 +286,7 @@ class EmployerService:
             )
 
         employer_profile.verification_status = EmployerVerificationStatus.PENDING_REVIEW
+        employer_profile.moderator_comment = None
         NotificationService(self.db).create_notification(
             user_id=current_user.id,
             kind=NotificationKind.EMPLOYER_VERIFICATION,
@@ -252,3 +304,87 @@ class EmployerService:
             "verification_request_id": str(verification_request.id),
             "documents_count": len(files),
         }
+
+    def get_verification_draft(self, current_user: User) -> dict:
+        if current_user.role != UserRole.EMPLOYER:
+            raise AppError(
+                code="EMPLOYER_PROFILE_FORBIDDEN",
+                message="Профиль работодателя доступен только работодателям",
+                status_code=403,
+            )
+
+        employer_profile = current_user.employer_profile
+        if employer_profile is None:
+            return {
+                "verification_request_id": None,
+                "website": None,
+                "phone": None,
+                "social_link": None,
+                "documents": [],
+            }
+
+        verification_request = (
+            self.db.query(EmployerVerificationRequest)
+            .options(
+                selectinload(EmployerVerificationRequest.documents).selectinload(
+                    EmployerVerificationDocument.media_file
+                )
+            )
+            .filter(
+                EmployerVerificationRequest.submitted_by == current_user.id,
+                EmployerVerificationRequest.status.in_(
+                    [
+                        EmployerVerificationRequestStatus.PENDING,
+                        EmployerVerificationRequestStatus.UNDER_REVIEW,
+                        EmployerVerificationRequestStatus.SUSPENDED,
+                        EmployerVerificationRequestStatus.REJECTED,
+                    ]
+                ),
+            )
+            .order_by(EmployerVerificationRequest.submitted_at.desc())
+            .first()
+        )
+
+        return {
+            "verification_request_id": str(verification_request.id) if verification_request is not None else None,
+            "website": employer_profile.website,
+            "phone": employer_profile.phone,
+            "social_link": employer_profile.social_link,
+            "documents": [
+                {
+                    "id": str(document.id),
+                    "file_name": (
+                        document.media_file.original_filename if document.media_file is not None else "Документ"
+                    ),
+                    "file_size": document.media_file.file_size if document.media_file is not None else 0,
+                    "mime_type": (
+                        document.media_file.mime_type
+                        if document.media_file is not None
+                        else "application/octet-stream"
+                    ),
+                    "file_url": (
+                        f"/api/v1/companies/verification-documents/{document.id}/file"
+                        if document.media_file is not None
+                        else document.source_url
+                    ),
+                }
+                for document in (verification_request.documents if verification_request is not None else [])
+            ],
+        }
+
+    def delete_verification_document(self, *, current_user: User, document_id: str) -> None:
+        document = self.get_verification_document_or_raise(
+            current_user=current_user,
+            document_id=document_id,
+        )
+
+        media_file = document.media_file
+        if media_file is not None and media_file.public_url:
+            file_path = Path(media_file.public_url)
+            if file_path.exists() and file_path.is_file():
+                file_path.unlink()
+
+        self.db.delete(document)
+        if media_file is not None:
+            self.db.delete(media_file)
+        self.db.commit()

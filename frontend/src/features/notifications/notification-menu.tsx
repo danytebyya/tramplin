@@ -82,6 +82,15 @@ export function NotificationMenu({
     queryFn: listNotificationsRequest,
     enabled: isAuthenticated,
     staleTime: 60_000,
+    refetchInterval: () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return false;
+      }
+
+      return 15_000;
+    },
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
   const unreadCount = getUnreadCount(notificationsQuery.data);
   const items = notificationsQuery.data?.data?.items ?? [];

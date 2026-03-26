@@ -276,6 +276,9 @@
 .curator-dashboard__activity-subject,
 .curator-dashboard__activity-meta {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .curator-dashboard__urgent-group {

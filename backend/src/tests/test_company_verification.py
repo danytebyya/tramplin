@@ -203,3 +203,90 @@ def test_upload_employer_verification_documents_persists_records(client, db_sess
     assert verification_request.inn == "7707083893"
     assert len(documents) == 2
     assert len(media_files) == 2
+
+
+def test_employer_verification_draft_returns_saved_fields_and_documents(client, db_session):
+    access_token = _register_and_login_employer(client, db_session, email="draft@example.com")
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Draft Corp",
+            "inn": "7707083894",
+            "corporate_email": "hr@draft.example",
+            "website": "https://draft.example",
+            "phone": "+7 (999) 111-22-33",
+            "social_link": "https://max.chat/draft",
+        },
+    )
+    assert profile_response.status_code == 200
+
+    upload_response = client.post(
+        "/api/v1/companies/verification-documents",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files=[
+            ("files", ("registration.pdf", b"registration-document", "application/pdf")),
+        ],
+    )
+    assert upload_response.status_code == 200
+
+    response = client.get(
+        "/api/v1/companies/verification-draft",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["website"] == "https://draft.example"
+    assert body["phone"] == "+7 (999) 111-22-33"
+    assert body["social_link"] == "https://max.chat/draft"
+    assert body["verification_request_id"] is not None
+    assert len(body["documents"]) == 1
+    assert body["documents"][0]["file_name"] == "registration.pdf"
+
+
+def test_employer_can_delete_existing_verification_document(client, db_session):
+    access_token = _register_and_login_employer(client, db_session, email="draft-delete@example.com")
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Delete Corp",
+            "inn": "7707083895",
+            "corporate_email": "hr@delete.example",
+            "website": "https://delete.example",
+        },
+    )
+    assert profile_response.status_code == 200
+
+    upload_response = client.post(
+        "/api/v1/companies/verification-documents",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files=[
+            ("files", ("registration.pdf", b"registration-document", "application/pdf")),
+        ],
+    )
+    assert upload_response.status_code == 200
+
+    draft_response = client.get(
+        "/api/v1/companies/verification-draft",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    document_id = draft_response.json()["data"]["documents"][0]["id"]
+
+    delete_response = client.delete(
+        f"/api/v1/companies/verification-documents/{document_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert delete_response.status_code == 200
+
+    next_draft_response = client.get(
+        "/api/v1/companies/verification-draft",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert next_draft_response.status_code == 200
+    assert next_draft_response.json()["data"]["documents"] == []

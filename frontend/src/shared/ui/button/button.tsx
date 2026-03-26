@@ -14,7 +14,9 @@ type ButtonVariant =
   | "accent-outline"
   | "accent-ghost"
   | "danger"
-  | "success";
+  | "danger-ghost"
+  | "success"
+  | "success-ghost";
 type ButtonSize = "sm" | "md";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

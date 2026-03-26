@@ -506,6 +506,32 @@ a {
   color: var(--color-text-tertiary);
 }
 
+.button--danger-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-danger);
+}
+
+.button--danger-ghost:not(.button--loading):not(:disabled):hover {
+  color: var(--color-danger-hover);
+}
+
+.button--danger-ghost:not(.button--loading):not(:disabled):active {
+  color: var(--color-danger-active);
+}
+
+.button--danger-ghost:not(.button--loading):focus-visible {
+  outline: none;
+  border-width: 3px;
+  border-color: var(--color-danger-active);
+}
+
+.button--danger-ghost:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-tertiary);
+}
+
 .button--success {
   background: var(--color-success);
   color: var(--color-text-inverse);
@@ -530,6 +556,32 @@ a {
 .button--success:disabled {
   background: var(--color-primary-disabled);
   border-color: var(--color-primary-disabled);
+  color: var(--color-text-tertiary);
+}
+
+.button--success-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-success);
+}
+
+.button--success-ghost:not(.button--loading):not(:disabled):hover {
+  color: var(--color-success-hover);
+}
+
+.button--success-ghost:not(.button--loading):not(:disabled):active {
+  color: var(--color-success-active);
+}
+
+.button--success-ghost:not(.button--loading):focus-visible {
+  outline: none;
+  border-width: 3px;
+  border-color: var(--color-success-active);
+}
+
+.button--success-ghost:disabled {
+  background: transparent;
+  border-color: transparent;
   color: var(--color-text-tertiary);
 }
 

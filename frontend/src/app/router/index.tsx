@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ReactElement } from "react";
 
 import { meRequest, useAuthStore } from "../../features/auth";
@@ -39,6 +39,12 @@ function useEmployerProfileAccess() {
     shouldCheckEmployerProfile,
     isEmployerProfilePending: shouldCheckEmployerProfile && currentUserQuery.isPending,
     hasEmployerProfile: Boolean(currentUserQuery.data?.data?.user?.employer_profile),
+    employerVerificationStatus:
+      currentUserQuery.data?.data?.user?.employer_profile?.verification_status ?? null,
+    requiresEmployerOnboarding:
+      role === "employer" &&
+      (!currentUserQuery.data?.data?.user?.employer_profile ||
+        currentUserQuery.data?.data?.user?.employer_profile?.verification_status === "unverified"),
   };
 }
 
@@ -49,7 +55,7 @@ function ProtectedRoute({ children }: { children: ReactElement }) {
     isHydrated,
     shouldCheckEmployerProfile,
     isEmployerProfilePending,
-    hasEmployerProfile,
+    requiresEmployerOnboarding,
   } = useEmployerProfileAccess();
 
   if (!isHydrated) {
@@ -65,7 +71,7 @@ function ProtectedRoute({ children }: { children: ReactElement }) {
       return null;
     }
 
-    if (!hasEmployerProfile) {
+    if (requiresEmployerOnboarding) {
       return <Navigate to="/onboarding/employer" replace />;
     }
   }
@@ -90,7 +96,7 @@ function GuestOnlyRoute({ children }: { children: ReactElement }) {
 }
 
 function HomeRoute() {
-  const { isHydrated, shouldCheckEmployerProfile, isEmployerProfilePending, hasEmployerProfile } =
+  const { isHydrated, shouldCheckEmployerProfile, isEmployerProfilePending, requiresEmployerOnboarding } =
     useEmployerProfileAccess();
 
   if (!isHydrated) {
@@ -102,7 +108,7 @@ function HomeRoute() {
       return null;
     }
 
-    if (!hasEmployerProfile) {
+    if (requiresEmployerOnboarding) {
       return <Navigate to="/onboarding/employer" replace />;
     }
   }
@@ -111,12 +117,14 @@ function HomeRoute() {
 }
 
 function EmployerOnboardingRoute() {
+  const location = useLocation();
   const {
     role,
     isHydrated,
     isAuthenticated,
     isEmployerProfilePending,
     hasEmployerProfile,
+    employerVerificationStatus,
   } = useEmployerProfileAccess();
 
   if (!isHydrated) {
@@ -135,7 +143,18 @@ function EmployerOnboardingRoute() {
     return null;
   }
 
-  if (hasEmployerProfile) {
+  if (employerVerificationStatus === "changes_requested") {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get("mode") !== "changes-requested") {
+      return <Navigate to="/onboarding/employer?mode=changes-requested" replace />;
+    }
+  }
+
+  if (
+    hasEmployerProfile &&
+    employerVerificationStatus !== "changes_requested" &&
+    employerVerificationStatus !== "unverified"
+  ) {
     return <Navigate to="/" replace />;
   }
 
@@ -143,7 +162,7 @@ function EmployerOnboardingRoute() {
 }
 
 function EmployerRestrictedPublicRoute({ children }: { children: ReactElement }) {
-  const { isHydrated, shouldCheckEmployerProfile, isEmployerProfilePending, hasEmployerProfile } =
+  const { isHydrated, shouldCheckEmployerProfile, isEmployerProfilePending, requiresEmployerOnboarding } =
     useEmployerProfileAccess();
 
   if (!isHydrated) {
@@ -155,7 +174,7 @@ function EmployerRestrictedPublicRoute({ children }: { children: ReactElement })
       return null;
     }
 
-    if (!hasEmployerProfile) {
+    if (requiresEmployerOnboarding) {
       return <Navigate to="/onboarding/employer" replace />;
     }
   }
@@ -164,7 +183,7 @@ function EmployerRestrictedPublicRoute({ children }: { children: ReactElement })
 }
 
 function FallbackRoute() {
-  const { isHydrated, shouldCheckEmployerProfile, isEmployerProfilePending, hasEmployerProfile, isAuthenticated } =
+  const { isHydrated, shouldCheckEmployerProfile, isEmployerProfilePending, requiresEmployerOnboarding, isAuthenticated } =
     useEmployerProfileAccess();
 
   if (!isHydrated) {
@@ -176,7 +195,7 @@ function FallbackRoute() {
       return null;
     }
 
-    if (!hasEmployerProfile) {
+    if (requiresEmployerOnboarding) {
       return <Navigate to="/onboarding/employer" replace />;
     }
   }

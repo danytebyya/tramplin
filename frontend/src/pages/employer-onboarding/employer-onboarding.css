@@ -83,6 +83,29 @@ body.employer-onboarding-page-root {
   transform: translateY(2px);
 }
 
+.employer-onboarding-card__rejection-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.employer-onboarding-card__rejection-title {
+  color: var(--color-danger);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  font-weight: 600;
+}
+
+.employer-onboarding-card__rejection-text {
+  color: var(--color-text-primary);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+}
+
 .employer-onboarding-page .auth-form__error {
   text-align: left;
   align-self: flex-start;

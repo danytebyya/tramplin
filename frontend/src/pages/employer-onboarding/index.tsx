@@ -2,12 +2,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
 import {
+  deleteEmployerVerificationDocument,
+  EmployerVerificationDraftDocument,
+  getEmployerVerificationDraft,
   upsertEmployerProfile,
   uploadEmployerVerificationDocuments,
   verifyEmployerInn,
@@ -64,7 +67,12 @@ type OnboardingStep = "verification" | "details";
 type DocumentUploadStatus = "pending" | "uploading" | "ready";
 type DocumentUploadItem = {
   key: string;
-  file: File;
+  source: "local" | "existing";
+  documentId?: string;
+  file?: File;
+  fileName: string;
+  fileSize?: number;
+  mimeType?: string;
   status: DocumentUploadStatus;
   progress: number;
 };
@@ -136,6 +144,7 @@ function formatPhoneNumber(value: string) {
 
 export function EmployerOnboardingPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -153,12 +162,17 @@ export function EmployerOnboardingPage() {
   const pendingInnRequestKeyRef = useRef<string | null>(null);
   const lastCheckedInnRequestKeyRef = useRef<string | null>(null);
   const verifyInnTimeoutRef = useRef<number | null>(null);
+  const hasAppliedNotificationPrefillRef = useRef(false);
+  const hasAppliedRejectedPrefillRef = useRef(false);
+  const hasAppliedDraftPrefillRef = useRef(false);
+  const shouldReturnHomeOnBackRef = useRef(false);
 
   const {
     clearErrors,
     control,
     register,
     handleSubmit,
+    setValue,
     setError,
     watch,
     formState: { errors },
@@ -185,6 +199,20 @@ export function EmployerOnboardingPage() {
     enabled: Boolean(accessToken),
     retry: false,
   });
+  const verificationDraftQuery = useQuery({
+    queryKey: ["companies", "verification-draft"],
+    queryFn: getEmployerVerificationDraft,
+    enabled: Boolean(accessToken),
+    staleTime: 30_000,
+  });
+  const notificationMode = searchParams.get("mode");
+  const isChangesRequestedEntry = notificationMode === "changes-requested";
+  const employerProfile = currentUserQuery.data?.data?.user?.employer_profile;
+  const isRejectedEntry =
+    notificationMode === "rejected" ||
+    (employerProfile?.verification_status === "unverified" && Boolean(employerProfile?.moderator_comment));
+  const rejectionReason = isRejectedEntry ? employerProfile?.moderator_comment?.trim() ?? "" : "";
+  const verificationDraft = verificationDraftQuery.data?.data;
 
   useEffect(() => {
     document.documentElement.classList.add("employer-onboarding-page-root");
@@ -250,12 +278,14 @@ export function EmployerOnboardingPage() {
     mutationFn: async (payload: {
       profile: Parameters<typeof upsertEmployerProfile>[0];
       documents: File[];
+      verificationRequestId?: string;
     }) => {
       await upsertEmployerProfile(payload.profile);
-      return uploadEmployerVerificationDocuments(payload.documents);
+      return uploadEmployerVerificationDocuments(payload.documents, payload.verificationRequestId);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.invalidateQueries({ queryKey: ["companies", "verification-draft"] });
       await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
       navigate("/", { replace: true });
     },
@@ -273,6 +303,10 @@ export function EmployerOnboardingPage() {
       pendingInnRequestKeyRef.current = `${variables.employer_type ?? "unknown"}:${variables.inn}`;
       setInnVerificationStatus("verifying");
       clearErrors("inn");
+
+      if (shouldReturnHomeOnBackRef.current) {
+        setStep("details");
+      }
     },
     onSuccess: (_data, variables) => {
       lastCheckedInnRequestKeyRef.current = `${variables.employer_type ?? "unknown"}:${variables.inn}`;
@@ -333,8 +367,8 @@ export function EmployerOnboardingPage() {
     setDocumentFiles((currentFiles) =>
       currentFiles.map((item) => ({
         ...item,
-        status: "uploading",
-        progress: 1,
+        status: item.source === "local" ? "uploading" : item.status,
+        progress: item.source === "local" ? 1 : item.progress,
       })),
     );
     onboardingMutation.mutate({
@@ -344,8 +378,11 @@ export function EmployerOnboardingPage() {
         inn: values.inn.replace(/\D/g, ""),
         corporate_email: currentUserEmail,
         website: values.website?.trim() || undefined,
+        phone: values.phone.trim() || undefined,
+        social_link: values.socialLink?.trim() || undefined,
       },
-      documents: documentFiles.map((item) => item.file),
+      documents: documentFiles.flatMap((item) => (item.source === "local" && item.file ? [item.file] : [])),
+      verificationRequestId: verificationDraft?.verification_request_id ?? undefined,
     });
   };
 
@@ -356,7 +393,16 @@ export function EmployerOnboardingPage() {
       nextFiles.forEach((file) => {
         const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
         if (!nextEntries.has(fileKey)) {
-          nextEntries.set(fileKey, { key: fileKey, file, status: "pending", progress: 0 });
+          nextEntries.set(fileKey, {
+            key: fileKey,
+            source: "local",
+            file,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            status: "pending",
+            progress: 0,
+          });
         }
       });
 
@@ -413,17 +459,28 @@ export function EmployerOnboardingPage() {
     mergeDocumentFiles(nextFiles);
   };
 
-  const handleDocumentRemove = (fileToRemove: File) => {
-    setDocumentFiles((currentFiles) =>
-      currentFiles.filter(
-        (item) =>
-          !(
-            item.file.name === fileToRemove.name &&
-            item.file.size === fileToRemove.size &&
-            item.file.lastModified === fileToRemove.lastModified
-          ),
-      ),
-    );
+  const deleteDocumentMutation = useMutation({
+    mutationFn: deleteEmployerVerificationDocument,
+    onSuccess: async (_response, documentId) => {
+      setDocumentFiles((currentFiles) =>
+        currentFiles.filter((item) => !(item.source === "existing" && item.documentId === documentId)),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["companies", "verification-draft"] });
+    },
+    onError: (error: any) => {
+      setDocumentError(
+        error?.response?.data?.error?.message ?? "Не удалось удалить документ. Попробуйте ещё раз.",
+      );
+    },
+  });
+
+  const handleDocumentRemove = (itemToRemove: DocumentUploadItem) => {
+    if (itemToRemove.source === "existing" && itemToRemove.documentId) {
+      deleteDocumentMutation.mutate(itemToRemove.documentId);
+      return;
+    }
+
+    setDocumentFiles((currentFiles) => currentFiles.filter((item) => item.key !== itemToRemove.key));
   };
 
   const handleContinue = () => {
@@ -440,6 +497,15 @@ export function EmployerOnboardingPage() {
   };
 
   const handleBack = () => {
+    if (isRejectedEntry && step === "verification") {
+      return;
+    }
+
+    if (shouldReturnHomeOnBackRef.current) {
+      navigate("/", { replace: true });
+      return;
+    }
+
     if (step === "details") {
       setStep("verification");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -479,15 +545,92 @@ export function EmployerOnboardingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!verificationDraft || hasAppliedDraftPrefillRef.current) {
+      return;
+    }
+
+    hasAppliedDraftPrefillRef.current = true;
+    setValue("website", verificationDraft.website ?? "", { shouldDirty: false });
+    setValue("phone", verificationDraft.phone ?? "", { shouldDirty: false });
+    setValue("socialLink", verificationDraft.social_link ?? "", { shouldDirty: false });
+    setDocumentError(null);
+
+    setDocumentFiles((currentFiles) => {
+      const localItems = currentFiles.filter((item) => item.source === "local");
+      const existingItems = (verificationDraft.documents ?? []).map((document: EmployerVerificationDraftDocument) => ({
+        key: `existing:${document.id}`,
+        source: "existing" as const,
+        documentId: document.id,
+        fileName: document.file_name,
+        fileSize: document.file_size,
+        mimeType: document.mime_type,
+        status: "ready" as const,
+        progress: 100,
+      }));
+      return [...existingItems, ...localItems];
+    });
+  }, [setValue, verificationDraft]);
+
+  useEffect(() => {
+    if (!isChangesRequestedEntry || hasAppliedNotificationPrefillRef.current || !employerProfile) {
+      return;
+    }
+
+    if (employerProfile.verification_status !== "changes_requested" || !employerProfile.inn) {
+      return;
+    }
+
+    hasAppliedNotificationPrefillRef.current = true;
+    shouldReturnHomeOnBackRef.current = true;
+
+    const normalizedProfileInn = employerProfile.inn.replace(/\D/g, "");
+    const employerType =
+      employerProfile.employer_type === "sole_proprietor" ? "sole_proprietor" : "company";
+
+    setSelectedEmployerType(employerType);
+    setValue("inn", normalizedProfileInn, { shouldValidate: true, shouldDirty: false });
+    clearErrors("inn");
+
+    if (verifyInnTimeoutRef.current !== null) {
+      window.clearTimeout(verifyInnTimeoutRef.current);
+      verifyInnTimeoutRef.current = null;
+    }
+
+    verifyInnMutation.mutate({
+      employer_type: employerType,
+      inn: normalizedProfileInn,
+    });
+  }, [clearErrors, employerProfile, isChangesRequestedEntry, setValue, verifyInnMutation]);
+
+  useEffect(() => {
+    if (!isRejectedEntry || hasAppliedRejectedPrefillRef.current || !employerProfile?.inn) {
+      return;
+    }
+
+    hasAppliedRejectedPrefillRef.current = true;
+
+    const normalizedProfileInn = employerProfile.inn.replace(/\D/g, "");
+    const employerType =
+      employerProfile.employer_type === "sole_proprietor" ? "sole_proprietor" : "company";
+
+    setSelectedEmployerType(employerType);
+    setStep("verification");
+    setInnVerificationStatus("idle");
+    setVerifiedEmployerData(null);
+    setValue("inn", normalizedProfileInn, { shouldValidate: true, shouldDirty: false });
+    clearErrors("inn");
+  }, [clearErrors, employerProfile, isRejectedEntry, setValue]);
+
   return (
     <main className="auth-page auth-page--verification employer-onboarding-page">
       <Container className="auth-page__content" variant="auth-page">
         <section className="auth-page__panel employer-onboarding-page__panel">
           <div className="auth-page__panel-content">
             <div className="auth-card auth-card--verification employer-onboarding-card">
-              <div className="employer-onboarding-card__intro">
-                <div className="auth-card__header">
-                  <div className="auth-verification-header employer-onboarding-card__header">
+                <div className="employer-onboarding-card__intro">
+                  <div className="auth-card__header">
+                    <div className="auth-verification-header employer-onboarding-card__header">
                     <button
                       type="button"
                       className="auth-verification-header__back"
@@ -514,6 +657,15 @@ export function EmployerOnboardingPage() {
                     </div>
                   </div>
                 </div>
+
+                {rejectionReason ? (
+                  <div className="employer-onboarding-card__rejection-note">
+                    <span className="employer-onboarding-card__rejection-title">
+                      Верификация отклонена
+                    </span>
+                    <span className="employer-onboarding-card__rejection-text">{rejectionReason}</span>
+                  </div>
+                ) : null}
 
                 {step === "verification" ? (
                   <div
@@ -857,21 +1009,25 @@ export function EmployerOnboardingPage() {
                                 </div>
                                 <div className="employer-onboarding-upload__file-body">
                                   <span className="employer-onboarding-upload__file-name">
-                                    {item.file.name}
+                                    {item.fileName}
                                   </span>
                                   <span className="employer-onboarding-upload__file-type">
                                     {item.status === "uploading"
                                       ? "Загрузка..."
                                       : item.status === "pending"
                                         ? "Ожидает отправки"
-                                        : item.file.type || "Документ"}
+                                        : item.mimeType || "Документ"}
                                   </span>
                                 </div>
                                 <button
                                   type="button"
                                   className="employer-onboarding-upload__file-remove"
-                                  aria-label={`Удалить файл ${item.file.name}`}
-                                  onClick={() => handleDocumentRemove(item.file)}
+                                  aria-label={`Удалить файл ${item.fileName}`}
+                                  onClick={() => handleDocumentRemove(item)}
+                                  disabled={
+                                    deleteDocumentMutation.isPending &&
+                                    deleteDocumentMutation.variables === item.documentId
+                                  }
                                 >
                                   <span
                                     className="employer-onboarding-upload__file-remove-icon"

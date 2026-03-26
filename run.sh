@@ -171,6 +171,14 @@ ensure_postgres() {
   echo -e "${GREEN}Database ${POSTGRES_DB} is ready${NC}"
 }
 
+run_backend_migrations() {
+  echo -e "${BLUE}--- Migrations${NC}"
+  (
+    cd backend
+    "${BACKEND_PY_BIN}" -m alembic upgrade head
+  )
+}
+
 start_backend() {
   echo -e "${BLUE}--- Backend (${BACKEND_PORT})${NC}"
   nohup bash -lc "cd backend && API_PORT=${BACKEND_PORT} API_HOST=0.0.0.0 PYTHONPATH=. ${BACKEND_PY_BIN} -m uvicorn src.main:app --host 0.0.0.0 --port ${BACKEND_PORT}" > backend.log 2>&1 &
@@ -194,6 +202,7 @@ main() {
   ensure_backend_deps
   ensure_frontend_deps
   ensure_postgres
+  run_backend_migrations
 
   start_backend
   start_frontend

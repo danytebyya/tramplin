@@ -1,6 +1,11 @@
 from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
+import logging
+
+from sqlalchemy.exc import ProgrammingError
 
 from src.enums import EmployerVerificationStatus, UserRole
+from src.enums.notifications import NotificationKind, NotificationSeverity
 from src.enums.statuses import EmployerVerificationRequestStatus
 from src.models import User
 from src.models.opportunity import ModerationStatus, OpportunityType
@@ -11,13 +16,24 @@ from src.schemas.moderation import (
     EmployerVerificationRequestRead,
     EmployerVerificationReviewRequest,
 )
+from src.services.email_service import send_email
+from src.services.notification_service import NotificationService
 from src.schemas.user import ModerationSettingsRead, ModerationSettingsUpdateRequest
 from src.utils.errors import AppError
+
+
+@dataclass(frozen=True)
+class ModerationSettingsFallback:
+    vacancy_review_hours: int = 24
+    internship_review_hours: int = 24
+    event_review_hours: int = 24
+    mentorship_review_hours: int = 24
 
 
 class ModerationService:
     def __init__(self, repo: ModerationRepository) -> None:
         self.repo = repo
+        self.logger = logging.getLogger(__name__)
 
     def get_dashboard(self, current_user: User) -> dict:
         if current_user.role not in {UserRole.CURATOR, UserRole.ADMIN}:
@@ -216,9 +232,26 @@ class ModerationService:
 
         employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
         if employer_profile is not None:
-            employer_profile.verification_status = EmployerVerificationStatus.REJECTED
+            employer_profile.verification_status = EmployerVerificationStatus.UNVERIFIED
             employer_profile.moderator_comment = payload.moderator_comment
             self.repo.db.add(employer_profile)
+
+        if verification_request.submitted_by is not None:
+            NotificationService(self.repo.db).create_notification(
+                user_id=verification_request.submitted_by,
+                kind=NotificationKind.EMPLOYER_VERIFICATION,
+                severity=NotificationSeverity.WARNING,
+                title="Верификация отклонена",
+                message=payload.moderator_comment or "Заявка на верификацию отклонена. Заполните данные заново.",
+                action_label="Исправить данные",
+                action_url="/onboarding/employer?mode=rejected",
+                payload={
+                    "verification_request_id": str(verification_request.id),
+                    "inn": verification_request.inn,
+                    "status": EmployerVerificationRequestStatus.REJECTED.value,
+                },
+                created_at=datetime.now(UTC),
+            )
 
         self.repo.db.add(verification_request)
         self.repo.db.commit()
@@ -233,6 +266,39 @@ class ModerationService:
     ) -> EmployerVerificationRequestRead:
         self._ensure_moderation_access(current_user)
         verification_request = self._get_verification_request_or_raise(request_id)
+        employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
+        previous_status = verification_request.status
+        previous_reviewed_by = verification_request.reviewed_by
+        previous_reviewed_at = verification_request.reviewed_at
+        previous_moderator_comment = verification_request.moderator_comment
+        previous_rejection_reason = verification_request.rejection_reason
+
+        try:
+            self._send_request_changes_email_with_retry(
+                verification_request=verification_request,
+                employer_profile=employer_profile,
+                moderator_comment=payload.moderator_comment,
+            )
+        except Exception as exc:
+            failure_comment = self._build_request_changes_delivery_failure_comment(
+                payload.moderator_comment
+            )
+            verification_request.status = previous_status
+            verification_request.reviewed_by = previous_reviewed_by
+            verification_request.reviewed_at = previous_reviewed_at
+            verification_request.moderator_comment = (
+                failure_comment if payload.moderator_comment else previous_moderator_comment or failure_comment
+            )
+            verification_request.rejection_reason = previous_rejection_reason
+            self.repo.db.add(verification_request)
+            self.repo.db.commit()
+            self.repo.db.refresh(verification_request)
+            raise AppError(
+                code="MODERATION_REQUEST_CHANGES_DELIVERY_FAILED",
+                message="Не удалось запросить доп. информацию у работодателя. Письмо не отправлено.",
+                status_code=503,
+            ) from exc
+
         verification_request.status = EmployerVerificationRequestStatus.SUSPENDED
         verification_request.reviewed_by = current_user.id
         verification_request.reviewed_at = datetime.now(UTC)
@@ -243,11 +309,27 @@ class ModerationService:
             verification_request.employer.verification_status = EmployerVerificationRequestStatus.SUSPENDED
             verification_request.employer.updated_by = current_user.id
 
-        employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
         if employer_profile is not None:
             employer_profile.verification_status = EmployerVerificationStatus.CHANGES_REQUESTED
             employer_profile.moderator_comment = payload.moderator_comment
             self.repo.db.add(employer_profile)
+
+        if verification_request.submitted_by is not None:
+            NotificationService(self.repo.db).create_notification(
+                user_id=verification_request.submitted_by,
+                kind=NotificationKind.EMPLOYER_VERIFICATION,
+                severity=NotificationSeverity.WARNING,
+                title="Запрос дополнительной информации",
+                message=payload.moderator_comment or "Куратор запросил дополнительные данные для верификации.",
+                action_label="Открыть заявку",
+                action_url="/onboarding/employer?mode=changes-requested",
+                payload={
+                    "verification_request_id": str(verification_request.id),
+                    "inn": verification_request.inn,
+                    "status": EmployerVerificationRequestStatus.SUSPENDED.value,
+                },
+                created_at=datetime.now(UTC),
+            )
 
         self.repo.db.add(verification_request)
         self.repo.db.commit()
@@ -326,8 +408,8 @@ class ModerationService:
                 category_counts[self._serialize_opportunity_kind(opportunity.opportunity_type)] += 1
 
         day_items = [
-            {"label": day_labels[index], "count": counts_by_date[day]}
-            for index, day in enumerate(week_dates)
+            {"label": day_labels[day.weekday()], "count": counts_by_date[day]}
+            for day in week_dates
         ]
         category_items = [
             {"label": "Вакансии", "count": category_counts["vacancy"]},
@@ -352,7 +434,7 @@ class ModerationService:
         items: list[dict] = []
 
         for request in verification_requests:
-            if request.reviewed_at is None:
+            if request.reviewed_at is None or request.reviewed_by is None:
                 continue
             status_label, status_variant = self._serialize_verification_status(request.status)
             items.append(
@@ -361,7 +443,9 @@ class ModerationService:
                     "title": status_label,
                     "status_label": status_label,
                     "status_variant": status_variant,
-                    "subject": employer_name_by_id.get(str(request.employer_id), request.legal_name),
+                    "subject": self._abbreviate_legal_entity_name(
+                        employer_name_by_id.get(str(request.employer_id), request.legal_name)
+                    ),
                     "meta": "Верификация работодателя",
                     "created_at": self._normalize_datetime(request.reviewed_at).isoformat(),
                 }
@@ -370,6 +454,7 @@ class ModerationService:
         for opportunity in opportunities:
             if (
                 opportunity.moderated_at is None
+                or opportunity.moderated_by_user_id is None
                 or opportunity.moderation_status == ModerationStatus.PENDING_REVIEW
             ):
                 continue
@@ -383,7 +468,11 @@ class ModerationService:
                     "status_label": status_label,
                     "status_variant": status_variant,
                     "subject": opportunity.title,
-                    "meta": opportunity.employer.display_name if opportunity.employer else "Работодатель",
+                    "meta": (
+                        self._abbreviate_legal_entity_name(opportunity.employer.display_name)
+                        if opportunity.employer
+                        else "Работодатель"
+                    ),
                     "created_at": self._normalize_datetime(opportunity.moderated_at).isoformat(),
                 }
             )
@@ -401,12 +490,15 @@ class ModerationService:
         employer_name_by_id: dict[str, str],
     ) -> list[dict]:
         verification_overdue_threshold = now - timedelta(days=3)
+        changes_overdue_threshold = now - timedelta(days=1)
         complaint_items: list[dict] = []
         overdue_items: list[dict] = []
         change_items: list[dict] = []
 
         for request in verification_requests:
-            subject = employer_name_by_id.get(str(request.employer_id), request.legal_name)
+            subject = self._abbreviate_legal_entity_name(
+                employer_name_by_id.get(str(request.employer_id), request.legal_name)
+            )
 
             if request.status in {
                 EmployerVerificationRequestStatus.PENDING,
@@ -434,17 +526,27 @@ class ModerationService:
                 )
 
             if request.status == EmployerVerificationRequestStatus.SUSPENDED:
-                change_items.append(
-                    {
-                        "id": f"verification:{request.id}",
-                        "subject": subject,
-                        "meta": "Запрошены изменения",
-                        "age_days": 0,
-                    }
+                reviewed_at = (
+                    self._normalize_datetime(request.reviewed_at)
+                    if request.reviewed_at is not None
+                    else self._normalize_datetime(request.submitted_at)
                 )
+                if reviewed_at <= changes_overdue_threshold:
+                    change_items.append(
+                        {
+                            "id": f"verification:{request.id}",
+                            "subject": subject,
+                            "meta": "Запрошены изменения",
+                            "age_days": (now.date() - reviewed_at.date()).days,
+                        }
+                    )
 
         for opportunity in opportunities:
-            meta = opportunity.employer.display_name if opportunity.employer else "Работодатель"
+            meta = (
+                self._abbreviate_legal_entity_name(opportunity.employer.display_name)
+                if opportunity.employer
+                else "Работодатель"
+            )
 
             if opportunity.moderation_status == ModerationStatus.PENDING_REVIEW:
                 created_at = self._normalize_datetime(opportunity.created_at)
@@ -502,7 +604,12 @@ class ModerationService:
         ]
 
     def _get_or_create_settings(self):
-        settings = self.repo.get_settings()
+        try:
+            settings = self.repo.get_settings()
+        except ProgrammingError:
+            self.repo.db.rollback()
+            return ModerationSettingsFallback()
+
         if settings is None:
             settings = self.repo.create_settings()
             self.db_commit()
@@ -554,6 +661,107 @@ class ModerationService:
         employer_profiles = self.repo.list_employer_profiles()
         return next((profile for profile in employer_profiles if profile.inn == inn), None)
 
+    @staticmethod
+    def _abbreviate_legal_entity_name(value: str | None) -> str | None:
+        if not value:
+            return value
+
+        normalized_value = " ".join(value.replace("\xa0", " ").split())
+        replacements = (
+            ("ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ ", "ООО "),
+            ("ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО ", "ПАО "),
+            ("НЕПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО ", "НАО "),
+            ("АКЦИОНЕРНОЕ ОБЩЕСТВО ", "АО "),
+            ("ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ ", "ИП "),
+        )
+        upper_value = normalized_value.upper()
+
+        for full_prefix, abbreviated_prefix in replacements:
+            if upper_value.startswith(full_prefix):
+                return f"{abbreviated_prefix}{normalized_value[len(full_prefix):]}".strip()
+
+        return normalized_value
+
+    def _send_request_changes_email_with_retry(
+        self,
+        *,
+        verification_request,
+        employer_profile,
+        moderator_comment: str | None,
+    ) -> None:
+        recipient = self._resolve_request_changes_email_recipient(
+            verification_request=verification_request,
+            employer_profile=employer_profile,
+        )
+
+        if recipient is None:
+            raise AppError(
+                code="MODERATION_REQUEST_CHANGES_EMAIL_MISSING",
+                message="Не удалось определить email работодателя для запроса доп. информации.",
+                status_code=503,
+            )
+
+        subject = "Трамплин: требуется дополнительная информация для верификации"
+        body = self._build_request_changes_email_body(
+            verification_request=verification_request,
+            moderator_comment=moderator_comment,
+        )
+
+        last_error: Exception | None = None
+        for attempt in range(1, 6):
+            try:
+                send_email(recipient=recipient, subject=subject, body=body)
+                return
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    "moderation.request_changes_email.retry_failed request_id=%s attempt=%s recipient=%s",
+                    verification_request.id,
+                    attempt,
+                    recipient,
+                )
+
+        if last_error is not None:
+            raise last_error
+
+    def _resolve_request_changes_email_recipient(self, *, verification_request, employer_profile) -> str | None:
+        if verification_request.submitted_by is not None:
+            submitted_by_user = self.repo.db.get(User, verification_request.submitted_by)
+            if submitted_by_user is not None and submitted_by_user.email:
+                return submitted_by_user.email
+
+        if verification_request.corporate_email:
+            return verification_request.corporate_email
+
+        if employer_profile is not None and employer_profile.corporate_email:
+            return employer_profile.corporate_email
+
+        return None
+
+    @staticmethod
+    def _build_request_changes_email_body(*, verification_request, moderator_comment: str | None) -> str:
+        comment_section = (
+            f"Комментарий куратора:\n{moderator_comment}\n\n"
+            if moderator_comment
+            else ""
+        )
+        return (
+            "По вашей заявке на верификацию работодателя требуется дополнительная информация.\n\n"
+            f"Компания: {verification_request.legal_name}\n"
+            f"ИНН: {verification_request.inn}\n\n"
+            f"{comment_section}"
+            "Откройте раздел верификации работодателя в личном кабинете и загрузите обновлённые данные."
+        )
+
+    @staticmethod
+    def _build_request_changes_delivery_failure_comment(moderator_comment: str | None) -> str:
+        failure_message = (
+            "Не удалось запросить доп. информацию: письмо работодателю не отправлено после 5 попыток."
+        )
+        if moderator_comment:
+            return f"{moderator_comment}\n\n{failure_message}"
+        return failure_message
+
     def _serialize_verification_request(
         self,
         request,
@@ -575,7 +783,7 @@ class ModerationService:
                     else "application/octet-stream"
                 ),
                 file_url=(
-                    document.media_file.public_url
+                    f"/api/v1/companies/verification-documents/{document.id}/file"
                     if document.media_file is not None
                     else document.source_url
                 ),
@@ -584,7 +792,7 @@ class ModerationService:
         ]
         return EmployerVerificationRequestRead(
             id=str(request.id),
-            employer_name=request.legal_name,
+            employer_name=self._abbreviate_legal_entity_name(request.legal_name) or request.legal_name,
             inn=request.inn,
             corporate_email=request.corporate_email,
             website_url=(

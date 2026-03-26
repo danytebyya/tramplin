@@ -53,7 +53,22 @@ export type MeResponse = {
       display_name?: string;
       preferred_city?: string | null;
       role?: "applicant" | "employer" | "curator" | "admin";
-      employer_profile?: unknown;
+      employer_profile?: {
+        employer_type?: "company" | "sole_proprietor";
+        company_name?: string;
+        inn?: string;
+        corporate_email?: string;
+        website?: string | null;
+        phone?: string | null;
+        social_link?: string | null;
+        verification_status?:
+          | "unverified"
+          | "pending_review"
+          | "verified"
+          | "rejected"
+          | "changes_requested";
+        moderator_comment?: string | null;
+      } | null;
     };
   };
 };
