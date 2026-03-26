@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from src.enums.statuses import EmployerVerificationRequestStatus
 
@@ -47,3 +47,59 @@ class EmployerVerificationReviewRequest(BaseModel):
 
         normalized_value = value.strip()
         return normalized_value or None
+
+
+class CuratorManagementMetricsRead(BaseModel):
+    total_curators: int
+    online_curators: int
+    queued_requests: int
+    reviewed_today: int
+
+
+class CuratorManagementItemRead(BaseModel):
+    id: str
+    full_name: str
+    email: str
+    role: str
+    reviewed_today: int
+    status: str
+    last_activity_at: str | None = None
+
+
+class CuratorManagementListResponse(BaseModel):
+    metrics: CuratorManagementMetricsRead
+    items: list[CuratorManagementItemRead]
+
+
+class CuratorCreateRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=180)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(pattern="^(admin|curator|junior)$")
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if len(normalized_value) < 2:
+            raise ValueError("Полное имя должно содержать не менее 2 символов")
+        return normalized_value
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: EmailStr) -> str:
+        return str(value).lower().strip()
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if len(normalized_value) < 8:
+            raise ValueError("Пароль должен содержать не менее 8 символов")
+        if normalized_value.lower() == normalized_value or normalized_value.upper() == normalized_value:
+            raise ValueError("Пароль должен содержать символы в разном регистре")
+        if not any(character.isdigit() for character in normalized_value):
+            raise ValueError("Пароль должен содержать хотя бы одну цифру")
+        if not any(("a" <= character.lower() <= "z") for character in normalized_value):
+            raise ValueError("Пароль должен содержать латинские буквы")
+        return normalized_value

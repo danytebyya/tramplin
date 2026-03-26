@@ -21,6 +21,7 @@ import {
   performLogout,
   revokeOtherSessionsRequest,
   revokeSessionRequest,
+  updateMeRequest,
   updateNotificationPreferencesRequest,
   updatePreferredCityRequest,
   useAuthStore,
@@ -62,7 +63,7 @@ const defaultNotificationPreferenceGroup: NotificationPreferenceGroup = {
 };
 
 function resolveDefaultNotificationPreferenceGroup(role: string | null): NotificationPreferenceGroup {
-  if (role === "curator" || role === "admin") {
+  if (role === "junior" || role === "curator" || role === "admin") {
     return {
       new_verification_requests: false,
       content_complaints: false,
@@ -103,6 +104,10 @@ function mapNotificationPreferencesToPayload(
 }
 
 function resolveThemeRole(role: string | null) {
+  if (role === "junior") {
+    return "curator";
+  }
+
   if (role === "employer" || role === "curator" || role === "admin") {
     return role;
   }
@@ -115,7 +120,7 @@ function resolveActionVariant(role: string | null) {
     return "primary" as const;
   }
 
-  if (role === "curator" || role === "admin") {
+  if (role === "junior" || role === "curator" || role === "admin") {
     return "accent" as const;
   }
 
@@ -127,7 +132,7 @@ function resolveOutlineVariant(role: string | null) {
     return "primary-outline" as const;
   }
 
-  if (role === "curator" || role === "admin") {
+  if (role === "junior" || role === "curator" || role === "admin") {
     return "accent-outline" as const;
   }
 
@@ -139,7 +144,7 @@ function resolveCheckboxVariant(role: string | null) {
     return "primary" as const;
   }
 
-  if (role === "curator" || role === "admin") {
+  if (role === "junior" || role === "curator" || role === "admin") {
     return "accent" as const;
   }
 
@@ -226,7 +231,7 @@ export function SettingsPage() {
   const actionVariant = resolveActionVariant(role);
   const outlineVariant = resolveOutlineVariant(role);
   const checkboxVariant = resolveCheckboxVariant(role);
-  const isModerationRole = role === "curator" || role === "admin";
+  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const profileMenuCloseTimeoutRef = useRef<number | null>(null);
@@ -271,6 +276,8 @@ export function SettingsPage() {
   const isModerationSettingsLoading = isModerationRole && moderationSettingsQuery.isPending;
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(() => buildNotificationPreferences(undefined, role));
   const [pushNotifications, setPushNotifications] = useState(() => buildNotificationPreferences(undefined, role));
   const [vacancyReviewHours, setVacancyReviewHours] = useState("24");
@@ -282,6 +289,22 @@ export function SettingsPage() {
     onSuccess: (response) => {
       queryClient.setQueryData(["auth", "me"], response);
       removeSelectedCityCookie();
+    },
+  });
+  const updateProfileMutation = useMutation({
+    mutationFn: updateMeRequest,
+    onMutate: () => {
+      setProfileError(null);
+      setProfileSuccess(null);
+    },
+    onSuccess: (response) => {
+      queryClient.setQueryData(["auth", "me"], response);
+      setProfileSuccess("Изменения сохранены.");
+    },
+    onError: (error: any) => {
+      setProfileError(
+        error?.response?.data?.error?.message ?? "Не удалось сохранить профиль. Попробуйте еще раз.",
+      );
     },
   });
   const revokeSessionMutation = useMutation({
@@ -346,6 +369,11 @@ export function SettingsPage() {
     setFullName(user?.display_name ?? "");
     setEmail(user?.email ?? "");
   }, [user?.display_name, user?.email]);
+
+  useEffect(() => {
+    setProfileError(null);
+    setProfileSuccess(null);
+  }, [fullName, email]);
 
   useEffect(() => {
     const preferredCity = user?.preferred_city?.trim();
@@ -428,6 +456,13 @@ export function SettingsPage() {
     updateNotificationPreferencesMutation.mutate({
       email_notifications: mapNotificationPreferencesToPayload(emailNotifications, role),
       push_notifications: mapNotificationPreferencesToPayload(pushNotifications, role),
+    });
+  };
+
+  const handleProfileSave = () => {
+    updateProfileMutation.mutate({
+      display_name: fullName.trim(),
+      email: email.trim(),
     });
   };
 
@@ -614,9 +649,11 @@ export function SettingsPage() {
                 <a href="#content-moderation" className="header__category-link">
                   Модерация контента
                 </a>
-                <NavLink to="/moderation/curators" className="header__category-link">
-                  Управление кураторами
-                </NavLink>
+                {role === "admin" ? (
+                  <NavLink to="/moderation/curators" className="header__category-link">
+                    Управление кураторами
+                  </NavLink>
+                ) : null}
                 <NavLink to="/settings" className="header__category-link">
                   Настройки
                 </NavLink>
@@ -684,9 +721,20 @@ export function SettingsPage() {
               </label>
             </div>
             <div className="settings-page__card-footer">
-              <Button type="button" variant={actionVariant} size="md">
+              <Button
+                type="button"
+                variant={actionVariant}
+                size="md"
+                onClick={handleProfileSave}
+                loading={updateProfileMutation.isPending}
+                disabled={isProfileLoading || !fullName.trim() || !email.trim()}
+              >
                 Сохранить изменения
               </Button>
+              {profileError ? <p className="settings-page__form-message settings-page__form-message--error">{profileError}</p> : null}
+              {profileSuccess ? (
+                <p className="settings-page__form-message settings-page__form-message--success">{profileSuccess}</p>
+              ) : null}
             </div>
           </section>
 

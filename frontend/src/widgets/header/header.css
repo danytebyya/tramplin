@@ -112,12 +112,6 @@
   background-color: var(--color-white-hover);
 }
 
-.header__nav-link.active,
-.header__nav-link[aria-current="page"] {
-  background-color: var(--color-white-hover);
-  color: var(--color-bg-primary);
-}
-
 .header__nav-link:active {
   background-color: var(--color-white-active);
   box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.2);
@@ -263,6 +257,15 @@
   transition:
     opacity 100ms ease,
     transform 100ms ease;
+}
+
+.header__profile-dropdown::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  right: 0;
+  left: 0;
+  height: 12px;
 }
 
 .header__profile-dropdown--hidden {

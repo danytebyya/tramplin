@@ -64,7 +64,7 @@ function ProtectedRoute({ children }: { children: ReactElement }) {
   }
 
   if (!accessToken && !refreshToken) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (shouldCheckEmployerProfile) {
@@ -133,7 +133,7 @@ function EmployerOnboardingRoute() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (role !== "employer") {
@@ -201,7 +201,7 @@ function FallbackRoute() {
     }
   }
 
-  return <Navigate to={isAuthenticated ? "/" : "/register"} replace />;
+  return <Navigate to="/" replace />;
 }
 
 export function AppRouter() {

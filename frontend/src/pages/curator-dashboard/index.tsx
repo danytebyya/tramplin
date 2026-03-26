@@ -1,9 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 
+import profileIcon from "../../assets/icons/profile.svg";
+import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import { NotificationMenu } from "../../features/notifications";
 import { getModerationDashboardRequest } from "../../features/moderation";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
-import { Button, Container, Status } from "../../shared/ui";
+import { Button, Container, Input, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
+import "../../widgets/header/header.css";
 import "./curator-dashboard.css";
 
 function formatRelativeMinutes(timestamp: string) {
@@ -285,5 +291,243 @@ export function ModerationDashboardContent({
 }
 
 export function CuratorDashboardPage() {
-  return <ModerationDashboardContent showFooter footerTheme="curator" />;
+  const navigate = useNavigate();
+  const location = useLocation();
+  const role = useAuthStore((state) => state.role);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const refreshToken = useAuthStore((state) => state.refreshToken);
+  const isAdmin = role === "admin";
+  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
+  const themeRole = isAdmin ? "admin" : "curator";
+  const isAuthenticated = Boolean(accessToken || refreshToken);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const profileMenuCloseTimeoutRef = useRef<number | null>(null);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
+
+  useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: meRequest,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  useEffect(() => {
+    if (location.hash !== "#dashboard" || !isModerationRole) {
+      return;
+    }
+
+    const target = document.getElementById("dashboard");
+    if (!target) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [isModerationRole, location.hash]);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setIsProfileMenuPinned(false);
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileMenuPinned(false);
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isProfileMenuOpen]);
+
+  useEffect(() => () => {
+    if (profileMenuCloseTimeoutRef.current !== null) {
+      window.clearTimeout(profileMenuCloseTimeoutRef.current);
+    }
+  }, []);
+
+  if (!isModerationRole) {
+    return <Navigate to="/" replace />;
+  }
+
+  const clearProfileMenuCloseTimeout = () => {
+    if (profileMenuCloseTimeoutRef.current !== null) {
+      window.clearTimeout(profileMenuCloseTimeoutRef.current);
+      profileMenuCloseTimeoutRef.current = null;
+    }
+  };
+
+  const openProfileMenu = () => {
+    clearProfileMenuCloseTimeout();
+    setIsProfileMenuOpen(true);
+  };
+
+  const scheduleProfileMenuClose = () => {
+    if (isProfileMenuPinned) {
+      return;
+    }
+
+    clearProfileMenuCloseTimeout();
+    profileMenuCloseTimeoutRef.current = window.setTimeout(() => {
+      setIsProfileMenuOpen(false);
+      profileMenuCloseTimeoutRef.current = null;
+    }, 40);
+  };
+
+  const handleLogout = () => {
+    void performLogout({
+      beforeRedirect: () => {
+        setIsProfileMenuPinned(false);
+        setIsProfileMenuOpen(false);
+      },
+    });
+  };
+
+  const profileMenuItems = [
+    { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
+    { label: "Выход", isDanger: true, onClick: handleLogout },
+  ];
+
+  return (
+    <main className={`curator-dashboard-page curator-dashboard-page--${themeRole}`}>
+      <header className="header">
+        <div className="header__top">
+          <Container className="home-page__container header__top-container">
+            <div className="header__brand">
+              <Link to="/" className="header__brand-name">
+                Трамплин
+              </Link>
+              <div className="header__logo-badge">Лого</div>
+            </div>
+
+            <div className="header__main">
+              <div className="header__controls">
+                <label className="header__search" aria-label="Поиск">
+                  <Input
+                    type="search"
+                    placeholder="Поиск"
+                    aria-label="Поиск по платформе"
+                    className="input--sm header__search-input"
+                  />
+                </label>
+
+                <div className="header__actions">
+                  {isAuthenticated ? (
+                    <div className="header__account-actions" aria-label="Действия аккаунта">
+                      <NotificationMenu
+                        buttonClassName="header__icon-button"
+                        iconClassName="header__icon-button-image"
+                      />
+
+                      <div
+                        ref={profileMenuRef}
+                        className="header__profile-menu"
+                        onMouseEnter={openProfileMenu}
+                        onMouseLeave={scheduleProfileMenuClose}
+                      >
+                        <button
+                          type="button"
+                          className="header__icon-button"
+                          aria-label="Профиль"
+                          aria-expanded={isProfileMenuOpen}
+                          aria-haspopup="menu"
+                          onClick={() => {
+                            clearProfileMenuCloseTimeout();
+                            setIsProfileMenuPinned((currentPinned) => {
+                              const nextPinned = !currentPinned;
+                              setIsProfileMenuOpen(nextPinned);
+                              return nextPinned;
+                            });
+                          }}
+                        >
+                          <img
+                            src={profileIcon}
+                            alt=""
+                            aria-hidden="true"
+                            className="header__icon-button-image"
+                          />
+                        </button>
+
+                        <div
+                          className={
+                            isProfileMenuOpen
+                              ? "header__profile-dropdown"
+                              : "header__profile-dropdown header__profile-dropdown--hidden"
+                          }
+                          role="menu"
+                        >
+                          {profileMenuItems.map((item) => (
+                            <button
+                              key={item.label}
+                              type="button"
+                              className={
+                                item.isDanger
+                                  ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
+                                  : "header__profile-dropdown-item"
+                              }
+                              role="menuitem"
+                              onClick={() => {
+                                item.onClick?.();
+                                setIsProfileMenuPinned(false);
+                                setIsProfileMenuOpen(false);
+                              }}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </Container>
+        </div>
+
+        <div className="header__bottom">
+          <Container className="home-page__container header__bottom-container">
+            <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
+              <NavLink to="/dashboard/curator" className="header__category-link">
+                Дашборд
+              </NavLink>
+              <NavLink to="/moderation/employers" className="header__category-link">
+                Верификация работодателей
+              </NavLink>
+              {isAdmin ? (
+                <NavLink to="/moderation/curators" className="header__category-link">
+                  Управление кураторами
+                </NavLink>
+              ) : null}
+              <NavLink to="/settings" className="header__category-link">
+                Настройки
+              </NavLink>
+            </nav>
+          </Container>
+        </div>
+      </header>
+
+      <ModerationDashboardContent footerTheme={themeRole} />
+      <Footer theme={themeRole} />
+    </main>
+  );
 }

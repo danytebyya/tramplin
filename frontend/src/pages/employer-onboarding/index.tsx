@@ -14,6 +14,7 @@ import {
   uploadEmployerVerificationDocuments,
   verifyEmployerInn,
 } from "../../features/company-verification";
+import { useNotificationsRealtime } from "../../features/notifications";
 import { Button, Checkbox, Container, InfoTooltip, Input } from "../../shared/ui";
 import "../auth/auth.css";
 import "./employer-onboarding.css";
@@ -213,6 +214,16 @@ export function EmployerOnboardingPage() {
     (employerProfile?.verification_status === "unverified" && Boolean(employerProfile?.moderator_comment));
   const rejectionReason = isRejectedEntry ? employerProfile?.moderator_comment?.trim() ?? "" : "";
   const verificationDraft = verificationDraftQuery.data?.data;
+
+  useNotificationsRealtime({
+    enabled: Boolean(accessToken),
+    onMessage: () => {
+      void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      void queryClient.invalidateQueries({ queryKey: ["companies", "verification-draft"] });
+      void queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
+      void queryClient.refetchQueries({ queryKey: ["companies", "verification-draft"], type: "active" });
+    },
+  });
 
   useEffect(() => {
     document.documentElement.classList.add("employer-onboarding-page-root");
@@ -514,7 +525,7 @@ export function EmployerOnboardingPage() {
       return;
     }
 
-    void performLogout({ redirectTo: "/login" });
+    void performLogout({ redirectTo: "/" });
   };
 
   useEffect(() => {

@@ -1,13 +1,19 @@
 export {
   approveEmployerVerificationRequest,
+  createCuratorRequest,
   getModerationDashboardRequest,
   getModerationSettingsRequest,
+  listCuratorsRequest,
   listEmployerVerificationRequestsRequest,
   rejectEmployerVerificationRequest,
   requestEmployerVerificationChanges,
   updateModerationSettingsRequest,
 } from "./api";
 export type {
+  CuratorCreatePayload,
+  CuratorManagementItem,
+  CuratorManagementMetrics,
+  CuratorManagementResponse,
   EmployerVerificationDocument,
   EmployerVerificationRequestItem,
   EmployerVerificationRequestListFilters,

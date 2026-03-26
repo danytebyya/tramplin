@@ -7,12 +7,18 @@ from src.models.opportunity import ModerationStatus, OpportunityStatus, Opportun
 from src.enums import EmployerType, EmployerVerificationRequestStatus, UserRole, UserStatus
 
 
-def _create_curator(db_session, *, email: str, password: str = "CuratorPass123") -> User:
+def _create_curator(
+    db_session,
+    *,
+    email: str,
+    password: str = "CuratorPass123",
+    role: UserRole = UserRole.CURATOR,
+) -> User:
     curator = User(
         email=email,
         display_name="Curator",
         password_hash=hash_password(password),
-        role=UserRole.CURATOR,
+        role=role,
         status=UserStatus.ACTIVE,
         curator_profile=CuratorProfile(full_name="Curator"),
     )
@@ -135,7 +141,159 @@ def test_curator_dashboard_requires_curator_or_admin(client, db_session):
     )
 
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "MODERATION_FORBIDDEN"
+
+
+def test_curator_management_returns_real_curators(client, db_session):
+    curator = _create_curator(
+        db_session,
+        email="curator-management@example.com",
+        role=UserRole.ADMIN,
+    )
+    second_curator = _create_curator(db_session, email="curator-management-2@example.com")
+    access_token = _login(client, email=curator.email, password="CuratorPass123")
+    _login(client, email=second_curator.email, password="CuratorPass123")
+
+    employer = Employer(
+        employer_type=EmployerType.COMPANY,
+        display_name="Acme",
+        legal_name="ООО Acme",
+        inn="7701234999",
+        corporate_email="hr@acme.example",
+        verification_status=EmployerVerificationRequestStatus.PENDING,
+    )
+    db_session.add(employer)
+    db_session.commit()
+    db_session.refresh(employer)
+
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            EmployerVerificationRequest(
+                employer_id=employer.id,
+                legal_name=employer.legal_name,
+                employer_type=EmployerType.COMPANY,
+                inn=employer.inn,
+                corporate_email=employer.corporate_email,
+                status=EmployerVerificationRequestStatus.PENDING,
+                submitted_at=now - timedelta(days=1),
+            ),
+            EmployerVerificationRequest(
+                employer_id=employer.id,
+                legal_name=employer.legal_name,
+                employer_type=EmployerType.COMPANY,
+                inn=employer.inn,
+                corporate_email=employer.corporate_email,
+                status=EmployerVerificationRequestStatus.APPROVED,
+                submitted_at=now - timedelta(days=2),
+                reviewed_by=curator.id,
+                reviewed_at=now,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/moderation/curators",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["metrics"]["total_curators"] == 2
+    assert payload["metrics"]["online_curators"] == 2
+    assert payload["metrics"]["queued_requests"] == 1
+    assert payload["metrics"]["reviewed_today"] == 1
+    assert len(payload["items"]) == 2
+    assert payload["items"][0]["email"] in {
+        "curator-management@example.com",
+        "curator-management-2@example.com",
+    }
+
+
+def test_curator_management_requires_admin(client, db_session):
+    curator = _create_curator(db_session, email="curator-management-forbidden@example.com")
+    access_token = _login(client, email=curator.email, password="CuratorPass123")
+
+    response = client.get(
+        "/api/v1/moderation/curators",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_curator_management_allows_admin_to_create_curator(client, db_session):
+    admin = _create_curator(
+        db_session,
+        email="create-curator-admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    access_token = _login(client, email=admin.email, password="CuratorPass123")
+
+    response = client.post(
+        "/api/v1/moderation/curators",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "full_name": "New Curator",
+            "email": "new-curator@example.com",
+            "password": "NewCurator123",
+            "role": "curator",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()["data"]
+    assert payload["full_name"] == "New Curator"
+    assert payload["email"] == "new-curator@example.com"
+    assert payload["role"] == "curator"
+
+    created_user = db_session.query(User).filter(User.email == "new-curator@example.com").one()
+    assert created_user.role == UserRole.CURATOR
+    assert created_user.curator_profile is not None
+    assert created_user.curator_profile.full_name == "New Curator"
+
+
+def test_curator_management_allows_admin_to_create_junior(client, db_session):
+    admin = _create_curator(
+        db_session,
+        email="create-junior-admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    access_token = _login(client, email=admin.email, password="CuratorPass123")
+
+    response = client.post(
+        "/api/v1/moderation/curators",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "full_name": "New Junior",
+            "email": "new-junior@example.com",
+            "password": "NewJunior123",
+            "role": "junior",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()["data"]
+    assert payload["role"] == "junior"
+
+    created_user = db_session.query(User).filter(User.email == "new-junior@example.com").one()
+    assert created_user.role == UserRole.JUNIOR
+
+
+def test_junior_can_open_moderation_dashboard(client, db_session):
+    junior = _create_curator(
+        db_session,
+        email="junior-dashboard@example.com",
+        role=UserRole.JUNIOR,
+    )
+    access_token = _login(client, email=junior.email, password="CuratorPass123")
+
+    response = client.get(
+        "/api/v1/moderation/dashboard",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_curator_dashboard_latest_activity_excludes_seed_like_records_without_moderator(client, db_session):

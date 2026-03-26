@@ -1,6 +1,6 @@
 import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
@@ -8,111 +8,28 @@ import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
 import profileIcon from "../../assets/icons/profile.svg";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import {
+  createCuratorRequest,
+  CuratorManagementResponse,
+  listCuratorsRequest,
+} from "../../features/moderation";
 import { NotificationMenu } from "../../features/notifications";
-import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import "../../widgets/header/header.css";
 import "./curator-management.css";
 
-type CuratorRole = "junior" | "middle" | "senior";
+type CuratorRole = "curator" | "admin" | "junior";
 type CuratorPresence = "online" | "offline";
-type CuratorSortField = "alphabet" | "workload" | "activity";
+type CuratorSortField = "alphabet" | "activity";
 type CuratorSortDirection = "asc" | "desc";
-
-type CuratorItem = {
-  id: string;
-  fullName: string;
-  email: string;
-  role: CuratorRole;
-  workloadCurrent: number;
-  workloadLimit: number;
-  status: CuratorPresence;
-  lastActivityLabel: string;
-  lastActivityMinutes: number;
-  reviewedToday: number;
-};
 
 const PAGE_SIZE = 5;
 
-const curatorItems: CuratorItem[] = [
-  {
-    id: "1",
-    fullName: "Иванов Иван Иванович",
-    email: "curator1@tramplin.ru",
-    role: "junior",
-    workloadCurrent: 12,
-    workloadLimit: 20,
-    status: "online",
-    lastActivityLabel: "Сейчас",
-    lastActivityMinutes: 0,
-    reviewedToday: 1,
-  },
-  {
-    id: "2",
-    fullName: "Петрова Мария Сергеевна",
-    email: "curator2@tramplin.ru",
-    role: "middle",
-    workloadCurrent: 9,
-    workloadLimit: 20,
-    status: "offline",
-    lastActivityLabel: "15 мин назад",
-    lastActivityMinutes: 15,
-    reviewedToday: 0,
-  },
-  {
-    id: "3",
-    fullName: "Сидоров Алексей Павлович",
-    email: "curator3@tramplin.ru",
-    role: "senior",
-    workloadCurrent: 12,
-    workloadLimit: 20,
-    status: "online",
-    lastActivityLabel: "Сейчас",
-    lastActivityMinutes: 0,
-    reviewedToday: 1,
-  },
-  {
-    id: "4",
-    fullName: "Козлова Анна Дмитриевна",
-    email: "curator4@tramplin.ru",
-    role: "junior",
-    workloadCurrent: 8,
-    workloadLimit: 20,
-    status: "online",
-    lastActivityLabel: "Сейчас",
-    lastActivityMinutes: 0,
-    reviewedToday: 0,
-  },
-  {
-    id: "5",
-    fullName: "Морозов Денис Ильич",
-    email: "curator5@tramplin.ru",
-    role: "junior",
-    workloadCurrent: 10,
-    workloadLimit: 20,
-    status: "online",
-    lastActivityLabel: "Сейчас",
-    lastActivityMinutes: 0,
-    reviewedToday: 0,
-  },
-  {
-    id: "6",
-    fullName: "Федорова Екатерина Олеговна",
-    email: "curator6@tramplin.ru",
-    role: "middle",
-    workloadCurrent: 14,
-    workloadLimit: 20,
-    status: "offline",
-    lastActivityLabel: "1 час назад",
-    lastActivityMinutes: 60,
-    reviewedToday: 0,
-  },
-];
-
 const roleOptions: Array<{ value: CuratorRole; label: string }> = [
+  { value: "admin", label: "Senior" },
+  { value: "curator", label: "Middle" },
   { value: "junior", label: "Junior" },
-  { value: "middle", label: "Middle" },
-  { value: "senior", label: "Senior" },
 ];
 
 const statusOptions: Array<{ value: CuratorPresence; label: string }> = [
@@ -122,9 +39,24 @@ const statusOptions: Array<{ value: CuratorPresence; label: string }> = [
 
 const sortFieldOptions: Array<{ value: CuratorSortField; label: string }> = [
   { value: "alphabet", label: "По алфавиту" },
-  { value: "workload", label: "По нагрузке" },
   { value: "activity", label: "По активности" },
 ];
+
+function generateCuratorPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+  const targetLength = 14;
+
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(targetLength);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+  }
+
+  return Array.from(
+    { length: targetLength },
+    () => alphabet[Math.floor(Math.random() * alphabet.length)],
+  ).join("");
+}
 
 function buildPageNumbers(currentPage: number, totalPages: number) {
   if (totalPages <= 5) {
@@ -143,15 +75,52 @@ function buildPageNumbers(currentPage: number, totalPages: number) {
 }
 
 function resolveRoleMeta(role: CuratorRole) {
+  if (role === "admin") {
+    return { label: "Senior", variant: "rejected" as const };
+  }
+
   if (role === "junior") {
     return { label: "Junior", variant: "approved" as const };
   }
 
-  if (role === "middle") {
-    return { label: "Middle", variant: "pending-review" as const };
+  return { label: "Middle", variant: "pending-review" as const };
+}
+
+function formatActivityMeta(value: string | null) {
+  if (!value) {
+    return {
+      minutes: Number.POSITIVE_INFINITY,
+      label: "Нет активности",
+    };
   }
 
-  return { label: "Senior", variant: "rejected" as const };
+  const diffMs = Math.max(Date.now() - new Date(value).getTime(), 0);
+  const diffMinutes = Math.round(diffMs / 60000);
+
+  if (diffMinutes <= 1) {
+    return { minutes: 0, label: "Сейчас" };
+  }
+
+  if (diffMinutes < 60) {
+    return { minutes: diffMinutes, label: `${diffMinutes} мин назад` };
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) {
+    return { minutes: diffMinutes, label: `${diffHours} ч назад` };
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+  return { minutes: diffMinutes, label: `${diffDays} дн назад` };
+}
+
+function CuratorManagementMetricSkeleton() {
+  return (
+    <article className="curator-management-page__metric-card" aria-hidden="true">
+      <span className="curator-management-page__skeleton curator-management-page__skeleton--metric-label" />
+      <span className="curator-management-page__skeleton curator-management-page__skeleton--metric-value" />
+    </article>
+  );
 }
 
 function CuratorManagementRowSkeleton() {
@@ -177,11 +146,13 @@ function CuratorManagementRowSkeleton() {
 
 export function CuratorManagementPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
-  const isModerationRole = role === "curator" || role === "admin";
-  const themeRole = role === "admin" ? "admin" : "curator";
+  const isAdmin = role === "admin";
+  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
+  const themeRole = isAdmin ? "admin" : "curator";
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const filtersRef = useRef<HTMLDivElement | null>(null);
@@ -203,6 +174,12 @@ export function CuratorManagementPage() {
   const [appliedSortDirection, setAppliedSortDirection] = useState<CuratorSortDirection>("asc");
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isCreateCuratorModalOpen, setIsCreateCuratorModalOpen] = useState(false);
+  const [newCuratorName, setNewCuratorName] = useState("");
+  const [newCuratorEmail, setNewCuratorEmail] = useState("");
+  const [newCuratorPassword, setNewCuratorPassword] = useState("");
+  const [newCuratorRole, setNewCuratorRole] = useState<"admin" | "curator" | "junior">("curator");
+  const [createCuratorError, setCreateCuratorError] = useState<string | null>(null);
 
   useQuery({
     queryKey: ["auth", "me"],
@@ -210,10 +187,52 @@ export function CuratorManagementPage() {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+  const curatorsQuery = useQuery<CuratorManagementResponse>({
+    queryKey: ["moderation", "curators"],
+    queryFn: listCuratorsRequest,
+    enabled: isAuthenticated && isModerationRole,
+    staleTime: 30 * 1000,
+  });
+  const createCuratorMutation = useMutation({
+    mutationFn: createCuratorRequest,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["moderation", "curators"],
+      });
+      setCreateCuratorError(null);
+      setNewCuratorName("");
+      setNewCuratorEmail("");
+      setNewCuratorPassword(generateCuratorPassword());
+      setNewCuratorRole("curator");
+      setIsCreateCuratorModalOpen(false);
+    },
+    onError: (error: any) => {
+      setCreateCuratorError(
+        error?.response?.data?.error?.message ?? "Не удалось добавить куратора. Попробуйте ещё раз.",
+      );
+    },
+  });
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
+
+  useEffect(() => {
+    const normalizedSearch = search.trim();
+    if (normalizedSearch === appliedSearch) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAppliedSearch(normalizedSearch);
+      setSelectedIds([]);
+      setPage(1);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [appliedSearch, search]);
 
   useEffect(() => {
     if (!isProfileMenuOpen) {
@@ -287,30 +306,28 @@ export function CuratorManagementPage() {
 
   const filteredItems = useMemo(() => {
     const normalizedSearch = appliedSearch.trim().toLowerCase();
+    const items = curatorsQuery.data?.data?.items ?? [];
 
-    return curatorItems.filter((item) => {
+    return items.filter((item) => {
       const matchesSearch =
         normalizedSearch.length === 0 ||
-        item.fullName.toLowerCase().includes(normalizedSearch) ||
+        item.full_name.toLowerCase().includes(normalizedSearch) ||
         item.email.toLowerCase().includes(normalizedSearch);
       const matchesRole = appliedRoles.includes("all") || appliedRoles.includes(item.role);
       const matchesStatus = appliedStatuses.includes("all") || appliedStatuses.includes(item.status);
 
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [appliedRoles, appliedSearch, appliedStatuses]);
+  }, [appliedRoles, appliedSearch, appliedStatuses, curatorsQuery.data]);
 
   const sortedItems = useMemo(() => {
     return [...filteredItems].sort((left, right) => {
       let comparison = 0;
 
-      if (appliedSortField === "workload") {
-        comparison =
-          left.workloadCurrent / left.workloadLimit - right.workloadCurrent / right.workloadLimit;
-      } else if (appliedSortField === "activity") {
-        comparison = left.lastActivityMinutes - right.lastActivityMinutes;
+      if (appliedSortField === "activity") {
+        comparison = formatActivityMeta(left.last_activity_at).minutes - formatActivityMeta(right.last_activity_at).minutes;
       } else {
-        comparison = left.fullName.localeCompare(right.fullName, "ru");
+        comparison = left.full_name.localeCompare(right.full_name, "ru");
       }
 
       return appliedSortDirection === "asc" ? comparison : -comparison;
@@ -324,13 +341,14 @@ export function CuratorManagementPage() {
   const allRowsSelected = paginatedItems.length > 0 && selectedIds.length === paginatedItems.length;
   const hasAppliedFilters =
     appliedSearch.length > 0 || !appliedRoles.includes("all") || !appliedStatuses.includes("all");
+  const metrics = curatorsQuery.data?.data?.metrics;
+  const totalCurators = metrics?.total_curators ?? 0;
+  const onlineCurators = metrics?.online_curators ?? 0;
+  const queuedRequests = metrics?.queued_requests ?? 0;
+  const reviewedToday = metrics?.reviewed_today ?? 0;
+  const isTableLoading = curatorsQuery.isPending || curatorsQuery.isFetching;
 
-  const totalCurators = curatorItems.length;
-  const onlineCurators = curatorItems.filter((item) => item.status === "online").length;
-  const queuedRequests = curatorItems.filter((item) => item.workloadCurrent < item.workloadLimit).length;
-  const reviewedToday = curatorItems.reduce((sum, item) => sum + item.reviewedToday, 0);
-
-  if (!isModerationRole) {
+  if (!isAdmin) {
     return <Navigate to="/" replace />;
   }
 
@@ -439,6 +457,16 @@ export function CuratorManagementPage() {
 
   const toggleSelectAll = () => {
     setSelectedIds(allRowsSelected ? [] : paginatedItems.map((item) => item.id));
+  };
+
+  const handleCreateCurator = () => {
+    setCreateCuratorError(null);
+    createCuratorMutation.mutate({
+      full_name: newCuratorName.trim(),
+      email: newCuratorEmail.trim(),
+      password: newCuratorPassword,
+      role: newCuratorRole,
+    });
   };
 
   useEffect(() => {
@@ -566,22 +594,33 @@ export function CuratorManagementPage() {
         </header>
 
         <section className="curator-management-page__metrics" aria-label="Статистика кураторов">
-          <article className="curator-management-page__metric-card">
-            <span className="curator-management-page__metric-label">Всего кураторов:</span>
-            <strong className="curator-management-page__metric-value">{totalCurators}</strong>
-          </article>
-          <article className="curator-management-page__metric-card">
-            <span className="curator-management-page__metric-label">Онлайн:</span>
-            <strong className="curator-management-page__metric-value">{onlineCurators}</strong>
-          </article>
-          <article className="curator-management-page__metric-card">
-            <span className="curator-management-page__metric-label">В очереди заявок:</span>
-            <strong className="curator-management-page__metric-value">{queuedRequests}</strong>
-          </article>
-          <article className="curator-management-page__metric-card">
-            <span className="curator-management-page__metric-label">Сегодня проверено:</span>
-            <strong className="curator-management-page__metric-value">{reviewedToday}</strong>
-          </article>
+          {curatorsQuery.isPending ? (
+            <>
+              <CuratorManagementMetricSkeleton />
+              <CuratorManagementMetricSkeleton />
+              <CuratorManagementMetricSkeleton />
+              <CuratorManagementMetricSkeleton />
+            </>
+          ) : (
+            <>
+              <article className="curator-management-page__metric-card">
+                <span className="curator-management-page__metric-label">Всего кураторов:</span>
+                <strong className="curator-management-page__metric-value">{totalCurators}</strong>
+              </article>
+              <article className="curator-management-page__metric-card">
+                <span className="curator-management-page__metric-label">Онлайн:</span>
+                <strong className="curator-management-page__metric-value">{onlineCurators}</strong>
+              </article>
+              <article className="curator-management-page__metric-card">
+                <span className="curator-management-page__metric-label">В очереди заявок:</span>
+                <strong className="curator-management-page__metric-value">{queuedRequests}</strong>
+              </article>
+              <article className="curator-management-page__metric-card">
+                <span className="curator-management-page__metric-label">Сегодня проверено:</span>
+                <strong className="curator-management-page__metric-value">{reviewedToday}</strong>
+              </article>
+            </>
+          )}
         </section>
 
         <section className="curator-management-page__toolbar">
@@ -594,7 +633,9 @@ export function CuratorManagementPage() {
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  applyFilters();
+                  setAppliedSearch(search.trim());
+                  setSelectedIds([]);
+                  setPage(1);
                 }
               }}
             />
@@ -790,11 +831,56 @@ export function CuratorManagementPage() {
               ) : null}
             </div>
 
-            <Button type="button" variant="accent" size="md" className="curator-management-page__add-button">
+            <Button
+              type="button"
+              variant="success"
+              size="md"
+              className="curator-management-page__add-button"
+              onClick={() => {
+                setCreateCuratorError(null);
+                setNewCuratorPassword(generateCuratorPassword());
+                setIsCreateCuratorModalOpen(true);
+              }}
+            >
               Добавить куратора
             </Button>
           </div>
         </section>
+
+        <div
+          className={
+            selectedIds.length > 0
+              ? "curator-management-page__bulk-bar-shell curator-management-page__bulk-bar-shell--visible"
+              : "curator-management-page__bulk-bar-shell"
+          }
+          aria-hidden={selectedIds.length === 0}
+        >
+          <div className="curator-management-page__bulk-bar">
+            <div className="curator-management-page__bulk-bar-selection">
+              <Checkbox checked={selectedIds.length > 0} variant="accent" disabled readOnly />
+              <span className="curator-management-page__bulk-bar-count">Выбрано: {selectedIds.length}</span>
+            </div>
+
+            <div className="curator-management-page__bulk-bar-actions">
+              <Button
+                type="button"
+                variant="accent"
+                size="md"
+                className="curator-management-page__bulk-bar-button"
+              >
+                Изменить роли
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="md"
+                className="curator-management-page__bulk-bar-button"
+              >
+                Удалить кураторов
+              </Button>
+            </div>
+          </div>
+        </div>
 
         <section className="curator-management-page__content">
           <div className="curator-management-page__table-head">
@@ -804,20 +890,19 @@ export function CuratorManagementPage() {
             <div className="curator-management-page__table-cell">ФИО</div>
             <div className="curator-management-page__table-cell">E-mail</div>
             <div className="curator-management-page__table-cell">Роль</div>
-            <div className="curator-management-page__table-cell">Нагрузка</div>
             <div className="curator-management-page__table-cell">Статус</div>
             <div className="curator-management-page__table-cell">Активность</div>
             <div className="curator-management-page__table-cell">Действия</div>
           </div>
 
           <div className="curator-management-page__rows">
-            {!isAuthenticated
+            {isTableLoading
               ? Array.from({ length: 3 }, (_, index) => (
                   <CuratorManagementRowSkeleton key={`skeleton-${index}`} />
                 ))
               : paginatedItems.map((item) => {
                   const roleMeta = resolveRoleMeta(item.role);
-                  const loadPercent = Math.min((item.workloadCurrent / item.workloadLimit) * 100, 100);
+                  const activityMeta = formatActivityMeta(item.last_activity_at);
 
                   return (
                     <article key={item.id} className="curator-management-page__row">
@@ -832,22 +917,11 @@ export function CuratorManagementPage() {
 
                         <div className="curator-management-page__row-main">
                           <div className="curator-management-page__row-name">
-                            <strong className="curator-management-page__row-title">{item.fullName}</strong>
+                            <strong className="curator-management-page__row-title">{item.full_name}</strong>
                           </div>
                           <div className="curator-management-page__row-email">{item.email}</div>
                           <div className="curator-management-page__row-role">
                             <Status variant={roleMeta.variant}>{roleMeta.label}</Status>
-                          </div>
-                          <div className="curator-management-page__row-workload">
-                            <span className="curator-management-page__row-workload-value">
-                              {item.workloadCurrent}/{item.workloadLimit}
-                            </span>
-                            <span className="curator-management-page__row-workload-bar" aria-hidden="true">
-                              <span
-                                className="curator-management-page__row-workload-progress"
-                                style={{ width: `${loadPercent}%` }}
-                              />
-                            </span>
                           </div>
                           <div className="curator-management-page__row-status">
                             <span
@@ -860,19 +934,19 @@ export function CuratorManagementPage() {
                             />
                             <span>{item.status === "online" ? "Online" : "Offline"}</span>
                           </div>
-                          <div className="curator-management-page__row-activity">{item.lastActivityLabel}</div>
+                          <div className="curator-management-page__row-activity">{activityMeta.label}</div>
                           <div className="curator-management-page__row-actions">
                             <button
                               type="button"
                               className="curator-management-page__action-button"
-                              aria-label={`Редактировать ${item.fullName}`}
+                              aria-label={`Редактировать ${item.full_name}`}
                             >
                               <img src={editIcon} alt="" aria-hidden="true" />
                             </button>
                             <button
                               type="button"
                               className="curator-management-page__action-button"
-                              aria-label={`Удалить ${item.fullName}`}
+                              aria-label={`Удалить ${item.full_name}`}
                             >
                               <img src={deleteIcon} alt="" aria-hidden="true" />
                             </button>
@@ -883,14 +957,14 @@ export function CuratorManagementPage() {
                   );
                 })}
 
-            {isAuthenticated && paginatedItems.length === 0 ? (
+            {!isTableLoading && isAuthenticated && paginatedItems.length === 0 ? (
               <div className="curator-management-page__empty">
                 {hasAppliedFilters ? "По выбранным параметрам кураторы не найдены." : "Кураторы пока не добавлены."}
               </div>
             ) : null}
           </div>
 
-          {isAuthenticated && paginatedItems.length > 0 ? (
+          {!isTableLoading && isAuthenticated && paginatedItems.length > 0 ? (
             <nav className="curator-management-page__pagination" aria-label="Пагинация">
               <button
                 type="button"
@@ -944,6 +1018,118 @@ export function CuratorManagementPage() {
           ) : null}
         </section>
       </Container>
+
+      <Modal
+        isOpen={isCreateCuratorModalOpen}
+        onClose={() => {
+          if (createCuratorMutation.isPending) {
+            return;
+          }
+
+          setCreateCuratorError(null);
+          setIsCreateCuratorModalOpen(false);
+        }}
+        title="Добавить куратора"
+        panelClassName="curator-management-page__modal-panel"
+      >
+        <div className="curator-management-page__modal-form">
+          <label className="curator-management-page__modal-field">
+            <span className="curator-management-page__modal-label">ФИО</span>
+            <Input
+              value={newCuratorName}
+              onChange={(event) => setNewCuratorName(event.target.value)}
+              placeholder="Введите имя куратора"
+              className="curator-management-page__modal-input"
+            />
+          </label>
+
+          <label className="curator-management-page__modal-field">
+            <span className="curator-management-page__modal-label">E-mail</span>
+            <Input
+              type="email"
+              value={newCuratorEmail}
+              onChange={(event) => setNewCuratorEmail(event.target.value)}
+              placeholder="name@example.com"
+              className="curator-management-page__modal-input"
+            />
+          </label>
+
+          <label className="curator-management-page__modal-field">
+            <span className="curator-management-page__modal-label">Пароль</span>
+            <Input
+              type="password"
+              value={newCuratorPassword}
+              onChange={(event) => setNewCuratorPassword(event.target.value)}
+              placeholder="Введите пароль"
+              className="curator-management-page__modal-input"
+            />
+          </label>
+
+          <div className="curator-management-page__modal-field">
+            <span className="curator-management-page__modal-label">Роль</span>
+            <div className="curator-management-page__modal-role-options">
+              <label className="curator-management-page__modal-role-option">
+                <Radio
+                  checked={newCuratorRole === "junior"}
+                  onChange={() => setNewCuratorRole("junior")}
+                  variant="accent"
+                />
+                <span>Junior</span>
+              </label>
+              <label className="curator-management-page__modal-role-option">
+                <Radio
+                  checked={newCuratorRole === "curator"}
+                  onChange={() => setNewCuratorRole("curator")}
+                  variant="accent"
+                />
+                <span>Middle</span>
+              </label>
+              <label className="curator-management-page__modal-role-option">
+                <Radio
+                  checked={newCuratorRole === "admin"}
+                  onChange={() => setNewCuratorRole("admin")}
+                  variant="accent"
+                />
+                <span>Senior</span>
+              </label>
+            </div>
+          </div>
+
+          {createCuratorError ? (
+            <p className="curator-management-page__modal-error">{createCuratorError}</p>
+          ) : null}
+
+          <div className="curator-management-page__modal-actions">
+            <Button
+              type="button"
+              variant="accent-outline"
+              size="md"
+              onClick={() => {
+                setCreateCuratorError(null);
+                setIsCreateCuratorModalOpen(false);
+              }}
+              disabled={createCuratorMutation.isPending}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="accent"
+              size="md"
+              onClick={handleCreateCurator}
+              loading={createCuratorMutation.isPending}
+              disabled={
+                createCuratorMutation.isPending ||
+                newCuratorName.trim().length < 2 ||
+                newCuratorEmail.trim().length === 0 ||
+                newCuratorPassword.length < 8
+              }
+            >
+              Добавить
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Footer hashPrefix="/" theme={themeRole} />
     </main>

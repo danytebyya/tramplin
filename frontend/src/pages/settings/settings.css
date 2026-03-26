@@ -350,7 +350,21 @@
 }
 
 .settings-page__card-footer .button {
-  min-width: 220px;
+  width: 100%;
+}
+
+.settings-page__form-message {
+  margin: 12px 0 0;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+}
+
+.settings-page__form-message--error {
+  color: var(--color-danger);
+}
+
+.settings-page__form-message--success {
+  color: var(--color-success);
 }
 
 .settings-page__skeleton {

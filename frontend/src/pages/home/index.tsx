@@ -104,9 +104,10 @@ export function HomePage() {
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
   const roleName = String(role ?? "");
+  const isJunior = roleName === "junior";
   const isCurator = roleName === "curator";
   const isAdmin = roleName === "admin";
-  const isModerationRole = isCurator || isAdmin;
+  const isModerationRole = isJunior || isCurator || isAdmin;
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const isMapExpanded = mapExpandMode !== "collapsed";
   const isMapExpandedLayout = mapExpandMode === "expanded";
@@ -613,9 +614,11 @@ export function HomePage() {
                 <a href="#content-moderation" className="header__category-link">
                   Модерация контента
                 </a>
-                <NavLink to="/moderation/curators" className="header__category-link">
-                  Управление кураторами
-                </NavLink>
+                {isAdmin ? (
+                  <NavLink to="/moderation/curators" className="header__category-link">
+                    Управление кураторами
+                  </NavLink>
+                ) : null}
                 <NavLink to="/settings" className="header__category-link">
                   Настройки
                 </NavLink>

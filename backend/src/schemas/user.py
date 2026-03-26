@@ -50,6 +50,19 @@ class UserPreferredCityUpdateRequest(BaseModel):
     preferred_city: str
 
 
+class UserUpdateRequest(BaseModel):
+    email: EmailStr
+    display_name: str = Field(min_length=1, max_length=120)
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Имя не может быть пустым")
+        return normalized
+
+
 class NotificationPreferenceChannelRead(BaseModel):
     new_verification_requests: bool
     content_complaints: bool

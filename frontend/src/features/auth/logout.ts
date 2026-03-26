@@ -27,5 +27,5 @@ export async function performLogout(options?: {
   useAuthStore.getState().clearSession();
   clearPersistedAuthSession();
   options?.beforeRedirect?.();
-  window.location.replace(options?.redirectTo ?? "/login");
+  window.location.replace(options?.redirectTo ?? "/");
 }

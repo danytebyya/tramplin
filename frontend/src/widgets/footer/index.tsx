@@ -21,13 +21,13 @@ export function Footer({
   theme = "guest",
 }: FooterProps) {
   const location = useLocation();
-  const isCuratorCompact = theme === "curator";
+  const isAdminCompact = theme === "admin";
   const returnTo = `${location.pathname}${location.search}${location.hash}`;
 
   return (
     <footer className={`site-footer site-footer--${theme}`} id="about">
       <Container className="site-footer__container">
-        {isCuratorCompact ? null : (
+        {isAdminCompact ? null : (
           <div className="site-footer__main">
             <div className="site-footer__logo-card">
               <strong className="site-footer__brand">Трамплин</strong>
@@ -111,17 +111,17 @@ export function Footer({
 
         <div
           className={
-            isCuratorCompact
+            isAdminCompact
               ? "site-footer__bottom site-footer__bottom--compact"
               : "site-footer__bottom"
           }
         >
           <span className="site-footer__copyright">
-            {isCuratorCompact
+            {isAdminCompact
               ? "© 2026 Трамплин Admin. Версия 1.0.0"
               : "© 2026 Платформа “Трамплин”. Все права защищены."}
           </span>
-          {isCuratorCompact ? (
+          {isAdminCompact ? (
             <a href="mailto:support@tramplin.ru" className="site-footer__legal-link">
               Техническая поддержка: support@tramplin.ru
             </a>

@@ -59,6 +59,37 @@ export type ModerationDashboardResponse = {
   };
 };
 
+export type CuratorManagementMetrics = {
+  total_curators: number;
+  online_curators: number;
+  queued_requests: number;
+  reviewed_today: number;
+};
+
+export type CuratorManagementItem = {
+  id: string;
+  full_name: string;
+  email: string;
+  role: "curator" | "admin" | "junior";
+  reviewed_today: number;
+  status: "online" | "offline";
+  last_activity_at: string | null;
+};
+
+export type CuratorManagementResponse = {
+  data?: {
+    metrics?: CuratorManagementMetrics;
+    items?: CuratorManagementItem[];
+  };
+};
+
+export type CuratorCreatePayload = {
+  full_name: string;
+  email: string;
+  password: string;
+  role: "admin" | "curator" | "junior";
+};
+
 export type ModerationSettings = {
   vacancy_review_hours: number;
   internship_review_hours: number;
@@ -124,6 +155,16 @@ export type EmployerVerificationRequestListFilters = {
 
 export async function getModerationDashboardRequest() {
   const response = await apiClient.get<ModerationDashboardResponse>("/moderation/dashboard");
+  return response.data;
+}
+
+export async function listCuratorsRequest() {
+  const response = await apiClient.get<CuratorManagementResponse>("/moderation/curators");
+  return response.data;
+}
+
+export async function createCuratorRequest(payload: CuratorCreatePayload) {
+  const response = await apiClient.post<{ data?: CuratorManagementItem }>("/moderation/curators", payload);
   return response.data;
 }
 

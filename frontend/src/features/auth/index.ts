@@ -39,7 +39,7 @@ export type AuthSuccessResponse = {
     refresh_token?: string;
     expires_in?: number;
     user?: {
-      role?: "applicant" | "employer" | "curator" | "admin";
+      role?: "applicant" | "employer" | "junior" | "curator" | "admin";
       has_employer_profile?: boolean;
     };
   };
@@ -52,7 +52,7 @@ export type MeResponse = {
       email?: string;
       display_name?: string;
       preferred_city?: string | null;
-      role?: "applicant" | "employer" | "curator" | "admin";
+      role?: "applicant" | "employer" | "junior" | "curator" | "admin";
       employer_profile?: {
         employer_type?: "company" | "sole_proprietor";
         company_name?: string;
@@ -165,6 +165,14 @@ export async function meRequest() {
   return response.data;
 }
 
+export async function updateMeRequest(payload: {
+  email: string;
+  display_name: string;
+}) {
+  const response = await apiClient.put<MeResponse>("/users/me", payload);
+  return response.data;
+}
+
 export async function updatePreferredCityRequest(preferredCity: string) {
   const response = await apiClient.put<MeResponse>("/users/me/preferred-city", {
     preferred_city: preferredCity,
@@ -225,7 +233,7 @@ export function applyAuthSession(response: AuthSuccessResponse) {
 }
 
 export function resolvePostAuthRoute(
-  role: "applicant" | "employer" | "curator" | "admin",
+  role: "applicant" | "employer" | "junior" | "curator" | "admin",
   hasEmployerProfile?: boolean,
 ) {
   if (role === "employer") {

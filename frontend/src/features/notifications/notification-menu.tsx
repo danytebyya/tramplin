@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import notificationsIcon from "../../assets/icons/notifications.svg";
-import { env } from "../../shared/config/env";
 import { cn } from "../../shared/lib";
 import { Button } from "../../shared/ui";
 import { useAuthStore } from "../auth";
@@ -14,6 +13,7 @@ import {
   markNotificationAsReadRequest,
   NotificationsResponse,
 } from "./api";
+import { useNotificationsRealtime } from "./use-notifications-realtime";
 import "./notifications.css";
 
 type NotificationMenuProps = {
@@ -65,12 +65,6 @@ function updateNotificationsCache(
   };
 }
 
-function getNotificationsWebSocketUrl(accessToken: string) {
-  const apiOrigin = env.apiBaseUrl.replace(/\/api\/v1$/, "");
-  const wsOrigin = apiOrigin.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
-  return `${wsOrigin}/api/v1/notifications/stream?token=${encodeURIComponent(accessToken)}`;
-}
-
 export function NotificationMenu({
   className,
   buttonClassName,
@@ -81,6 +75,7 @@ export function NotificationMenu({
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
+  const role = useAuthStore((state) => state.role);
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -195,67 +190,13 @@ export function NotificationMenu({
     previousTopNotificationIdRef.current = topNotificationId;
   }, [items]);
 
-  useEffect(() => {
-    if (!accessToken) {
-      return;
-    }
-
-    let isDisposed = false;
-    let reconnectTimeoutId: number | null = null;
-    let socket: WebSocket | null = null;
-
-    const connect = () => {
-      if (isDisposed) {
-        return;
-      }
-
-      socket = new WebSocket(getNotificationsWebSocketUrl(accessToken));
-
-      socket.onopen = () => {
-        if (isDisposed) {
-          socket?.close();
-        }
-      };
-
-      socket.onmessage = () => {
-        void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
-        void queryClient.refetchQueries({ queryKey: ["notifications", "feed"], type: "active" });
-      };
-
-      socket.onclose = () => {
-        if (isDisposed) {
-          return;
-        }
-
-        reconnectTimeoutId = window.setTimeout(() => {
-          connect();
-        }, 2_000);
-      };
-
-      socket.onerror = () => {
-        socket?.close();
-      };
-    };
-
-    connect();
-
-    return () => {
-      isDisposed = true;
-      if (reconnectTimeoutId !== null) {
-        window.clearTimeout(reconnectTimeoutId);
-      }
-      if (socket) {
-        socket.onopen = null;
-        socket.onmessage = null;
-        socket.onclose = null;
-        socket.onerror = null;
-
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.close();
-        }
-      }
-    };
-  }, [accessToken, queryClient]);
+  useNotificationsRealtime({
+    enabled: Boolean(accessToken),
+    onMessage: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+      void queryClient.refetchQueries({ queryKey: ["notifications", "feed"], type: "active" });
+    },
+  });
 
   const markAsReadMutation = useMutation({
     mutationFn: markNotificationAsReadRequest,
@@ -349,8 +290,13 @@ export function NotificationMenu({
       return;
     }
 
-    if (actionUrl.startsWith("/")) {
-      const [targetPathname, targetHash] = actionUrl.split("#");
+    const resolvedActionUrl =
+      actionUrl === "/#dashboard" && (role === "junior" || role === "curator" || role === "admin")
+        ? "/dashboard/curator#dashboard"
+        : actionUrl;
+
+    if (resolvedActionUrl.startsWith("/")) {
+      const [targetPathname, targetHash] = resolvedActionUrl.split("#");
       const normalizedTargetPathname = targetPathname || "/";
 
       if (targetHash && location.pathname === normalizedTargetPathname) {
@@ -361,11 +307,11 @@ export function NotificationMenu({
         }
       }
 
-      navigate(actionUrl);
+      navigate(resolvedActionUrl);
       return;
     }
 
-    window.location.assign(actionUrl);
+    window.location.assign(resolvedActionUrl);
   };
 
   const handleHideNotification = (notificationId: string) => {

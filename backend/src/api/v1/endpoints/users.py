@@ -14,6 +14,7 @@ from src.schemas.user import (
     UserNotificationPreferencesUpdateRequest,
     UserPreferredCityUpdateRequest,
     UserRead,
+    UserUpdateRequest,
 )
 from src.services import AuthService, UserService
 from src.utils.responses import success_response
@@ -69,6 +70,16 @@ def create_user(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict
 @router.get("/me", status_code=status.HTTP_200_OK)
 def read_me(current_user: User = Depends(get_current_user)) -> dict:
     return success_response({"user": _serialize_user(current_user)})
+
+
+@router.put("/me", status_code=status.HTTP_200_OK)
+def update_me(
+    payload: UserUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = UserService(db).update_profile(current_user, payload)
+    return success_response({"user": _serialize_user(user)})
 
 
 @router.put("/me/preferred-city", status_code=status.HTTP_200_OK)

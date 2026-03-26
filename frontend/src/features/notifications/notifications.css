@@ -57,6 +57,15 @@
     visibility 100ms ease;
 }
 
+.notification-menu__dropdown::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  right: 0;
+  left: 0;
+  height: 12px;
+}
+
 .notification-menu__dropdown--hidden {
   visibility: hidden;
   opacity: 0;
@@ -386,6 +395,7 @@
 
 .settings-page--curator .notification-menu,
 .settings-page--admin .notification-menu,
+.curator-dashboard-page .notification-menu,
 .employer-verification-page .notification-menu {
   --notification-menu-primary: var(--color-accent);
   --notification-menu-secondary: var(--color-accent-hover);

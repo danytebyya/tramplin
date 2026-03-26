@@ -12,3 +12,4 @@ export type {
   NotificationSeverity,
 } from "./api";
 export { NotificationMenu } from "./notification-menu";
+export { useNotificationsRealtime } from "./use-notifications-realtime";

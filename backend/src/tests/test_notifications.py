@@ -6,6 +6,7 @@ from src.core.security import decode_token
 from src.models import Notification
 from src.realtime.notification_hub import notification_hub
 from src.tests.test_auth import _request_code
+from src.tests.test_employer_verification_moderation import _create_verification_request, _register_curator
 
 
 def _register_and_login(client, db_session, *, email: str, role: str):
@@ -257,3 +258,41 @@ def test_notifications_websocket_disconnect_removes_connection(client, db_sessio
         websocket.close()
 
     assert user_id not in notification_hub._connections
+
+
+def test_notifications_websocket_receives_employer_verification_status_update_for_curator(client, db_session):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="notifications-curator-verification-update@example.com",
+    )
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email="notifications-employer-verification-update@example.com",
+        company_name="Realtime Corp",
+        inn="7707083898",
+    )
+
+    with client.websocket_connect(f"/api/v1/notifications/stream?token={curator_token}") as websocket:
+        response = client.post(
+            f"/api/v1/moderation/employer-verification-requests/{request_id}/approve",
+            headers={"Authorization": f"Bearer {curator_token}"},
+            json={"moderator_comment": "Одобрено для realtime"},
+        )
+        assert response.status_code == 200
+
+        received_types: list[str] = []
+        received_payloads: list[dict] = []
+        while "moderation_employer_verification_updated" not in received_types:
+            event = websocket.receive_json()
+            received_types.append(event["type"])
+            received_payloads.append(event)
+
+        moderation_event = next(
+            payload
+            for payload in received_payloads
+            if payload["type"] == "moderation_employer_verification_updated"
+        )
+        assert moderation_event["verification_request_id"] == request_id
+        assert moderation_event["status"] == "approved"

@@ -1599,9 +1599,9 @@ a {
   position: relative;
   z-index: 1;
   width: min(100%, 640px);
-  border-radius: 24px;
+  border-radius: 8px;
   background: var(--color-bg-primary);
-  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.22);
+  box-shadow: var(--shadow-sm);
   padding: 32px;
 }
 

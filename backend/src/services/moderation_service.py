@@ -10,12 +10,19 @@ from src.enums.statuses import EmployerVerificationRequestStatus
 from src.models import User
 from src.models.opportunity import ModerationStatus, OpportunityType
 from src.repositories import ModerationRepository
+from src.core.security import hash_password
+from src.models import UserNotificationPreference
 from src.schemas.moderation import (
+    CuratorCreateRequest,
+    CuratorManagementItemRead,
+    CuratorManagementListResponse,
+    CuratorManagementMetricsRead,
     EmployerVerificationDocumentRead,
     EmployerVerificationRequestListResponse,
     EmployerVerificationRequestRead,
     EmployerVerificationReviewRequest,
 )
+from src.realtime.notification_hub import notification_hub
 from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
 from src.schemas.user import ModerationSettingsRead, ModerationSettingsUpdateRequest
@@ -37,13 +44,16 @@ class ModerationService:
     DEFAULT_REJECTION_COMMENT = (
         "Верификация отклонена. При необходимости вы можете отправить заявку повторно."
     )
+    SIDE_EFFECT_ACTION_APPROVE = "approve"
+    SIDE_EFFECT_ACTION_REJECT = "reject"
+    SIDE_EFFECT_ACTION_REQUEST_CHANGES = "request-changes"
 
     def __init__(self, repo: ModerationRepository) -> None:
         self.repo = repo
         self.logger = logging.getLogger(__name__)
 
     def get_dashboard(self, current_user: User) -> dict:
-        if current_user.role not in {UserRole.CURATOR, UserRole.ADMIN}:
+        if current_user.role not in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}:
             raise AppError(
                 code="MODERATION_FORBIDDEN",
                 message="Недостаточно прав для просмотра дашборда модерации",
@@ -118,6 +128,190 @@ class ModerationService:
     def get_settings(self, current_user: User) -> ModerationSettingsRead:
         self._ensure_moderation_access(current_user)
         return self._serialize_settings(self._get_or_create_settings())
+
+    def list_curators(self, current_user: User) -> CuratorManagementListResponse:
+        if current_user.role != UserRole.ADMIN:
+            raise AppError(
+                code="MODERATION_FORBIDDEN",
+                message="Недостаточно прав для управления кураторами",
+                status_code=403,
+            )
+
+        now = datetime.now(UTC)
+        curators = self.repo.list_curators()
+        verification_requests = self.repo.list_verification_requests()
+        opportunities = self.repo.list_opportunities()
+        active_session_rows = self.repo.list_active_curator_session_rows(now)
+
+        online_by_user_id = {
+            str(user_id): self._normalize_datetime(last_seen_at)
+            for user_id, last_seen_at in active_session_rows
+        }
+        today = now.date()
+        queued_requests = len(
+            [
+                request
+                for request in verification_requests
+                if request.status
+                in {
+                    EmployerVerificationRequestStatus.PENDING,
+                    EmployerVerificationRequestStatus.UNDER_REVIEW,
+                }
+            ]
+        ) + len(
+            [
+                opportunity
+                for opportunity in opportunities
+                if opportunity.moderation_status == ModerationStatus.PENDING_REVIEW
+            ]
+        )
+
+        items: list[CuratorManagementItemRead] = []
+        reviewed_today_total = 0
+
+        for curator in curators:
+            curator_id = str(curator.id)
+            verification_reviews = [
+                request
+                for request in verification_requests
+                if request.reviewed_by is not None
+                and str(request.reviewed_by) == curator_id
+                and request.reviewed_at is not None
+            ]
+            opportunity_reviews = [
+                opportunity
+                for opportunity in opportunities
+                if opportunity.moderated_by_user_id is not None
+                and str(opportunity.moderated_by_user_id) == curator_id
+                and opportunity.moderated_at is not None
+            ]
+
+            reviewed_today = len(
+                [
+                    request
+                    for request in verification_reviews
+                    if self._normalize_datetime(request.reviewed_at).date() == today
+                ]
+            ) + len(
+                [
+                    opportunity
+                    for opportunity in opportunity_reviews
+                    if self._normalize_datetime(opportunity.moderated_at).date() == today
+                ]
+            )
+            last_activity_candidates = [
+                online_by_user_id.get(curator_id),
+                *[
+                    self._normalize_datetime(request.reviewed_at)
+                    for request in verification_reviews
+                    if request.reviewed_at is not None
+                ],
+                *[
+                    self._normalize_datetime(opportunity.moderated_at)
+                    for opportunity in opportunity_reviews
+                    if opportunity.moderated_at is not None
+                ],
+            ]
+            last_activity = max(
+                (item for item in last_activity_candidates if item is not None),
+                default=None,
+            )
+
+            reviewed_today_total += reviewed_today
+            items.append(
+                CuratorManagementItemRead(
+                    id=curator_id,
+                    full_name=(
+                        curator.curator_profile.full_name
+                        if curator.curator_profile is not None and curator.curator_profile.full_name
+                        else curator.display_name
+                    ),
+                    email=curator.email,
+                    role=(
+                        "admin"
+                        if curator.role == UserRole.ADMIN
+                        else "junior" if curator.role == UserRole.JUNIOR else "curator"
+                    ),
+                    reviewed_today=reviewed_today,
+                    status="online" if curator_id in online_by_user_id else "offline",
+                    last_activity_at=last_activity.isoformat() if last_activity is not None else None,
+                )
+            )
+
+        items.sort(
+            key=lambda item: (
+                item.status != "online",
+                item.full_name.lower(),
+            )
+        )
+
+        return CuratorManagementListResponse(
+            metrics=CuratorManagementMetricsRead(
+                total_curators=len(curators),
+                online_curators=len(online_by_user_id),
+                queued_requests=queued_requests,
+                reviewed_today=reviewed_today_total,
+            ),
+            items=items,
+        )
+
+    def create_curator(self, current_user: User, payload: CuratorCreateRequest) -> CuratorManagementItemRead:
+        if current_user.role != UserRole.ADMIN:
+            raise AppError(
+                code="MODERATION_FORBIDDEN",
+                message="Недостаточно прав для управления кураторами",
+                status_code=403,
+            )
+
+        existing_user = self.repo.get_user_by_email(payload.email)
+        if existing_user is not None:
+            raise AppError(
+                code="USER_EMAIL_ALREADY_EXISTS",
+                message="Пользователь с таким email уже существует.",
+                status_code=409,
+            )
+
+        next_role = (
+            UserRole.ADMIN
+            if payload.role == "admin"
+            else UserRole.JUNIOR if payload.role == "junior" else UserRole.CURATOR
+        )
+        curator = self.repo.create_curator(
+            full_name=payload.full_name,
+            email=payload.email,
+            password_hash=hash_password(payload.password),
+            role=next_role,
+        )
+        self.repo.db.flush()
+
+        preferences = UserNotificationPreference(user_id=curator.id)
+        preferences.email_new_verification_requests = False
+        preferences.email_content_complaints = False
+        preferences.email_overdue_reviews = False
+        preferences.email_company_profile_changes = False
+        preferences.email_publication_changes = False
+        preferences.email_daily_digest = False
+        preferences.email_weekly_report = False
+        preferences.push_new_verification_requests = False
+        preferences.push_content_complaints = False
+        preferences.push_overdue_reviews = False
+        preferences.push_company_profile_changes = False
+        preferences.push_publication_changes = False
+        preferences.push_daily_digest = False
+        preferences.push_weekly_report = False
+        self.repo.db.add(preferences)
+        self.repo.db.commit()
+        self.repo.db.refresh(curator)
+
+        return CuratorManagementItemRead(
+            id=str(curator.id),
+            full_name=payload.full_name,
+            email=payload.email,
+            role=payload.role,
+            reviewed_today=0,
+            status="offline",
+            last_activity_at=None,
+        )
 
     def list_employer_verification_requests(
         self,
@@ -218,6 +412,7 @@ class ModerationService:
         self.repo.db.add(verification_request)
         self.repo.db.commit()
         self.repo.db.refresh(verification_request)
+        self._publish_verification_request_updated(verification_request)
         return self._serialize_verification_request(verification_request, employer_profile=employer_profile)
 
     def reject_employer_verification_request(
@@ -245,32 +440,10 @@ class ModerationService:
             employer_profile.moderator_comment = resolved_moderator_comment
             self.repo.db.add(employer_profile)
 
-        self._send_rejection_email(
-            verification_request=verification_request,
-            employer_profile=employer_profile,
-            moderator_comment=resolved_moderator_comment,
-        )
-
-        if verification_request.submitted_by is not None:
-            NotificationService(self.repo.db).create_notification(
-                user_id=verification_request.submitted_by,
-                kind=NotificationKind.EMPLOYER_VERIFICATION,
-                severity=NotificationSeverity.WARNING,
-                title="Верификация отклонена",
-                message=resolved_moderator_comment,
-                action_label="Исправить данные",
-                action_url="/onboarding/employer?mode=rejected",
-                payload={
-                    "verification_request_id": str(verification_request.id),
-                    "inn": verification_request.inn,
-                    "status": EmployerVerificationRequestStatus.REJECTED.value,
-                },
-                created_at=datetime.now(UTC),
-            )
-
         self.repo.db.add(verification_request)
         self.repo.db.commit()
         self.repo.db.refresh(verification_request)
+        self._publish_verification_request_updated(verification_request)
         return self._serialize_verification_request(verification_request, employer_profile=employer_profile)
 
     def request_employer_verification_changes(
@@ -283,35 +456,6 @@ class ModerationService:
         verification_request = self._get_verification_request_or_raise(request_id)
         employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
         resolved_moderator_comment = self._resolve_request_changes_comment(payload.moderator_comment)
-        previous_status = verification_request.status
-        previous_reviewed_by = verification_request.reviewed_by
-        previous_reviewed_at = verification_request.reviewed_at
-        previous_moderator_comment = verification_request.moderator_comment
-        previous_rejection_reason = verification_request.rejection_reason
-
-        try:
-            self._send_request_changes_email_with_retry(
-                verification_request=verification_request,
-                employer_profile=employer_profile,
-                moderator_comment=resolved_moderator_comment,
-            )
-        except Exception as exc:
-            failure_comment = self._build_request_changes_delivery_failure_comment(
-                resolved_moderator_comment
-            )
-            verification_request.status = previous_status
-            verification_request.reviewed_by = previous_reviewed_by
-            verification_request.reviewed_at = previous_reviewed_at
-            verification_request.moderator_comment = failure_comment or previous_moderator_comment
-            verification_request.rejection_reason = previous_rejection_reason
-            self.repo.db.add(verification_request)
-            self.repo.db.commit()
-            self.repo.db.refresh(verification_request)
-            raise AppError(
-                code="MODERATION_REQUEST_CHANGES_DELIVERY_FAILED",
-                message="Не удалось запросить доп. информацию у работодателя. Письмо не отправлено.",
-                status_code=503,
-            ) from exc
 
         verification_request.status = EmployerVerificationRequestStatus.SUSPENDED
         verification_request.reviewed_by = current_user.id
@@ -328,27 +472,135 @@ class ModerationService:
             employer_profile.moderator_comment = resolved_moderator_comment
             self.repo.db.add(employer_profile)
 
-        if verification_request.submitted_by is not None:
-            NotificationService(self.repo.db).create_notification(
-                user_id=verification_request.submitted_by,
-                kind=NotificationKind.EMPLOYER_VERIFICATION,
-                severity=NotificationSeverity.WARNING,
-                title="Запрос дополнительной информации",
-                message=resolved_moderator_comment,
-                action_label="Открыть заявку",
-                action_url="/onboarding/employer?mode=changes-requested",
-                payload={
-                    "verification_request_id": str(verification_request.id),
-                    "inn": verification_request.inn,
-                    "status": EmployerVerificationRequestStatus.SUSPENDED.value,
-                },
-                created_at=datetime.now(UTC),
-            )
-
         self.repo.db.add(verification_request)
         self.repo.db.commit()
         self.repo.db.refresh(verification_request)
+        self._publish_verification_request_updated(verification_request)
         return self._serialize_verification_request(verification_request, employer_profile=employer_profile)
+
+    def _publish_verification_request_updated(self, verification_request) -> None:
+        moderator_user_ids = [str(user.id) for user in self.repo.list_curators()]
+        if not moderator_user_ids:
+            return
+
+        notification_hub.publish_to_users_sync(
+            moderator_user_ids,
+            {
+                "type": "moderation_employer_verification_updated",
+                "verification_request_id": str(verification_request.id),
+                "status": verification_request.status.value,
+            },
+        )
+
+    def run_employer_verification_side_effects(self, *, action: str, request_id: str) -> None:
+        try:
+            verification_request = self._get_verification_request_or_raise(request_id)
+            employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
+
+            if action == self.SIDE_EFFECT_ACTION_APPROVE:
+                self._create_approved_notification(verification_request=verification_request)
+            elif action == self.SIDE_EFFECT_ACTION_REJECT:
+                self._send_rejection_email(
+                    verification_request=verification_request,
+                    employer_profile=employer_profile,
+                    moderator_comment=verification_request.moderator_comment,
+                )
+                self._create_rejected_notification(
+                    verification_request=verification_request,
+                    moderator_comment=verification_request.moderator_comment,
+                )
+            elif action == self.SIDE_EFFECT_ACTION_REQUEST_CHANGES:
+                try:
+                    self._send_request_changes_email_with_retry(
+                        verification_request=verification_request,
+                        employer_profile=employer_profile,
+                        moderator_comment=verification_request.moderator_comment,
+                    )
+                except Exception:
+                    self.logger.warning(
+                        "moderation.request_changes_email.failed_async request_id=%s",
+                        verification_request.id,
+                    )
+                self._create_request_changes_notification(
+                    verification_request=verification_request,
+                    moderator_comment=verification_request.moderator_comment,
+                )
+            else:
+                raise ValueError(f"Unsupported moderation side effect action: {action}")
+
+            self.repo.db.commit()
+        except Exception:
+            self.repo.db.rollback()
+            logging.getLogger(__name__).exception(
+                "moderation.verification_side_effects.failed action=%s request_id=%s",
+                action,
+                request_id,
+            )
+
+    def _create_approved_notification(self, *, verification_request) -> None:
+        if verification_request.submitted_by is None:
+            return
+
+        NotificationService(self.repo.db).create_notification(
+            user_id=verification_request.submitted_by,
+            kind=NotificationKind.EMPLOYER_VERIFICATION,
+            severity=NotificationSeverity.SUCCESS,
+            title="Верификация одобрена",
+            message="Компания успешно прошла проверку.",
+            action_label="Открыть дашборд",
+            action_url="/dashboard/employer",
+            payload={
+                "verification_request_id": str(verification_request.id),
+                "inn": verification_request.inn,
+                "status": EmployerVerificationRequestStatus.APPROVED.value,
+            },
+            created_at=datetime.now(UTC),
+        )
+
+    def _create_rejected_notification(self, *, verification_request, moderator_comment: str | None) -> None:
+        if verification_request.submitted_by is None:
+            return
+
+        NotificationService(self.repo.db).create_notification(
+            user_id=verification_request.submitted_by,
+            kind=NotificationKind.EMPLOYER_VERIFICATION,
+            severity=NotificationSeverity.WARNING,
+            title="Верификация отклонена",
+            message=moderator_comment or self.DEFAULT_REJECTION_COMMENT,
+            action_label="Исправить данные",
+            action_url="/onboarding/employer?mode=rejected",
+            payload={
+                "verification_request_id": str(verification_request.id),
+                "inn": verification_request.inn,
+                "status": EmployerVerificationRequestStatus.REJECTED.value,
+            },
+            created_at=datetime.now(UTC),
+        )
+
+    def _create_request_changes_notification(
+        self,
+        *,
+        verification_request,
+        moderator_comment: str | None,
+    ) -> None:
+        if verification_request.submitted_by is None:
+            return
+
+        NotificationService(self.repo.db).create_notification(
+            user_id=verification_request.submitted_by,
+            kind=NotificationKind.EMPLOYER_VERIFICATION,
+            severity=NotificationSeverity.WARNING,
+            title="Запрос дополнительной информации",
+            message=moderator_comment or self.DEFAULT_REQUEST_CHANGES_COMMENT,
+            action_label="Открыть заявку",
+            action_url="/onboarding/employer?mode=changes-requested",
+            payload={
+                "verification_request_id": str(verification_request.id),
+                "inn": verification_request.inn,
+                "status": EmployerVerificationRequestStatus.SUSPENDED.value,
+            },
+            created_at=datetime.now(UTC),
+        )
 
     @classmethod
     def _resolve_request_changes_comment(cls, moderator_comment: str | None) -> str:
@@ -703,7 +955,7 @@ class ModerationService:
 
     @staticmethod
     def _ensure_moderation_access(current_user: User) -> None:
-        if current_user.role not in {UserRole.CURATOR, UserRole.ADMIN}:
+        if current_user.role not in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}:
             raise AppError(
                 code="MODERATION_FORBIDDEN",
                 message="Недостаточно прав для просмотра дашборда модерации",
@@ -863,15 +1115,6 @@ class ModerationService:
             "Вы можете открыть раздел верификации работодателя в личном кабинете и подать заявку повторно."
         )
 
-    @staticmethod
-    def _build_request_changes_delivery_failure_comment(moderator_comment: str | None) -> str:
-        failure_message = (
-            "Не удалось запросить доп. информацию: письмо работодателю не отправлено после 5 попыток."
-        )
-        if moderator_comment:
-            return f"{moderator_comment}\n\n{failure_message}"
-        return failure_message
-
     def _serialize_verification_request(
         self,
         request,
@@ -951,7 +1194,7 @@ class ModerationService:
     @staticmethod
     def _serialize_verification_status(status: EmployerVerificationRequestStatus) -> tuple[str, str]:
         if status == EmployerVerificationRequestStatus.APPROVED:
-            return "Верифицирована компания", "verified"
+            return "Компания верифицирована", "verified"
         if status == EmployerVerificationRequestStatus.REJECTED:
             return "Отклонена верификация", "rejected"
         if status == EmployerVerificationRequestStatus.SUSPENDED:

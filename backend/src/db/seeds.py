@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from random import Random
@@ -9,12 +8,9 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.core.config import settings
-from src.core.security import hash_password
 from src.db.session import SessionLocal
 from src.enums import EmployerType, EmployerVerificationRequestStatus, UserRole, UserStatus
 from src.models import (
-    CuratorProfile,
     Employer,
     EmploymentType,
     Location,
@@ -30,27 +26,7 @@ from src.models import (
     User,
     WorkFormat,
 )
-from src.repositories import OpportunityRepository, UserRepository
-
-
-def seed_initial_admin(db: Session | None = None) -> None:
-    session_context = nullcontext(db) if db is not None else SessionLocal()
-    with session_context as db:
-        repo = UserRepository(db)
-        admin = repo.get_by_email(settings.initial_admin_email.lower())
-        if admin is not None:
-            return
-
-        admin_user = User(
-            email=settings.initial_admin_email.lower(),
-            display_name=settings.initial_admin_display_name,
-            password_hash=hash_password(settings.initial_admin_password),
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE,
-            curator_profile=CuratorProfile(full_name=settings.initial_admin_display_name),
-        )
-        repo.add(admin_user)
-        db.commit()
+from src.repositories import OpportunityRepository
 
 
 def seed_demo_opportunities(db: Session | None = None) -> None:
@@ -330,5 +306,4 @@ def seed_demo_opportunities(db: Session | None = None) -> None:
 
 
 if __name__ == "__main__":
-    seed_initial_admin()
     seed_demo_opportunities()

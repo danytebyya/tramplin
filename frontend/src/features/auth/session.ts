@@ -4,7 +4,7 @@ import { createJSONStorage, persist, StateStorage } from "zustand/middleware";
 
 import { env } from "../../shared/config/env";
 
-export type AuthRole = "guest" | "applicant" | "employer" | "curator" | "admin";
+export type AuthRole = "guest" | "applicant" | "employer" | "junior" | "curator" | "admin";
 
 export const AUTH_STORAGE_KEY = "tramplin.auth.session";
 const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;

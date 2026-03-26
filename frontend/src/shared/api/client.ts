@@ -51,8 +51,8 @@ apiClient.interceptors.response.use(
       useAuthStore.getState().clearSession();
       clearPersistedAuthSession();
 
-      if (window.location.pathname !== "/login") {
-        window.location.replace("/login");
+      if (window.location.pathname !== "/") {
+        window.location.replace("/");
       }
     }
 

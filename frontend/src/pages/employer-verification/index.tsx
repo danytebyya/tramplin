@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { renderAsync } from "docx-preview";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions, VerbosityLevel } from "pdfjs-dist";
 import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
@@ -14,9 +14,11 @@ import {
   useAuthStore,
 } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
+import { useNotificationsRealtime } from "../../features/notifications";
 import {
   approveEmployerVerificationRequest,
   EmployerVerificationRequestItem,
+  EmployerVerificationRequestListResponse,
   EmployerVerificationRequestStatus,
   listEmployerVerificationRequestsRequest,
   rejectEmployerVerificationRequest,
@@ -147,6 +149,7 @@ function DocumentPreview({
   mimeType,
   unavailable = false,
 }: DocumentPreviewProps) {
+  const DOCX_PREVIEW_CLASS = "docx-preview-thumb";
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const docxHostRef = useRef<HTMLDivElement | null>(null);
   const docxStageRef = useRef<HTMLDivElement | null>(null);
@@ -164,12 +167,18 @@ function DocumentPreview({
 
     void (async () => {
       try {
-        const loadingTask = getDocument(blobUrl);
+        const loadingTask = getDocument({
+          url: blobUrl,
+          verbosity: VerbosityLevel.ERRORS,
+          disableFontFace: true,
+          useSystemFonts: false,
+        });
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: 1 });
+        const targetWidth = canvas.parentElement?.clientWidth ?? 60;
         const targetHeight = canvas.parentElement?.clientHeight ?? 85;
-        const scale = targetHeight / viewport.height;
+        const scale = Math.min(targetWidth / viewport.width, targetHeight / viewport.height, 1);
         const scaledViewport = page.getViewport({ scale });
         const context = canvas.getContext("2d");
 
@@ -209,15 +218,19 @@ function DocumentPreview({
     stage.style.transform = "";
     stage.style.width = "";
     stage.style.height = "";
+    stage.style.opacity = "0";
     setDocxPreviewFailed(false);
 
     void (async () => {
       try {
         await renderAsync(fileBlob, stage, undefined, {
-          inWrapper: true,
-          breakPages: true,
+          className: DOCX_PREVIEW_CLASS,
+          inWrapper: false,
+          hideWrapperOnPrint: true,
+          breakPages: false,
           ignoreWidth: false,
           ignoreHeight: false,
+          ignoreFonts: true,
           renderHeaders: false,
           renderFooters: false,
           renderFootnotes: false,
@@ -229,18 +242,47 @@ function DocumentPreview({
           return;
         }
 
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => resolve());
-        });
-
-        if (!host.clientWidth || !host.clientHeight) {
+        let previousWidth = 0;
+        let previousHeight = 0;
+        for (let frame = 0; frame < 4; frame += 1) {
           await new Promise<void>((resolve) => {
             requestAnimationFrame(() => resolve());
           });
+
+          const renderedNode =
+            (stage.querySelector(`section.${DOCX_PREVIEW_CLASS}`) as HTMLElement | null) ??
+            (stage.querySelector(`.${DOCX_PREVIEW_CLASS}`) as HTMLElement | null) ??
+            (stage.firstElementChild as HTMLElement | null);
+
+          if (!renderedNode) {
+            continue;
+          }
+
+          const nextWidth =
+            renderedNode.offsetWidth ||
+            renderedNode.scrollWidth ||
+            renderedNode.getBoundingClientRect().width;
+          const nextHeight =
+            renderedNode.offsetHeight ||
+            renderedNode.scrollHeight ||
+            renderedNode.getBoundingClientRect().height;
+
+          if (
+            nextWidth > 0 &&
+            nextHeight > 0 &&
+            Math.abs(nextWidth - previousWidth) < 1 &&
+            Math.abs(nextHeight - previousHeight) < 1
+          ) {
+            break;
+          }
+
+          previousWidth = nextWidth;
+          previousHeight = nextHeight;
         }
 
         const renderedNode =
-          (stage.querySelector(".docx-wrapper") as HTMLElement | null) ??
+          (stage.querySelector(`section.${DOCX_PREVIEW_CLASS}`) as HTMLElement | null) ??
+          (stage.querySelector(`.${DOCX_PREVIEW_CLASS}`) as HTMLElement | null) ??
           (stage.firstElementChild as HTMLElement | null);
 
         if (!renderedNode) {
@@ -248,18 +290,33 @@ function DocumentPreview({
           return;
         }
 
-        const contentWidth = renderedNode.scrollWidth;
-        const contentHeight = renderedNode.scrollHeight;
+        Array.from(stage.children).forEach((child, index) => {
+          if (index > 0) {
+            (child as HTMLElement).style.display = "none";
+          }
+        });
+
+        const contentWidth =
+          renderedNode.offsetWidth ||
+          renderedNode.scrollWidth ||
+          renderedNode.getBoundingClientRect().width;
+        const contentHeight =
+          renderedNode.offsetHeight ||
+          renderedNode.scrollHeight ||
+          renderedNode.getBoundingClientRect().height;
+        const availableWidth = host.clientWidth || 60;
+        const availableHeight = host.clientHeight || 85;
 
         if (!contentWidth || !contentHeight) {
           setDocxPreviewFailed(true);
           return;
         }
 
-        const scale = Math.min(host.clientWidth / contentWidth, host.clientHeight / contentHeight);
+        const scale = Math.min(availableWidth / contentWidth, availableHeight / contentHeight, 1);
         stage.style.width = `${contentWidth}px`;
         stage.style.height = `${contentHeight}px`;
         stage.style.transform = `scale(${scale})`;
+        stage.style.opacity = "1";
       } catch {
         if (!cancelled) {
           setDocxPreviewFailed(true);
@@ -352,7 +409,7 @@ function VerificationDocumentCard({
 
     void (async () => {
       try {
-        const response = await apiClient.get<Blob>(resolvedFileUrl, {
+    const response = await apiClient.get<Blob>(resolvedFileUrl, {
           responseType: "blob",
         });
 
@@ -360,8 +417,18 @@ function VerificationDocumentCard({
           return;
         }
 
-        nextObjectUrl = URL.createObjectURL(response.data);
-        setFileBlob(response.data);
+        const normalizedMimeType =
+          response.data.type ||
+          (fileName.toLowerCase().endsWith(".docx")
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : mimeType);
+        const normalizedBlob =
+          normalizedMimeType && normalizedMimeType !== response.data.type
+            ? response.data.slice(0, response.data.size, normalizedMimeType)
+            : response.data;
+
+        nextObjectUrl = URL.createObjectURL(normalizedBlob);
+        setFileBlob(normalizedBlob);
         setBlobUrl(nextObjectUrl);
         setIsLoading(false);
       } catch {
@@ -466,7 +533,8 @@ export function EmployerVerificationPage() {
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
-  const isModerationRole = role === "curator" || role === "admin";
+  const isAdmin = role === "admin";
+  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
   const themeRole = role === "admin" ? "admin" : "curator";
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -492,6 +560,14 @@ export function EmployerVerificationPage() {
   const [appliedSortDirection, setAppliedSortDirection] = useState<VerificationSortDirection>("desc");
   const [moderatorComment, setModeratorComment] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const verificationRequestsQueryKey = [
+    "moderation",
+    "employer-verification-requests",
+    appliedSearch,
+    appliedStatuses,
+    appliedPeriod,
+    page,
+  ] as const;
 
   const { data: meData } = useQuery({
     queryKey: ["auth", "me"],
@@ -501,14 +577,7 @@ export function EmployerVerificationPage() {
   });
 
   const verificationRequestsQuery = useQuery({
-    queryKey: [
-      "moderation",
-      "employer-verification-requests",
-      appliedSearch,
-      appliedStatuses,
-      appliedPeriod,
-      page,
-    ],
+    queryKey: verificationRequestsQueryKey,
     queryFn: () =>
       listEmployerVerificationRequestsRequest({
         search: appliedSearch,
@@ -529,6 +598,44 @@ export function EmployerVerificationPage() {
     enabled: isAuthenticated && isModerationRole,
     staleTime: 30 * 1000,
   });
+
+  useNotificationsRealtime({
+    enabled: isAuthenticated && isModerationRole,
+    onMessage: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["moderation", "employer-verification-requests"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["moderation", "dashboard"],
+      });
+      void queryClient.refetchQueries({
+        queryKey: ["moderation", "employer-verification-requests"],
+        type: "active",
+      });
+      void queryClient.refetchQueries({
+        queryKey: ["moderation", "dashboard"],
+        type: "active",
+      });
+    },
+  });
+
+  useEffect(() => {
+    const normalizedSearch = search.trim();
+    if (normalizedSearch === appliedSearch) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAppliedSearch(normalizedSearch);
+      setSelectedIds([]);
+      setExpandedRequestId(null);
+      setPage(1);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [appliedSearch, search]);
 
   const handleMutationSuccess = async () => {
     await queryClient.invalidateQueries({
@@ -557,37 +664,84 @@ export function EmployerVerificationPage() {
     );
   };
 
+  const applyOptimisticReviewUpdate = (
+    requestId: string,
+    nextStatus: EmployerVerificationRequestStatus,
+  ) => {
+    queryClient.setQueryData<EmployerVerificationRequestListResponse | undefined>(
+      verificationRequestsQueryKey,
+      (current) => {
+        const currentItems = current?.data?.items;
+        if (!currentItems) {
+          return current;
+        }
+
+        return {
+          ...current,
+          data: {
+            ...current.data,
+            items: currentItems.map((item) =>
+              item.id === requestId
+                ? {
+                    ...item,
+                    status: nextStatus,
+                  }
+                : item,
+            ),
+          },
+        };
+      },
+    );
+    setExpandedRequestId((current) => (current === requestId ? null : current));
+    setModeratorComment("");
+    setSelectedIds((current) => current.filter((item) => item !== requestId));
+  };
+
+  const createReviewMutationHandlers = (
+    nextStatus: EmployerVerificationRequestStatus,
+  ) => ({
+    onMutate: async ({ requestId }: { requestId: string; comment: string }) => {
+      setReviewError(null);
+      await queryClient.cancelQueries({
+        queryKey: verificationRequestsQueryKey,
+      });
+      const previousData =
+        queryClient.getQueryData<EmployerVerificationRequestListResponse | undefined>(
+          verificationRequestsQueryKey,
+        );
+      applyOptimisticReviewUpdate(requestId, nextStatus);
+      return { previousData };
+    },
+    onSuccess: handleMutationSuccess,
+    onError: (
+      error: unknown,
+      _variables: { requestId: string; comment: string },
+      context: { previousData?: EmployerVerificationRequestListResponse } | undefined,
+    ) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(verificationRequestsQueryKey, context.previousData);
+      }
+      handleMutationError(error);
+    },
+    onSettled: handleMutationSettled,
+  });
+
   const approveMutation = useMutation({
     mutationFn: ({ requestId, comment }: { requestId: string; comment: string }) =>
       approveEmployerVerificationRequest(requestId, { moderator_comment: comment || null }),
-    onMutate: () => {
-      setReviewError(null);
-    },
-    onSuccess: handleMutationSuccess,
-    onError: handleMutationError,
-    onSettled: handleMutationSettled,
+    ...createReviewMutationHandlers("approved"),
   });
 
   const rejectMutation = useMutation({
     mutationFn: ({ requestId, comment }: { requestId: string; comment: string }) =>
       rejectEmployerVerificationRequest(requestId, { moderator_comment: comment || null }),
-    onMutate: () => {
-      setReviewError(null);
-    },
-    onSuccess: handleMutationSuccess,
-    onError: handleMutationError,
-    onSettled: handleMutationSettled,
+    ...createReviewMutationHandlers("rejected"),
   });
 
   const requestChangesMutation = useMutation({
     mutationFn: ({ requestId, comment }: { requestId: string; comment: string }) =>
       requestEmployerVerificationChanges(requestId, { moderator_comment: comment || null }),
-    onMutate: () => {
-      setReviewError(null);
-    },
-    onSuccess: handleMutationSuccess,
-    onError: handleMutationError,
-    onSettled: handleMutationSettled,
+    ...createReviewMutationHandlers("suspended"),
   });
 
   const bulkActionMutation = useMutation({
@@ -984,9 +1138,11 @@ export function EmployerVerificationPage() {
               <a href="#content-moderation" className="header__category-link">
                 Модерация контента
               </a>
-              <NavLink to="/moderation/curators" className="header__category-link">
-                Управление кураторами
-              </NavLink>
+              {isAdmin ? (
+                <NavLink to="/moderation/curators" className="header__category-link">
+                  Управление кураторами
+                </NavLink>
+              ) : null}
               <NavLink to="/settings" className="header__category-link">
                 Настройки
               </NavLink>
@@ -1015,7 +1171,10 @@ export function EmployerVerificationPage() {
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  applyFilters();
+                  setAppliedSearch(search.trim());
+                  setSelectedIds([]);
+                  setExpandedRequestId(null);
+                  setPage(1);
                 }
               }}
             />
@@ -1239,6 +1398,7 @@ export function EmployerVerificationPage() {
               <Button
                 type="button"
                 variant="accent-outline"
+                size="md"
                 className="employer-verification-page__bulk-bar-button employer-verification-page__bulk-bar-button--request"
                 onClick={() => handleBulkAction("request-changes")}
                 loading={bulkActionMutation.isPending}
@@ -1249,6 +1409,7 @@ export function EmployerVerificationPage() {
               <Button
                 type="button"
                 variant="danger"
+                size="md"
                 className="employer-verification-page__bulk-bar-button"
                 onClick={() => handleBulkAction("reject")}
                 loading={bulkActionMutation.isPending}
@@ -1259,6 +1420,7 @@ export function EmployerVerificationPage() {
               <Button
                 type="button"
                 variant="success"
+                size="md"
                 className="employer-verification-page__bulk-bar-button"
                 onClick={() => handleBulkAction("approve")}
                 loading={bulkActionMutation.isPending}
@@ -1368,7 +1530,14 @@ export function EmployerVerificationPage() {
                     </div>
                   </div>
 
-                  {isExpanded ? (
+                  <div
+                    className={
+                      isExpanded
+                        ? "employer-verification-page__row-details-shell employer-verification-page__row-details-shell--expanded"
+                        : "employer-verification-page__row-details-shell"
+                    }
+                    aria-hidden={!isExpanded}
+                  >
                     <div className="employer-verification-page__row-details">
                       <div className="employer-verification-page__details-grid">
                         <div className="employer-verification-page__details-column">
@@ -1475,7 +1644,7 @@ export function EmployerVerificationPage() {
                         </div>
                       </div>
                     </div>
-                  ) : null}
+                  </div>
                 </article>
               );
             })}

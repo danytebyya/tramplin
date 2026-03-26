@@ -32,6 +32,21 @@ class UserRepository:
         self.db.add(user)
         return user
 
+    def update_profile(self, user: User, *, email: str, display_name: str) -> User:
+        user.email = email
+        user.display_name = display_name
+
+        if user.applicant_profile is not None:
+            user.applicant_profile.full_name = display_name
+            self.db.add(user.applicant_profile)
+
+        if user.curator_profile is not None:
+            user.curator_profile.full_name = display_name
+            self.db.add(user.curator_profile)
+
+        self.db.add(user)
+        return user
+
     def has_employer_profile(self, user_id: str | UUID) -> bool:
         normalized_id = UUID(str(user_id))
         stmt = select(EmployerProfile.user_id).where(EmployerProfile.user_id == normalized_id)

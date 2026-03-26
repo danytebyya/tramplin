@@ -23,6 +23,17 @@ def _register_curator(client, db_session, *, email: str) -> str:
     return access_token
 
 
+def _register_moderator(client, db_session, *, email: str, role: UserRole) -> str:
+    from src.tests.test_notifications import _register_and_login
+
+    access_token = _register_and_login(client, db_session, email=email, role="applicant")
+    user = db_session.execute(select(User).where(User.email == email)).scalar_one()
+    user.role = role
+    db_session.add(user)
+    db_session.commit()
+    return access_token
+
+
 def _create_verification_request(client, db_session, *, email: str, company_name: str, inn: str) -> str:
     access_token = _register_and_login_employer(client, db_session, email=email)
 
@@ -87,6 +98,29 @@ def test_list_employer_verification_requests_returns_pending_requests(client, db
     assert body["items"][0]["phone"] == "+7 (999) 111-22-33"
     assert body["items"][0]["social_link"] == "https://t.me/acme-labs"
     assert body["items"][0]["documents"][0]["file_name"] == "registration.pdf"
+
+
+def test_list_employer_verification_requests_is_available_for_junior(client, db_session):
+    junior_token = _register_moderator(
+        client,
+        db_session,
+        email="junior-verification-list@example.com",
+        role=UserRole.JUNIOR,
+    )
+    _create_verification_request(
+        client,
+        db_session,
+        email="employer-verification-junior@example.com",
+        company_name="Junior Labs",
+        inn="7707083894",
+    )
+
+    response = client.get(
+        "/api/v1/moderation/employer-verification-requests",
+        headers={"Authorization": f"Bearer {junior_token}"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_new_verification_request_creates_curator_notification(client, db_session):
@@ -279,11 +313,20 @@ def test_approve_employer_verification_request_updates_statuses(client, db_sessi
     employer_profile = db_session.execute(
         select(EmployerProfile).where(EmployerProfile.inn == "7707083894")
     ).scalar_one()
+    notification = db_session.execute(
+        select(Notification)
+        .where(Notification.user_id == employer_profile.user_id)
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
 
     assert verification_request.status == EmployerVerificationRequestStatus.APPROVED
     assert verification_request.reviewed_at is not None
     assert employer_profile.verification_status == EmployerVerificationStatus.VERIFIED
     assert employer_profile.moderator_comment == "Проверка завершена"
+    assert notification is not None
+    assert notification.title == "Верификация одобрена"
+    assert notification.action_url == "/dashboard/employer"
+    assert notification.action_label == "Открыть дашборд"
 
 
 def test_request_employer_verification_changes_marks_profile(client, db_session):
@@ -489,7 +532,7 @@ def test_reject_employer_verification_request_uses_default_comment_when_empty(cl
     assert notification.message == expected_message
 
 
-def test_request_employer_verification_changes_reverts_status_when_email_delivery_fails(
+def test_request_employer_verification_changes_keeps_status_when_email_delivery_fails(
     client,
     db_session,
     monkeypatch,
@@ -521,11 +564,8 @@ def test_request_employer_verification_changes_reverts_status_when_email_deliver
         json={"moderator_comment": "Нужен ещё один документ"},
     )
 
-    assert response.status_code == 503
-    assert (
-        response.json()["error"]["message"]
-        == "Не удалось запросить доп. информацию у работодателя. Письмо не отправлено."
-    )
+    assert response.status_code == 200
+    assert response.json()["data"]["status"] == EmployerVerificationRequestStatus.SUSPENDED.value
     assert len(attempts) == 5
 
     verification_request = db_session.execute(
@@ -540,11 +580,12 @@ def test_request_employer_verification_changes_reverts_status_when_email_deliver
         .order_by(Notification.created_at.desc())
     ).scalars().first()
 
-    assert verification_request.status == EmployerVerificationRequestStatus.PENDING
-    assert verification_request.reviewed_at is None
-    assert "Не удалось запросить доп. информацию" in (verification_request.moderator_comment or "")
-    assert employer_profile.verification_status == EmployerVerificationStatus.PENDING_REVIEW
-    assert notification is None or notification.title != "Запрос дополнительной информации"
+    assert verification_request.status == EmployerVerificationRequestStatus.SUSPENDED
+    assert verification_request.reviewed_at is not None
+    assert verification_request.moderator_comment == "Нужен ещё один документ"
+    assert employer_profile.verification_status == EmployerVerificationStatus.CHANGES_REQUESTED
+    assert notification is not None
+    assert notification.title == "Запрос дополнительной информации"
 
 
 def test_resubmitting_changed_employer_verification_returns_request_to_pending(client, db_session):

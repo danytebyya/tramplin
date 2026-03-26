@@ -695,6 +695,50 @@ def test_update_preferred_city(client, db_session):
     assert me_response.json()["data"]["user"]["preferred_city"] == "Казань"
 
 
+def test_update_me_profile(client, db_session):
+    code = _request_code(client, db_session, "update-me@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "update-me@example.com",
+            "display_name": "Initial Name",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Initial Name"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "update-me@example.com", "password": "StrongPass123"},
+    )
+    assert login_response.status_code == 201
+    access_token = login_response.json()["data"]["access_token"]
+
+    update_response = client.put(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "email": "updated-me@example.com",
+            "display_name": "Updated Name",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["data"]["user"]["email"] == "updated-me@example.com"
+    assert update_response.json()["data"]["user"]["display_name"] == "Updated Name"
+    assert update_response.json()["data"]["user"]["applicant_profile"]["full_name"] == "Updated Name"
+
+    me_response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert me_response.status_code == 200
+    assert me_response.json()["data"]["user"]["email"] == "updated-me@example.com"
+    assert me_response.json()["data"]["user"]["display_name"] == "Updated Name"
+
+
 def test_login_rate_limit(client, db_session):
     code = _request_code(client, db_session, "limited-login@example.com")
     register_payload = {

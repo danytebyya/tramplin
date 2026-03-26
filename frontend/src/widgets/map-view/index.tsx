@@ -745,12 +745,14 @@ export function MapView({
               <div className="map-view__details-company-row">
                 <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
                 {selectedOpportunity.companyVerified ? (
-                  <img
-                    src={verifiedIcon}
-                    alt=""
-                    aria-hidden="true"
-                    className="map-view__details-verified-icon"
-                  />
+                  <span className="map-view__details-verified-icon" aria-hidden="true">
+                    <img
+                      src={verifiedIcon}
+                      alt=""
+                      aria-hidden="true"
+                      className="map-view__details-verified-icon-image"
+                    />
+                  </span>
                 ) : null}
               </div>
             </div>

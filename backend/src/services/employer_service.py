@@ -29,6 +29,7 @@ from src.models import (
     UserNotificationPreference,
 )
 from src.schemas.company import EmployerOnboardingRequest
+from src.realtime.notification_hub import notification_hub
 from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
 from src.utils.errors import AppError
@@ -144,7 +145,7 @@ class EmployerService:
                 status_code=404,
             )
 
-        if current_user.role in {UserRole.CURATOR, UserRole.ADMIN}:
+        if current_user.role in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}:
             return document
 
         if current_user.role != UserRole.EMPLOYER:
@@ -373,6 +374,7 @@ class EmployerService:
             self._notify_moderators_about_new_verification_request(verification_request=verification_request)
         self.db.commit()
         self.db.refresh(verification_request)
+        self._publish_verification_request_updated(verification_request)
 
         return {
             "verification_request_id": str(verification_request.id),
@@ -548,11 +550,25 @@ class EmployerService:
             select(User)
             .options(selectinload(User.notification_preferences))
             .where(
-                User.role.in_([UserRole.CURATOR, UserRole.ADMIN]),
+                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
                 User.status == UserStatus.ACTIVE,
             )
         )
         return list(self.db.execute(stmt).scalars().all())
+
+    def _publish_verification_request_updated(self, verification_request: EmployerVerificationRequest) -> None:
+        moderator_user_ids = [str(user.id) for user in self._list_moderation_recipients()]
+        if not moderator_user_ids:
+            return
+
+        notification_hub.publish_to_users_sync(
+            moderator_user_ids,
+            {
+                "type": "moderation_employer_verification_updated",
+                "verification_request_id": str(verification_request.id),
+                "status": verification_request.status.value,
+            },
+        )
 
     def _get_moderation_recipient(self, user_id) -> User | None:
         stmt = (
@@ -561,7 +577,11 @@ class EmployerService:
             .where(User.id == UUID(str(user_id)))
         )
         user = self.db.execute(stmt).scalar_one_or_none()
-        if user is None or user.role not in {UserRole.CURATOR, UserRole.ADMIN} or user.status != UserStatus.ACTIVE:
+        if (
+            user is None
+            or user.role not in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}
+            or user.status != UserStatus.ACTIVE
+        ):
             return None
         return user
 

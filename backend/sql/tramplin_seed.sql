@@ -1,7 +1,6 @@
 INSERT INTO users (id, email, display_name, password_hash, role, status, email_verified_at, created_at, updated_at)
 VALUES
-    ('00000000-0000-0000-0000-000000000001', 'admin@tramplin.ru', 'Platform Admin', '$demo$admin_hash', 'admin', 'active', NOW(), NOW(), NOW()),
-    ('00000000-0000-0000-0000-000000000002', 'curator@tramplin.ru', 'Lead Curator', '$pbkdf2-sha256$29000$ZUwJoVTqXev9XytF6J2zNg$5J.hHC8Bj1ADDWDREmnrRGCZicVgGxU5vpErKB6Kv64', 'curator', 'active', NOW(), NOW(), NOW()),
+    ('00000000-0000-0000-0000-000000000002', 'curator@tramplin.ru', 'Lead Curator', '$pbkdf2-sha256$29000$ZUwJoVTqXev9XytF6J2zNg$5J.hHC8Bj1ADDWDREmnrRGCZicVgGxU5vpErKB6Kv64', 'admin', 'active', NOW(), NOW(), NOW()),
     ('00000000-0000-0000-0000-000000000003', 'hr@acme.example', 'Acme Recruiter', '$demo$employer_hash', 'employer', 'active', NOW(), NOW(), NOW()),
     ('00000000-0000-0000-0000-000000000004', 'alice@student.example', 'Alice', '$demo$applicant_hash', 'applicant', 'active', NOW(), NOW(), NOW()),
     ('00000000-0000-0000-0000-000000000005', 'bob@student.example', 'Bob', '$demo$applicant_hash', 'applicant', 'active', NOW(), NOW(), NOW());

@@ -1,11 +1,12 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from src.enums import UserRole, UserStatus
 from src.models import (
+    CuratorProfile,
     Employer,
     EmployerProfile,
     EmployerVerificationDocument,
@@ -104,7 +105,7 @@ class ModerationRepository:
             select(User.id)
             .join(RefreshSession, RefreshSession.user_id == User.id)
             .where(
-                User.role == UserRole.CURATOR,
+                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
                 User.status == UserStatus.ACTIVE,
                 RefreshSession.revoked_at.is_(None),
                 RefreshSession.expires_at > now,
@@ -112,3 +113,52 @@ class ModerationRepository:
             .distinct()
         )
         return len(self.db.execute(stmt).scalars().all())
+
+    def list_curators(self) -> list[User]:
+        stmt = (
+            select(User)
+            .options(selectinload(User.curator_profile))
+            .where(
+                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
+                User.status == UserStatus.ACTIVE,
+            )
+            .order_by(User.created_at.asc())
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
+    def list_active_curator_session_rows(self, now: datetime) -> list[tuple[str, datetime]]:
+        stmt = (
+            select(RefreshSession.user_id, func.max(RefreshSession.created_at))
+            .join(User, User.id == RefreshSession.user_id)
+            .where(
+                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
+                User.status == UserStatus.ACTIVE,
+                RefreshSession.revoked_at.is_(None),
+                RefreshSession.expires_at > now,
+            )
+            .group_by(RefreshSession.user_id)
+        )
+        return list(self.db.execute(stmt).all())
+
+    def get_user_by_email(self, email: str) -> User | None:
+        stmt = select(User).where(func.lower(User.email) == email.lower())
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def create_curator(
+        self,
+        *,
+        full_name: str,
+        email: str,
+        password_hash: str,
+        role: UserRole,
+    ) -> User:
+        curator = User(
+            email=email,
+            display_name=full_name,
+            password_hash=password_hash,
+            role=role,
+            status=UserStatus.ACTIVE,
+            curator_profile=CuratorProfile(full_name=full_name),
+        )
+        self.db.add(curator)
+        return curator

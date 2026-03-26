@@ -108,12 +108,9 @@ export function OpportunityList({
                   <div className="opportunity-list__company-header">
                     <p className="opportunity-list__company">{opportunity.companyName}</p>
                     {opportunity.companyVerified ? (
-                      <img
-                        src={verifiedIcon}
-                        alt=""
-                        aria-hidden="true"
-                        className="opportunity-list__verified-icon"
-                      />
+                      <span className="opportunity-list__verified-icon" aria-hidden="true">
+                        <img src={verifiedIcon} alt="" aria-hidden="true" className="opportunity-list__verified-icon-image" />
+                      </span>
                     ) : null}
                   </div>
                 </div>

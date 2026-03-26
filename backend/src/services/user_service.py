@@ -1,6 +1,11 @@
+from src.utils.errors import AppError
 from src.models import User
 from src.repositories.user_repository import UserRepository
-from src.schemas.user import UserNotificationPreferencesRead, UserNotificationPreferencesUpdateRequest
+from src.schemas.user import (
+    UserNotificationPreferencesRead,
+    UserNotificationPreferencesUpdateRequest,
+    UserUpdateRequest,
+)
 from src.enums import UserRole
 
 
@@ -12,6 +17,27 @@ class UserService:
     def update_preferred_city(self, current_user: User, preferred_city: str) -> User:
         normalized_city = preferred_city.strip()
         updated_user = self.user_repo.update_preferred_city(current_user, normalized_city)
+        self.db.commit()
+        self.db.refresh(updated_user)
+        return updated_user
+
+    def update_profile(self, current_user: User, payload: UserUpdateRequest) -> User:
+        normalized_email = payload.email.lower().strip()
+        normalized_display_name = payload.display_name.strip()
+
+        existing_user = self.user_repo.get_by_email(normalized_email, with_profiles=False)
+        if existing_user is not None and str(existing_user.id) != str(current_user.id):
+            raise AppError(
+                code="USER_EMAIL_ALREADY_EXISTS",
+                message="Пользователь с таким email уже существует.",
+                status_code=409,
+            )
+
+        updated_user = self.user_repo.update_profile(
+            current_user,
+            email=normalized_email,
+            display_name=normalized_display_name,
+        )
         self.db.commit()
         self.db.refresh(updated_user)
         return updated_user
@@ -45,7 +71,7 @@ class UserService:
 
     @staticmethod
     def _apply_default_notification_preferences(preferences, role: UserRole) -> None:
-        if role not in {UserRole.CURATOR, UserRole.ADMIN}:
+        if role not in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}:
             return
 
         preferences.email_new_verification_requests = False
