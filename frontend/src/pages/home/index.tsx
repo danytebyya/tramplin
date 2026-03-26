@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import profileIcon from "../../assets/icons/profile.svg";
 import {
@@ -76,6 +76,7 @@ export function HomePage() {
   const MAP_EXPAND_TRANSITION_MS = 520;
   const DEFAULT_CITY = "Чебоксары";
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [mapExpandMode, setMapExpandMode] = useState<"collapsed" | "expanding" | "expanded" | "collapsing">("collapsed");
@@ -390,6 +391,21 @@ export function HomePage() {
       setSelectedOpportunityId(null);
     }
   }, [opportunities, selectedOpportunityId]);
+
+  useEffect(() => {
+    if (location.hash !== "#dashboard" || !isModerationRole) {
+      return;
+    }
+
+    const target = document.getElementById("dashboard");
+    if (!target) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [isModerationRole, location.hash]);
 
   useEffect(() => {
     const preferredCity = currentUserQuery.data?.data?.user?.preferred_city?.trim();

@@ -142,6 +142,60 @@ def test_new_verification_request_creates_curator_notification(client, db_sessio
     assert notification.action_url == "/moderation/employers"
 
 
+def test_new_verification_request_sends_curator_email_when_enabled(client, db_session, monkeypatch):
+    curator_email = "curator-verification-email@example.com"
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email=curator_email,
+    )
+    response = client.put(
+        "/api/v1/users/me/notification-preferences",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={
+            "email_notifications": {
+                "new_verification_requests": True,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+            "push_notifications": {
+                "new_verification_requests": False,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+        },
+    )
+    assert response.status_code == 200
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    _create_verification_request(
+        client,
+        db_session,
+        email="employer-verification-email-notify@example.com",
+        company_name="Email Notify Corp",
+        inn="7707083899",
+    )
+
+    assert len(sent_messages) == 1
+    assert sent_messages[0][0] == curator_email
+    assert sent_messages[0][1] == "Новая заявка на верификацию"
+    assert "Email Notify Corp" in sent_messages[0][2]
+
+
 def test_new_verification_request_does_not_notify_curator_when_pref_disabled(client, db_session):
     curator_email = "curator-verification-notify-disabled@example.com"
     curator_token = _register_curator(
@@ -319,6 +373,40 @@ def test_reject_employer_verification_request_keeps_profile_unverified_and_notif
     assert notification.action_label == "Исправить данные"
 
 
+def test_reject_employer_verification_request_sends_email_to_employer(client, db_session, monkeypatch):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="curator-verification-reject-email@example.com",
+    )
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email="employer-verification-reject-email@example.com",
+        company_name="Reject Email Corp",
+        inn="7707083888",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.moderation_service.send_email", fake_send_email)
+
+    response = client.post(
+        f"/api/v1/moderation/employer-verification-requests/{request_id}/reject",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={"moderator_comment": "Заявка отклонена"},
+    )
+
+    assert response.status_code == 200
+    assert len(sent_messages) == 1
+    assert sent_messages[0][0] == "employer-verification-reject-email@example.com"
+    assert sent_messages[0][1] == "Трамплин: заявка на верификацию отклонена"
+    assert "Reject Email Corp" in sent_messages[0][2]
+
+
 def test_request_employer_verification_changes_uses_default_comment_when_empty(client, db_session):
     curator_token = _register_curator(
         client,
@@ -355,6 +443,48 @@ def test_request_employer_verification_changes_uses_default_comment_when_empty(c
         "контактную информацию и приложенные документы."
     )
     assert employer_profile.moderator_comment == expected_message
+    assert notification is not None
+    assert notification.message == expected_message
+
+
+def test_reject_employer_verification_request_uses_default_comment_when_empty(client, db_session):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="curator-verification-reject-default@example.com",
+    )
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email="employer-verification-reject-default@example.com",
+        company_name="Reject Default Corp",
+        inn="7707083892",
+    )
+
+    response = client.post(
+        f"/api/v1/moderation/employer-verification-requests/{request_id}/reject",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={"moderator_comment": ""},
+    )
+
+    assert response.status_code == 200
+
+    employer_profile = db_session.execute(
+        select(EmployerProfile).where(EmployerProfile.inn == "7707083892")
+    ).scalar_one()
+    verification_request = db_session.execute(
+        select(EmployerVerificationRequest).where(EmployerVerificationRequest.id == UUID(request_id))
+    ).scalar_one()
+    notification = db_session.execute(
+        select(Notification)
+        .where(Notification.user_id == employer_profile.user_id)
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
+
+    expected_message = "Верификация отклонена. При необходимости вы можете отправить заявку повторно."
+    assert employer_profile.moderator_comment == expected_message
+    assert verification_request.rejection_reason == expected_message
+    assert verification_request.moderator_comment == expected_message
     assert notification is not None
     assert notification.message == expected_message
 

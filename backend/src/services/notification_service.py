@@ -153,12 +153,12 @@ class NotificationService:
             UserRole.CURATOR: (
                 "Добро пожаловать в Трамплин!",
                 "Здесь будут появляться новые заявки на проверку, задачи модерации и системные события платформы.",
-                "/dashboard/curator",
+                "/#dashboard",
             ),
             UserRole.ADMIN: (
                 "Добро пожаловать в Трамплин!",
                 "Здесь будут собираться системные события, статусы модерации и критичные уведомления платформы.",
-                "/dashboard/curator",
+                "/#dashboard",
             ),
         }
         title, message, action_url = role_message_map.get(

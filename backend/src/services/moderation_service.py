@@ -34,6 +34,9 @@ class ModerationService:
     DEFAULT_REQUEST_CHANGES_COMMENT = (
         "Требуется дополнить заявку: проверьте полноту заполнения данных, контактную информацию и приложенные документы."
     )
+    DEFAULT_REJECTION_COMMENT = (
+        "Верификация отклонена. При необходимости вы можете отправить заявку повторно."
+    )
 
     def __init__(self, repo: ModerationRepository) -> None:
         self.repo = repo
@@ -203,7 +206,6 @@ class ModerationService:
         verification_request.rejection_reason = None
 
         if verification_request.employer is not None:
-            verification_request.employer.verification_status = EmployerVerificationRequestStatus.APPROVED
             verification_request.employer.verified_at = datetime.now(UTC)
             verification_request.employer.updated_by = current_user.id
 
@@ -226,21 +228,28 @@ class ModerationService:
     ) -> EmployerVerificationRequestRead:
         self._ensure_moderation_access(current_user)
         verification_request = self._get_verification_request_or_raise(request_id)
+        resolved_moderator_comment = self._resolve_rejection_comment(payload.moderator_comment)
         verification_request.status = EmployerVerificationRequestStatus.REJECTED
         verification_request.reviewed_by = current_user.id
         verification_request.reviewed_at = datetime.now(UTC)
-        verification_request.rejection_reason = payload.moderator_comment
-        verification_request.moderator_comment = payload.moderator_comment
+        verification_request.rejection_reason = resolved_moderator_comment
+        verification_request.moderator_comment = resolved_moderator_comment
 
         if verification_request.employer is not None:
-            verification_request.employer.verification_status = EmployerVerificationRequestStatus.REJECTED
+            verification_request.employer.verified_at = None
             verification_request.employer.updated_by = current_user.id
 
         employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
         if employer_profile is not None:
             employer_profile.verification_status = EmployerVerificationStatus.UNVERIFIED
-            employer_profile.moderator_comment = payload.moderator_comment
+            employer_profile.moderator_comment = resolved_moderator_comment
             self.repo.db.add(employer_profile)
+
+        self._send_rejection_email(
+            verification_request=verification_request,
+            employer_profile=employer_profile,
+            moderator_comment=resolved_moderator_comment,
+        )
 
         if verification_request.submitted_by is not None:
             NotificationService(self.repo.db).create_notification(
@@ -248,7 +257,7 @@ class ModerationService:
                 kind=NotificationKind.EMPLOYER_VERIFICATION,
                 severity=NotificationSeverity.WARNING,
                 title="Верификация отклонена",
-                message=payload.moderator_comment or "Заявка на верификацию отклонена. Заполните данные заново.",
+                message=resolved_moderator_comment,
                 action_label="Исправить данные",
                 action_url="/onboarding/employer?mode=rejected",
                 payload={
@@ -311,7 +320,7 @@ class ModerationService:
         verification_request.rejection_reason = None
 
         if verification_request.employer is not None:
-            verification_request.employer.verification_status = EmployerVerificationRequestStatus.SUSPENDED
+            verification_request.employer.verified_at = None
             verification_request.employer.updated_by = current_user.id
 
         if employer_profile is not None:
@@ -345,6 +354,11 @@ class ModerationService:
     def _resolve_request_changes_comment(cls, moderator_comment: str | None) -> str:
         normalized_comment = (moderator_comment or "").strip()
         return normalized_comment or cls.DEFAULT_REQUEST_CHANGES_COMMENT
+
+    @classmethod
+    def _resolve_rejection_comment(cls, moderator_comment: str | None) -> str:
+        normalized_comment = (moderator_comment or "").strip()
+        return normalized_comment or cls.DEFAULT_REJECTION_COMMENT
 
     def update_settings(
         self,
@@ -776,6 +790,35 @@ class ModerationService:
         if last_error is not None:
             raise last_error
 
+    def _send_rejection_email(
+        self,
+        *,
+        verification_request,
+        employer_profile,
+        moderator_comment: str | None,
+    ) -> None:
+        recipient = self._resolve_request_changes_email_recipient(
+            verification_request=verification_request,
+            employer_profile=employer_profile,
+        )
+        if recipient is None:
+            return
+
+        subject = "Трамплин: заявка на верификацию отклонена"
+        body = self._build_rejection_email_body(
+            verification_request=verification_request,
+            moderator_comment=moderator_comment,
+        )
+
+        try:
+            send_email(recipient=recipient, subject=subject, body=body)
+        except Exception:
+            self.logger.warning(
+                "moderation.rejection_email.failed request_id=%s recipient=%s",
+                verification_request.id,
+                recipient,
+            )
+
     def _resolve_request_changes_email_recipient(self, *, verification_request, employer_profile) -> str | None:
         if verification_request.submitted_by is not None:
             submitted_by_user = self.repo.db.get(User, verification_request.submitted_by)
@@ -803,6 +846,21 @@ class ModerationService:
             f"ИНН: {verification_request.inn}\n\n"
             f"{comment_section}"
             "Откройте раздел верификации работодателя в личном кабинете и загрузите обновлённые данные."
+        )
+
+    @staticmethod
+    def _build_rejection_email_body(*, verification_request, moderator_comment: str | None) -> str:
+        comment_section = (
+            f"Причина:\n{moderator_comment}\n\n"
+            if moderator_comment
+            else ""
+        )
+        return (
+            "Заявка на верификацию работодателя отклонена.\n\n"
+            f"Компания: {verification_request.legal_name}\n"
+            f"ИНН: {verification_request.inn}\n\n"
+            f"{comment_section}"
+            "Вы можете открыть раздел верификации работодателя в личном кабинете и подать заявку повторно."
         )
 
     @staticmethod

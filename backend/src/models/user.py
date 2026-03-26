@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, String
+from sqlalchemy import Enum, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -24,6 +24,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         Enum(UserStatus, name="user_status", values_callable=enum_values),
         default=UserStatus.ACTIVE,
         nullable=False,
+    )
+    __table_args__ = (
+        Index("uq_users_email_lower", func.lower(email), unique=True),
     )
 
     applicant_profile = relationship("ApplicantProfile", back_populates="user", uselist=False)

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import notificationsIcon from "../../assets/icons/notifications.svg";
 import { env } from "../../shared/config/env";
@@ -77,6 +77,7 @@ export function NotificationMenu({
   iconClassName,
 }: NotificationMenuProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
@@ -349,6 +350,17 @@ export function NotificationMenu({
     }
 
     if (actionUrl.startsWith("/")) {
+      const [targetPathname, targetHash] = actionUrl.split("#");
+      const normalizedTargetPathname = targetPathname || "/";
+
+      if (targetHash && location.pathname === normalizedTargetPathname) {
+        const targetElement = document.getElementById(targetHash);
+        if (targetElement) {
+          targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+      }
+
       navigate(actionUrl);
       return;
     }

@@ -2,7 +2,9 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from src.core.security import decode_token
 from src.models import Notification
+from src.realtime.notification_hub import notification_hub
 from src.tests.test_auth import _request_code
 
 
@@ -239,3 +241,19 @@ def test_notifications_websocket_receives_push_event_on_new_notification(client,
 
         event = websocket.receive_json()
         assert event["type"] == "notification_created"
+
+
+def test_notifications_websocket_disconnect_removes_connection(client, db_session):
+    access_token = _register_and_login(
+        client,
+        db_session,
+        email="notifications-websocket-disconnect@example.com",
+        role="employer",
+    )
+    user_id = decode_token(access_token)["sub"]
+
+    with client.websocket_connect(f"/api/v1/notifications/stream?token={access_token}") as websocket:
+        assert len(notification_hub._connections[user_id]) == 1
+        websocket.close()
+
+    assert user_id not in notification_hub._connections

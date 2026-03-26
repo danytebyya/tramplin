@@ -23,7 +23,7 @@ class OpportunityService:
             "id": str(opportunity.id),
             "title": opportunity.title,
             "company_name": opportunity.employer.display_name,
-            "company_verified": opportunity.employer.verification_status == "approved",
+            "company_verified": opportunity.employer.verified_at is not None,
             "company_rating": self._company_rating(index),
             "company_reviews_count": self._company_reviews_count(index),
             "salary_label": self._build_salary_label(opportunity),

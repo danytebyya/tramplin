@@ -23,7 +23,7 @@ class EmailVerificationService:
         self.logger = logging.getLogger(__name__)
 
     def check_email_availability(self, email: str) -> bool:
-        return self.user_repo.get_by_email(email.lower()) is None
+        return self.user_repo.get_by_email(self._normalize_email(email)) is None
 
     def ensure_email_check_allowed(self, ip_address: str | None) -> None:
         normalized_ip = self._normalize_ip(ip_address)
@@ -57,13 +57,7 @@ class EmailVerificationService:
         state = self.repo.get_or_create(normalized_email, "register")
         self._ensure_not_blocked(state, now)
 
-        if not self.check_email_availability(normalized_email):
-            self.logger.info("auth.otp.request.reject_existing_email email=%s", normalized_email)
-            raise AppError(
-                code="AUTH_EMAIL_EXISTS",
-                message="Аккаунт с такой почтой уже зарегистрирован",
-                status_code=409,
-            )
+        self._ensure_email_is_available(normalized_email)
 
         if self._has_active_code(state, now) and not force_resend:
             self.logger.info("auth.otp.request.skip_active email=%s", normalized_email)
@@ -184,6 +178,15 @@ class EmailVerificationService:
                 code="AUTH_OTP_REQUEST_LIMIT_REACHED",
                 message="Слишком много запросов кода. Попробуйте позже.",
                 status_code=429,
+            )
+
+    def _ensure_email_is_available(self, email: str) -> None:
+        if self.user_repo.get_by_email(email) is not None:
+            self.logger.info("auth.otp.request.reject_existing_email email=%s", email)
+            raise AppError(
+                code="AUTH_EMAIL_EXISTS",
+                message="Аккаунт с такой почтой уже зарегистрирован",
+                status_code=409,
             )
 
     def _deliver_code(

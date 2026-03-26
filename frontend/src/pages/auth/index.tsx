@@ -11,6 +11,7 @@ import arrowIcon from "../../assets/icons/arrow.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
   applyAuthSession,
+  checkEmailAvailabilityRequest,
   loginRequest,
   registerRequest,
   resolvePostAuthRoute,
@@ -165,6 +166,8 @@ export function AuthPage() {
     handleSubmit,
     reset,
     watch,
+    clearErrors,
+    setError,
     setValue,
     formState: { errors },
   } = useForm<RegisterFormValues>({
@@ -364,14 +367,26 @@ export function AuthPage() {
 
   const handleFormSubmit = async (values: RegisterFormValues) => {
     const now = Date.now();
+    const normalizedEmail = values.email.trim();
 
+    clearErrors("email");
     setApiError(null);
     setApiErrorCode(null);
     try {
-      await requestCodeMutation.mutateAsync({ email: values.email.trim(), forceResend: false });
+      const availabilityResponse = await checkEmailAvailabilityRequest(normalizedEmail);
+      if (availabilityResponse?.data?.exists) {
+        setError("email", {
+          type: "manual",
+          message: "Аккаунт с такой почтой уже зарегистрирован",
+        });
+        return;
+      }
+
+      await requestCodeMutation.mutateAsync({ email: normalizedEmail, forceResend: false });
 
       blurActiveElement();
-      setPendingValues(values);
+      const nextValues = { ...values, email: normalizedEmail };
+      setPendingValues(nextValues);
       setVerificationCode("");
       lastAutoSubmittedCodeRef.current = null;
       setStep("code");
@@ -379,7 +394,7 @@ export function AuthPage() {
       setCodeInputFocusTrigger((current) => current + 1);
       writePersistedVerificationState({
         step: "code",
-        values,
+        values: nextValues,
         verificationCode: "",
         requestedAt: now,
         expiresAt: now + EMAIL_VERIFICATION_TTL_MS,

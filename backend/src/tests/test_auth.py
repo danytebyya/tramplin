@@ -1,12 +1,16 @@
 import re
 
+import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 
 from src.core.config import settings
-from src.models import EmailVerificationState
+from src.enums import UserRole, UserStatus
+from src.models import EmailVerificationState, User
 
 
 def _request_code(client, db_session, email: str, *, force_resend: bool = False) -> str:
+    normalized_email = email.lower()
     response = client.post(
         "/api/v1/auth/email/request-code",
         json={"email": email, "force_resend": force_resend},
@@ -14,7 +18,7 @@ def _request_code(client, db_session, email: str, *, force_resend: bool = False)
     assert response.status_code == 200
     code = db_session.execute(
         select(EmailVerificationState.debug_code).where(
-            EmailVerificationState.email == email,
+            EmailVerificationState.email == normalized_email,
             EmailVerificationState.purpose == "register",
         )
     ).scalar_one_or_none()
@@ -93,6 +97,25 @@ def test_request_code_rejects_existing_email(client, db_session):
     assert persisted_code is None
 
 
+def test_request_code_rejects_existing_email_case_insensitive(client, db_session):
+    code = _request_code(client, db_session, "Taken@example.com")
+    register_payload = {
+        "email": "Taken@example.com",
+        "display_name": "Taken User",
+        "password": "StrongPass123",
+        "verification_code": code,
+        "role": "applicant",
+        "applicant_profile": {"full_name": "Taken User"},
+    }
+    register_response = client.post("/api/v1/users", json=register_payload)
+    assert register_response.status_code == 201
+
+    response = client.post("/api/v1/auth/email/request-code", json={"email": "taken@example.com"})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "AUTH_EMAIL_EXISTS"
+    assert response.json()["error"]["message"] == "Аккаунт с такой почтой уже зарегистрирован"
+
+
 def test_register_rejects_existing_email_for_another_role(client, db_session):
     code = _request_code(client, db_session, "multi-role@example.com")
     first_payload = {
@@ -120,6 +143,61 @@ def test_register_rejects_existing_email_for_another_role(client, db_session):
     assert second_response.status_code == 409
     assert second_response.json()["error"]["code"] == "AUTH_EMAIL_EXISTS"
     assert second_response.json()["error"]["message"] == "Аккаунт с такой почтой уже зарегистрирован"
+
+
+def test_register_rejects_existing_email_case_insensitive(client, db_session):
+    code = _request_code(client, db_session, "CaseSensitive@example.com")
+    first_payload = {
+        "email": "CaseSensitive@example.com",
+        "display_name": "Applicant User",
+        "password": "StrongPass123",
+        "verification_code": code,
+        "role": "applicant",
+        "applicant_profile": {"full_name": "Applicant User"},
+    }
+
+    first_response = client.post("/api/v1/users", json=first_payload)
+    assert first_response.status_code == 201
+
+    second_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "casesensitive@example.com",
+            "display_name": "Employer User",
+            "password": "StrongPass123",
+            "verification_code": "123456",
+            "role": "employer",
+        },
+    )
+    assert second_response.status_code == 409
+    assert second_response.json()["error"]["code"] == "AUTH_EMAIL_EXISTS"
+    assert second_response.json()["error"]["message"] == "Аккаунт с такой почтой уже зарегистрирован"
+
+
+def test_users_table_rejects_duplicate_email_case_insensitive(db_session):
+    db_session.add(
+        User(
+            email="curator@example.com",
+            display_name="Curator",
+            password_hash="hashed",
+            role=UserRole.CURATOR,
+            status=UserStatus.ACTIVE,
+        )
+    )
+    db_session.commit()
+
+    db_session.add(
+        User(
+            email="Curator@example.com",
+            display_name="Applicant",
+            password_hash="hashed",
+            role=UserRole.APPLICANT,
+            status=UserStatus.ACTIVE,
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
 
 
 def test_check_email_returns_exists_for_registered_user(client, db_session):

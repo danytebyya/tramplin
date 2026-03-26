@@ -1,6 +1,7 @@
 import logging
 from datetime import UTC, datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.core.config import settings
@@ -47,13 +48,7 @@ class AuthService:
                 status_code=422,
             )
 
-        if self.user_repo.get_by_email(normalized_email):
-            self.logger.warning("auth.register.email_exists email=%s", normalized_email)
-            raise AppError(
-                code="AUTH_EMAIL_EXISTS",
-                message="Аккаунт с такой почтой уже зарегистрирован",
-                status_code=409,
-            )
+        self._ensure_email_is_available(normalized_email)
 
         self.logger.info(
             "auth.register.verify_code email=%s role=%s",
@@ -88,7 +83,14 @@ class AuthService:
             )
 
         self.user_repo.add(user)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            if self.user_repo.get_by_email(normalized_email, with_profiles=False):
+                self.logger.warning("auth.register.email_exists_race email=%s", normalized_email)
+                self._raise_email_exists_error()
+            raise exc
         self.db.refresh(user)
         self.logger.info("auth.register.persisted email=%s user_id=%s", user.email, user.id)
         return user
@@ -345,6 +347,19 @@ class AuthService:
             return None
         normalized_value = value.strip().lower()
         return normalized_value or None
+
+    def _ensure_email_is_available(self, email: str) -> None:
+        if self.user_repo.get_by_email(email):
+            self.logger.warning("auth.register.email_exists email=%s", email)
+            self._raise_email_exists_error()
+
+    @staticmethod
+    def _raise_email_exists_error() -> None:
+        raise AppError(
+            code="AUTH_EMAIL_EXISTS",
+            message="Аккаунт с такой почтой уже зарегистрирован",
+            status_code=409,
+        )
 
     def _record_login_event(
         self,

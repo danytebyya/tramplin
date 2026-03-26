@@ -94,7 +94,13 @@ async def notifications_stream(
     await notification_hub.connect(current_user.id, websocket)
     try:
         while True:
-            message = await websocket.receive()
+            try:
+                message = await websocket.receive()
+            except RuntimeError as exc:
+                if "disconnect message has been received" in str(exc):
+                    break
+                raise
+
             if message.get("type") == "websocket.disconnect":
                 break
     except WebSocketDisconnect:

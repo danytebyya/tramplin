@@ -138,6 +138,13 @@ export async function requestEmailVerificationCode({
   return response.data;
 }
 
+export async function checkEmailAvailabilityRequest(email: string) {
+  const response = await apiClient.post<{ data?: { exists?: boolean } }>("/auth/email/check", {
+    email,
+  });
+  return response.data;
+}
+
 export async function verifyEmailVerificationCode(email: string, code: string) {
   const response = await apiClient.post("/auth/email/verify-code", { email, code });
   return response.data;

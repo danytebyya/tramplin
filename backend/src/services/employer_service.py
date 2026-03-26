@@ -29,6 +29,7 @@ from src.models import (
     UserNotificationPreference,
 )
 from src.schemas.company import EmployerOnboardingRequest
+from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
 from src.utils.errors import AppError
 
@@ -212,6 +213,7 @@ class EmployerService:
             employer.corporate_email = employer_profile.corporate_email
             employer.phone = employer_profile.phone
             employer.verification_status = EmployerVerificationRequestStatus.PENDING
+            employer.verified_at = None
             employer.updated_by = current_user.id
 
         membership = (
@@ -465,25 +467,37 @@ class EmployerService:
 
     def _notify_moderators_about_new_verification_request(self, *, verification_request: EmployerVerificationRequest) -> None:
         notification_service = NotificationService(self.db)
-        for moderator in self._list_moderation_notification_recipients(
-            preference_key="push_new_verification_requests"
-        ):
-            notification_service.create_notification(
-                user_id=moderator.id,
-                kind=NotificationKind.EMPLOYER_VERIFICATION,
-                severity=NotificationSeverity.INFO,
-                title="Новая заявка на верификацию",
-                message=(
-                    f"Поступила новая заявка на верификацию работодателя: "
-                    f"{verification_request.legal_name}."
-                ),
-                action_label="Открыть список",
-                action_url="/moderation/employers",
-                payload={
-                    "verification_request_id": str(verification_request.id),
-                    "status": EmployerVerificationRequestStatus.PENDING.value,
-                },
-            )
+        title = "Новая заявка на верификацию"
+        message = (
+            f"Поступила новая заявка на верификацию работодателя: "
+            f"{verification_request.legal_name}."
+        )
+        for moderator in self._list_moderation_recipients():
+            if self._is_moderation_notification_enabled(moderator, "push_new_verification_requests"):
+                notification_service.create_notification(
+                    user_id=moderator.id,
+                    kind=NotificationKind.EMPLOYER_VERIFICATION,
+                    severity=NotificationSeverity.INFO,
+                    title=title,
+                    message=message,
+                    action_label="Открыть список",
+                    action_url="/moderation/employers",
+                    payload={
+                        "verification_request_id": str(verification_request.id),
+                        "status": EmployerVerificationRequestStatus.PENDING.value,
+                    },
+                )
+            if self._is_moderation_email_enabled(moderator, "email_new_verification_requests"):
+                self._send_moderation_email(
+                    recipient=moderator.email,
+                    subject=title,
+                    body=(
+                        f"{message}\n\n"
+                        f"Компания: {verification_request.legal_name}\n"
+                        f"ИНН: {verification_request.inn}\n\n"
+                        "Откройте список заявок на верификацию в панели куратора."
+                    ),
+                )
 
     def _notify_curator_about_resubmitted_verification_request(
         self,
@@ -493,30 +507,43 @@ class EmployerService:
     ) -> None:
         moderator = self._get_moderation_recipient(
             curator_user_id,
-            preference_key="push_company_profile_changes",
         )
         if moderator is None:
             return
 
-        NotificationService(self.db).create_notification(
-            user_id=moderator.id,
-            kind=NotificationKind.EMPLOYER_VERIFICATION,
-            severity=NotificationSeverity.INFO,
-            title="Работодатель прислал обновлённые данные",
-            message=(
-                f"По заявке {verification_request.legal_name} поступили обновлённые данные "
-                "после запроса дополнительной информации."
-            ),
-            action_label="Открыть заявку",
-            action_url="/moderation/employers",
-            payload={
-                "verification_request_id": str(verification_request.id),
-                "status": EmployerVerificationRequestStatus.PENDING.value,
-                "source": "resubmitted_after_changes_request",
-            },
+        title = "Работодатель прислал обновлённые данные"
+        message = (
+            f"По заявке {verification_request.legal_name} поступили обновлённые данные "
+            "после запроса дополнительной информации."
         )
+        if self._is_moderation_notification_enabled(moderator, "push_company_profile_changes"):
+            NotificationService(self.db).create_notification(
+                user_id=moderator.id,
+                kind=NotificationKind.EMPLOYER_VERIFICATION,
+                severity=NotificationSeverity.INFO,
+                title=title,
+                message=message,
+                action_label="Открыть заявку",
+                action_url="/moderation/employers",
+                payload={
+                    "verification_request_id": str(verification_request.id),
+                    "status": EmployerVerificationRequestStatus.PENDING.value,
+                    "source": "resubmitted_after_changes_request",
+                },
+            )
+        if self._is_moderation_email_enabled(moderator, "email_company_profile_changes"):
+            self._send_moderation_email(
+                recipient=moderator.email,
+                subject=title,
+                body=(
+                    f"{message}\n\n"
+                    f"Компания: {verification_request.legal_name}\n"
+                    f"ИНН: {verification_request.inn}\n\n"
+                    "Откройте заявку в панели куратора."
+                ),
+            )
 
-    def _list_moderation_notification_recipients(self, *, preference_key: str) -> list[User]:
+    def _list_moderation_recipients(self) -> list[User]:
         stmt = (
             select(User)
             .options(selectinload(User.notification_preferences))
@@ -525,13 +552,9 @@ class EmployerService:
                 User.status == UserStatus.ACTIVE,
             )
         )
-        users = list(self.db.execute(stmt).scalars().all())
-        return [
-            user for user in users
-            if self._is_moderation_notification_enabled(user, preference_key)
-        ]
+        return list(self.db.execute(stmt).scalars().all())
 
-    def _get_moderation_recipient(self, user_id, *, preference_key: str) -> User | None:
+    def _get_moderation_recipient(self, user_id) -> User | None:
         stmt = (
             select(User)
             .options(selectinload(User.notification_preferences))
@@ -539,8 +562,6 @@ class EmployerService:
         )
         user = self.db.execute(stmt).scalar_one_or_none()
         if user is None or user.role not in {UserRole.CURATOR, UserRole.ADMIN} or user.status != UserStatus.ACTIVE:
-            return None
-        if not self._is_moderation_notification_enabled(user, preference_key):
             return None
         return user
 
@@ -550,3 +571,19 @@ class EmployerService:
         if preferences is None:
             return False
         return bool(getattr(preferences, preference_key, False))
+
+    @staticmethod
+    def _is_moderation_email_enabled(user: User, preference_key: str) -> bool:
+        preferences = user.notification_preferences
+        if preferences is None:
+            return False
+        return bool(getattr(preferences, preference_key, False))
+
+    @staticmethod
+    def _send_moderation_email(*, recipient: str | None, subject: str, body: str) -> None:
+        if not recipient:
+            return
+        try:
+            send_email(recipient=recipient, subject=subject, body=body)
+        except Exception:
+            return
