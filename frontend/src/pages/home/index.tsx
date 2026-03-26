@@ -613,9 +613,9 @@ export function HomePage() {
                 <a href="#content-moderation" className="header__category-link">
                   Модерация контента
                 </a>
-                <a href="#curators" className="header__category-link">
+                <NavLink to="/moderation/curators" className="header__category-link">
                   Управление кураторами
-                </a>
+                </NavLink>
                 <NavLink to="/settings" className="header__category-link">
                   Настройки
                 </NavLink>

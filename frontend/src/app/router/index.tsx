@@ -5,6 +5,7 @@ import { ReactElement } from "react";
 import { meRequest, useAuthStore } from "../../features/auth";
 import { AuthPage } from "../../pages/auth";
 import { CuratorDashboardPage } from "../../pages/curator-dashboard";
+import { CuratorManagementPage } from "../../pages/curator-management";
 import { EmployerDashboardPage } from "../../pages/employer-dashboard";
 import { EmployerOnboardingPage } from "../../pages/employer-onboarding";
 import { EmployerVerificationPage } from "../../pages/employer-verification";
@@ -254,6 +255,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <EmployerVerificationPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/moderation/curators"
+        element={
+          <ProtectedRoute>
+            <CuratorManagementPage />
           </ProtectedRoute>
         }
       />
