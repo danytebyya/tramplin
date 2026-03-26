@@ -61,21 +61,44 @@ const defaultNotificationPreferenceGroup: NotificationPreferenceGroup = {
   weekly_report: false,
 };
 
-function buildNotificationPreferences(group?: Partial<NotificationPreferenceGroup>): NotificationPreference[] {
+function resolveDefaultNotificationPreferenceGroup(role: string | null): NotificationPreferenceGroup {
+  if (role === "curator" || role === "admin") {
+    return {
+      new_verification_requests: false,
+      content_complaints: false,
+      overdue_reviews: false,
+      company_profile_changes: false,
+      publication_changes: false,
+      daily_digest: false,
+      weekly_report: false,
+    };
+  }
+
+  return defaultNotificationPreferenceGroup;
+}
+
+function buildNotificationPreferences(
+  group?: Partial<NotificationPreferenceGroup>,
+  role: string | null = null,
+): NotificationPreference[] {
+  const defaultGroup = resolveDefaultNotificationPreferenceGroup(role);
   return notificationPreferenceDefinitions.map((item) => ({
     key: item.key,
     label: item.label,
-    enabled: group?.[item.key] ?? defaultNotificationPreferenceGroup[item.key],
+    enabled: group?.[item.key] ?? defaultGroup[item.key],
   }));
 }
 
-function mapNotificationPreferencesToPayload(items: NotificationPreference[]): NotificationPreferenceGroup {
+function mapNotificationPreferencesToPayload(
+  items: NotificationPreference[],
+  role: string | null,
+): NotificationPreferenceGroup {
   return items.reduce<NotificationPreferenceGroup>(
     (result, item) => {
       result[item.key] = item.enabled;
       return result;
     },
-    { ...defaultNotificationPreferenceGroup },
+    { ...resolveDefaultNotificationPreferenceGroup(role) },
   );
 }
 
@@ -239,8 +262,8 @@ export function SettingsPage() {
   const user = meData?.data?.user;
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [emailNotifications, setEmailNotifications] = useState(buildNotificationPreferences);
-  const [pushNotifications, setPushNotifications] = useState(buildNotificationPreferences);
+  const [emailNotifications, setEmailNotifications] = useState(() => buildNotificationPreferences(undefined, role));
+  const [pushNotifications, setPushNotifications] = useState(() => buildNotificationPreferences(undefined, role));
   const [vacancyReviewHours, setVacancyReviewHours] = useState("24");
   const [internshipReviewHours, setInternshipReviewHours] = useState("24");
   const [eventReviewHours, setEventReviewHours] = useState("24");
@@ -332,9 +355,9 @@ export function SettingsPage() {
       return;
     }
 
-    setEmailNotifications(buildNotificationPreferences(preferences.email_notifications));
-    setPushNotifications(buildNotificationPreferences(preferences.push_notifications));
-  }, [notificationPreferencesQuery.data]);
+    setEmailNotifications(buildNotificationPreferences(preferences.email_notifications, role));
+    setPushNotifications(buildNotificationPreferences(preferences.push_notifications, role));
+  }, [notificationPreferencesQuery.data, role]);
 
   useEffect(() => {
     const settings = moderationSettingsQuery.data?.data;
@@ -394,8 +417,8 @@ export function SettingsPage() {
 
   const handleNotificationPreferencesSave = () => {
     updateNotificationPreferencesMutation.mutate({
-      email_notifications: mapNotificationPreferencesToPayload(emailNotifications),
-      push_notifications: mapNotificationPreferencesToPayload(pushNotifications),
+      email_notifications: mapNotificationPreferencesToPayload(emailNotifications, role),
+      push_notifications: mapNotificationPreferencesToPayload(pushNotifications, role),
     });
   };
 

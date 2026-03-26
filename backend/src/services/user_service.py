@@ -1,6 +1,7 @@
 from src.models import User
 from src.repositories.user_repository import UserRepository
 from src.schemas.user import UserNotificationPreferencesRead, UserNotificationPreferencesUpdateRequest
+from src.enums import UserRole
 
 
 class UserService:
@@ -19,6 +20,7 @@ class UserService:
         preferences = self.user_repo.get_notification_preferences(current_user.id)
         if preferences is None:
             preferences = self.user_repo.create_notification_preferences(current_user.id)
+            self._apply_default_notification_preferences(preferences, current_user.role)
             self.db.commit()
             self.db.refresh(preferences)
         return self._serialize_notification_preferences(preferences)
@@ -31,6 +33,7 @@ class UserService:
         preferences = self.user_repo.get_notification_preferences(current_user.id)
         if preferences is None:
             preferences = self.user_repo.create_notification_preferences(current_user.id)
+            self._apply_default_notification_preferences(preferences, current_user.role)
         updated_preferences = self.user_repo.update_notification_preferences(
             preferences,
             email_notifications=payload.email_notifications.model_dump(),
@@ -39,6 +42,26 @@ class UserService:
         self.db.commit()
         self.db.refresh(updated_preferences)
         return self._serialize_notification_preferences(updated_preferences)
+
+    @staticmethod
+    def _apply_default_notification_preferences(preferences, role: UserRole) -> None:
+        if role not in {UserRole.CURATOR, UserRole.ADMIN}:
+            return
+
+        preferences.email_new_verification_requests = False
+        preferences.email_content_complaints = False
+        preferences.email_overdue_reviews = False
+        preferences.email_company_profile_changes = False
+        preferences.email_publication_changes = False
+        preferences.email_daily_digest = False
+        preferences.email_weekly_report = False
+        preferences.push_new_verification_requests = False
+        preferences.push_content_complaints = False
+        preferences.push_overdue_reviews = False
+        preferences.push_company_profile_changes = False
+        preferences.push_publication_changes = False
+        preferences.push_daily_digest = False
+        preferences.push_weekly_report = False
 
     @staticmethod
     def _serialize_notification_preferences(preferences) -> UserNotificationPreferencesRead:

@@ -465,7 +465,9 @@ class EmployerService:
 
     def _notify_moderators_about_new_verification_request(self, *, verification_request: EmployerVerificationRequest) -> None:
         notification_service = NotificationService(self.db)
-        for moderator in self._list_moderation_notification_recipients():
+        for moderator in self._list_moderation_notification_recipients(
+            preference_key="push_new_verification_requests"
+        ):
             notification_service.create_notification(
                 user_id=moderator.id,
                 kind=NotificationKind.EMPLOYER_VERIFICATION,
@@ -489,7 +491,10 @@ class EmployerService:
         curator_user_id,
         verification_request: EmployerVerificationRequest,
     ) -> None:
-        moderator = self._get_moderation_recipient(curator_user_id)
+        moderator = self._get_moderation_recipient(
+            curator_user_id,
+            preference_key="push_company_profile_changes",
+        )
         if moderator is None:
             return
 
@@ -511,7 +516,7 @@ class EmployerService:
             },
         )
 
-    def _list_moderation_notification_recipients(self) -> list[User]:
+    def _list_moderation_notification_recipients(self, *, preference_key: str) -> list[User]:
         stmt = (
             select(User)
             .options(selectinload(User.notification_preferences))
@@ -523,11 +528,10 @@ class EmployerService:
         users = list(self.db.execute(stmt).scalars().all())
         return [
             user for user in users
-            if user.notification_preferences is None
-            or user.notification_preferences.push_new_verification_requests
+            if self._is_moderation_notification_enabled(user, preference_key)
         ]
 
-    def _get_moderation_recipient(self, user_id) -> User | None:
+    def _get_moderation_recipient(self, user_id, *, preference_key: str) -> User | None:
         stmt = (
             select(User)
             .options(selectinload(User.notification_preferences))
@@ -536,7 +540,13 @@ class EmployerService:
         user = self.db.execute(stmt).scalar_one_or_none()
         if user is None or user.role not in {UserRole.CURATOR, UserRole.ADMIN} or user.status != UserStatus.ACTIVE:
             return None
-        preferences = user.notification_preferences
-        if preferences is not None and not preferences.push_new_verification_requests:
+        if not self._is_moderation_notification_enabled(user, preference_key):
             return None
         return user
+
+    @staticmethod
+    def _is_moderation_notification_enabled(user: User, preference_key: str) -> bool:
+        preferences = user.notification_preferences
+        if preferences is None:
+            return False
+        return bool(getattr(preferences, preference_key, False))

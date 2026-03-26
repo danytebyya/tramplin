@@ -91,11 +91,38 @@ def test_list_employer_verification_requests_returns_pending_requests(client, db
 
 def test_new_verification_request_creates_curator_notification(client, db_session):
     curator_email = "curator-verification-notify@example.com"
-    _register_curator(
+    curator_token = _register_curator(
         client,
         db_session,
         email=curator_email,
     )
+    curator = db_session.execute(select(User).where(User.email == curator_email)).scalar_one()
+    response = client.put(
+        "/api/v1/users/me/notification-preferences",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={
+            "email_notifications": {
+                "new_verification_requests": False,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+            "push_notifications": {
+                "new_verification_requests": True,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+        },
+    )
+    assert response.status_code == 200
+
     _create_verification_request(
         client,
         db_session,
@@ -104,7 +131,6 @@ def test_new_verification_request_creates_curator_notification(client, db_sessio
         inn="7707083892",
     )
 
-    curator = db_session.execute(select(User).where(User.email == curator_email)).scalar_one()
     notification = db_session.execute(
         select(Notification)
         .where(Notification.user_id == curator.id)
@@ -114,6 +140,60 @@ def test_new_verification_request_creates_curator_notification(client, db_sessio
     assert notification is not None
     assert notification.title == "Новая заявка на верификацию"
     assert notification.action_url == "/moderation/employers"
+
+
+def test_new_verification_request_does_not_notify_curator_when_pref_disabled(client, db_session):
+    curator_email = "curator-verification-notify-disabled@example.com"
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email=curator_email,
+    )
+    curator = db_session.execute(select(User).where(User.email == curator_email)).scalar_one()
+    response = client.put(
+        "/api/v1/users/me/notification-preferences",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={
+            "email_notifications": {
+                "new_verification_requests": False,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+            "push_notifications": {
+                "new_verification_requests": False,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+        },
+    )
+    assert response.status_code == 200
+
+    _create_verification_request(
+        client,
+        db_session,
+        email="employer-verification-notify-disabled@example.com",
+        company_name="Muted Notify Corp",
+        inn="7707083890",
+    )
+
+    notification = db_session.execute(
+        select(Notification)
+        .where(
+            Notification.user_id == curator.id,
+            Notification.title == "Новая заявка на верификацию",
+        )
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
+
+    assert notification is None
 
 
 def test_approve_employer_verification_request_updates_statuses(client, db_session):
@@ -338,11 +418,39 @@ def test_request_employer_verification_changes_reverts_status_when_email_deliver
 
 
 def test_resubmitting_changed_employer_verification_returns_request_to_pending(client, db_session):
+    curator_email = "curator-verification-resubmit@example.com"
     curator_token = _register_curator(
         client,
         db_session,
-        email="curator-verification-resubmit@example.com",
+        email=curator_email,
     )
+    curator = db_session.execute(select(User).where(User.email == curator_email)).scalar_one()
+    response = client.put(
+        "/api/v1/users/me/notification-preferences",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={
+            "email_notifications": {
+                "new_verification_requests": False,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+            "push_notifications": {
+                "new_verification_requests": False,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": True,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+        },
+    )
+    assert response.status_code == 200
+
     employer_email = "employer-verification-resubmit@example.com"
     request_id = _create_verification_request(
         client,
@@ -386,9 +494,6 @@ def test_resubmitting_changed_employer_verification_returns_request_to_pending(c
     ).scalar_one()
     employer_profile = db_session.execute(
         select(EmployerProfile).where(EmployerProfile.inn == "7707083898")
-    ).scalar_one()
-    curator = db_session.execute(
-        select(User).where(User.email == "curator-verification-resubmit@example.com")
     ).scalar_one()
     notification = db_session.execute(
         select(Notification)
