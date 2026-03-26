@@ -1,7 +1,7 @@
 """add hidden state to notifications
 
-Revision ID: 20260326_0016
-Revises: 20260326_0015
+Revision ID: 20260326_0017
+Revises: 20260326_0016
 Create Date: 2026-03-26 16:40:00
 """
 
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
-revision = "20260326_0016"
-down_revision = "20260326_0015"
+revision = "20260326_0017"
+down_revision = "20260326_0016"
 branch_labels = None
 depends_on = None
 
