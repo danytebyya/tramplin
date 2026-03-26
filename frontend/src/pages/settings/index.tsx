@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import profileIcon from "../../assets/icons/profile.svg";
 import {
@@ -212,6 +212,10 @@ function resolveLoginStatus(isSuccess: boolean, failureReason: string | null | u
   };
 }
 
+function SettingsSkeleton({ className }: { className: string }) {
+  return <span className={`settings-page__skeleton ${className}`} aria-hidden="true" />;
+}
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -260,6 +264,11 @@ export function SettingsPage() {
     enabled: isAuthenticated && isModerationRole,
   });
   const user = meData?.data?.user;
+  const isProfileLoading = !user;
+  const isNotificationLoading = notificationPreferencesQuery.isPending;
+  const isSessionsLoading = sessionsQuery.isPending;
+  const isLoginHistoryLoading = loginHistoryQuery.isPending;
+  const isModerationSettingsLoading = isModerationRole && moderationSettingsQuery.isPending;
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [emailNotifications, setEmailNotifications] = useState(() => buildNotificationPreferences(undefined, role));
@@ -504,9 +513,9 @@ export function SettingsPage() {
             <div className="header__main">
               {isModerationRole ? null : (
                 <nav className="header__nav" aria-label="Основная навигация">
-                  <Link to="/" className="header__nav-link">
+                  <NavLink to="/" end className="header__nav-link">
                     Главная
-                  </Link>
+                  </NavLink>
                   <a href="#about" className="header__nav-link">
                     О проекте
                   </a>
@@ -596,21 +605,21 @@ export function SettingsPage() {
           <Container className="home-page__container header__bottom-container">
             {isModerationRole ? (
               <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-                <Link to="/" className="header__category-link">
+                <NavLink to="/" end className="header__category-link">
                   Дашборд
-                </Link>
-                <Link to="/moderation/employers" className="header__category-link">
+                </NavLink>
+                <NavLink to="/moderation/employers" className="header__category-link">
                   Верификация работодателей
-                </Link>
+                </NavLink>
                 <a href="#content-moderation" className="header__category-link">
                   Модерация контента
                 </a>
                 <a href="#curators" className="header__category-link">
                   Управление кураторами
                 </a>
-                <Link to="/settings" className="header__category-link">
+                <NavLink to="/settings" className="header__category-link">
                   Настройки
-                </Link>
+                </NavLink>
               </nav>
             ) : (
               <>
@@ -649,21 +658,29 @@ export function SettingsPage() {
             <div className="settings-page__card-body settings-page__card-body--profile">
               <label className="settings-page__field">
                 <span className="settings-page__field-label">ФИО</span>
-                <Input
-                  className="input--sm"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  placeholder="Введите имя"
-                />
+                {isProfileLoading ? (
+                  <SettingsSkeleton className="settings-page__skeleton--input" />
+                ) : (
+                  <Input
+                    className="input--sm"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    placeholder="Введите имя"
+                  />
+                )}
               </label>
               <label className="settings-page__field">
                 <span className="settings-page__field-label">E-mail</span>
-                <Input
-                  className="input--sm"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Введите email"
-                />
+                {isProfileLoading ? (
+                  <SettingsSkeleton className="settings-page__skeleton--input" />
+                ) : (
+                  <Input
+                    className="input--sm"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="Введите email"
+                  />
+                )}
               </label>
             </div>
             <div className="settings-page__card-footer">
@@ -710,31 +727,45 @@ export function SettingsPage() {
               <div className="settings-page__group">
                 <h3 className="settings-page__group-title">E-mail уведомления</h3>
                 <div className="settings-page__checkbox-list">
-                  {emailNotifications.map((item) => (
-                    <label key={item.key} className="settings-page__checkbox-row">
-                      <Checkbox
-                        variant={checkboxVariant}
-                        checked={item.enabled}
-                        onChange={() => toggleEmailNotification(item.key)}
-                      />
-                      <span className="settings-page__checkbox-label">{item.label}</span>
-                    </label>
-                  ))}
+                  {isNotificationLoading
+                    ? Array.from({ length: 4 }, (_, index) => (
+                        <div key={`email-skeleton-${index}`} className="settings-page__checkbox-row">
+                          <SettingsSkeleton className="settings-page__skeleton--checkbox" />
+                          <SettingsSkeleton className="settings-page__skeleton--checkbox-label" />
+                        </div>
+                      ))
+                    : emailNotifications.map((item) => (
+                        <label key={item.key} className="settings-page__checkbox-row">
+                          <Checkbox
+                            variant={checkboxVariant}
+                            checked={item.enabled}
+                            onChange={() => toggleEmailNotification(item.key)}
+                          />
+                          <span className="settings-page__checkbox-label">{item.label}</span>
+                        </label>
+                      ))}
                 </div>
               </div>
               <div className="settings-page__group">
                 <h3 className="settings-page__group-title">Push-уведомления</h3>
                 <div className="settings-page__checkbox-list">
-                  {pushNotifications.map((item) => (
-                    <label key={item.key} className="settings-page__checkbox-row">
-                      <Checkbox
-                        variant={checkboxVariant}
-                        checked={item.enabled}
-                        onChange={() => togglePushNotification(item.key)}
-                      />
-                      <span className="settings-page__checkbox-label">{item.label}</span>
-                    </label>
-                  ))}
+                  {isNotificationLoading
+                    ? Array.from({ length: 4 }, (_, index) => (
+                        <div key={`push-skeleton-${index}`} className="settings-page__checkbox-row">
+                          <SettingsSkeleton className="settings-page__skeleton--checkbox" />
+                          <SettingsSkeleton className="settings-page__skeleton--checkbox-label" />
+                        </div>
+                      ))
+                    : pushNotifications.map((item) => (
+                        <label key={item.key} className="settings-page__checkbox-row">
+                          <Checkbox
+                            variant={checkboxVariant}
+                            checked={item.enabled}
+                            onChange={() => togglePushNotification(item.key)}
+                          />
+                          <span className="settings-page__checkbox-label">{item.label}</span>
+                        </label>
+                      ))}
                 </div>
               </div>
             </div>
@@ -757,26 +788,37 @@ export function SettingsPage() {
             </div>
             <div className="settings-page__card-body settings-page__card-body--sessions">
               <div className="settings-page__session-list">
-                {sessionItems.map((session) => (
-                  <div key={session.id} className="settings-page__session-item">
-                    <span className="settings-page__session-dot" aria-hidden="true" />
-                    <div className="settings-page__session-content">
-                      <p className="settings-page__session-title">{session.title}</p>
-                      <p className="settings-page__session-meta">{session.meta}</p>
-                      <p className="settings-page__session-date">{session.date}</p>
-                      <Button
-                        type="button"
-                        variant="accent-ghost"
-                        size="md"
-                        className="settings-page__session-action"
-                        disabled={session.isCurrent || revokeSessionMutation.isPending}
-                        onClick={() => revokeSessionMutation.mutate(session.id)}
-                      >
-                        Завершить сессию
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                {isSessionsLoading
+                  ? Array.from({ length: 3 }, (_, index) => (
+                      <div key={`session-skeleton-${index}`} className="settings-page__session-item">
+                        <SettingsSkeleton className="settings-page__skeleton--dot" />
+                        <div className="settings-page__session-content">
+                          <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                          <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                          <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                        </div>
+                      </div>
+                    ))
+                  : sessionItems.map((session) => (
+                      <div key={session.id} className="settings-page__session-item">
+                        <span className="settings-page__session-dot" aria-hidden="true" />
+                        <div className="settings-page__session-content">
+                          <p className="settings-page__session-title">{session.title}</p>
+                          <p className="settings-page__session-meta">{session.meta}</p>
+                          <p className="settings-page__session-date">{session.date}</p>
+                          <Button
+                            type="button"
+                            variant="accent-ghost"
+                            size="md"
+                            className="settings-page__session-action"
+                            disabled={session.isCurrent || revokeSessionMutation.isPending}
+                            onClick={() => revokeSessionMutation.mutate(session.id)}
+                          >
+                            Завершить сессию
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
               </div>
             </div>
             <div className="settings-page__card-footer settings-page__card-footer--stacked">
@@ -799,54 +841,66 @@ export function SettingsPage() {
                 <p className="settings-page__card-subtitle">Сроки проверки</p>
               </div>
               <div className="settings-page__card-body settings-page__card-body--moderation">
-                <div className="settings-page__review-row">
-                  <span className="settings-page__review-label">Вакансии:</span>
-                  <Input
-                    type="number"
-                    className="input--sm settings-page__review-input"
-                    value={vacancyReviewHours}
-                    onChange={(event) => setVacancyReviewHours(event.target.value)}
-                    clearable={false}
-                    min={1}
-                  />
-                  <span className="settings-page__review-suffix">часа</span>
-                </div>
-                <div className="settings-page__review-row">
-                  <span className="settings-page__review-label">Стажировки:</span>
-                  <Input
-                    type="number"
-                    className="input--sm settings-page__review-input"
-                    value={internshipReviewHours}
-                    onChange={(event) => setInternshipReviewHours(event.target.value)}
-                    clearable={false}
-                    min={1}
-                  />
-                  <span className="settings-page__review-suffix">часа</span>
-                </div>
-                <div className="settings-page__review-row">
-                  <span className="settings-page__review-label">Мероприятия:</span>
-                  <Input
-                    type="number"
-                    className="input--sm settings-page__review-input"
-                    value={eventReviewHours}
-                    onChange={(event) => setEventReviewHours(event.target.value)}
-                    clearable={false}
-                    min={1}
-                  />
-                  <span className="settings-page__review-suffix">часа</span>
-                </div>
-                <div className="settings-page__review-row">
-                  <span className="settings-page__review-label">Менторские программы:</span>
-                  <Input
-                    type="number"
-                    className="input--sm settings-page__review-input"
-                    value={mentorshipReviewHours}
-                    onChange={(event) => setMentorshipReviewHours(event.target.value)}
-                    clearable={false}
-                    min={1}
-                  />
-                  <span className="settings-page__review-suffix">часа</span>
-                </div>
+                {isModerationSettingsLoading
+                  ? Array.from({ length: 4 }, (_, index) => (
+                      <div key={`review-skeleton-${index}`} className="settings-page__review-row">
+                        <SettingsSkeleton className="settings-page__skeleton--review-label" />
+                        <SettingsSkeleton className="settings-page__skeleton--review-input" />
+                        <SettingsSkeleton className="settings-page__skeleton--review-suffix" />
+                      </div>
+                    ))
+                  : (
+                    <>
+                      <div className="settings-page__review-row">
+                        <span className="settings-page__review-label">Вакансии:</span>
+                        <Input
+                          type="number"
+                          className="input--sm settings-page__review-input"
+                          value={vacancyReviewHours}
+                          onChange={(event) => setVacancyReviewHours(event.target.value)}
+                          clearable={false}
+                          min={1}
+                        />
+                        <span className="settings-page__review-suffix">часа</span>
+                      </div>
+                      <div className="settings-page__review-row">
+                        <span className="settings-page__review-label">Стажировки:</span>
+                        <Input
+                          type="number"
+                          className="input--sm settings-page__review-input"
+                          value={internshipReviewHours}
+                          onChange={(event) => setInternshipReviewHours(event.target.value)}
+                          clearable={false}
+                          min={1}
+                        />
+                        <span className="settings-page__review-suffix">часа</span>
+                      </div>
+                      <div className="settings-page__review-row">
+                        <span className="settings-page__review-label">Мероприятия:</span>
+                        <Input
+                          type="number"
+                          className="input--sm settings-page__review-input"
+                          value={eventReviewHours}
+                          onChange={(event) => setEventReviewHours(event.target.value)}
+                          clearable={false}
+                          min={1}
+                        />
+                        <span className="settings-page__review-suffix">часа</span>
+                      </div>
+                      <div className="settings-page__review-row">
+                        <span className="settings-page__review-label">Менторские программы:</span>
+                        <Input
+                          type="number"
+                          className="input--sm settings-page__review-input"
+                          value={mentorshipReviewHours}
+                          onChange={(event) => setMentorshipReviewHours(event.target.value)}
+                          clearable={false}
+                          min={1}
+                        />
+                        <span className="settings-page__review-suffix">часа</span>
+                      </div>
+                    </>
+                  )}
               </div>
               <div className="settings-page__card-footer">
                 <Button
@@ -868,13 +922,21 @@ export function SettingsPage() {
             </div>
             <div className="settings-page__card-body settings-page__card-body--history">
               <div className="settings-page__history-list">
-                {loginHistoryItems.map((item) => (
-                  <div key={item.id} className="settings-page__history-item">
-                    <span className="settings-page__history-dot" aria-hidden="true" />
-                    <span className="settings-page__history-date">{item.date}</span>
-                    <Status variant={item.statusVariant}>{item.statusLabel}</Status>
-                  </div>
-                ))}
+                {isLoginHistoryLoading
+                  ? Array.from({ length: 4 }, (_, index) => (
+                      <div key={`history-skeleton-${index}`} className="settings-page__history-item">
+                        <SettingsSkeleton className="settings-page__skeleton--dot" />
+                        <SettingsSkeleton className="settings-page__skeleton--history-line" />
+                        <SettingsSkeleton className="settings-page__skeleton--history-status" />
+                      </div>
+                    ))
+                  : loginHistoryItems.map((item) => (
+                      <div key={item.id} className="settings-page__history-item">
+                        <span className="settings-page__history-dot" aria-hidden="true" />
+                        <span className="settings-page__history-date">{item.date}</span>
+                        <Status variant={item.statusVariant}>{item.statusLabel}</Status>
+                      </div>
+                    ))}
               </div>
             </div>
           </section>

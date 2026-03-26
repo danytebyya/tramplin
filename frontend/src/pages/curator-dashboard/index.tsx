@@ -139,7 +139,7 @@ export function ModerationDashboardContent({
                       className={isLoading ? "curator-dashboard__chart-bar curator-dashboard__chart-bar--skeleton" : "curator-dashboard__chart-bar"}
                       style={
                         isLoading
-                          ? { height: `${56 + (index % 4) * 16}px` }
+                          ? { height: `${40 + (index % 4) * 12}px` }
                           : { height: `${Math.max((item.count / maxDayCount) * 120, item.count > 0 ? 10 : 0)}px` }
                       }
                     />

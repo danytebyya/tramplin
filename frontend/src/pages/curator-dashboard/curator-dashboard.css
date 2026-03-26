@@ -105,9 +105,16 @@
 
 .curator-dashboard__skeleton--metric-value,
 .curator-dashboard__skeleton--week-total {
-  width: 96px;
-  height: 44px;
+  width: 84px;
   margin: 0 auto;
+}
+
+.curator-dashboard__skeleton--metric-value {
+  height: 40px;
+}
+
+.curator-dashboard__skeleton--week-total {
+  height: 40px;
 }
 
 .curator-dashboard__skeleton--chart-value,
@@ -118,17 +125,17 @@
 
 .curator-dashboard__skeleton--status {
   width: 148px;
-  height: 32px;
+  height: 24px;
 }
 
 .curator-dashboard__skeleton--activity-line {
   width: 100%;
-  height: 18px;
+  height: 12px;
 }
 
 .curator-dashboard__skeleton--activity-time {
   width: 128px;
-  height: 16px;
+  height: 10px;
 }
 
 .curator-dashboard__skeleton--dot {
@@ -139,17 +146,17 @@
 
 .curator-dashboard__skeleton--urgent-title {
   width: 140px;
-  height: 20px;
+  height: 14px;
 }
 
 .curator-dashboard__skeleton--urgent-subject {
   width: 100%;
-  height: 20px;
+  height: 14px;
 }
 
 .curator-dashboard__skeleton--urgent-meta {
   width: 172px;
-  height: 16px;
+  height: 10px;
 }
 
 @keyframes curator-dashboard-skeleton-shimmer {

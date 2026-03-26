@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 
 import profileIcon from "../../assets/icons/profile.svg";
 import {
@@ -473,9 +473,9 @@ export function HomePage() {
             <div className="header__main">
               {isModerationRole ? null : (
                 <nav className="header__nav" aria-label="Основная навигация">
-                  <Link to="/" className="header__nav-link">
+                  <NavLink to="/" end className="header__nav-link">
                     Главная
-                  </Link>
+                  </NavLink>
                   <a href="#about" className="header__nav-link">
                     О проекте
                   </a>
@@ -588,21 +588,21 @@ export function HomePage() {
           <Container className="home-page__container header__bottom-container">
             {isModerationRole ? (
               <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-                <Link to="/" className="header__category-link">
+                <NavLink to="/" end className="header__category-link">
                   Дашборд
-                </Link>
-                <Link to="/moderation/employers" className="header__category-link">
+                </NavLink>
+                <NavLink to="/moderation/employers" className="header__category-link">
                   Верификация работодателей
-                </Link>
+                </NavLink>
                 <a href="#content-moderation" className="header__category-link">
                   Модерация контента
                 </a>
                 <a href="#curators" className="header__category-link">
                   Управление кураторами
                 </a>
-                <Link to="/settings" className="header__category-link">
+                <NavLink to="/settings" className="header__category-link">
                   Настройки
-                </Link>
+                </NavLink>
               </nav>
             ) : (
               <>

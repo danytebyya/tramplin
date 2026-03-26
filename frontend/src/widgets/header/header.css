@@ -112,6 +112,12 @@
   background-color: var(--color-white-hover);
 }
 
+.header__nav-link.active,
+.header__nav-link[aria-current="page"] {
+  background-color: var(--color-white-hover);
+  color: var(--color-bg-primary);
+}
+
 .header__nav-link:active {
   background-color: var(--color-white-active);
   box-shadow: inset 0px 2px 4px rgba(0, 0, 0, 0.2);
@@ -397,6 +403,11 @@
 }
 
 .header__category-link:hover {
+  color: var(--home-accent);
+}
+
+.header__category-link.active,
+.header__category-link[aria-current="page"] {
   color: var(--home-accent);
 }
 

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { renderAsync } from "docx-preview";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import profileIcon from "../../assets/icons/profile.svg";
@@ -975,21 +975,21 @@ export function EmployerVerificationPage() {
         <div className="header__bottom">
           <Container className="home-page__container header__bottom-container">
             <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-              <Link to="/" className="header__category-link">
+              <NavLink to="/" end className="header__category-link">
                 Дашборд
-              </Link>
-              <Link to="/moderation/employers" className="header__category-link">
+              </NavLink>
+              <NavLink to="/moderation/employers" className="header__category-link">
                 Верификация работодателей
-              </Link>
+              </NavLink>
               <a href="#content-moderation" className="header__category-link">
                 Модерация контента
               </a>
               <a href="#curators" className="header__category-link">
                 Управление кураторами
               </a>
-              <Link to="/settings" className="header__category-link">
+              <NavLink to="/settings" className="header__category-link">
                 Настройки
-              </Link>
+              </NavLink>
             </nav>
           </Container>
         </div>

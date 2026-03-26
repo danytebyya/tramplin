@@ -36,6 +36,11 @@
   color: var(--color-accent);
 }
 
+.employer-verification-page .header__bottom .header__category-link.active,
+.employer-verification-page .header__bottom .header__category-link[aria-current="page"] {
+  color: var(--color-accent);
+}
+
 .employer-verification-page .header__bottom .header__category-link:active {
   color: var(--color-accent-active);
 }
@@ -399,6 +404,7 @@
 
 .employer-verification-page__row--skeleton {
   pointer-events: none;
+  min-height: 98px;
 }
 
 .employer-verification-page__row-summary {
