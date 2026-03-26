@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from src.enums import (
@@ -15,6 +15,7 @@ from src.enums import (
     NotificationKind,
     NotificationSeverity,
     UserRole,
+    UserStatus,
     VerificationDocumentType,
 )
 from src.models import (
@@ -25,6 +26,7 @@ from src.models import (
     EmployerVerificationRequest,
     MediaFile,
     User,
+    UserNotificationPreference,
 )
 from src.schemas.company import EmployerOnboardingRequest
 from src.services.notification_service import NotificationService
@@ -264,6 +266,8 @@ class EmployerService:
                     message="Заявка на верификацию не найдена",
                     status_code=404,
                 )
+            previous_status = verification_request.status
+            previous_reviewed_by = verification_request.reviewed_by
             verification_request.employer_id = employer.id
             verification_request.legal_name = employer_profile.company_name
             verification_request.employer_type = EmployerType(employer_profile.employer_type)
@@ -278,6 +282,9 @@ class EmployerService:
             verification_request.reviewed_at = None
             verification_request.rejection_reason = None
             verification_request.moderator_comment = None
+        if verification_request_id is None:
+            previous_status = None
+            previous_reviewed_by = None
 
         existing_documents = list(verification_request.documents or [])
         documents_to_delete: list[EmployerVerificationDocument] = []
@@ -355,6 +362,13 @@ class EmployerService:
             action_url="/onboarding/employer",
             payload={"verification_request_id": str(verification_request.id)},
         )
+        if previous_status == EmployerVerificationRequestStatus.SUSPENDED and previous_reviewed_by is not None:
+            self._notify_curator_about_resubmitted_verification_request(
+                curator_user_id=previous_reviewed_by,
+                verification_request=verification_request,
+            )
+        elif previous_status is None:
+            self._notify_moderators_about_new_verification_request(verification_request=verification_request)
         self.db.commit()
         self.db.refresh(verification_request)
 
@@ -448,3 +462,81 @@ class EmployerService:
         self.db.delete(document)
         if media_file is not None:
             self.db.delete(media_file)
+
+    def _notify_moderators_about_new_verification_request(self, *, verification_request: EmployerVerificationRequest) -> None:
+        notification_service = NotificationService(self.db)
+        for moderator in self._list_moderation_notification_recipients():
+            notification_service.create_notification(
+                user_id=moderator.id,
+                kind=NotificationKind.EMPLOYER_VERIFICATION,
+                severity=NotificationSeverity.INFO,
+                title="Новая заявка на верификацию",
+                message=(
+                    f"Поступила новая заявка на верификацию работодателя: "
+                    f"{verification_request.legal_name}."
+                ),
+                action_label="Открыть список",
+                action_url="/moderation/employers",
+                payload={
+                    "verification_request_id": str(verification_request.id),
+                    "status": EmployerVerificationRequestStatus.PENDING.value,
+                },
+            )
+
+    def _notify_curator_about_resubmitted_verification_request(
+        self,
+        *,
+        curator_user_id,
+        verification_request: EmployerVerificationRequest,
+    ) -> None:
+        moderator = self._get_moderation_recipient(curator_user_id)
+        if moderator is None:
+            return
+
+        NotificationService(self.db).create_notification(
+            user_id=moderator.id,
+            kind=NotificationKind.EMPLOYER_VERIFICATION,
+            severity=NotificationSeverity.INFO,
+            title="Работодатель прислал обновлённые данные",
+            message=(
+                f"По заявке {verification_request.legal_name} поступили обновлённые данные "
+                "после запроса дополнительной информации."
+            ),
+            action_label="Открыть заявку",
+            action_url="/moderation/employers",
+            payload={
+                "verification_request_id": str(verification_request.id),
+                "status": EmployerVerificationRequestStatus.PENDING.value,
+                "source": "resubmitted_after_changes_request",
+            },
+        )
+
+    def _list_moderation_notification_recipients(self) -> list[User]:
+        stmt = (
+            select(User)
+            .options(selectinload(User.notification_preferences))
+            .where(
+                User.role.in_([UserRole.CURATOR, UserRole.ADMIN]),
+                User.status == UserStatus.ACTIVE,
+            )
+        )
+        users = list(self.db.execute(stmt).scalars().all())
+        return [
+            user for user in users
+            if user.notification_preferences is None
+            or user.notification_preferences.push_new_verification_requests
+        ]
+
+    def _get_moderation_recipient(self, user_id) -> User | None:
+        stmt = (
+            select(User)
+            .options(selectinload(User.notification_preferences))
+            .where(User.id == UUID(str(user_id)))
+        )
+        user = self.db.execute(stmt).scalar_one_or_none()
+        if user is None or user.role not in {UserRole.CURATOR, UserRole.ADMIN} or user.status != UserStatus.ACTIVE:
+            return None
+        preferences = user.notification_preferences
+        if preferences is not None and not preferences.push_new_verification_requests:
+            return None
+        return user

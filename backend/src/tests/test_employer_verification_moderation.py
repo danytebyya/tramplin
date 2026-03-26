@@ -89,6 +89,33 @@ def test_list_employer_verification_requests_returns_pending_requests(client, db
     assert body["items"][0]["documents"][0]["file_name"] == "registration.pdf"
 
 
+def test_new_verification_request_creates_curator_notification(client, db_session):
+    curator_email = "curator-verification-notify@example.com"
+    _register_curator(
+        client,
+        db_session,
+        email=curator_email,
+    )
+    _create_verification_request(
+        client,
+        db_session,
+        email="employer-verification-notify@example.com",
+        company_name="Notify Corp",
+        inn="7707083892",
+    )
+
+    curator = db_session.execute(select(User).where(User.email == curator_email)).scalar_one()
+    notification = db_session.execute(
+        select(Notification)
+        .where(Notification.user_id == curator.id)
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
+
+    assert notification is not None
+    assert notification.title == "Новая заявка на верификацию"
+    assert notification.action_url == "/moderation/employers"
+
+
 def test_approve_employer_verification_request_updates_statuses(client, db_session):
     curator_token = _register_curator(
         client,
@@ -360,6 +387,17 @@ def test_resubmitting_changed_employer_verification_returns_request_to_pending(c
     employer_profile = db_session.execute(
         select(EmployerProfile).where(EmployerProfile.inn == "7707083898")
     ).scalar_one()
+    curator = db_session.execute(
+        select(User).where(User.email == "curator-verification-resubmit@example.com")
+    ).scalar_one()
+    notification = db_session.execute(
+        select(Notification)
+        .where(
+            Notification.user_id == curator.id,
+            Notification.title == "Работодатель прислал обновлённые данные",
+        )
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
 
     assert verification_request.status == EmployerVerificationRequestStatus.PENDING
     assert verification_request.reviewed_by is None
@@ -369,3 +407,5 @@ def test_resubmitting_changed_employer_verification_returns_request_to_pending(c
     assert verification_request.submitted_at >= initial_reviewed_at
     assert employer_profile.verification_status == EmployerVerificationStatus.PENDING_REVIEW
     assert employer_profile.moderator_comment is None
+    assert notification is not None
+    assert notification.action_url == "/moderation/employers"
