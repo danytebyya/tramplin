@@ -9,6 +9,7 @@ from src.models import Notification
 
 class NotificationRepository:
     _HIDDEN_SYSTEM_KEY = "welcome_suppressed"
+    _DISMISSED_NOTIFICATION_KEY = "dismissed_notification"
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -19,11 +20,19 @@ class NotificationRepository:
 
         return notification.payload.get("system_key") == self._HIDDEN_SYSTEM_KEY
 
+    def _is_dismissed_notification_marker(self, notification: Notification) -> bool:
+        if not notification.payload:
+            return False
+
+        return notification.payload.get("system_key") == self._DISMISSED_NOTIFICATION_KEY
+
     def _filter_visible(self, notifications: list[Notification]) -> list[Notification]:
         return [
             notification
             for notification in notifications
             if not self._is_hidden_system_notification(notification)
+            and not self._is_dismissed_notification_marker(notification)
+            and not notification.is_hidden
         ]
 
     def add(self, notification: Notification) -> Notification:
@@ -39,7 +48,11 @@ class NotificationRepository:
         normalized_user_id = UUID(str(user_id))
         stmt = (
             select(Notification.id)
-            .where(Notification.user_id == normalized_user_id, Notification.title == title)
+            .where(
+                Notification.user_id == normalized_user_id,
+                Notification.title == title,
+                Notification.is_hidden.is_(False),
+            )
             .limit(1)
         )
         return self.db.execute(stmt).scalar_one_or_none() is not None
@@ -96,6 +109,31 @@ class NotificationRepository:
         )
         self.db.execute(stmt)
 
+    def hide(self, notification_id: str | UUID, user_id: str | UUID) -> None:
+        notification = self.get_by_id_for_user(notification_id, user_id)
+        if notification is None:
+            return
+
+        signature = self.build_notification_signature(notification)
+        self.db.delete(notification)
+        self.add(
+            Notification(
+                user_id=notification.user_id,
+                kind=notification.kind,
+                severity=notification.severity,
+                title="__dismissed_notification__",
+                message="Dismissed notification marker.",
+                is_read=True,
+                read_at=datetime.now(UTC),
+                is_hidden=True,
+                hidden_at=datetime.now(UTC),
+                payload={
+                    "system_key": self._DISMISSED_NOTIFICATION_KEY,
+                    "notification_signature": signature,
+                },
+            )
+        )
+
     def delete_all_for_user(self, user_id: str | UUID) -> None:
         normalized_user_id = UUID(str(user_id))
         stmt = delete(Notification).where(Notification.user_id == normalized_user_id)
@@ -106,3 +144,27 @@ class NotificationRepository:
         stmt = select(Notification).where(Notification.user_id == normalized_user_id)
         notifications = list(self.db.execute(stmt).scalars().all())
         return any(self._is_hidden_system_notification(notification) for notification in notifications)
+
+    def has_dismissed_signature(self, user_id: str | UUID, signature: str) -> bool:
+        normalized_user_id = UUID(str(user_id))
+        stmt = select(Notification).where(Notification.user_id == normalized_user_id)
+        notifications = list(self.db.execute(stmt).scalars().all())
+        return any(
+            notification.payload
+            and notification.payload.get("system_key") == self._DISMISSED_NOTIFICATION_KEY
+            and notification.payload.get("notification_signature") == signature
+            for notification in notifications
+        )
+
+    @staticmethod
+    def build_notification_signature(notification: Notification) -> str:
+        payload = notification.payload or {}
+        relevant_payload = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"created_at", "updated_at"}
+        }
+        return (
+            f"{notification.kind.value}|{notification.title}|{notification.action_url or ''}|"
+            f"{sorted(relevant_payload.items(), key=lambda item: item[0])}"
+        )

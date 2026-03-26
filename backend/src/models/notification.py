@@ -30,6 +30,8 @@ class Notification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     action_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     user = relationship("User", back_populates="notifications")

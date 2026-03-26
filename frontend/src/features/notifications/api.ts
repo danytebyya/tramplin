@@ -52,6 +52,13 @@ export async function markNotificationAsReadRequest(notificationId: string) {
   return response.data;
 }
 
+export async function hideNotificationRequest(notificationId: string) {
+  const response = await apiClient.post<NotificationsUnreadCountResponse>(
+    `/notifications/${notificationId}/hide`,
+  );
+  return response.data;
+}
+
 export async function clearNotificationsRequest() {
   const response = await apiClient.delete<NotificationsUnreadCountResponse>("/notifications");
   return response.data;

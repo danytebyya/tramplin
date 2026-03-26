@@ -4,6 +4,11 @@
   --notification-menu-primary: var(--color-primary);
   --notification-menu-secondary: var(--color-secondary);
   --notification-menu-accent: var(--color-accent);
+  --notification-menu-text: var(--color-text-primary);
+  --notification-menu-text-muted: var(--color-text-secondary);
+  --notification-menu-text-subtle: var(--color-text-tertiary);
+  --notification-menu-hover-bg: rgba(15, 23, 42, 0.03);
+  --notification-menu-active-bg: rgba(15, 23, 42, 0.06);
 }
 
 .notification-menu__button {
@@ -84,7 +89,7 @@
 .notification-menu__mark-all {
   border: none;
   background: transparent;
-  color: var(--color-text-tertiary);
+  color: var(--notification-menu-text-subtle);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   font-weight: 400;
@@ -93,11 +98,11 @@
 }
 
 .notification-menu__mark-all:hover {
-  color: var(--color-text-primary);
+  color: var(--notification-menu-primary);
 }
 
 .notification-menu__mark-all:active {
-  color: var(--color-text-secondary);
+  color: var(--notification-menu-accent);
 }
 
 .notification-menu__mark-all:disabled {
@@ -111,6 +116,28 @@
   min-height: 60px;
   padding-bottom: 8px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 23, 42, 0.22) transparent;
+}
+
+.notification-menu__content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notification-menu__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-menu__content::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.18);
+  background-clip: padding-box;
+}
+
+.notification-menu__content::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.28);
+  background-clip: padding-box;
 }
 
 .notification-menu__empty {
@@ -119,7 +146,7 @@
   align-items: center;
   justify-content: flex-start;
   padding: 8px 24px;
-  color: var(--color-text-tertiary);
+  color: var(--notification-menu-text-subtle);
   font-size: 14px;
   line-height: 20px;
   text-align: center;
@@ -135,12 +162,18 @@
   background: var(--color-bg-primary);
 }
 
+.notification-menu__item-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .notification-menu__item:hover {
-  background: rgba(15, 23, 42, 0.03);
+  background: var(--notification-menu-hover-bg);
 }
 
 .notification-menu__item:active {
-  background: rgba(15, 23, 42, 0.06);
+  background: var(--notification-menu-active-bg);
 }
 
 .notification-menu__item--read {
@@ -156,6 +189,54 @@
   background: transparent;
   text-align: left;
   cursor: pointer;
+}
+
+.notification-menu__item-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--notification-menu-text-subtle);
+  cursor: pointer;
+  transition: color var(--transition-base);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.notification-menu__item-dismiss::before {
+  content: "";
+  display: block;
+  margin-top: 2px;
+  width: 10px;
+  height: 10px;
+  background-color: currentColor;
+  mask-image: url("../../assets/icons/close.svg");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: url("../../assets/icons/close.svg");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+.notification-menu__item-dismiss:hover {
+  color: var(--notification-menu-primary);
+}
+
+.notification-menu__item-dismiss:active {
+  color: var(--notification-menu-accent);
+}
+
+.notification-menu__item-dismiss:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .notification-menu__item-body {
@@ -180,7 +261,7 @@
 }
 
 .notification-menu__item-title {
-  color: var(--color-text-primary);
+  color: var(--notification-menu-text);
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
   font-weight: 500;
@@ -213,7 +294,7 @@
   width: 13px;
   height: 13px;
   flex: 0 0 13px;
-  background-color: var(--color-text-tertiary);
+  background-color: var(--notification-menu-text-subtle);
   mask-image: url("../../assets/icons/calendar.svg");
   mask-repeat: no-repeat;
   mask-position: center;
@@ -225,14 +306,14 @@
 }
 
 .notification-menu__item-date {
-  color: var(--color-text-tertiary);
+  color: var(--notification-menu-text-subtle);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   white-space: nowrap;
 }
 
 .notification-menu__item-message {
-  color: var(--color-text-secondary);
+  color: var(--notification-menu-text-muted);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   width: 100%;
@@ -298,6 +379,14 @@
 }
 
 .home-page--curator .notification-menu {
+  --notification-menu-primary: var(--color-accent);
+  --notification-menu-secondary: var(--color-accent-hover);
+  --notification-menu-accent: var(--color-accent-active);
+}
+
+.settings-page--curator .notification-menu,
+.settings-page--admin .notification-menu,
+.employer-verification-page .notification-menu {
   --notification-menu-primary: var(--color-accent);
   --notification-menu-secondary: var(--color-accent-hover);
   --notification-menu-accent: var(--color-accent-active);

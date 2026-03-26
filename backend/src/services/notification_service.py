@@ -65,6 +65,21 @@ class NotificationService:
             unread_count=self.notification_repo.count_unread_for_user(current_user.id)
         )
 
+    def hide(self, current_user: User, notification_id: str) -> NotificationUnreadCountResponse:
+        notification = self.notification_repo.get_by_id_for_user(notification_id, current_user.id)
+        if notification is None:
+            raise AppError(
+                code="NOTIFICATION_NOT_FOUND",
+                message="Уведомление не найдено",
+                status_code=404,
+            )
+
+        self.notification_repo.hide(notification.id, current_user.id)
+        self.db.commit()
+        return NotificationUnreadCountResponse(
+            unread_count=self.notification_repo.count_unread_for_user(current_user.id)
+        )
+
     def create_notification(
         self,
         *,
@@ -77,8 +92,8 @@ class NotificationService:
         action_url: str | None = None,
         payload: dict | None = None,
         created_at: datetime | None = None,
-    ) -> Notification:
-        notification = Notification(
+    ) -> Notification | None:
+        candidate_notification = Notification(
             user_id=user_id,
             kind=kind,
             severity=severity,
@@ -90,6 +105,11 @@ class NotificationService:
             created_at=created_at,
             updated_at=created_at,
         )
+        notification_signature = self.notification_repo.build_notification_signature(candidate_notification)
+        if self.notification_repo.has_dismissed_signature(user_id, notification_signature):
+            return None
+
+        notification = candidate_notification
         self.notification_repo.add(notification)
         pending_notification_user_ids = self.db.info.setdefault("pending_notification_user_ids", set())
         pending_notification_user_ids.add(str(user_id))

@@ -77,6 +77,83 @@ def test_mark_notification_as_read_updates_unread_count(client, db_session):
     assert persisted_notification.read_at is not None
 
 
+def test_hide_notification_removes_it_from_feed(client, db_session):
+    access_token = _register_and_login(
+        client,
+        db_session,
+        email="notifications-hide@example.com",
+        role="employer",
+    )
+
+    feed_response = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    notification_id = feed_response.json()["data"]["items"][0]["id"]
+
+    response = client.post(
+        f"/api/v1/notifications/{notification_id}/hide",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+
+    persisted_notification = db_session.execute(
+        select(Notification).where(Notification.id == UUID(notification_id))
+    ).scalar_one_or_none()
+    assert persisted_notification is None
+
+    updated_feed_response = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    updated_ids = [item["id"] for item in updated_feed_response.json()["data"]["items"]]
+    assert notification_id not in updated_ids
+
+
+def test_hidden_notification_signature_prevents_recreation(client, db_session):
+    access_token = _register_and_login(
+        client,
+        db_session,
+        email="notifications-dismissed-marker@example.com",
+        role="employer",
+    )
+    user_id = UUID(
+        client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).json()["data"]["user"]["id"]
+    )
+
+    feed_response = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    notification = feed_response.json()["data"]["items"][0]
+
+    hide_response = client.post(
+        f"/api/v1/notifications/{notification['id']}/hide",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert hide_response.status_code == 200
+
+    from src.enums.notifications import NotificationKind, NotificationSeverity
+    from src.services.notification_service import NotificationService
+
+    created = NotificationService(db_session).create_notification(
+        user_id=user_id,
+        kind=NotificationKind(notification["kind"]),
+        severity=NotificationSeverity(notification["severity"]),
+        title=notification["title"],
+        message=notification["message"],
+        action_label=notification.get("action_label"),
+        action_url=notification.get("action_url"),
+        payload=None,
+    )
+    db_session.commit()
+
+    assert created is None
+
+
 def test_clear_all_notifications(client, db_session):
     access_token = _register_and_login(
         client,

@@ -60,6 +60,16 @@ def mark_notification_as_read(
     return success_response(payload.model_dump(mode="json"))
 
 
+@router.post("/{notification_id}/hide", status_code=status.HTTP_200_OK)
+def hide_notification(
+    notification_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = NotificationService(db).hide(current_user, notification_id)
+    return success_response(payload.model_dump(mode="json"))
+
+
 @router.delete("", status_code=status.HTTP_200_OK)
 def clear_notifications(
     current_user: User = Depends(get_current_user),
@@ -84,6 +94,10 @@ async def notifications_stream(
     await notification_hub.connect(current_user.id, websocket)
     try:
         while True:
-            await websocket.receive()
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
     except WebSocketDisconnect:
+        pass
+    finally:
         await notification_hub.disconnect(current_user.id, websocket)
