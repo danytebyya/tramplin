@@ -261,6 +261,15 @@ class AuthService:
         sessions = self.auth_repo.list_active_sessions_for_user(current_user.id)
         normalized_current_ip = self._normalize_optional_value(current_ip_address)
         normalized_current_agent = self._normalize_optional_value(current_user_agent)
+        current_session_id: str | None = None
+
+        for session in sessions:
+            if (
+                self._normalize_optional_value(session.ip_address) == normalized_current_ip
+                and self._normalize_optional_value(session.user_agent) == normalized_current_agent
+            ):
+                current_session_id = str(session.id)
+                break
 
         items = [
             AuthSessionRead(
@@ -269,10 +278,7 @@ class AuthService:
                 ip_address=session.ip_address,
                 created_at=session.created_at.isoformat(),
                 expires_at=session.expires_at.isoformat(),
-                is_current=(
-                    self._normalize_optional_value(session.ip_address) == normalized_current_ip
-                    and self._normalize_optional_value(session.user_agent) == normalized_current_agent
-                ),
+                is_current=str(session.id) == current_session_id,
             )
             for session in sessions
         ]

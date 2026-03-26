@@ -44,7 +44,7 @@ const sortFieldOptions: Array<{ value: CuratorSortField; label: string }> = [
 
 function generateCuratorPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-  const targetLength = 14;
+  const targetLength = 10;
 
   if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
     const bytes = new Uint8Array(targetLength);
@@ -1060,6 +1060,7 @@ export function CuratorManagementPage() {
               type="password"
               value={newCuratorPassword}
               onChange={(event) => setNewCuratorPassword(event.target.value)}
+              maxLength={10}
               placeholder="Введите пароль"
               className="curator-management-page__modal-input"
             />

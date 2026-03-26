@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import DataError, ProgrammingError
 from sqlalchemy.orm import Session, selectinload
 
 from src.enums import UserRole, UserStatus
@@ -101,44 +102,87 @@ class ModerationRepository:
         return settings
 
     def count_online_curators(self, now: datetime) -> int:
-        stmt = (
-            select(User.id)
-            .join(RefreshSession, RefreshSession.user_id == User.id)
-            .where(
-                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
-                User.status == UserStatus.ACTIVE,
-                RefreshSession.revoked_at.is_(None),
-                RefreshSession.expires_at > now,
+        try:
+            stmt = (
+                select(User.id)
+                .join(RefreshSession, RefreshSession.user_id == User.id)
+                .where(
+                    User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                    RefreshSession.revoked_at.is_(None),
+                    RefreshSession.expires_at > now,
+                )
+                .distinct()
             )
-            .distinct()
-        )
-        return len(self.db.execute(stmt).scalars().all())
+            return len(self.db.execute(stmt).scalars().all())
+        except (ProgrammingError, DataError):
+            self.db.rollback()
+            stmt = (
+                select(User.id)
+                .join(RefreshSession, RefreshSession.user_id == User.id)
+                .where(
+                    User.role.in_([UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                    RefreshSession.revoked_at.is_(None),
+                    RefreshSession.expires_at > now,
+                )
+                .distinct()
+            )
+            return len(self.db.execute(stmt).scalars().all())
 
     def list_curators(self) -> list[User]:
-        stmt = (
-            select(User)
-            .options(selectinload(User.curator_profile))
-            .where(
-                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
-                User.status == UserStatus.ACTIVE,
+        try:
+            stmt = (
+                select(User)
+                .options(selectinload(User.curator_profile))
+                .where(
+                    User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                )
+                .order_by(User.created_at.asc())
             )
-            .order_by(User.created_at.asc())
-        )
-        return list(self.db.execute(stmt).scalars().all())
+            return list(self.db.execute(stmt).scalars().all())
+        except (ProgrammingError, DataError):
+            self.db.rollback()
+            stmt = (
+                select(User)
+                .options(selectinload(User.curator_profile))
+                .where(
+                    User.role.in_([UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                )
+                .order_by(User.created_at.asc())
+            )
+            return list(self.db.execute(stmt).scalars().all())
 
     def list_active_curator_session_rows(self, now: datetime) -> list[tuple[str, datetime]]:
-        stmt = (
-            select(RefreshSession.user_id, func.max(RefreshSession.created_at))
-            .join(User, User.id == RefreshSession.user_id)
-            .where(
-                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
-                User.status == UserStatus.ACTIVE,
-                RefreshSession.revoked_at.is_(None),
-                RefreshSession.expires_at > now,
+        try:
+            stmt = (
+                select(RefreshSession.user_id, func.max(RefreshSession.created_at))
+                .join(User, User.id == RefreshSession.user_id)
+                .where(
+                    User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                    RefreshSession.revoked_at.is_(None),
+                    RefreshSession.expires_at > now,
+                )
+                .group_by(RefreshSession.user_id)
             )
-            .group_by(RefreshSession.user_id)
-        )
-        return list(self.db.execute(stmt).all())
+            return list(self.db.execute(stmt).all())
+        except (ProgrammingError, DataError):
+            self.db.rollback()
+            stmt = (
+                select(RefreshSession.user_id, func.max(RefreshSession.created_at))
+                .join(User, User.id == RefreshSession.user_id)
+                .where(
+                    User.role.in_([UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                    RefreshSession.revoked_at.is_(None),
+                    RefreshSession.expires_at > now,
+                )
+                .group_by(RefreshSession.user_id)
+            )
+            return list(self.db.execute(stmt).all())
 
     def get_user_by_email(self, email: str) -> User | None:
         stmt = select(User).where(func.lower(User.email) == email.lower())

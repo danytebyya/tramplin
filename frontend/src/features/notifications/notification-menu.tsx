@@ -294,6 +294,8 @@ export function NotificationMenu({
       actionUrl === "/#dashboard" && (role === "junior" || role === "curator" || role === "admin")
         ? "/dashboard/curator#dashboard"
         : actionUrl;
+    const shouldAllowEmployerChangesRequested =
+      resolvedActionUrl.startsWith("/onboarding/employer?mode=changes-requested");
 
     if (resolvedActionUrl.startsWith("/")) {
       const [targetPathname, targetHash] = resolvedActionUrl.split("#");
@@ -307,7 +309,9 @@ export function NotificationMenu({
         }
       }
 
-      navigate(resolvedActionUrl);
+      navigate(resolvedActionUrl, {
+        state: shouldAllowEmployerChangesRequested ? { allowChangesRequestedAccess: true } : undefined,
+      });
       return;
     }
 

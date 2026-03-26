@@ -614,6 +614,50 @@ def test_login_history_returns_real_events(client, db_session):
     assert any(item["is_success"] is False for item in items)
 
 
+def test_active_sessions_marks_only_one_session_as_current_for_same_browser(client, db_session):
+    code = _request_code(client, db_session, "duplicate-current@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "duplicate-current@example.com",
+            "display_name": "Duplicate Current",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Duplicate Current"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    first_login = client.post(
+        "/api/v1/auth/sessions",
+        headers={"User-Agent": "Same Browser"},
+        json={"email": "duplicate-current@example.com", "password": "StrongPass123"},
+    )
+    assert first_login.status_code == 201
+
+    second_login = client.post(
+        "/api/v1/auth/sessions",
+        headers={"User-Agent": "Same Browser"},
+        json={"email": "duplicate-current@example.com", "password": "StrongPass123"},
+    )
+    assert second_login.status_code == 201
+
+    access_token = second_login.json()["data"]["access_token"]
+    sessions_response = client.get(
+        "/api/v1/auth/sessions",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "Same Browser",
+        },
+    )
+
+    assert sessions_response.status_code == 200
+    items = sessions_response.json()["data"]["items"]
+    assert len(items) == 2
+    assert sum(1 for item in items if item["is_current"]) == 1
+
+
 def test_employer_onboarding_flow(client, db_session):
     code = _request_code(client, db_session, "company-owner@example.com")
     register_payload = {

@@ -402,6 +402,10 @@
   --notification-menu-accent: var(--color-accent-active);
 }
 
+.curator-dashboard-page .notification-menu__badge {
+  background: var(--color-accent);
+}
+
 .employer-dashboard .notification-menu {
   --notification-menu-primary: var(--color-primary);
   --notification-menu-secondary: var(--color-primary-hover);

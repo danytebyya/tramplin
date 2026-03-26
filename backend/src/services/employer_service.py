@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import DataError, ProgrammingError
 from sqlalchemy.orm import Session, selectinload
 
 from src.enums import (
@@ -546,15 +547,27 @@ class EmployerService:
             )
 
     def _list_moderation_recipients(self) -> list[User]:
-        stmt = (
-            select(User)
-            .options(selectinload(User.notification_preferences))
-            .where(
-                User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
-                User.status == UserStatus.ACTIVE,
+        try:
+            stmt = (
+                select(User)
+                .options(selectinload(User.notification_preferences))
+                .where(
+                    User.role.in_([UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                )
             )
-        )
-        return list(self.db.execute(stmt).scalars().all())
+            return list(self.db.execute(stmt).scalars().all())
+        except (ProgrammingError, DataError):
+            self.db.rollback()
+            stmt = (
+                select(User)
+                .options(selectinload(User.notification_preferences))
+                .where(
+                    User.role.in_([UserRole.CURATOR, UserRole.ADMIN]),
+                    User.status == UserStatus.ACTIVE,
+                )
+            )
+            return list(self.db.execute(stmt).scalars().all())
 
     def _publish_verification_request_updated(self, verification_request: EmployerVerificationRequest) -> None:
         moderator_user_ids = [str(user.id) for user in self._list_moderation_recipients()]

@@ -485,16 +485,18 @@ export function SettingsPage() {
     }));
   }, [sessionsQuery.data]);
   const loginHistoryItems = useMemo(() => {
-    return (loginHistoryQuery.data?.data?.items ?? []).map((item) => {
-      const status = resolveLoginStatus(item.is_success, item.failure_reason);
+    return (loginHistoryQuery.data?.data?.items ?? [])
+      .slice(0, 7)
+      .map((item) => {
+        const status = resolveLoginStatus(item.is_success, item.failure_reason);
 
-      return {
-        id: item.id,
-        date: formatDateWithTime(item.created_at),
-        statusLabel: status.label,
-        statusVariant: status.variant,
-      };
-    });
+        return {
+          id: item.id,
+          date: formatDateWithTime(item.created_at),
+          statusLabel: status.label,
+          statusVariant: status.variant,
+        };
+      });
   }, [loginHistoryQuery.data]);
 
   const pageClassName = [
@@ -859,8 +861,15 @@ export function SettingsPage() {
                             variant="accent-ghost"
                             size="md"
                             className="settings-page__session-action"
-                            disabled={session.isCurrent || revokeSessionMutation.isPending}
-                            onClick={() => revokeSessionMutation.mutate(session.id)}
+                            disabled={revokeSessionMutation.isPending}
+                            onClick={() => {
+                              if (session.isCurrent) {
+                                handleLogout();
+                                return;
+                              }
+
+                              revokeSessionMutation.mutate(session.id);
+                            }}
                           >
                             Завершить сессию
                           </Button>
@@ -982,7 +991,9 @@ export function SettingsPage() {
                       <div key={item.id} className="settings-page__history-item">
                         <span className="settings-page__history-dot" aria-hidden="true" />
                         <span className="settings-page__history-date">{item.date}</span>
-                        <Status variant={item.statusVariant}>{item.statusLabel}</Status>
+                        <Status className="settings-page__history-status" variant={item.statusVariant}>
+                          {item.statusLabel}
+                        </Status>
                       </div>
                     ))}
               </div>

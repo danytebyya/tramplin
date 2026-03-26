@@ -29,7 +29,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 type LoginSuccessResponse = {
   data?: {
     user?: {
-      role?: "applicant" | "employer" | "curator" | "admin";
+      role?: "applicant" | "employer" | "junior" | "curator" | "admin";
       has_employer_profile?: boolean;
     };
   };

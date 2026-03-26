@@ -74,7 +74,7 @@ class CuratorManagementListResponse(BaseModel):
 class CuratorCreateRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=180)
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=8, max_length=10)
     role: str = Field(pattern="^(admin|curator|junior)$")
 
     @field_validator("full_name")

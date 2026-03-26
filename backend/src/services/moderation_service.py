@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from dataclasses import dataclass
 import logging
 
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import DataError, ProgrammingError
 
 from src.enums import EmployerVerificationStatus, UserRole
 from src.enums.notifications import NotificationKind, NotificationSeverity
@@ -282,7 +282,17 @@ class ModerationService:
             password_hash=hash_password(payload.password),
             role=next_role,
         )
-        self.repo.db.flush()
+        try:
+            self.repo.db.flush()
+        except (ProgrammingError, DataError) as error:
+            self.repo.db.rollback()
+            if payload.role == "junior":
+                raise AppError(
+                    code="JUNIOR_ROLE_NOT_AVAILABLE",
+                    message="Роль Junior ещё не активирована в базе данных. Сначала примените миграцию.",
+                    status_code=409,
+                ) from error
+            raise
 
         preferences = UserNotificationPreference(user_id=curator.id)
         preferences.email_new_verification_requests = False
@@ -300,7 +310,17 @@ class ModerationService:
         preferences.push_daily_digest = False
         preferences.push_weekly_report = False
         self.repo.db.add(preferences)
-        self.repo.db.commit()
+        try:
+            self.repo.db.commit()
+        except (ProgrammingError, DataError) as error:
+            self.repo.db.rollback()
+            if payload.role == "junior":
+                raise AppError(
+                    code="JUNIOR_ROLE_NOT_AVAILABLE",
+                    message="Роль Junior ещё не активирована в базе данных. Сначала примените миграцию.",
+                    status_code=409,
+                ) from error
+            raise
         self.repo.db.refresh(curator)
 
         return CuratorManagementItemRead(

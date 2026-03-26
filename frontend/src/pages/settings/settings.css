@@ -338,6 +338,10 @@
   margin-right: auto;
 }
 
+.settings-page__history-status {
+  justify-self: end;
+}
+
 .settings-page__card-footer {
   display: flex;
   padding: 24px 32px 32px;
@@ -476,5 +480,9 @@
   .settings-page__history-item {
     grid-template-columns: 14px minmax(0, 1fr);
     row-gap: 8px;
+  }
+
+  .settings-page__history-status {
+    display: none;
   }
 }

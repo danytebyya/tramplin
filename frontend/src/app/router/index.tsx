@@ -146,8 +146,9 @@ function EmployerOnboardingRoute() {
 
   if (employerVerificationStatus === "changes_requested") {
     const searchParams = new URLSearchParams(location.search);
-    if (searchParams.get("mode") !== "changes-requested") {
-      return <Navigate to="/onboarding/employer?mode=changes-requested" replace />;
+    const hasNotificationAccess = Boolean((location.state as { allowChangesRequestedAccess?: boolean } | null)?.allowChangesRequestedAccess);
+    if (searchParams.get("mode") !== "changes-requested" || !hasNotificationAccess) {
+      return <Navigate to="/" replace />;
     }
   }
 
