@@ -13,6 +13,7 @@ import { EmployerVerificationPage } from "../../pages/employer-verification";
 import { LoginPage } from "../../pages/login";
 import { LegalDocumentPage } from "../../pages/legal/index";
 import { HomePage } from "../../pages/home";
+import { OpportunityManagementPage } from "../../pages/opportunity-management";
 import { SettingsPage } from "../../pages/settings";
 import { SeekerDashboardPage } from "../../pages/seeker-dashboard";
 import { UiKitPage } from "../../pages/ui-kit";
@@ -268,6 +269,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/employer/opportunities"
+        element={
+          <ProtectedRoute>
+            <OpportunityManagementPage />
           </ProtectedRoute>
         }
       />

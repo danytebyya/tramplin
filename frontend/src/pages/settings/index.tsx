@@ -265,8 +265,8 @@ function resolveModerationTitle(role: string | null) {
 function resolvePublicSettingsTabs(role: string | null): SettingsTabItem[] {
   if (role === "employer") {
     return [
-      { label: "Профиль", to: "/dashboard/employer" },
-      { label: "Управление возможностями" },
+      { label: "Профиль компании", to: "/dashboard/employer" },
+      { label: "Управление возможностями", to: "/employer/opportunities" },
       { label: "Отклики" },
       { label: "Чат" },
       { label: "Настройки", to: "/settings", isCurrent: true },
