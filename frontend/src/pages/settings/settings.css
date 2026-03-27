@@ -455,9 +455,9 @@
 
 .settings-page__staff-pending-label {
   margin: 8px 0 0;
-  color: var(--color-text-tertiary);
-  font-size: var(--type-body-small-size);
-  line-height: var(--type-body-small-line);
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
 }
 
 .settings-page__staff-actions {
@@ -476,6 +476,16 @@
   border: none;
   background: transparent;
   cursor: pointer;
+}
+
+.settings-page__icon-button .settings-page__icon {
+  opacity: 0.52;
+  transition: opacity 0.2s ease;
+}
+
+.settings-page__icon-button:hover .settings-page__icon,
+.settings-page__icon-button:focus-visible .settings-page__icon {
+  opacity: 1;
 }
 
 .settings-page__icon-button:disabled {
@@ -539,6 +549,13 @@
 .settings-page__staff-permission-item::marker {
   color: var(--settings-accent);
   font-size: 1.3em;
+}
+
+.settings-page__staff-delete-message {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
 }
 
 .settings-page__staff-empty {

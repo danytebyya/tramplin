@@ -342,6 +342,14 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString("ru-RU");
 }
 
+function resolveStaffInvitationStatusLabel(kind: "email" | "link") {
+  if (kind === "email") {
+    return "Ссылка отправлена";
+  }
+
+  return "Ожидание перехода по ссылке";
+}
+
 function isFutureDate(value: string) {
   return new Date(value).getTime() > Date.now();
 }
@@ -439,6 +447,20 @@ export function SettingsPage() {
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [expandedStaffMemberId, setExpandedStaffMemberId] = useState<string | null>(null);
   const [expandedInvitationId, setExpandedInvitationId] = useState<string | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<
+    | {
+        kind: "membership";
+        id: string;
+        email: string;
+        isCurrentUser: boolean;
+      }
+    | {
+        kind: "invitation";
+        id: string;
+        email: string;
+      }
+    | null
+  >(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -663,6 +685,7 @@ export function SettingsPage() {
     mutationFn: deleteEmployerStaffInvitation,
     onSuccess: (_response, invitationId) => {
       setExpandedInvitationId((current) => (current === invitationId ? null : current));
+      setPendingDeleteItem((current) => (current?.kind === "invitation" && current.id === invitationId ? null : current));
       void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
     },
   });
@@ -979,6 +1002,25 @@ export function SettingsPage() {
     createEmployerStaffInvitationMutation.mutate({
       email: trimmedInviteEmail || undefined,
       permissions: invitePermissionKeys,
+    });
+  };
+
+  const isDeleteStaffItemPending =
+    deleteEmployerStaffMembershipMutation.isPending || deleteEmployerStaffInvitationMutation.isPending;
+
+  const handleConfirmDeleteStaffItem = () => {
+    if (!pendingDeleteItem) {
+      return;
+    }
+
+    if (pendingDeleteItem.kind === "invitation") {
+      deleteEmployerStaffInvitationMutation.mutate(pendingDeleteItem.id);
+      return;
+    }
+
+    deleteEmployerStaffMembershipMutation.mutate({
+      membershipId: pendingDeleteItem.id,
+      isCurrentUser: pendingDeleteItem.isCurrentUser,
     });
   };
 
@@ -1341,7 +1383,9 @@ export function SettingsPage() {
                               <div className="settings-page__staff-card-title-group">
                                 <h3 className="settings-page__staff-email">{member.email}</h3>
                                 {"kind" in member && member.kind === "invitation" ? (
-                                  <p className="settings-page__staff-pending-label">Приглашение ожидает подтверждения</p>
+                                  <p className="settings-page__staff-pending-label">
+                                    {resolveStaffInvitationStatusLabel("email")}
+                                  </p>
                                 ) : null}
                               </div>
                               <div className="settings-page__staff-actions" aria-label={`Действия для ${member.email}`}>
@@ -1361,12 +1405,18 @@ export function SettingsPage() {
                                   }
                                   onClick={() => {
                                     if ("kind" in member && member.kind === "invitation") {
-                                      deleteEmployerStaffInvitationMutation.mutate(member.id.replace("invitation-", ""));
+                                      setPendingDeleteItem({
+                                        kind: "invitation",
+                                        id: member.id.replace("invitation-", ""),
+                                        email: member.email,
+                                      });
                                       return;
                                     }
 
-                                    deleteEmployerStaffMembershipMutation.mutate({
-                                      membershipId: member.id,
+                                    setPendingDeleteItem({
+                                      kind: "membership",
+                                      id: member.id,
+                                      email: member.email,
                                       isCurrentUser: member.is_current_user,
                                     });
                                   }}
@@ -1436,9 +1486,12 @@ export function SettingsPage() {
 
                                 setExpandedInvitationId((current) => (current === item.id ? null : item.id));
                               }}
-                            >
-                              <div className="settings-page__staff-card-title-group">
-                                <h3 className="settings-page__staff-email">Ссылка без почты</h3>
+                              >
+                                <div className="settings-page__staff-card-title-group">
+                                  <h3 className="settings-page__staff-email">Неизвестный пользователь</h3>
+                                  <p className="settings-page__staff-pending-label">
+                                    {resolveStaffInvitationStatusLabel("link")}
+                                  </p>
                               </div>
                               <div className="settings-page__staff-actions" aria-label="Действия для ссылки приглашения">
                                 <button
@@ -1447,7 +1500,11 @@ export function SettingsPage() {
                                   aria-label="Удалить ссылку приглашения"
                                   disabled={!isPrimaryEmployerManager || deleteEmployerStaffInvitationMutation.isPending}
                                   onClick={() => {
-                                    deleteEmployerStaffInvitationMutation.mutate(item.id);
+                                    setPendingDeleteItem({
+                                      kind: "invitation",
+                                      id: item.id,
+                                      email: "Неизвестный пользователь",
+                                    });
                                   }}
                                 >
                                   <img src={deleteIcon} alt="" aria-hidden="true" className="settings-page__icon" />
@@ -1652,6 +1709,54 @@ export function SettingsPage() {
                     onClick={handleCreateStaffInvitation}
                   >
                     {trimmedInviteEmail ? "Отправить приглашение" : "Сгенерировать ссылку"}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+            <Modal
+              title={
+                pendingDeleteItem?.kind === "membership"
+                  ? pendingDeleteItem.isCurrentUser
+                    ? "Выйти из компании"
+                    : "Удалить сотрудника"
+                  : "Удалить приглашение"
+              }
+              isOpen={pendingDeleteItem !== null}
+              onClose={() => {
+                if (isDeleteStaffItemPending) {
+                  return;
+                }
+
+                setPendingDeleteItem(null);
+              }}
+              panelClassName="settings-page__staff-modal-panel"
+            >
+              <div className="settings-page__staff-modal">
+                <p className="settings-page__staff-delete-message">
+                  {pendingDeleteItem?.kind === "membership"
+                    ? pendingDeleteItem.isCurrentUser
+                      ? `Вы уверены, что хотите отвязать рабочий профиль ${pendingDeleteItem.email} от компании?`
+                      : `Вы уверены, что хотите удалить сотрудника ${pendingDeleteItem.email} из компании?`
+                    : `Вы уверены, что хотите удалить приглашение для ${pendingDeleteItem?.email}?`}
+                </p>
+                <div className="settings-page__staff-invite-actions">
+                  <Button
+                    type="button"
+                    variant={outlineVariant}
+                    size="md"
+                    disabled={isDeleteStaffItemPending}
+                    onClick={() => setPendingDeleteItem(null)}
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={actionVariant}
+                    size="md"
+                    loading={isDeleteStaffItemPending}
+                    onClick={handleConfirmDeleteStaffItem}
+                  >
+                    Подтвердить
                   </Button>
                 </div>
               </div>
