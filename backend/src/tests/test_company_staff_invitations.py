@@ -207,6 +207,39 @@ def test_owner_can_create_link_only_invitation(client, db_session, monkeypatch):
     assert sent_messages == []
 
 
+def test_primary_owner_can_revoke_pending_staff_invitation(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-revoke-invite@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-revoke-invite@example.com",
+        company_name="Revoke Invite Corp",
+        inn="7707083899",
+    )
+
+    monkeypatch.setattr("src.services.employer_service.send_email", lambda recipient, subject, body: None)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "pending-revoke@example.com", "permissions": ["view_responses"]},
+    )
+    assert invite_response.status_code == 201
+    invitation_id = invite_response.json()["data"]["id"]
+
+    revoke_response = client.delete(
+        f"/api/v1/companies/staff/invitations/{invitation_id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert revoke_response.status_code == 200
+
+    list_response = client.get(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["items"] == []
+
+
 def test_link_only_invitation_can_be_accepted_by_registered_applicant(client, db_session, monkeypatch):
     owner_token = _register_and_login(client, db_session, email="owner-link-accept@example.com", role="employer")
     _create_company_for_owner(

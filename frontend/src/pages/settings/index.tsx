@@ -45,6 +45,7 @@ import {
 import {
   acceptEmployerStaffInvitation,
   createEmployerStaffInvitation,
+  deleteEmployerStaffInvitation,
   deleteEmployerStaffMembership,
   listEmployerStaff,
   listEmployerStaffInvitations,
@@ -437,6 +438,7 @@ export function SettingsPage() {
   const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [expandedStaffMemberId, setExpandedStaffMemberId] = useState<string | null>(null);
+  const [expandedInvitationId, setExpandedInvitationId] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -655,6 +657,13 @@ export function SettingsPage() {
         queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
         queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
       ]);
+    },
+  });
+  const deleteEmployerStaffInvitationMutation = useMutation({
+    mutationFn: deleteEmployerStaffInvitation,
+    onSuccess: (_response, invitationId) => {
+      setExpandedInvitationId((current) => (current === invitationId ? null : current));
+      void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
     },
   });
   const acceptEmployerStaffInvitationMutation = useMutation({
@@ -947,6 +956,10 @@ export function SettingsPage() {
   const combinedEmployerStaffItems = useMemo(
     () => [...employerStaffItems, ...emailInvitationStaffItems],
     [emailInvitationStaffItems, employerStaffItems],
+  );
+  const isPrimaryEmployerManager = useMemo(
+    () => employerStaffItems.some((item) => item.is_current_user && item.is_primary),
+    [employerStaffItems],
   );
   const invitePermissionKeys = useMemo(
     () => mapEmployerStaffPermissionsToKeys(invitePermissions),
@@ -1292,39 +1305,6 @@ export function SettingsPage() {
                 >
                   Пригласить сотрудника
                 </Button>
-                <div className="settings-page__staff-invitations">
-                  <h3 className="settings-page__staff-subtitle">Активные ссылки приглашений</h3>
-                  {isEmployerStaffInvitationsLoading ? (
-                    <SettingsSkeleton className="settings-page__skeleton--session-line" />
-                  ) : linkOnlyInvitationItems.length > 0 ? (
-                    <div className="settings-page__staff-invitation-list">
-                      {linkOnlyInvitationItems.map((item) => (
-                        <article key={item.id} className="settings-page__staff-invitation-card">
-                          <div className="settings-page__staff-invitation-head">
-                            <p className="settings-page__staff-email">
-                              {item.email || "Ссылка без почты"}
-                            </p>
-                            <Status variant="pending-review">{item.roleLabel}</Status>
-                          </div>
-                          <p className="settings-page__staff-date">Создано: {item.invitedAtLabel}</p>
-                          {item.invitation_url ? (
-                            <button
-                              type="button"
-                              className="settings-page__copy-link"
-                              onClick={() => {
-                                void navigator.clipboard.writeText(item.invitation_url || "");
-                              }}
-                            >
-                              Скопировать ссылку
-                            </button>
-                          ) : null}
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="settings-page__staff-empty">Активных ссылок приглашений пока нет.</div>
-                  )}
-                </div>
                 <div className="settings-page__staff-list">
                   {isEmployerStaffLoading
                     ? Array.from({ length: 2 }, (_, index) => (
@@ -1375,9 +1355,16 @@ export function SettingsPage() {
                                   disabled={
                                     member.is_primary ||
                                     deleteEmployerStaffMembershipMutation.isPending ||
-                                    ("kind" in member && member.kind === "invitation")
+                                    ("kind" in member &&
+                                      member.kind === "invitation" &&
+                                      (!isPrimaryEmployerManager || deleteEmployerStaffInvitationMutation.isPending))
                                   }
                                   onClick={() => {
+                                    if ("kind" in member && member.kind === "invitation") {
+                                      deleteEmployerStaffInvitationMutation.mutate(member.id.replace("invitation-", ""));
+                                      return;
+                                    }
+
                                     deleteEmployerStaffMembershipMutation.mutate({
                                       membershipId: member.id,
                                       isCurrentUser: member.is_current_user,
@@ -1423,6 +1410,89 @@ export function SettingsPage() {
                         </div>
                       )}
                 </div>
+                {isEmployerStaffInvitationsLoading || linkOnlyInvitationItems.length > 0 ? (
+                  <div className="settings-page__staff-invitations">
+                    <h3 className="settings-page__staff-subtitle">Активные ссылки приглашений</h3>
+                    {isEmployerStaffInvitationsLoading ? (
+                      <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                    ) : (
+                      <div className="settings-page__staff-invitation-list">
+                        {linkOnlyInvitationItems.map((item) => (
+                          <article
+                            key={item.id}
+                            className={
+                              expandedInvitationId === item.id
+                                ? "settings-page__staff-card settings-page__staff-card--expanded"
+                                : "settings-page__staff-card"
+                            }
+                          >
+                            <div
+                              className="settings-page__staff-card-summary"
+                              onClick={(event) => {
+                                const target = event.target as HTMLElement;
+                                if (target.closest(".settings-page__icon-button") || target.closest(".settings-page__copy-link")) {
+                                  return;
+                                }
+
+                                setExpandedInvitationId((current) => (current === item.id ? null : item.id));
+                              }}
+                            >
+                              <div className="settings-page__staff-card-title-group">
+                                <h3 className="settings-page__staff-email">Ссылка без почты</h3>
+                              </div>
+                              <div className="settings-page__staff-actions" aria-label="Действия для ссылки приглашения">
+                                <button
+                                  type="button"
+                                  className="settings-page__icon-button"
+                                  aria-label="Удалить ссылку приглашения"
+                                  disabled={!isPrimaryEmployerManager || deleteEmployerStaffInvitationMutation.isPending}
+                                  onClick={() => {
+                                    deleteEmployerStaffInvitationMutation.mutate(item.id);
+                                  }}
+                                >
+                                  <img src={deleteIcon} alt="" aria-hidden="true" className="settings-page__icon" />
+                                </button>
+                              </div>
+                            </div>
+                            <div
+                              className={
+                                expandedInvitationId === item.id
+                                  ? "settings-page__staff-card-details-shell settings-page__staff-card-details-shell--expanded"
+                                  : "settings-page__staff-card-details-shell"
+                              }
+                              aria-hidden={expandedInvitationId !== item.id}
+                            >
+                              <div className="settings-page__staff-card-details">
+                                <div className="settings-page__staff-card-body">
+                                  <p className="settings-page__staff-role">Роль: {item.roleLabel}</p>
+                                  <p className="settings-page__staff-date">Создано: {item.invitedAtLabel}</p>
+                                  <ul className="settings-page__staff-permission-list">
+                                    {(item.permissions ?? []).map((permission) => (
+                                      <li key={`${item.id}-${permission}`} className="settings-page__staff-permission-item">
+                                        {permission}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  {item.invitation_url ? (
+                                    <button
+                                      type="button"
+                                      className="settings-page__copy-link"
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(item.invitation_url || "");
+                                      }}
+                                    >
+                                      Скопировать ссылку
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
             <Modal

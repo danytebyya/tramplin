@@ -227,6 +227,13 @@ export async function createEmployerStaffInvitation(payload: {
   return response.data;
 }
 
+export async function deleteEmployerStaffInvitation(invitationId: string) {
+  const response = await apiClient.delete(`/companies/staff/invitations/${invitationId}`, {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
 export async function acceptEmployerStaffInvitation(token: string) {
   const response = await apiClient.post<EmployerStaffInvitationAcceptResponse>(
     "/companies/staff/invitations/accept",

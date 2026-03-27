@@ -109,6 +109,21 @@ def accept_employer_staff_invitation(
     return success_response(member.model_dump(mode="json"))
 
 
+@router.delete("/staff/invitations/{invitation_id}", status_code=status.HTTP_200_OK)
+def revoke_employer_staff_invitation(
+    invitation_id: str,
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    EmployerService(db).revoke_staff_invitation(
+        current_user,
+        invitation_id=invitation_id,
+        access_payload=access_payload,
+    )
+    return success_response({"deleted": True})
+
+
 @router.delete("/staff/memberships/{membership_id}", status_code=status.HTTP_200_OK)
 def leave_employer_company(
     membership_id: str,

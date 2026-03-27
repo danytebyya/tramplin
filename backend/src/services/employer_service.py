@@ -364,6 +364,43 @@ class EmployerService:
             is_primary=membership.is_primary,
         )
 
+    def revoke_staff_invitation(
+        self,
+        current_user: User,
+        *,
+        invitation_id: str,
+        access_payload: dict | None = None,
+    ) -> None:
+        employer, membership = self._resolve_staff_access(current_user=current_user, access_payload=access_payload)
+        self._ensure_staff_management_allowed(membership)
+        if membership is None or not membership.is_primary:
+            raise AppError(
+                code="EMPLOYER_STAFF_INVITATION_REVOKE_FORBIDDEN",
+                message="Отзывать приглашения может только основной работодатель компании",
+                status_code=403,
+            )
+
+        invitation = (
+            self.db.query(EmployerStaffInvitation)
+            .filter(
+                EmployerStaffInvitation.id == UUID(str(invitation_id)),
+                EmployerStaffInvitation.employer_id == employer.id,
+                EmployerStaffInvitation.accepted_at.is_(None),
+                EmployerStaffInvitation.revoked_at.is_(None),
+            )
+            .one_or_none()
+        )
+        if invitation is None:
+            raise AppError(
+                code="EMPLOYER_INVITATION_NOT_FOUND",
+                message="Приглашение не найдено или уже недоступно",
+                status_code=404,
+            )
+
+        invitation.revoked_at = datetime.now(UTC)
+        self.db.add(invitation)
+        self.db.commit()
+
     def leave_company(
         self,
         current_user: User,
