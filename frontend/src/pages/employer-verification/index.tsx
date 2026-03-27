@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { renderAsync } from "docx-preview";
 import { getDocument, GlobalWorkerOptions, VerbosityLevel } from "pdfjs-dist";
 import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -596,6 +596,7 @@ export function EmployerVerificationPage() {
         pageSize: PAGE_SIZE,
       }),
     enabled: isAuthenticated && isModerationRole,
+    placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
 
@@ -855,7 +856,7 @@ export function EmployerVerificationPage() {
     rejectMutation.isPending ||
     requestChangesMutation.isPending ||
     bulkActionMutation.isPending;
-  const isTableLoading = verificationRequestsQuery.isPending || verificationRequestsQuery.isFetching;
+  const isTableLoading = verificationRequestsQuery.isPending;
 
   if (!isModerationRole) {
     return <Navigate to="/" replace />;

@@ -1,6 +1,6 @@
 import { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
@@ -188,6 +188,7 @@ export function ContentModerationPage() {
         pageSize: PAGE_SIZE,
       }),
     enabled: isAuthenticated && isModerationRole,
+    placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
 
@@ -396,7 +397,7 @@ export function ContentModerationPage() {
     rejectMutation.isPending ||
     requestChangesMutation.isPending ||
     bulkActionMutation.isPending;
-  const isTableLoading = contentQuery.isPending || contentQuery.isFetching;
+  const isTableLoading = contentQuery.isPending;
   const counts = contentQuery.data?.data?.counts;
   const metrics = contentQuery.data?.data?.metrics;
 
