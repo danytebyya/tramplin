@@ -186,6 +186,65 @@ def test_staff_member_can_leave_company_membership(client, db_session, monkeypat
     assert len(contexts_response.json()["data"]["items"]) == 1
 
 
+def test_owner_can_remove_staff_with_active_employer_context(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-remove-active@example.com", role="employer")
+    employer = _create_company_for_owner(
+        db_session,
+        owner_email="owner-remove-active@example.com",
+        company_name="Remove Active Corp",
+        inn="7707083821",
+    )
+    applicant_token = _register_and_login(
+        client,
+        db_session,
+        email="staff-remove-active@example.com",
+        role="applicant",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "staff-remove-active@example.com", "permissions": ["view_responses"]},
+    )
+    invite_token = parse_qs(urlparse(invite_response.json()["data"]["invitation_url"]).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"token": invite_token},
+    )
+    membership_id = accept_response.json()["data"]["id"]
+
+    contexts_response = client.get(
+        "/api/v1/auth/contexts",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+    )
+    company_context = next(
+        item
+        for item in contexts_response.json()["data"]["items"]
+        if item["role"] == UserRole.EMPLOYER.value and item["employer_id"] == str(employer.id)
+    )
+    switched_response = client.post(
+        "/api/v1/auth/context",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"context_id": company_context["id"]},
+    )
+    assert switched_response.status_code == 200
+
+    delete_response = client.delete(
+        f"/api/v1/companies/staff/memberships/{membership_id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert delete_response.status_code == 200
+
+
 def test_owner_can_create_link_only_invitation(client, db_session, monkeypatch):
     owner_token = _register_and_login(client, db_session, email="owner-link@example.com", role="employer")
     _create_company_for_owner(

@@ -31,6 +31,7 @@ from src.models import (
     EmployerVerificationDocument,
     EmployerVerificationRequest,
     MediaFile,
+    RefreshSession,
     User,
     UserNotificationPreference,
 )
@@ -441,6 +442,20 @@ class EmployerService:
             )
         removed_user = self.db.query(User).filter(User.id == membership.user_id).one()
         employer = self.db.query(Employer).filter(Employer.id == membership.employer_id).one()
+        active_sessions = (
+            self.db.query(RefreshSession)
+            .filter(
+                RefreshSession.user_id == membership.user_id,
+                RefreshSession.active_membership_id == membership.id,
+                RefreshSession.revoked_at.is_(None),
+            )
+            .all()
+        )
+        for session in active_sessions:
+            session.active_membership_id = None
+            session.active_employer_id = None
+            session.active_role = removed_user.role
+            self.db.add(session)
         self.db.delete(membership)
         self._ensure_applicant_profile_for_company_staff(removed_user)
         if is_self_leave:
