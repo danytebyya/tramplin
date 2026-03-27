@@ -122,22 +122,26 @@ class EmployerStaffListRead(BaseModel):
 
 
 class EmployerStaffInviteRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr | None = None
     role: MembershipRole
 
     @field_validator("email")
     @classmethod
-    def normalize_email(cls, value: str) -> str:
+    def normalize_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return value.lower().strip()
 
 
 class EmployerStaffInvitationRead(BaseModel):
     id: str
-    email: str
+    email: str | None = None
     role: MembershipRole
     status: str
     invited_at: str
     expires_at: str
+    invitation_url: str | None = None
+    email_sent: bool = False
 
 
 class EmployerStaffInvitationListRead(BaseModel):

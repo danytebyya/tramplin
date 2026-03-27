@@ -72,6 +72,27 @@ export type EmployerStaffListResponse = {
   };
 };
 
+export type EmployerStaffInvitation = {
+  id: string;
+  email?: string | null;
+  role: "owner" | "recruiter" | "manager" | "viewer";
+  status: string;
+  invited_at: string;
+  expires_at: string;
+  invitation_url?: string | null;
+  email_sent: boolean;
+};
+
+export type EmployerStaffInvitationListResponse = {
+  data?: {
+    items?: EmployerStaffInvitation[];
+  };
+};
+
+export type EmployerStaffInvitationAcceptResponse = {
+  data?: EmployerStaffMember;
+};
+
 function getAuthorizedHeaders() {
   const accessToken = useAuthStore.getState().accessToken;
 
@@ -179,5 +200,37 @@ export async function listEmployerStaff() {
   const response = await apiClient.get<EmployerStaffListResponse>("/companies/staff", {
     headers: getAuthorizedHeaders(),
   });
+  return response.data;
+}
+
+export async function listEmployerStaffInvitations() {
+  const response = await apiClient.get<EmployerStaffInvitationListResponse>("/companies/staff/invitations", {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
+export async function createEmployerStaffInvitation(payload: {
+  email?: string;
+  role: "owner" | "recruiter" | "manager" | "viewer";
+}) {
+  const response = await apiClient.post<{ data?: EmployerStaffInvitation }>(
+    "/companies/staff/invitations",
+    payload,
+    {
+      headers: getAuthorizedHeaders(),
+    },
+  );
+  return response.data;
+}
+
+export async function acceptEmployerStaffInvitation(token: string) {
+  const response = await apiClient.post<EmployerStaffInvitationAcceptResponse>(
+    "/companies/staff/invitations/accept",
+    { token },
+    {
+      headers: getAuthorizedHeaders(),
+    },
+  );
   return response.data;
 }

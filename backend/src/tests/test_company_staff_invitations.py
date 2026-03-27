@@ -91,6 +91,9 @@ def test_existing_user_can_accept_company_invitation_and_switch_context(client, 
         json={"email": "applicant-context@example.com", "role": "recruiter"},
     )
     assert invite_response.status_code == 201
+    assert invite_response.json()["data"]["email"] == "applicant-context@example.com"
+    assert invite_response.json()["data"]["email_sent"] is True
+    assert invite_response.json()["data"]["invitation_url"]
     assert len(sent_messages) == 1
     assert "новый рабочий профиль компании" in sent_messages[0][2]
 
@@ -173,3 +176,75 @@ def test_staff_member_can_leave_company_membership(client, db_session, monkeypat
     )
     assert contexts_response.status_code == 200
     assert len(contexts_response.json()["data"]["items"]) == 1
+
+
+def test_owner_can_create_link_only_invitation(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-link@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-link@example.com",
+        company_name="Link Corp",
+        inn="7707083813",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"role": "viewer"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["email"] is None
+    assert response.json()["data"]["email_sent"] is False
+    assert response.json()["data"]["invitation_url"]
+    assert sent_messages == []
+
+
+def test_link_only_invitation_can_be_accepted_by_registered_applicant(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-link-accept@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-link-accept@example.com",
+        company_name="Shared Link Corp",
+        inn="7707083814",
+    )
+    applicant_token = _register_and_login(
+        client,
+        db_session,
+        email="candidate-link-accept@example.com",
+        role="applicant",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"role": "manager"},
+    )
+
+    assert invite_response.status_code == 201
+    invitation_url = invite_response.json()["data"]["invitation_url"]
+    invite_token = parse_qs(urlparse(invitation_url).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"token": invite_token},
+    )
+
+    assert accept_response.status_code == 200
+    assert accept_response.json()["data"]["role"] == "manager"
+    assert sent_messages == []

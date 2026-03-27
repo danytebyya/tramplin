@@ -132,7 +132,12 @@ export function AuthPage() {
   const initialPersistedState = getInitialPersistedVerificationState();
   const location = useLocation();
   const navigate = useNavigate();
-  const returnTo = `${location.pathname}${location.search}${location.hash}`;
+  const searchParams = new URLSearchParams(location.search);
+  const explicitReturnTo = searchParams.get("returnTo");
+  const inviteReturnParams = explicitReturnTo ? new URLSearchParams(explicitReturnTo.split("?")[1] ?? "") : null;
+  const isCompanyInviteRegistration =
+    inviteReturnParams?.get("mode") === "accept-company-invite" && Boolean(inviteReturnParams.get("invite_token"));
+  const legalReturnTo = explicitReturnTo || `${location.pathname}${location.search}${location.hash}`;
   const [step, setStep] = useState<VerificationStep>(initialPersistedState?.step ?? "form");
   const [apiError, setApiError] = useState<string | null>(initialPersistedState?.apiError ?? null);
   const [apiErrorCode, setApiErrorCode] = useState<string | null>(
@@ -192,6 +197,14 @@ export function AuthPage() {
     apiErrorCode === "AUTH_OTP_REQUEST_LIMIT_REACHED" ||
     apiErrorCode === "AUTH_OTP_VERIFICATION_BLOCKED";
   const isVerificationLocked = step === "code" && isTemporarilyRateLimited;
+
+  useEffect(() => {
+    if (!isCompanyInviteRegistration || selectedRole === "applicant") {
+      return;
+    }
+
+    setValue("role", "applicant", { shouldValidate: true });
+  }, [isCompanyInviteRegistration, selectedRole, setValue]);
 
   useEffect(() => {
     if (step !== "form") {
@@ -353,7 +366,7 @@ export function AuthPage() {
 
       clearPersistedVerificationState();
       setApiErrorCode(null);
-      navigate(resolvePostAuthRoute(role, hasEmployerProfile));
+      navigate(explicitReturnTo || resolvePostAuthRoute(role, hasEmployerProfile));
     },
     onError: (error: any) => {
       registrationSubmitLockRef.current = false;
@@ -549,7 +562,7 @@ export function AuthPage() {
                   <>
                     <h2 className="auth-card__title">Регистрация</h2>
                     <p className="auth-card__hint">
-                      Уже есть аккаунт? <Link to="/login">Войти</Link>
+                      Уже есть аккаунт? <Link to={explicitReturnTo ? `/login?returnTo=${encodeURIComponent(explicitReturnTo)}` : "/login"}>Войти</Link>
                     </p>
                   </>
                 )}
@@ -574,6 +587,7 @@ export function AuthPage() {
                           ? "segmented-switch__option segmented-switch__option--active"
                           : "segmented-switch__option"
                       }
+                      disabled={isCompanyInviteRegistration}
                       onClick={() => setValue("role", "employer", { shouldValidate: true })}
                     >
                       Работодатель
@@ -590,6 +604,12 @@ export function AuthPage() {
                       Соискатель
                     </button>
                   </div>
+
+                  {isCompanyInviteRegistration ? (
+                    <p className="auth-card__hint">
+                      Для принятия приглашения в компанию регистрация доступна только как соискатель.
+                    </p>
+                  ) : null}
 
                   <div className="auth-form__fields">
                     <label className="auth-form__control">
@@ -654,9 +674,9 @@ export function AuthPage() {
                       )}
                     />
                     <span>
-                      Я согласен с условиями <Link to="/rules" state={{ returnTo }}>согласия на обработку данных</Link> и даю
+                      Я согласен с условиями <Link to="/rules" state={{ returnTo: legalReturnTo }}>согласия на обработку данных</Link> и даю
                       согласие на обработку моей персональной информации на условиях, определенных{" "}
-                      <Link to="/confidential" state={{ returnTo }}>политикой конфиденциальности</Link>
+                      <Link to="/confidential" state={{ returnTo: legalReturnTo }}>политикой конфиденциальности</Link>
                     </span>
                   </label>
                   {apiError && <span className="auth-form__error">{apiError}</span>}

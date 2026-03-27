@@ -51,6 +51,7 @@ function useEmployerProfileAccess() {
 }
 
 function ProtectedRoute({ children }: { children: ReactElement }) {
+  const location = useLocation();
   const {
     accessToken,
     refreshToken,
@@ -65,6 +66,14 @@ function ProtectedRoute({ children }: { children: ReactElement }) {
   }
 
   if (!accessToken && !refreshToken) {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    const searchParams = new URLSearchParams(location.search);
+    const isCompanyInviteFlow = searchParams.get("mode") === "accept-company-invite" && searchParams.get("invite_token");
+
+    if (isCompanyInviteFlow) {
+      return <Navigate to={`/register?returnTo=${encodeURIComponent(returnTo)}`} replace />;
+    }
+
     return <Navigate to="/" replace />;
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
@@ -34,8 +34,13 @@ import {
   getModerationSettingsRequest,
   updateModerationSettingsRequest,
 } from "../../features/moderation";
-import { listEmployerStaff } from "../../features/company-verification";
-import { Button, Checkbox, Container, Input, Status } from "../../shared/ui";
+import {
+  acceptEmployerStaffInvitation,
+  createEmployerStaffInvitation,
+  listEmployerStaff,
+  listEmployerStaffInvitations,
+} from "../../features/company-verification";
+import { Button, Checkbox, Container, Input, Select, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import "../../widgets/header/header.css";
 import "./settings.css";
@@ -271,6 +276,12 @@ function resolveEmployerStaffRoleLabel(role: string) {
   return "Наблюдатель";
 }
 
+const employerStaffRoleOptions = [
+  { value: "recruiter", label: "Рекрутер" },
+  { value: "manager", label: "Менеджер" },
+  { value: "viewer", label: "Наблюдатель" },
+];
+
 function formatDateWithTime(value: string) {
   return new Date(value).toLocaleString("ru-RU", {
     day: "2-digit",
@@ -357,6 +368,7 @@ function SettingsSkeleton({ className }: { className: string }) {
 
 export function SettingsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -379,6 +391,16 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("recruiter");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [latestInvitationUrl, setLatestInvitationUrl] = useState<string | null>(null);
+  const [staffInviteAcceptError, setStaffInviteAcceptError] = useState<string | null>(null);
+  const [staffInviteAcceptSuccess, setStaffInviteAcceptSuccess] = useState<string | null>(null);
+
+  const inviteToken = searchParams.get("invite_token");
+  const inviteMode = searchParams.get("mode");
+  const hasPendingCompanyInvite = inviteMode === "accept-company-invite" && Boolean(inviteToken);
 
   const { data: meData } = useQuery({
     queryKey: ["auth", "me"],
@@ -420,6 +442,12 @@ export function SettingsPage() {
     staleTime: 30 * 1000,
     enabled: isAuthenticated && isEmployer,
   });
+  const employerStaffInvitationsQuery = useQuery({
+    queryKey: ["companies", "staff", "invitations"],
+    queryFn: listEmployerStaffInvitations,
+    staleTime: 30 * 1000,
+    enabled: isAuthenticated && isEmployer,
+  });
 
   const user = meData?.data?.user;
   const isProfileLoading = !user;
@@ -428,6 +456,7 @@ export function SettingsPage() {
   const isLoginHistoryLoading = loginHistoryQuery.isPending;
   const isModerationSettingsLoading = isModerationRole && moderationSettingsQuery.isPending;
   const isEmployerStaffLoading = isEmployer && employerStaffQuery.isPending;
+  const isEmployerStaffInvitationsLoading = isEmployer && employerStaffInvitationsQuery.isPending;
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -516,6 +545,45 @@ export function SettingsPage() {
     mutationFn: updateModerationSettingsRequest,
     onSuccess: (response) => {
       queryClient.setQueryData(["moderation", "settings"], response);
+    },
+  });
+  const createEmployerStaffInvitationMutation = useMutation({
+    mutationFn: createEmployerStaffInvitation,
+    onMutate: () => {
+      setInviteError(null);
+    },
+    onSuccess: (response) => {
+      setLatestInvitationUrl(response?.data?.invitation_url ?? null);
+      setInviteEmail("");
+      void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
+    },
+    onError: (error: any) => {
+      setInviteError(
+        error?.response?.data?.error?.message ?? "Не удалось создать приглашение. Попробуйте еще раз.",
+      );
+    },
+  });
+  const acceptEmployerStaffInvitationMutation = useMutation({
+    mutationFn: acceptEmployerStaffInvitation,
+    onMutate: () => {
+      setStaffInviteAcceptError(null);
+      setStaffInviteAcceptSuccess(null);
+    },
+    onSuccess: async () => {
+      setStaffInviteAcceptSuccess("Рабочий профиль компании добавлен. Теперь его можно будет использовать после переключения контекста.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["companies", "staff"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] }),
+      ]);
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.delete("invite_token");
+      nextSearchParams.delete("mode");
+      setSearchParams(nextSearchParams, { replace: true });
+    },
+    onError: (error: any) => {
+      setStaffInviteAcceptError(
+        error?.response?.data?.error?.message ?? "Не удалось принять приглашение. Попробуйте еще раз.",
+      );
     },
   });
 
@@ -710,6 +778,13 @@ export function SettingsPage() {
       invitedAtLabel: formatDate(item.invited_at),
     }));
   }, [employerStaffQuery.data]);
+  const employerStaffInvitationItems = useMemo(() => {
+    return (employerStaffInvitationsQuery.data?.data?.items ?? []).map((item) => ({
+      ...item,
+      roleLabel: resolveEmployerStaffRoleLabel(item.role),
+      invitedAtLabel: formatDate(item.invited_at),
+    }));
+  }, [employerStaffInvitationsQuery.data]);
 
   const pageClassName = [
     "settings-page",
@@ -964,14 +1039,145 @@ export function SettingsPage() {
       <>
         {renderPublicTabs()}
 
+        {hasPendingCompanyInvite ? (
+          <section className="settings-page__section">
+            <h2 className="settings-page__section-title">Приглашение в компанию</h2>
+            <div className="settings-page__panel">
+              <div className="settings-page__panel-body settings-page__panel-body--staff">
+                <div className="settings-page__staff-link-card">
+                  <p className="settings-page__staff-link-title">Доступен рабочий профиль компании</p>
+                  <p className="settings-page__staff-link-value">
+                    После подтверждения к вашему аккаунту будет привязан дополнительный контекст работодателя.
+                  </p>
+                  {staffInviteAcceptError ? (
+                    <p className="settings-page__form-message settings-page__form-message--error">
+                      {staffInviteAcceptError}
+                    </p>
+                  ) : null}
+                  {staffInviteAcceptSuccess ? (
+                    <p className="settings-page__form-message settings-page__form-message--success">
+                      {staffInviteAcceptSuccess}
+                    </p>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant={actionVariant}
+                    size="md"
+                    loading={acceptEmployerStaffInvitationMutation.isPending}
+                    onClick={() => {
+                      if (!inviteToken) {
+                        return;
+                      }
+
+                      acceptEmployerStaffInvitationMutation.mutate(inviteToken);
+                    }}
+                  >
+                    Принять приглашение
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         {isEmployer ? (
           <section className="settings-page__section">
             <h2 className="settings-page__section-title">Доступ для сотрудников</h2>
             <div className="settings-page__panel">
               <div className="settings-page__panel-body settings-page__panel-body--staff">
-                <Button type="button" variant={actionVariant} size="md">
-                  Пригласить сотрудника
-                </Button>
+                <div className="settings-page__staff-invite">
+                  <p className="settings-page__staff-link-value">
+                    Можно сразу отправить приглашение на почту или создать только ссылку и передать её вручную.
+                  </p>
+                  <div className="settings-page__staff-invite-grid">
+                    <label className="settings-page__field">
+                      <span className="settings-page__field-label">Почта сотрудника</span>
+                      <Input
+                        className="input--sm"
+                        value={inviteEmail}
+                        onChange={(event) => setInviteEmail(event.target.value)}
+                        placeholder="Введите email или оставьте пустым"
+                      />
+                    </label>
+                    <label className="settings-page__field">
+                      <span className="settings-page__field-label">Роль доступа</span>
+                      <Select
+                        className="select-field--sm"
+                        size="sm"
+                        variant={role === "employer" ? "primary" : "secondary"}
+                        value={inviteRole}
+                        options={employerStaffRoleOptions}
+                        onValueChange={setInviteRole}
+                      />
+                    </label>
+                  </div>
+                  <div className="settings-page__staff-invite-actions">
+                    <Button
+                      type="button"
+                      variant={actionVariant}
+                      size="md"
+                      loading={createEmployerStaffInvitationMutation.isPending}
+                      onClick={() => {
+                        createEmployerStaffInvitationMutation.mutate({
+                          email: inviteEmail.trim() || undefined,
+                          role: inviteRole as "recruiter" | "manager" | "viewer",
+                        });
+                      }}
+                    >
+                      Создать приглашение
+                    </Button>
+                  </div>
+                  {inviteError ? <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p> : null}
+                  {latestInvitationUrl ? (
+                    <div className="settings-page__staff-link-card">
+                      <p className="settings-page__staff-link-title">Ссылка приглашения</p>
+                      <p className="settings-page__staff-link-value">{latestInvitationUrl}</p>
+                      <Button
+                        type="button"
+                        variant={outlineVariant}
+                        size="md"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(latestInvitationUrl);
+                        }}
+                      >
+                        Скопировать ссылку
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="settings-page__staff-invitations">
+                  <h3 className="settings-page__staff-subtitle">Активные приглашения</h3>
+                  {isEmployerStaffInvitationsLoading ? (
+                    <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                  ) : employerStaffInvitationItems.length > 0 ? (
+                    <div className="settings-page__staff-invitation-list">
+                      {employerStaffInvitationItems.map((item) => (
+                        <article key={item.id} className="settings-page__staff-invitation-card">
+                          <div className="settings-page__staff-invitation-head">
+                            <p className="settings-page__staff-email">
+                              {item.email || "Ссылка без почты"}
+                            </p>
+                            <Status variant="pending-review">{item.roleLabel}</Status>
+                          </div>
+                          <p className="settings-page__staff-date">Создано: {item.invitedAtLabel}</p>
+                          {item.invitation_url ? (
+                            <button
+                              type="button"
+                              className="settings-page__copy-link"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(item.invitation_url || "");
+                              }}
+                            >
+                              Скопировать ссылку
+                            </button>
+                          ) : null}
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="settings-page__staff-empty">Активных приглашений пока нет.</div>
+                  )}
+                </div>
                 <div className="settings-page__staff-list">
                   {isEmployerStaffLoading
                     ? Array.from({ length: 2 }, (_, index) => (

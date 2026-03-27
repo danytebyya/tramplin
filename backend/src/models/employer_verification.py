@@ -66,7 +66,7 @@ class EmployerStaffInvitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "employer_staff_invitations"
 
     employer_id: Mapped[str] = mapped_column(Uuid(as_uuid=True), ForeignKey("employers.id"), nullable=False)
-    invited_email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    invited_email: Mapped[str | None] = mapped_column(String(320), nullable=True, index=True)
     membership_role: Mapped[MembershipRole] = mapped_column(
         Enum(MembershipRole, name="membership_role", values_callable=enum_values),
         nullable=False,

@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import maxIcon from "../../assets/auth/max.png";
@@ -36,8 +36,11 @@ type LoginSuccessResponse = {
 };
 
 export function LoginPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [apiError, setApiError] = useState<string | null>(null);
+  const searchParams = new URLSearchParams(location.search);
+  const returnTo = searchParams.get("returnTo");
 
   const {
     register,
@@ -59,7 +62,7 @@ export function LoginPage() {
 
       applyAuthSession(data);
 
-      navigate(resolvePostAuthRoute(role, hasEmployerProfile));
+      navigate(returnTo || resolvePostAuthRoute(role, hasEmployerProfile));
     },
     onError: (error: any) => {
       setApiError(
@@ -91,7 +94,7 @@ export function LoginPage() {
               <div className="auth-card__header">
                 <h2 className="auth-card__title">Авторизация</h2>
                 <p className="auth-card__hint">
-                  Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+                  Нет аккаунта? <Link to={returnTo ? `/register?returnTo=${encodeURIComponent(returnTo)}` : "/register"}>Зарегистрироваться</Link>
                 </p>
               </div>
 

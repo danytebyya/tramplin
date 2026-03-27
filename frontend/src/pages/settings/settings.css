@@ -264,6 +264,83 @@
   gap: 16px;
 }
 
+.settings-page__staff-invite,
+.settings-page__staff-invitations {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-page__staff-invite-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.8fr);
+  gap: 16px;
+}
+
+.settings-page__staff-invite-actions {
+  display: flex;
+}
+
+.settings-page__staff-invite-actions .button {
+  width: 100%;
+}
+
+.settings-page__staff-link-card,
+.settings-page__staff-invitation-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--color-bg-primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.settings-page__staff-link-title,
+.settings-page__staff-subtitle {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  font-weight: 500;
+}
+
+.settings-page__staff-link-value {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  word-break: break-word;
+}
+
+.settings-page__staff-invitation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-page__staff-invitation-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-page__copy-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--settings-accent);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.settings-page__copy-link:hover,
+.settings-page__copy-link:focus-visible {
+  color: var(--settings-accent-strong);
+}
+
 .settings-page__staff-card {
   display: flex;
   flex-direction: column;

@@ -197,7 +197,11 @@ class EmployerService:
         employer, membership = self._resolve_staff_access(current_user=current_user, access_payload=access_payload)
         self._ensure_staff_management_allowed(membership)
 
-        existing_user = self.db.query(User).filter(User.email == payload.email).one_or_none()
+        existing_user = (
+            self.db.query(User).filter(User.email == payload.email).one_or_none()
+            if payload.email
+            else None
+        )
         if existing_user is not None:
             existing_membership = (
                 self.db.query(EmployerMembership)
@@ -231,25 +235,31 @@ class EmployerService:
             f"{settings.frontend_base_url.rstrip('/')}/settings"
             f"?invite_token={token}&mode=accept-company-invite"
         )
-        if existing_user is not None:
+        email_sent = False
+        if payload.email and existing_user is not None:
             body = (
                 f"Вас пригласили в компанию {employer.display_name}.\n\n"
                 "У вас уже есть аккаунт на Трамплин. После перехода по ссылке новый рабочий профиль компании "
                 "будет добавлен как отдельный контекст, и вы сможете быстро переключаться между профилями.\n\n"
                 f"Ссылка: {invitation_url}"
             )
-        else:
+        elif payload.email:
             body = (
                 f"Вас пригласили в компанию {employer.display_name}.\n\n"
                 "Если у вас ещё нет аккаунта в Трамплин, зарегистрируйтесь как соискатель по этой почте, "
                 "а затем откройте ссылку приглашения, чтобы привязать рабочий профиль компании.\n\n"
                 f"Ссылка: {invitation_url}"
             )
-        self._send_moderation_email(
-            recipient=payload.email,
-            subject=f"Приглашение в компанию {employer.display_name}",
-            body=body,
-        )
+        else:
+            body = None
+
+        if payload.email and body is not None:
+            self._send_moderation_email(
+                recipient=payload.email,
+                subject=f"Приглашение в компанию {employer.display_name}",
+                body=body,
+            )
+            email_sent = True
 
         return EmployerStaffInvitationRead(
             id=str(invitation.id),
@@ -258,6 +268,8 @@ class EmployerService:
             status="pending",
             invited_at=invitation.created_at.date().isoformat(),
             expires_at=invitation.expires_at.date().isoformat(),
+            invitation_url=invitation_url,
+            email_sent=email_sent,
         )
 
     def accept_staff_invitation(
@@ -288,7 +300,7 @@ class EmployerService:
                 message="Срок действия приглашения истёк",
                 status_code=410,
             )
-        if current_user.email.lower() != invitation.invited_email.lower():
+        if invitation.invited_email is not None and current_user.email.lower() != invitation.invited_email.lower():
             raise AppError(
                 code="EMPLOYER_INVITATION_EMAIL_MISMATCH",
                 message="Приглашение привязано к другой почте",
