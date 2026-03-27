@@ -326,11 +326,15 @@
   border-bottom: 1px solid var(--color-border-primary);
 }
 
+.header__profile-contexts--single {
+  gap: 0;
+}
+
 .header__profile-contexts-title {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--type-h3-size);
-  line-height: var(--type-h3-line);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
   font-weight: 400;
 }
 
@@ -401,9 +405,9 @@
 
 .header__profile-context-name {
   color: var(--color-text-primary);
-  font-size: var(--type-h3-size);
-  line-height: var(--type-h3-line);
-  font-weight: 500;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  font-weight: 400;
 }
 
 .header__profile-context-card--active .header__profile-context-name {
@@ -412,8 +416,8 @@
 
 .header__profile-context-role {
   color: var(--color-text-secondary);
-  font-size: var(--type-body-large-size);
-  line-height: var(--type-body-large-line);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .header__action-button.button {

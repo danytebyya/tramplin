@@ -1243,8 +1243,15 @@ export function SettingsPage() {
         ];
   const accountContextItems = useMemo(() => {
     const items = accountContextsQuery.data?.data?.items ?? [];
+    const filteredItems = items.filter((item) => {
+      if (!(item.is_default && item.role === "employer")) {
+        return true;
+      }
 
-    return [...items].sort((left, right) => {
+      return !items.some((candidate) => candidate.role === "employer" && !candidate.is_default);
+    });
+
+    return [...filteredItems].sort((left, right) => {
       if ((left.is_active ?? false) !== (right.is_active ?? false)) {
         return left.is_active ? -1 : 1;
       }
@@ -1256,6 +1263,7 @@ export function SettingsPage() {
       return (left.label ?? "").localeCompare(right.label ?? "", "ru");
     });
   }, [accountContextsQuery.data?.data?.items]);
+  const hasAccountContextCards = accountContextItems.length > 0;
   const hasMultipleAccountContexts = accountContextItems.length > 1;
 
   const handleCityChange = (city: string | CitySelection) => {
@@ -2501,9 +2509,17 @@ export function SettingsPage() {
                         role="menu"
                         aria-hidden={!isProfileMenuOpen}
                       >
-                        {hasMultipleAccountContexts ? (
-                          <div className="header__profile-contexts">
-                            <p className="header__profile-contexts-title">Выбор аккаунта</p>
+                        {hasAccountContextCards ? (
+                          <div
+                            className={
+                              hasMultipleAccountContexts
+                                ? "header__profile-contexts"
+                                : "header__profile-contexts header__profile-contexts--single"
+                            }
+                          >
+                            {hasMultipleAccountContexts ? (
+                              <p className="header__profile-contexts-title">Выбор аккаунта</p>
+                            ) : null}
                             <div className="header__profile-contexts-list">
                               {accountContextItems.map((item) => {
                                 const isActive = Boolean(item.is_active);
