@@ -129,6 +129,7 @@ class AuthService:
 
         access_token, access_exp = create_access_token(subject=str(user.id), role=user.role.value)
         refresh_token, refresh_exp, jti = create_refresh_token(subject=str(user.id))
+        refresh_token_fingerprint = self._fingerprint_token(refresh_token)
 
         session = RefreshSession(
             user_id=user.id,
@@ -147,6 +148,15 @@ class AuthService:
             is_success=True,
         )
         self.db.commit()
+        self.logger.info(
+            "auth.login.success user_id=%s email=%s session_id=%s refresh_fp=%s ip=%s ua=%s",
+            user.id,
+            normalized_email,
+            session.id,
+            refresh_token_fingerprint,
+            normalized_ip,
+            self._normalize_optional_value(user_agent),
+        )
 
         return {
             "access_token": access_token,
@@ -160,14 +170,39 @@ class AuthService:
         }
 
     def refresh(self, refresh_token: str, user_agent: str | None, ip_address: str | None) -> dict:
+        normalized_ip = self._normalize_ip(ip_address)
+        normalized_user_agent = self._normalize_optional_value(user_agent)
+        refresh_token_fingerprint = self._fingerprint_token(refresh_token)
+
+        self.logger.info(
+            "auth.refresh.start refresh_fp=%s ip=%s ua=%s",
+            refresh_token_fingerprint,
+            normalized_ip,
+            normalized_user_agent,
+        )
         try:
             payload = ensure_token_type(decode_token(refresh_token), TokenType.REFRESH)
         except TokenPayloadError as exc:
+            self.logger.warning(
+                "auth.refresh.invalid_payload refresh_fp=%s ip=%s ua=%s reason=%s",
+                refresh_token_fingerprint,
+                normalized_ip,
+                normalized_user_agent,
+                str(exc),
+            )
             raise AppError(code="AUTH_INVALID_REFRESH", message=str(exc), status_code=401) from exc
 
         token_hash_value = hash_token(refresh_token)
         active_session = self.auth_repo.get_active_session_by_hash(token_hash_value)
         if active_session is None:
+            self.logger.warning(
+                "auth.refresh.session_not_found refresh_fp=%s user_id=%s token_jti=%s ip=%s ua=%s",
+                refresh_token_fingerprint,
+                payload.get("sub"),
+                payload.get("jti"),
+                normalized_ip,
+                normalized_user_agent,
+            )
             raise AppError(
                 code="AUTH_REFRESH_REVOKED",
                 message="Сессия обновления недействительна или истекла",
@@ -177,6 +212,17 @@ class AuthService:
         if active_session.jti != payload.get("jti") or str(active_session.user_id) != str(payload.get("sub")):
             self.auth_repo.revoke_session(str(active_session.id))
             self.db.commit()
+            self.logger.warning(
+                "auth.refresh.session_mismatch session_id=%s session_user_id=%s payload_user_id=%s session_jti=%s payload_jti=%s refresh_fp=%s ip=%s ua=%s",
+                active_session.id,
+                active_session.user_id,
+                payload.get("sub"),
+                active_session.jti,
+                payload.get("jti"),
+                refresh_token_fingerprint,
+                normalized_ip,
+                normalized_user_agent,
+            )
             raise AppError(
                 code="AUTH_INVALID_REFRESH",
                 message="Refresh token не соответствует активной сессии",
@@ -185,12 +231,21 @@ class AuthService:
 
         user = self.user_repo.get_by_id(str(payload.get("sub")), with_profiles=False)
         if user is None:
+            self.logger.warning(
+                "auth.refresh.user_not_found session_id=%s payload_user_id=%s refresh_fp=%s ip=%s ua=%s",
+                active_session.id,
+                payload.get("sub"),
+                refresh_token_fingerprint,
+                normalized_ip,
+                normalized_user_agent,
+            )
             raise AppError(code="AUTH_USER_NOT_FOUND", message="Пользователь не найден", status_code=404)
 
         self.auth_repo.revoke_session(str(active_session.id))
 
         access_token, access_exp = create_access_token(subject=str(user.id), role=user.role.value)
         new_refresh_token, refresh_exp, jti = create_refresh_token(subject=str(user.id))
+        new_refresh_token_fingerprint = self._fingerprint_token(new_refresh_token)
 
         session = RefreshSession(
             user_id=user.id,
@@ -202,6 +257,16 @@ class AuthService:
         )
         self.auth_repo.create_session(session)
         self.db.commit()
+        self.logger.info(
+            "auth.refresh.success previous_session_id=%s new_session_id=%s user_id=%s old_refresh_fp=%s new_refresh_fp=%s ip=%s ua=%s",
+            active_session.id,
+            session.id,
+            user.id,
+            refresh_token_fingerprint,
+            new_refresh_token_fingerprint,
+            normalized_ip,
+            normalized_user_agent,
+        )
 
         return {
             "access_token": access_token,
@@ -220,10 +285,19 @@ class AuthService:
         if session and str(session.user_id) == user_id:
             self.auth_repo.revoke_session(str(session.id))
             self.db.commit()
+            self.logger.info("auth.logout.success user_id=%s session_id=%s", user_id, session.id)
+            return
+
+        self.logger.warning(
+            "auth.logout.session_not_found user_id=%s refresh_fp=%s",
+            user_id,
+            self._fingerprint_token(refresh_token),
+        )
 
     def logout_all(self, user_id: str) -> None:
         self.auth_repo.revoke_all_user_sessions(user_id)
         self.db.commit()
+        self.logger.info("auth.logout_all.success user_id=%s", user_id)
 
     def logout_others(
         self,
@@ -238,10 +312,21 @@ class AuthService:
             current_ip_address=current_ip_address,
         )
         self.db.commit()
+        self.logger.info(
+            "auth.logout_others.success user_id=%s ip=%s ua=%s",
+            user_id,
+            self._normalize_ip(current_ip_address),
+            self._normalize_optional_value(current_user_agent),
+        )
 
     def revoke_session(self, user_id: str, session_id: str) -> None:
         session = self.auth_repo.get_active_session_for_user(user_id, session_id)
         if session is None:
+            self.logger.warning(
+                "auth.revoke_session.not_found user_id=%s target_session_id=%s",
+                user_id,
+                session_id,
+            )
             raise AppError(
                 code="AUTH_SESSION_NOT_FOUND",
                 message="Сессия не найдена или уже завершена",
@@ -250,6 +335,11 @@ class AuthService:
 
         self.auth_repo.revoke_session(session.id)
         self.db.commit()
+        self.logger.info(
+            "auth.revoke_session.success user_id=%s target_session_id=%s",
+            user_id,
+            session.id,
+        )
 
     def list_sessions(
         self,
@@ -270,6 +360,23 @@ class AuthService:
             ):
                 current_session_id = str(session.id)
                 break
+
+        if sessions:
+            self.logger.info(
+                "auth.sessions.list user_id=%s total=%s current_session_id=%s request_ip=%s request_ua=%s",
+                current_user.id,
+                len(sessions),
+                current_session_id,
+                normalized_current_ip,
+                normalized_current_agent,
+            )
+        else:
+            self.logger.warning(
+                "auth.sessions.list.empty user_id=%s request_ip=%s request_ua=%s",
+                current_user.id,
+                normalized_current_ip,
+                normalized_current_agent,
+            )
 
         items = [
             AuthSessionRead(
@@ -353,6 +460,11 @@ class AuthService:
             return None
         normalized_value = value.strip().lower()
         return normalized_value or None
+
+    @staticmethod
+    def _fingerprint_token(token: str) -> str:
+        token_hash = hash_token(token)
+        return token_hash[:12]
 
     def _ensure_email_is_available(self, email: str) -> None:
         if self.user_repo.get_by_email(email):

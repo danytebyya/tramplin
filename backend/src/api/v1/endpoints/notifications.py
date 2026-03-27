@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
@@ -13,20 +15,24 @@ from src.utils.errors import AppError
 from src.utils.responses import success_response
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+logger = logging.getLogger(__name__)
 
 
 def get_current_user_by_access_token(token: str, db: Session) -> User:
     try:
         payload = ensure_token_type(decode_token(token), TokenType.ACCESS)
     except TokenPayloadError as exc:
+        logger.warning("notifications.stream.auth.invalid_token reason=%s", str(exc))
         raise AppError(code="AUTH_UNAUTHORIZED", message=str(exc), status_code=401) from exc
 
     user_id = payload.get("sub")
     if user_id is None:
+        logger.warning("notifications.stream.auth.invalid_payload missing_sub=true")
         raise AppError(code="AUTH_UNAUTHORIZED", message="Некорректный токен доступа", status_code=401)
 
     user = UserRepository(db).get_by_id(user_id)
     if user is None:
+        logger.warning("notifications.stream.auth.user_not_found user_id=%s", user_id)
         raise AppError(code="AUTH_UNAUTHORIZED", message="Пользователь не найден", status_code=401)
 
     return user
@@ -87,10 +93,12 @@ async def notifications_stream(
 ) -> None:
     try:
         current_user = get_current_user_by_access_token(token, db)
-    except AppError:
+    except AppError as exc:
+        logger.warning("notifications.stream.reject code=%s", exc.code)
         await websocket.close(code=1008)
         return
 
+    logger.info("notifications.stream.connect user_id=%s", current_user.id)
     await notification_hub.connect(current_user.id, websocket)
     try:
         while True:
@@ -106,4 +114,5 @@ async def notifications_stream(
     except WebSocketDisconnect:
         pass
     finally:
+        logger.info("notifications.stream.disconnect user_id=%s", current_user.id)
         await notification_hub.disconnect(current_user.id, websocket)
