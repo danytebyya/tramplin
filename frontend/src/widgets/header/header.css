@@ -406,7 +406,7 @@
 }
 
 .header__category-link:hover {
-  color: var(--home-accent);
+  color: var(--color-text-primary);
 }
 
 .header__category-link.active,
