@@ -1,6 +1,7 @@
 import axios from "axios";
 
-import { clearPersistedAuthSession, restoreAuthSession, useAuthStore } from "../../features/auth/session";
+import { clearClientSession } from "../../features/auth/logout";
+import { restoreAuthSession, useAuthStore } from "../../features/auth/session";
 import { env } from "../config/env";
 
 export const apiClient = axios.create({
@@ -63,12 +64,7 @@ apiClient.interceptors.response.use(
       !isLoginRequest &&
       !isCurrentSessionLogoutRequest
     ) {
-      useAuthStore.getState().clearSession();
-      clearPersistedAuthSession();
-
-      if (window.location.pathname !== "/") {
-        window.location.replace("/");
-      }
+      clearClientSession();
     }
 
     return Promise.reject(error);

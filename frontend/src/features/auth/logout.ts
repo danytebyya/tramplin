@@ -10,6 +10,19 @@ export async function logoutCurrentSessionRequest(refreshToken: string) {
   return response.data;
 }
 
+export function clearClientSession(options?: {
+  redirectTo?: string;
+  beforeRedirect?: () => void;
+}) {
+  useAuthStore.getState().clearSession();
+  clearPersistedAuthSession();
+  options?.beforeRedirect?.();
+
+  if (typeof window !== "undefined" && window.location.pathname !== (options?.redirectTo ?? "/")) {
+    window.location.replace(options?.redirectTo ?? "/");
+  }
+}
+
 export async function performLogout(options?: {
   redirectTo?: string;
   beforeRedirect?: () => void;
@@ -24,8 +37,5 @@ export async function performLogout(options?: {
     }
   }
 
-  useAuthStore.getState().clearSession();
-  clearPersistedAuthSession();
-  options?.beforeRedirect?.();
-  window.location.replace(options?.redirectTo ?? "/");
+  clearClientSession(options);
 }

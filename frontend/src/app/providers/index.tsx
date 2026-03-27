@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useEffect, useMemo } from "react";
 import { BrowserRouter } from "react-router-dom";
 
-import { isAccessTokenExpired, restoreAuthSession, useAuthStore } from "../../features/auth";
+import { clearClientSession, listActiveSessionsRequest, isAccessTokenExpired, restoreAuthSession, useAuthStore } from "../../features/auth";
 
 type AppProvidersProps = {
   children: ReactNode;
@@ -17,6 +17,7 @@ const SESSION_ACTIVITY_EVENTS: Array<keyof WindowEventMap> = [
 ];
 const SESSION_ACTIVE_WINDOW_MS = 15 * 60 * 1000;
 const SESSION_REFRESH_BUFFER_MS = 60 * 1000;
+const SESSION_VALIDATION_INTERVAL_MS = 15 * 1000;
 
 function AuthSessionBootstrap() {
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -100,6 +101,46 @@ function AuthSessionBootstrap() {
       window.clearTimeout(timeoutId);
     };
   }, [accessToken, accessTokenExpiresAt, isHydrated, lastActivityAt, refreshToken]);
+
+  useEffect(() => {
+    if (!isHydrated || !refreshToken) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const validateCurrentSession = async () => {
+      try {
+        const response = await listActiveSessionsRequest();
+        const hasCurrentSession = Boolean(response?.data?.items?.some((session) => session.is_current));
+
+        if (!cancelled && !hasCurrentSession) {
+          clearClientSession();
+        }
+      } catch {
+        // Unauthorized responses are handled by the API client interceptor.
+      }
+    };
+
+    void validateCurrentSession();
+    const intervalId = window.setInterval(() => {
+      void validateCurrentSession();
+    }, SESSION_VALIDATION_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void validateCurrentSession();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isHydrated, refreshToken]);
 
   return null;
 }

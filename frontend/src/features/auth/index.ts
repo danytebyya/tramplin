@@ -1,6 +1,6 @@
 import { apiClient } from "../../shared/api/client";
 import { AUTH_STORAGE_KEY, clearPersistedAuthSession, isAccessTokenExpired, restoreAuthSession, useAuthStore } from "./session";
-export { logoutCurrentSessionRequest, performLogout } from "./logout";
+export { clearClientSession, logoutCurrentSessionRequest, performLogout } from "./logout";
 
 export type { AuthRole } from "./session";
 export {
