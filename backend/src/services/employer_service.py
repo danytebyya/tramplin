@@ -47,6 +47,7 @@ from src.realtime.notification_hub import notification_hub
 from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
 from src.utils.errors import AppError
+from src.utils.legal_entity import normalize_legal_entity_name
 
 EMPLOYER_STAFF_PERMISSION_LABELS = {
     "view_responses": "Просмотр откликов",
@@ -77,6 +78,7 @@ class EmployerService:
             )
 
         self.ensure_inn_available(current_user=current_user, inn=payload.inn)
+        normalized_company_name = normalize_legal_entity_name(payload.company_name)
 
         employer_profile = current_user.employer_profile
 
@@ -84,7 +86,7 @@ class EmployerService:
             employer_profile = EmployerProfile(
                 user_id=current_user.id,
                 employer_type=payload.employer_type,
-                company_name=payload.company_name,
+                company_name=normalized_company_name,
                 inn=payload.inn,
                 corporate_email=payload.corporate_email,
                 website=payload.website,
@@ -93,7 +95,7 @@ class EmployerService:
             self.db.add(employer_profile)
         else:
             employer_profile.employer_type = payload.employer_type
-            employer_profile.company_name = payload.company_name
+            employer_profile.company_name = normalized_company_name
             employer_profile.inn = payload.inn
             employer_profile.corporate_email = payload.corporate_email
             employer_profile.website = payload.website

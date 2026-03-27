@@ -154,7 +154,7 @@ def test_upload_employer_verification_documents_persists_records(client, db_sess
         headers={"Authorization": f"Bearer {access_token}"},
         json={
             "employer_type": "company",
-            "company_name": "Acme Corp",
+            "company_name": "ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ Acme Corp",
             "inn": "7707083893",
             "corporate_email": "hr@acme.example",
             "website": "https://acme.example",
@@ -197,7 +197,8 @@ def test_upload_employer_verification_documents_persists_records(client, db_sess
     )
     media_files = db_session.query(MediaFile).all()
 
-    assert employer.legal_name == "Acme Corp"
+    assert employer_profile.company_name == "ООО Acme Corp"
+    assert employer.legal_name == "ООО Acme Corp"
     assert membership.is_primary is True
     assert employer_profile.verification_status.value == "pending_review"
     assert verification_request.inn == "7707083893"
