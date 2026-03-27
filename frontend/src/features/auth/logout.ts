@@ -1,3 +1,4 @@
+import { clearAuthenticatedQueryState } from "../../app/query-client";
 import { apiClient } from "../../shared/api/client";
 import { clearPersistedAuthSession, useAuthStore } from "./session";
 
@@ -14,6 +15,7 @@ export function clearClientSession(options?: {
   redirectTo?: string;
   beforeRedirect?: () => void;
 }) {
+  clearAuthenticatedQueryState();
   useAuthStore.getState().clearSession();
   clearPersistedAuthSession();
   options?.beforeRedirect?.();

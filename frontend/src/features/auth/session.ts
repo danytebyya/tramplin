@@ -2,6 +2,7 @@ import axios from "axios";
 import { create } from "zustand";
 import { createJSONStorage, persist, StateStorage } from "zustand/middleware";
 
+import { clearAuthenticatedQueryState } from "../../app/query-client";
 import { env } from "../../shared/config/env";
 
 export type AuthRole = "guest" | "applicant" | "employer" | "junior" | "curator" | "admin";
@@ -174,6 +175,7 @@ export async function restoreAuthSession() {
   const state = useAuthStore.getState();
 
   if (!state.refreshToken) {
+    clearAuthenticatedQueryState();
     state.clearSession();
     clearPersistedAuthSession();
     return null;
@@ -210,6 +212,7 @@ export async function restoreAuthSession() {
       useAuthStore.getState().setSession(accessToken, refreshToken, role, expiresIn);
       return accessToken;
     } catch {
+      clearAuthenticatedQueryState();
       useAuthStore.getState().clearSession();
       clearPersistedAuthSession();
       return null;

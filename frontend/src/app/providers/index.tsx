@@ -1,7 +1,8 @@
-import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ReactNode, useEffect, useMemo } from "react";
 import { BrowserRouter, useNavigate } from "react-router-dom";
 
+import { appQueryClient } from "../query-client";
 import {
   clearClientSession,
   isAccessTokenExpired,
@@ -229,18 +230,7 @@ function AuthSessionBootstrap() {
 }
 
 export function AppProviders({ children }: AppProvidersProps) {
-  const queryClient = useMemo(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            refetchOnWindowFocus: false,
-            retry: 1,
-          },
-        },
-      }),
-    [],
-  );
+  const queryClient = useMemo(() => appQueryClient, []);
 
   return (
     <QueryClientProvider client={queryClient}>
