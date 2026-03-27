@@ -389,6 +389,26 @@ function isFutureDate(value: string) {
   return new Date(value).getTime() > Date.now();
 }
 
+function resolveAccountContextSubtitle(role: string | undefined) {
+  if (role === "employer") {
+    return "профиль работодателя";
+  }
+
+  if (role === "applicant") {
+    return "профиль соискателя";
+  }
+
+  if (role === "curator" || role === "junior") {
+    return "профиль куратора";
+  }
+
+  if (role === "admin") {
+    return "профиль администратора";
+  }
+
+  return "профиль пользователя";
+}
+
 function readAccessTokenPayload(token: string | null) {
   if (!token || typeof window === "undefined") {
     return null;
@@ -575,6 +595,12 @@ export function SettingsPage() {
     staleTime: 5 * 60 * 1000,
     enabled: isAuthenticated,
   });
+  const accountContextsQuery = useQuery({
+    queryKey: ["auth", "contexts"],
+    queryFn: listAccountContextsRequest,
+    staleTime: 30 * 1000,
+    enabled: isAuthenticated,
+  });
 
   const moderationSettingsQuery = useQuery({
     queryKey: ["moderation", "settings"],
@@ -697,6 +723,36 @@ export function SettingsPage() {
     mutationFn: updateModerationSettingsRequest,
     onSuccess: (response) => {
       queryClient.setQueryData(["moderation", "settings"], response);
+    },
+  });
+  const switchAccountContextMutation = useMutation({
+    mutationFn: switchAccountContextRequest,
+    onSuccess: async (response) => {
+      const nextAccessToken = response?.data?.access_token;
+      const nextExpiresIn = response?.data?.expires_in;
+      const currentRefreshToken = useAuthStore.getState().refreshToken;
+      const nextRole = (response?.data?.active_context?.role ?? response?.data?.user?.role ?? "applicant") as
+        | "applicant"
+        | "employer"
+        | "junior"
+        | "curator"
+        | "admin";
+
+      if (nextAccessToken && nextExpiresIn && currentRefreshToken) {
+        useAuthStore.getState().setSession(nextAccessToken, currentRefreshToken, nextRole, nextExpiresIn);
+      }
+
+      setIsProfileMenuPinned(false);
+      setIsProfileMenuOpen(false);
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
+        queryClient.invalidateQueries({ queryKey: ["users", "me", "notification-preferences"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies", "staff"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] }),
+      ]);
     },
   });
   const createEmployerStaffInvitationMutation = useMutation({
@@ -1185,6 +1241,22 @@ export function SettingsPage() {
           { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
           { label: "Выход", isDanger: true, onClick: handleLogout },
         ];
+  const accountContextItems = useMemo(() => {
+    const items = accountContextsQuery.data?.data?.items ?? [];
+
+    return [...items].sort((left, right) => {
+      if ((left.is_active ?? false) !== (right.is_active ?? false)) {
+        return left.is_active ? -1 : 1;
+      }
+
+      if ((left.is_default ?? false) !== (right.is_default ?? false)) {
+        return left.is_default ? -1 : 1;
+      }
+
+      return (left.label ?? "").localeCompare(right.label ?? "", "ru");
+    });
+  }, [accountContextsQuery.data?.data?.items]);
+  const hasMultipleAccountContexts = accountContextItems.length > 1;
 
   const handleCityChange = (city: string | CitySelection) => {
     const nextCity = typeof city === "string" ? city : city.name;
@@ -2419,12 +2491,63 @@ export function SettingsPage() {
                       <div
                         className={
                           isProfileMenuOpen
-                            ? "header__profile-dropdown"
-                            : "header__profile-dropdown header__profile-dropdown--hidden"
+                            ? hasMultipleAccountContexts
+                              ? "header__profile-dropdown header__profile-dropdown--with-contexts"
+                              : "header__profile-dropdown"
+                            : hasMultipleAccountContexts
+                              ? "header__profile-dropdown header__profile-dropdown--with-contexts header__profile-dropdown--hidden"
+                              : "header__profile-dropdown header__profile-dropdown--hidden"
                         }
                         role="menu"
                         aria-hidden={!isProfileMenuOpen}
                       >
+                        {hasMultipleAccountContexts ? (
+                          <div className="header__profile-contexts">
+                            <p className="header__profile-contexts-title">Выбор аккаунта</p>
+                            <div className="header__profile-contexts-list">
+                              {accountContextItems.map((item) => {
+                                const isActive = Boolean(item.is_active);
+
+                                return (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    className={
+                                      isActive
+                                        ? "header__profile-context-card header__profile-context-card--active"
+                                        : "header__profile-context-card"
+                                    }
+                                    disabled={isActive || switchAccountContextMutation.isPending}
+                                    onClick={() => {
+                                      if (isActive) {
+                                        return;
+                                      }
+
+                                      switchAccountContextMutation.mutate(item.id);
+                                    }}
+                                  >
+                                    <span className="header__profile-context-avatar">
+                                      <img
+                                        src={profileIcon}
+                                        alt=""
+                                        aria-hidden="true"
+                                        className="header__profile-context-avatar-image"
+                                      />
+                                    </span>
+                                    <span className="header__profile-context-copy">
+                                      <span className="header__profile-context-name">
+                                        {user?.display_name ?? item.label ?? "Профиль"}
+                                      </span>
+                                      <span className="header__profile-context-role">
+                                        {resolveAccountContextSubtitle(item.role)}
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                         {profileMenuItems.map((item) => (
                           <button
                             key={item.label}
