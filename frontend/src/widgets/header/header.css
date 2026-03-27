@@ -435,7 +435,7 @@
 }
 
 .header__location:hover {
-  color: var(--home-accent);
+  color: var(--color-text-primary);
 }
 
 .header__location:active {
@@ -463,7 +463,7 @@
 }
 
 .header__location:hover .header__location-icon {
-  background-color: var(--home-accent);
+  background-color: var(--color-text-primary);
 }
 
 .header__location:active .header__location-icon {
