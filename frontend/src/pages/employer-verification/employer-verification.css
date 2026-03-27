@@ -887,8 +887,8 @@
   border: none;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: var(--type-body-large-size);
-  line-height: var(--type-body-large-line);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
   cursor: pointer;
   transition: color 0.2s ease, opacity 0.2s ease;
 }
@@ -905,7 +905,7 @@
 }
 
 .employer-verification-page__pagination-page--active {
-  color: var(--color-text-primary);
+  color: var(--color-accent);
 }
 
 .employer-verification-page__pagination-arrow:disabled {
