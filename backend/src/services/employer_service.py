@@ -23,6 +23,7 @@ from src.enums import (
     VerificationDocumentType,
 )
 from src.models import (
+    ApplicantProfile,
     Employer,
     EmployerMembership,
     EmployerProfile,
@@ -45,6 +46,14 @@ from src.realtime.notification_hub import notification_hub
 from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
 from src.utils.errors import AppError
+
+EMPLOYER_STAFF_PERMISSION_LABELS = {
+    "view_responses": "Просмотр откликов",
+    "manage_opportunities": "Создание и редактирование возможностей",
+    "manage_company_profile": "Управление профилем компании",
+    "manage_staff": "Управление сотрудниками",
+    "access_chat": "Общение в чате",
+}
 
 
 class EmployerService:
@@ -116,7 +125,9 @@ class EmployerService:
                         user_id=str(current_user.id),
                         email=current_user.email,
                         role=MembershipRole.OWNER,
-                        permissions=self._resolve_membership_permissions(MembershipRole.OWNER),
+                        permissions=self._resolve_membership_permission_labels(
+                            self._resolve_membership_permission_keys(MembershipRole.OWNER),
+                        ),
                         invited_at=employer_profile.created_at.date().isoformat(),
                         is_current_user=True,
                         is_primary=True,
@@ -145,7 +156,10 @@ class EmployerService:
                     user_id=str(user.id),
                     email=user.email,
                     role=membership.membership_role,
-                    permissions=self._resolve_membership_permissions(membership.membership_role),
+                    permissions=self._resolve_membership_permission_labels(
+                        membership.permissions
+                        or self._resolve_membership_permission_keys(membership.membership_role),
+                    ),
                     invited_at=membership.created_at.date().isoformat(),
                     is_current_user=user.id == current_user.id,
                     is_primary=membership.is_primary,
@@ -179,6 +193,7 @@ class EmployerService:
                     id=str(item.id),
                     email=item.invited_email,
                     role=item.membership_role,
+                    permissions=item.permissions or self._resolve_membership_permission_keys(item.membership_role),
                     status="pending" if item.expires_at > datetime.now(UTC) else "expired",
                     invited_at=item.created_at.date().isoformat(),
                     expires_at=item.expires_at.date().isoformat(),
@@ -196,6 +211,8 @@ class EmployerService:
     ) -> EmployerStaffInvitationRead:
         employer, membership = self._resolve_staff_access(current_user=current_user, access_payload=access_payload)
         self._ensure_staff_management_allowed(membership)
+        permissions = self._normalize_membership_permission_keys(payload.permissions, fallback_role=payload.role)
+        membership_role = self._derive_membership_role_from_permissions(permissions)
 
         existing_user = (
             self.db.query(User).filter(User.email == payload.email).one_or_none()
@@ -222,7 +239,8 @@ class EmployerService:
         invitation = EmployerStaffInvitation(
             employer_id=employer.id,
             invited_email=payload.email,
-            membership_role=payload.role,
+            membership_role=membership_role,
+            permissions=permissions,
             token_hash=hash_token(token),
             invited_by_user_id=current_user.id,
             expires_at=datetime.now(UTC) + timedelta(days=7),
@@ -265,6 +283,7 @@ class EmployerService:
             id=str(invitation.id),
             email=invitation.invited_email,
             role=invitation.membership_role,
+            permissions=invitation.permissions or permissions,
             status="pending",
             invited_at=invitation.created_at.date().isoformat(),
             expires_at=invitation.expires_at.date().isoformat(),
@@ -320,6 +339,7 @@ class EmployerService:
                 employer_id=invitation.employer_id,
                 user_id=current_user.id,
                 membership_role=invitation.membership_role,
+                permissions=invitation.permissions,
                 is_primary=False,
             )
             self.db.add(membership)
@@ -335,7 +355,10 @@ class EmployerService:
             user_id=str(current_user.id),
             email=current_user.email,
             role=membership.membership_role,
-            permissions=self._resolve_membership_permissions(membership.membership_role),
+            permissions=self._resolve_membership_permission_labels(
+                membership.permissions
+                or self._resolve_membership_permission_keys(membership.membership_role),
+            ),
             invited_at=membership.created_at.date().isoformat(),
             is_current_user=True,
             is_primary=membership.is_primary,
@@ -346,13 +369,11 @@ class EmployerService:
         current_user: User,
         *,
         membership_id: str,
+        access_payload: dict | None = None,
     ) -> None:
         membership = (
             self.db.query(EmployerMembership)
-            .filter(
-                EmployerMembership.id == UUID(str(membership_id)),
-                EmployerMembership.user_id == current_user.id,
-            )
+            .filter(EmployerMembership.id == UUID(str(membership_id)))
             .one_or_none()
         )
         if membership is None:
@@ -361,13 +382,42 @@ class EmployerService:
                 message="Привязка к компании не найдена",
                 status_code=404,
             )
+        is_self_leave = membership.user_id == current_user.id
+        if not is_self_leave:
+            employer, acting_membership = self._resolve_staff_access(current_user=current_user, access_payload=access_payload)
+            self._ensure_staff_management_allowed(acting_membership)
+            if employer is None or membership.employer_id != employer.id:
+                raise AppError(
+                    code="EMPLOYER_MEMBERSHIP_NOT_FOUND",
+                    message="Привязка к компании не найдена",
+                    status_code=404,
+                )
         if membership.is_primary:
             raise AppError(
                 code="EMPLOYER_MEMBERSHIP_PRIMARY_FORBIDDEN",
                 message="Основной профиль компании нельзя отвязать через приглашение",
                 status_code=409,
             )
+        removed_user = self.db.query(User).filter(User.id == membership.user_id).one()
+        employer = self.db.query(Employer).filter(Employer.id == membership.employer_id).one()
         self.db.delete(membership)
+        self._ensure_applicant_profile_for_company_staff(removed_user)
+        if is_self_leave:
+            self._notify_company_owners_about_staff_leave(
+                employer=employer,
+                actor=current_user,
+            )
+        else:
+            NotificationService(self.db).create_notification(
+                user_id=removed_user.id,
+                kind=NotificationKind.SYSTEM,
+                severity=NotificationSeverity.WARNING,
+                title="Доступ к компании отозван",
+                message=f"Ваш рабочий профиль был отвязан от компании {employer.display_name}.",
+                action_label="Открыть настройки",
+                action_url="/settings",
+                payload={"company_id": str(employer.id), "event": "company_membership_removed"},
+            )
         self.db.commit()
 
     def ensure_inn_available(self, current_user: User, inn: str) -> None:
@@ -411,33 +461,75 @@ class EmployerService:
             )
 
     @staticmethod
-    def _resolve_membership_permissions(role: MembershipRole) -> list[str]:
+    def _resolve_membership_permission_keys(role: MembershipRole) -> list[str]:
         if role == MembershipRole.OWNER:
             return [
-                "Просмотр откликов",
-                "Создание и редактирование возможностей",
-                "Управление профилем компании",
-                "Управление сотрудниками",
-                "Общение в чате",
+                "view_responses",
+                "manage_opportunities",
+                "manage_company_profile",
+                "manage_staff",
+                "access_chat",
             ]
 
         if role == MembershipRole.RECRUITER:
             return [
-                "Просмотр откликов",
-                "Создание и редактирование возможностей",
-                "Общение в чате",
+                "view_responses",
+                "manage_opportunities",
+                "access_chat",
             ]
 
         if role == MembershipRole.MANAGER:
             return [
-                "Просмотр откликов",
-                "Управление профилем компании",
-                "Общение в чате",
+                "view_responses",
+                "manage_company_profile",
+                "access_chat",
             ]
 
         return [
-            "Просмотр откликов",
+            "view_responses",
         ]
+
+    @staticmethod
+    def _resolve_membership_permission_labels(permission_keys: list[str]) -> list[str]:
+        return [
+            EMPLOYER_STAFF_PERMISSION_LABELS[item]
+            for item in permission_keys
+            if item in EMPLOYER_STAFF_PERMISSION_LABELS
+        ]
+
+    def _normalize_membership_permission_keys(
+        self,
+        permission_keys: list[str] | None,
+        *,
+        fallback_role: MembershipRole | None,
+    ) -> list[str]:
+        if permission_keys:
+            normalized: list[str] = []
+            for item in permission_keys:
+                if item in EMPLOYER_STAFF_PERMISSION_LABELS and item not in normalized:
+                    normalized.append(item)
+            if normalized:
+                return normalized
+
+        if fallback_role is not None:
+            return self._resolve_membership_permission_keys(fallback_role)
+
+        raise AppError(
+            code="EMPLOYER_STAFF_PERMISSIONS_REQUIRED",
+            message="Нужно выбрать хотя бы один доступ сотрудника",
+            status_code=422,
+        )
+
+    @staticmethod
+    def _derive_membership_role_from_permissions(permission_keys: list[str]) -> MembershipRole:
+        permission_set = set(permission_keys)
+        if "manage_staff" in permission_set:
+            return MembershipRole.OWNER
+        if "manage_company_profile" in permission_set:
+            return MembershipRole.MANAGER
+        if "manage_opportunities" in permission_set:
+            return MembershipRole.RECRUITER
+        return MembershipRole.VIEWER
 
     def _resolve_staff_access(
         self,
@@ -498,11 +590,49 @@ class EmployerService:
 
     @staticmethod
     def _ensure_staff_management_allowed(membership: EmployerMembership | None) -> None:
-        if membership is None or membership.membership_role != MembershipRole.OWNER:
+        if membership is None:
             raise AppError(
                 code="EMPLOYER_STAFF_MANAGEMENT_FORBIDDEN",
                 message="Управление сотрудниками доступно только владельцу компании",
                 status_code=403,
+            )
+        permission_keys = membership.permissions or EmployerService._resolve_membership_permission_keys(
+            membership.membership_role,
+        )
+        if "manage_staff" not in permission_keys:
+            raise AppError(
+                code="EMPLOYER_STAFF_MANAGEMENT_FORBIDDEN",
+                message="Управление сотрудниками доступно только владельцу компании",
+                status_code=403,
+            )
+
+    def _ensure_applicant_profile_for_company_staff(self, user: User) -> None:
+        if user.role != UserRole.APPLICANT or user.applicant_profile is not None:
+            return
+
+        user.applicant_profile = ApplicantProfile(full_name=user.display_name)
+        self.db.add(user)
+
+    def _notify_company_owners_about_staff_leave(self, *, employer: Employer, actor: User) -> None:
+        owner_memberships = (
+            self.db.query(EmployerMembership)
+            .filter(EmployerMembership.employer_id == employer.id)
+            .all()
+        )
+        for membership in owner_memberships:
+            permission_keys = membership.permissions or self._resolve_membership_permission_keys(membership.membership_role)
+            if "manage_staff" not in permission_keys or membership.user_id == actor.id:
+                continue
+
+            NotificationService(self.db).create_notification(
+                user_id=membership.user_id,
+                kind=NotificationKind.SYSTEM,
+                severity=NotificationSeverity.INFO,
+                title="Сотрудник покинул компанию",
+                message=f"{actor.display_name} больше не привязан к компании {employer.display_name}.",
+                action_label="Открыть настройки",
+                action_url="/settings",
+                payload={"company_id": str(employer.id), "event": "company_membership_left"},
             )
 
     def get_verification_document_or_raise(

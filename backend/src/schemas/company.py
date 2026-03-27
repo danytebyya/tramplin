@@ -2,6 +2,14 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, model_validato
 
 from src.enums import EmployerType, MembershipRole
 
+EMPLOYER_STAFF_PERMISSION_KEYS = {
+    "view_responses",
+    "manage_opportunities",
+    "manage_company_profile",
+    "manage_staff",
+    "access_chat",
+}
+
 
 class EmployerOnboardingRequest(BaseModel):
     employer_type: EmployerType
@@ -123,7 +131,8 @@ class EmployerStaffListRead(BaseModel):
 
 class EmployerStaffInviteRequest(BaseModel):
     email: EmailStr | None = None
-    role: MembershipRole
+    role: MembershipRole | None = None
+    permissions: list[str] | None = None
 
     @field_validator("email")
     @classmethod
@@ -132,11 +141,36 @@ class EmployerStaffInviteRequest(BaseModel):
             return None
         return value.lower().strip()
 
+    @field_validator("permissions")
+    @classmethod
+    def validate_permissions(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+
+        normalized_permissions: list[str] = []
+        for item in value:
+            normalized_item = item.strip()
+            if normalized_item not in EMPLOYER_STAFF_PERMISSION_KEYS:
+                raise ValueError("Указан неизвестный доступ сотрудника")
+            if normalized_item not in normalized_permissions:
+                normalized_permissions.append(normalized_item)
+
+        if not normalized_permissions:
+            raise ValueError("Нужно выбрать хотя бы один доступ сотрудника")
+        return normalized_permissions
+
+    @model_validator(mode="after")
+    def validate_role_or_permissions(self) -> "EmployerStaffInviteRequest":
+        if self.role is None and self.permissions is None:
+            raise ValueError("Нужно указать роль или набор доступов сотрудника")
+        return self
+
 
 class EmployerStaffInvitationRead(BaseModel):
     id: str
     email: str | None = None
     role: MembershipRole
+    permissions: list[str] = Field(default_factory=list)
     status: str
     invited_at: str
     expires_at: str

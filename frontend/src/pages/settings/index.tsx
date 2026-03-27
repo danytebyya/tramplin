@@ -42,6 +42,7 @@ import {
 import {
   acceptEmployerStaffInvitation,
   createEmployerStaffInvitation,
+  deleteEmployerStaffMembership,
   listEmployerStaff,
   listEmployerStaffInvitations,
 } from "../../features/company-verification";
@@ -285,28 +286,38 @@ type EmployerStaffPermissionState = {
   canReviewResponses: boolean;
   canManageOpportunities: boolean;
   canManageCompanyProfile: boolean;
+  canManageStaff: boolean;
+  canAccessChat: boolean;
 };
 
 const defaultEmployerStaffPermissions: EmployerStaffPermissionState = {
   canReviewResponses: true,
   canManageOpportunities: false,
   canManageCompanyProfile: false,
+  canManageStaff: false,
+  canAccessChat: false,
 };
 
-function resolveEmployerStaffInvitationRole(permissions: EmployerStaffPermissionState) {
-  if (permissions.canManageOpportunities && permissions.canManageCompanyProfile) {
-    return null;
-  }
+function mapEmployerStaffPermissionsToKeys(permissions: EmployerStaffPermissionState) {
+  const items: string[] = [];
 
-  if (permissions.canManageCompanyProfile) {
-    return "manager" as const;
+  if (permissions.canReviewResponses) {
+    items.push("view_responses");
   }
-
   if (permissions.canManageOpportunities) {
-    return "recruiter" as const;
+    items.push("manage_opportunities");
+  }
+  if (permissions.canManageCompanyProfile) {
+    items.push("manage_company_profile");
+  }
+  if (permissions.canManageStaff) {
+    items.push("manage_staff");
+  }
+  if (permissions.canAccessChat) {
+    items.push("access_chat");
   }
 
-  return "viewer" as const;
+  return items;
 }
 
 function formatDateWithTime(value: string) {
@@ -594,6 +605,46 @@ export function SettingsPage() {
       );
     },
   });
+  const deleteEmployerStaffMembershipMutation = useMutation({
+    mutationFn: async ({
+      membershipId,
+      isCurrentUser,
+    }: {
+      membershipId: string;
+      isCurrentUser: boolean;
+    }) => {
+      await deleteEmployerStaffMembership(membershipId);
+      return { isCurrentUser };
+    },
+    onSuccess: async ({ isCurrentUser }) => {
+      if (isCurrentUser) {
+        const contextsResponse = await listAccountContextsRequest();
+        const baseContext = contextsResponse?.data?.items?.find((item) => item.is_default);
+        if (baseContext?.id) {
+          const switchResponse = await switchAccountContextRequest(baseContext.id);
+          const nextAccessToken = switchResponse?.data?.access_token;
+          const nextExpiresIn = switchResponse?.data?.expires_in;
+          const currentRefreshToken = useAuthStore.getState().refreshToken;
+          const nextRole = (switchResponse?.data?.active_context?.role ?? switchResponse?.data?.user?.role ?? "applicant") as
+            | "applicant"
+            | "employer"
+            | "junior"
+            | "curator"
+            | "admin";
+
+          if (nextAccessToken && nextExpiresIn && currentRefreshToken) {
+            useAuthStore.getState().setSession(nextAccessToken, currentRefreshToken, nextRole, nextExpiresIn);
+          }
+        }
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["companies", "staff"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
+      ]);
+    },
+  });
   const acceptEmployerStaffInvitationMutation = useMutation({
     mutationFn: acceptEmployerStaffInvitation,
     onMutate: () => {
@@ -860,8 +911,8 @@ export function SettingsPage() {
       invitedAtLabel: formatDate(item.invited_at),
     }));
   }, [employerStaffInvitationsQuery.data]);
-  const resolvedInviteRole = useMemo(
-    () => resolveEmployerStaffInvitationRole(invitePermissions),
+  const invitePermissionKeys = useMemo(
+    () => mapEmployerStaffPermissionsToKeys(invitePermissions),
     [invitePermissions],
   );
 
@@ -1245,7 +1296,18 @@ export function SettingsPage() {
                                 <button type="button" className="settings-page__icon-button" aria-label={`Редактировать ${member.email}`} disabled>
                                   <img src={editIcon} alt="" aria-hidden="true" className="settings-page__icon" />
                                 </button>
-                                <button type="button" className="settings-page__icon-button" aria-label={`Удалить ${member.email}`} disabled>
+                                <button
+                                  type="button"
+                                  className="settings-page__icon-button"
+                                  aria-label={member.is_current_user ? `Покинуть компанию ${member.email}` : `Удалить ${member.email}`}
+                                  disabled={member.is_primary || deleteEmployerStaffMembershipMutation.isPending}
+                                  onClick={() => {
+                                    deleteEmployerStaffMembershipMutation.mutate({
+                                      membershipId: member.id,
+                                      isCurrentUser: member.is_current_user,
+                                    });
+                                  }}
+                                >
                                   <img src={deleteIcon} alt="" aria-hidden="true" className="settings-page__icon" />
                                 </button>
                               </div>
@@ -1305,7 +1367,16 @@ export function SettingsPage() {
                 <div className="settings-page__staff-permissions">
                   <p className="settings-page__staff-subtitle">Доступы сотрудника</p>
                   <label className="settings-page__checkbox-row">
-                    <Checkbox checked variant={checkboxVariant} disabled />
+                    <Checkbox
+                      checked={invitePermissions.canReviewResponses}
+                      variant={checkboxVariant}
+                      onChange={(event) =>
+                        setInvitePermissions((current) => ({
+                          ...current,
+                          canReviewResponses: event.target.checked,
+                        }))
+                      }
+                    />
                     <span className="settings-page__checkbox-label">Просмотр откликов</span>
                   </label>
                   <label className="settings-page__checkbox-row">
@@ -1334,15 +1405,36 @@ export function SettingsPage() {
                     />
                     <span className="settings-page__checkbox-label">Управление профилем компании</span>
                   </label>
+                  <label className="settings-page__checkbox-row">
+                    <Checkbox
+                      checked={invitePermissions.canManageStaff}
+                      variant={checkboxVariant}
+                      onChange={(event) =>
+                        setInvitePermissions((current) => ({
+                          ...current,
+                          canManageStaff: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="settings-page__checkbox-label">Управление сотрудниками</span>
+                  </label>
+                  <label className="settings-page__checkbox-row">
+                    <Checkbox
+                      checked={invitePermissions.canAccessChat}
+                      variant={checkboxVariant}
+                      onChange={(event) =>
+                        setInvitePermissions((current) => ({
+                          ...current,
+                          canAccessChat: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="settings-page__checkbox-label">Общение в чате</span>
+                  </label>
                   <p className="settings-page__staff-permissions-hint">
-                    Доступ к чату будет выдан автоматически для расширенных доступов.
+                    Можно выдать любой набор доступов. Пустое приглашение создать нельзя.
                   </p>
                 </div>
-                {resolvedInviteRole === null ? (
-                  <p className="settings-page__form-message settings-page__form-message--error">
-                    Сейчас можно выдать либо доступ к возможностям, либо доступ к профилю компании.
-                  </p>
-                ) : null}
                 {inviteError ? (
                   <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p>
                 ) : null}
@@ -1376,15 +1468,15 @@ export function SettingsPage() {
                     variant={actionVariant}
                     size="md"
                     loading={createEmployerStaffInvitationMutation.isPending}
-                    disabled={resolvedInviteRole === null}
+                    disabled={invitePermissionKeys.length === 0}
                     onClick={() => {
-                      if (!resolvedInviteRole) {
+                      if (invitePermissionKeys.length === 0) {
                         return;
                       }
 
                       createEmployerStaffInvitationMutation.mutate({
                         email: inviteEmail.trim() || undefined,
-                        role: resolvedInviteRole,
+                        permissions: invitePermissionKeys,
                       });
                     }}
                   >

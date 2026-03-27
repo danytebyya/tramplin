@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, String, Text, Uuid, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, JSON, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -59,6 +59,7 @@ class EmployerMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(MembershipRole, name="membership_role", values_callable=enum_values),
         nullable=False,
     )
+    permissions: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
@@ -71,6 +72,7 @@ class EmployerStaffInvitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(MembershipRole, name="membership_role", values_callable=enum_values),
         nullable=False,
     )
+    permissions: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
     invited_by_user_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

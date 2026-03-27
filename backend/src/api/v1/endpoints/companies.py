@@ -112,10 +112,11 @@ def accept_employer_staff_invitation(
 @router.delete("/staff/memberships/{membership_id}", status_code=status.HTTP_200_OK)
 def leave_employer_company(
     membership_id: str,
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    EmployerService(db).leave_company(current_user, membership_id=membership_id)
+    EmployerService(db).leave_company(current_user, membership_id=membership_id, access_payload=access_payload)
     return success_response({"deleted": True})
 
 

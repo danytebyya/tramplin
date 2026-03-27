@@ -60,6 +60,7 @@ export type EmployerStaffMember = {
   user_id: string;
   email: string;
   role: "owner" | "recruiter" | "manager" | "viewer";
+  permission_keys?: string[];
   permissions: string[];
   invited_at: string;
   is_current_user: boolean;
@@ -76,6 +77,7 @@ export type EmployerStaffInvitation = {
   id: string;
   email?: string | null;
   role: "owner" | "recruiter" | "manager" | "viewer";
+  permissions?: string[];
   status: string;
   invited_at: string;
   expires_at: string;
@@ -212,7 +214,8 @@ export async function listEmployerStaffInvitations() {
 
 export async function createEmployerStaffInvitation(payload: {
   email?: string;
-  role: "owner" | "recruiter" | "manager" | "viewer";
+  role?: "owner" | "recruiter" | "manager" | "viewer";
+  permissions?: string[];
 }) {
   const response = await apiClient.post<{ data?: EmployerStaffInvitation }>(
     "/companies/staff/invitations",
@@ -232,5 +235,12 @@ export async function acceptEmployerStaffInvitation(token: string) {
       headers: getAuthorizedHeaders(),
     },
   );
+  return response.data;
+}
+
+export async function deleteEmployerStaffMembership(membershipId: string) {
+  const response = await apiClient.delete(`/companies/staff/memberships/${membershipId}`, {
+    headers: getAuthorizedHeaders(),
+  });
   return response.data;
 }

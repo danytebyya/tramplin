@@ -3,7 +3,7 @@ from urllib.parse import parse_qs, urlparse
 from sqlalchemy import select
 
 from src.enums import EmployerType, MembershipRole, UserRole
-from src.models import Employer, EmployerMembership, EmployerProfile, User
+from src.models import Employer, EmployerMembership, EmployerProfile, Notification, User
 from src.tests.test_auth import _request_code
 
 
@@ -290,3 +290,104 @@ def test_invited_user_can_register_without_applicant_profile(client, db_session,
     assert register_response.status_code == 201
     assert register_response.json()["data"]["user"]["role"] == "applicant"
     assert register_response.json()["data"]["user"]["applicant_profile"] is None
+
+
+def test_owner_can_invite_staff_with_explicit_permissions(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-permissions@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-permissions@example.com",
+        company_name="Permissions Corp",
+        inn="7707083816",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "email": "permissions-staff@example.com",
+            "permissions": [
+                "view_responses",
+                "manage_opportunities",
+                "access_chat",
+            ],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["role"] == "recruiter"
+    assert response.json()["data"]["permissions"] == [
+        "view_responses",
+        "manage_opportunities",
+        "access_chat",
+    ]
+
+
+def test_leave_company_creates_applicant_profile_and_notifies_owner(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-notify@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-notify@example.com",
+        company_name="Notify Corp",
+        inn="7707083817",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "email": "leave-notify@example.com",
+            "permissions": ["view_responses"],
+        },
+    )
+    invite_token = parse_qs(urlparse(invite_response.json()["data"]["invitation_url"]).query)["invite_token"][0]
+
+    code = _request_code(client, db_session, "leave-notify@example.com")
+    client.post(
+        "/api/v1/users",
+        json={
+            "email": "leave-notify@example.com",
+            "display_name": "Leave Notify",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "company_invite_token": invite_token,
+        },
+    )
+    staff_token = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "leave-notify@example.com", "password": "StrongPass123"},
+    ).json()["data"]["access_token"]
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {staff_token}"},
+        json={"token": invite_token},
+    )
+
+    membership_id = accept_response.json()["data"]["id"]
+    leave_response = client.delete(
+        f"/api/v1/companies/staff/memberships/{membership_id}",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+
+    assert leave_response.status_code == 200
+    staff_user = db_session.execute(select(User).where(User.email == "leave-notify@example.com")).scalar_one()
+    assert staff_user.applicant_profile is not None
+
+    owner_user = db_session.execute(select(User).where(User.email == "owner-notify@example.com")).scalar_one()
+    notifications = db_session.execute(select(Notification).where(Notification.user_id == owner_user.id)).scalars().all()
+    assert any(item.title == "Сотрудник покинул компанию" for item in notifications)
