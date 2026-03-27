@@ -134,6 +134,7 @@ class EmployerService:
                     )
                 ]
             )
+        self._ensure_staff_management_allowed(membership)
         if membership is None:
             raise AppError(
                 code="EMPLOYER_STAFF_FORBIDDEN",
@@ -248,6 +249,7 @@ class EmployerService:
         self.db.add(invitation)
         self.db.commit()
         self.db.refresh(invitation)
+        self._publish_staff_realtime_update(employer=employer)
 
         invitation_url = (
             f"{settings.frontend_base_url.rstrip('/')}/settings"
@@ -348,8 +350,9 @@ class EmployerService:
         invitation.accepted_at = datetime.now(UTC)
         self.db.add(invitation)
         self.db.commit()
-
         employer = self.db.query(Employer).filter(Employer.id == invitation.employer_id).one()
+        self._publish_staff_realtime_update(employer=employer)
+
         return EmployerStaffMemberRead(
             id=str(membership.id),
             user_id=str(current_user.id),
@@ -400,6 +403,7 @@ class EmployerService:
         invitation.revoked_at = datetime.now(UTC)
         self.db.add(invitation)
         self.db.commit()
+        self._publish_staff_realtime_update(employer=employer)
 
     def leave_company(
         self,
@@ -456,6 +460,7 @@ class EmployerService:
                 payload={"company_id": str(employer.id), "event": "company_membership_removed"},
             )
         self.db.commit()
+        self._publish_staff_realtime_update(employer=employer)
 
     def ensure_inn_available(self, current_user: User, inn: str) -> None:
         normalized_inn = inn.strip()
@@ -671,6 +676,39 @@ class EmployerService:
                 action_url="/settings",
                 payload={"company_id": str(employer.id), "event": "company_membership_left"},
             )
+
+    def _publish_staff_realtime_update(self, *, employer: Employer) -> None:
+        recipient_ids = self._resolve_staff_management_recipient_ids(employer=employer)
+        if not recipient_ids:
+            return
+
+        notification_hub.publish_to_users_sync(
+            recipient_ids,
+            {
+                "type": "company_staff_updated",
+                "company_id": str(employer.id),
+            },
+        )
+
+    def _resolve_staff_management_recipient_ids(self, *, employer: Employer) -> list[str]:
+        memberships = (
+            self.db.query(EmployerMembership)
+            .filter(EmployerMembership.employer_id == employer.id)
+            .all()
+        )
+        recipient_ids: list[str] = []
+
+        for membership in memberships:
+            permission_keys = membership.permissions or self._resolve_membership_permission_keys(
+                membership.membership_role,
+            )
+            if "manage_staff" not in permission_keys:
+                continue
+            user_id = str(membership.user_id)
+            if user_id not in recipient_ids:
+                recipient_ids.append(user_id)
+
+        return recipient_ids
 
     def get_verification_document_or_raise(
         self,

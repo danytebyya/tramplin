@@ -240,6 +240,64 @@ def test_primary_owner_can_revoke_pending_staff_invitation(client, db_session, m
     assert list_response.json()["data"]["items"] == []
 
 
+def test_staff_without_manage_staff_permission_cannot_view_company_staff_settings(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-staff-visibility@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-staff-visibility@example.com",
+        company_name="Visibility Corp",
+        inn="7707083820",
+    )
+    applicant_token = _register_and_login(
+        client,
+        db_session,
+        email="recruiter-staff-visibility@example.com",
+        role="applicant",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "recruiter-staff-visibility@example.com", "permissions": ["view_responses"]},
+    )
+    invite_token = parse_qs(urlparse(invite_response.json()["data"]["invitation_url"]).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"token": invite_token},
+    )
+    assert accept_response.status_code == 200
+
+    contexts_response = client.get(
+        "/api/v1/auth/contexts",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+    )
+    company_context = next(
+        item for item in contexts_response.json()["data"]["items"] if item["role"] == UserRole.EMPLOYER.value
+    )
+    switched_response = client.post(
+        "/api/v1/auth/context",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"context_id": company_context["id"]},
+    )
+    employer_access_token = switched_response.json()["data"]["access_token"]
+
+    list_staff_response = client.get(
+        "/api/v1/companies/staff",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+    )
+    assert list_staff_response.status_code == 403
+    assert list_staff_response.json()["error"]["code"] == "EMPLOYER_STAFF_MANAGEMENT_FORBIDDEN"
+
+
 def test_link_only_invitation_can_be_accepted_by_registered_applicant(client, db_session, monkeypatch):
     owner_token = _register_and_login(client, db_session, email="owner-link-accept@example.com", role="employer")
     _create_company_for_owner(

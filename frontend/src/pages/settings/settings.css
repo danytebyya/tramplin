@@ -334,7 +334,7 @@
 
 .settings-page__invite-link-input.input {
   width: 100%;
-  padding-right: 250px;
+  padding-right: 40px;
   color: var(--color-text-secondary);
 }
 
@@ -375,6 +375,10 @@
   object-fit: contain;
   opacity: 0.72;
   transition: opacity 0.2s ease;
+}
+
+.settings-page__invite-link-icon--copied {
+  opacity: 1;
 }
 
 .settings-page__invite-link-button:hover .settings-page__invite-link-icon,
@@ -433,7 +437,7 @@
 
 .settings-page__staff-card-summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
@@ -441,6 +445,9 @@
 }
 
 .settings-page__staff-card-title-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0;
 }
 
@@ -454,8 +461,7 @@
 }
 
 .settings-page__staff-pending-label {
-  margin: 8px 0 0;
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
 }

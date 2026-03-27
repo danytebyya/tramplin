@@ -7,8 +7,7 @@ import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
 import profileIcon from "../../assets/icons/profile.svg";
 import copyIcon from "../../assets/icons/copy.svg";
-import copiedIcon from "../../assets/icons/check-mark.svg";
-import regenerateIcon from "../../assets/icons/reboot.png";
+import copiedIcon from "../../assets/icons/check-mark-light.png";
 import {
   CitySelector,
   CitySelection,
@@ -328,6 +327,30 @@ function mapEmployerStaffPermissionsToKeys(permissions: EmployerStaffPermissionS
   return items;
 }
 
+function resolveEmployerStaffPermissionLabel(permission: string) {
+  if (permission === "view_responses") {
+    return "Просмотр откликов";
+  }
+
+  if (permission === "manage_opportunities") {
+    return "Создание и редактирование возможностей";
+  }
+
+  if (permission === "manage_company_profile") {
+    return "Управление профилем компании";
+  }
+
+  if (permission === "manage_staff") {
+    return "Управление сотрудниками";
+  }
+
+  if (permission === "access_chat") {
+    return "Общение в чате";
+  }
+
+  return permission;
+}
+
 function formatDateWithTime(value: string) {
   return new Date(value).toLocaleString("ru-RU", {
     day: "2-digit",
@@ -518,12 +541,14 @@ export function SettingsPage() {
     queryFn: listEmployerStaff,
     staleTime: 30 * 1000,
     enabled: isAuthenticated && isEmployer,
+    retry: false,
   });
   const employerStaffInvitationsQuery = useQuery({
     queryKey: ["companies", "staff", "invitations"],
     queryFn: listEmployerStaffInvitations,
     staleTime: 30 * 1000,
     enabled: isAuthenticated && isEmployer,
+    retry: false,
   });
 
   const user = meData?.data?.user;
@@ -534,6 +559,9 @@ export function SettingsPage() {
   const isModerationSettingsLoading = isModerationRole && moderationSettingsQuery.isPending;
   const isEmployerStaffLoading = isEmployer && employerStaffQuery.isPending;
   const isEmployerStaffInvitationsLoading = isEmployer && employerStaffInvitationsQuery.isPending;
+  const isEmployerStaffForbidden =
+    employerStaffQuery.error && (employerStaffQuery.error as any)?.response?.data?.error?.code === "EMPLOYER_STAFF_MANAGEMENT_FORBIDDEN";
+  const canViewEmployerStaffSection = isEmployer && !isEmployerStaffForbidden;
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -953,11 +981,12 @@ export function SettingsPage() {
     return (employerStaffInvitationsQuery.data?.data?.items ?? [])
       .filter((item) => item.status !== "expired" && isFutureDate(item.expires_at))
       .map((item) => ({
-      ...item,
-      roleLabel: resolveEmployerStaffRoleLabel(item.role),
-      invitedAtLabel: formatDate(item.invited_at),
-      expiresAtLabel: formatDate(item.expires_at),
-    }));
+        ...item,
+        roleLabel: resolveEmployerStaffRoleLabel(item.role),
+        permissions: (item.permissions ?? []).map(resolveEmployerStaffPermissionLabel),
+        invitedAtLabel: formatDate(item.invited_at),
+        expiresAtLabel: formatDate(item.expires_at),
+      }));
   }, [employerStaffInvitationsQuery.data]);
   const linkOnlyInvitationItems = useMemo(
     () => employerStaffInvitationItems.filter((item) => !item.email),
@@ -1334,7 +1363,7 @@ export function SettingsPage() {
           </section>
         ) : null}
 
-        {isEmployer ? (
+        {canViewEmployerStaffSection ? (
           <section className="settings-page__section">
             <h2 className="settings-page__section-title">Доступ для сотрудников</h2>
             <div className="settings-page__panel">
@@ -1519,31 +1548,31 @@ export function SettingsPage() {
                               }
                               aria-hidden={expandedInvitationId !== item.id}
                             >
-                              <div className="settings-page__staff-card-details">
-                                <div className="settings-page__staff-card-body">
-                                  <p className="settings-page__staff-role">Роль: {item.roleLabel}</p>
-                                  <p className="settings-page__staff-date">Создано: {item.invitedAtLabel}</p>
-                                  <ul className="settings-page__staff-permission-list">
-                                    {(item.permissions ?? []).map((permission) => (
-                                      <li key={`${item.id}-${permission}`} className="settings-page__staff-permission-item">
-                                        {permission}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                  {item.invitation_url ? (
-                                    <button
-                                      type="button"
-                                      className="settings-page__copy-link"
-                                      onClick={() => {
-                                        void navigator.clipboard.writeText(item.invitation_url || "");
-                                      }}
-                                    >
-                                      Скопировать ссылку
-                                    </button>
-                                  ) : null}
+                                <div className="settings-page__staff-card-details">
+                                  <div className="settings-page__staff-card-body">
+                                    <p className="settings-page__staff-role">Роль: {item.roleLabel}</p>
+                                    <ul className="settings-page__staff-permission-list">
+                                      {(item.permissions ?? []).map((permission) => (
+                                        <li key={`${item.id}-${permission}`} className="settings-page__staff-permission-item">
+                                          {permission}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    {item.invitation_url ? (
+                                      <button
+                                        type="button"
+                                        className="settings-page__copy-link"
+                                        onClick={() => {
+                                          void navigator.clipboard.writeText(item.invitation_url || "");
+                                        }}
+                                      >
+                                        Скопировать ссылку
+                                      </button>
+                                    ) : null}
+                                    <p className="settings-page__staff-date">Создано: {item.invitedAtLabel}</p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
                           </article>
                         ))}
                       </div>
@@ -1670,21 +1699,11 @@ export function SettingsPage() {
                             src={isInviteLinkCopied ? copiedIcon : copyIcon}
                             alt=""
                             aria-hidden="true"
-                            className="settings-page__invite-link-icon"
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          className="settings-page__invite-link-button"
-                          aria-label="Перегенерировать ссылку"
-                          disabled={createEmployerStaffInvitationMutation.isPending || Boolean(inviteEmailError)}
-                          onClick={handleCreateStaffInvitation}
-                        >
-                          <img
-                            src={regenerateIcon}
-                            alt=""
-                            aria-hidden="true"
-                            className="settings-page__invite-link-icon"
+                            className={
+                              isInviteLinkCopied
+                                ? "settings-page__invite-link-icon settings-page__invite-link-icon--copied"
+                                : "settings-page__invite-link-icon"
+                            }
                           />
                         </button>
                       </span>
@@ -2197,6 +2216,14 @@ export function SettingsPage() {
                     <NotificationMenu
                       buttonClassName="header__icon-button"
                       iconClassName="header__icon-button-image"
+                      onRealtimeMessage={() => {
+                        if (!canViewEmployerStaffSection) {
+                          return;
+                        }
+
+                        void queryClient.invalidateQueries({ queryKey: ["companies", "staff"] });
+                        void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
+                      }}
                     />
 
                     <div

@@ -20,7 +20,10 @@ import {
   registerRequest,
   resolvePostAuthRoute,
   requestEmailVerificationCode,
+  listAccountContextsRequest,
+  switchAccountContextRequest,
 } from "../../features/auth";
+import { acceptEmployerStaffInvitation } from "../../features/company-verification";
 import { Button, Checkbox, CodeInput, Container, Input } from "../../shared/ui";
 import "./auth.css";
 
@@ -139,6 +142,7 @@ export function AuthPage() {
   const searchParams = new URLSearchParams(location.search);
   const explicitReturnTo = searchParams.get("returnTo") ?? readCompanyInviteReturnTo();
   const inviteReturnParams = explicitReturnTo ? new URLSearchParams(explicitReturnTo.split("?")[1] ?? "") : null;
+  const inviteToken = inviteReturnParams?.get("invite_token") ?? undefined;
   const isCompanyInviteRegistration =
     isCompanyInviteReturnTo(explicitReturnTo);
   const legalReturnTo = explicitReturnTo || `${location.pathname}${location.search}${location.hash}`;
@@ -370,12 +374,36 @@ export function AuthPage() {
         password: values.password,
       });
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       registrationSubmitLockRef.current = false;
       const role = data?.data?.user?.role ?? pendingValues?.role ?? "applicant";
       const hasEmployerProfile = data?.data?.user?.has_employer_profile;
 
       applyAuthSession(data);
+
+      if (isCompanyInviteRegistration && inviteToken) {
+        try {
+          const acceptResponse = await acceptEmployerStaffInvitation(inviteToken);
+          const contextsResponse = await listAccountContextsRequest();
+          const nextEmployerContext = contextsResponse?.data?.items?.find(
+            (item) => item.role === "employer" && item.membership_id === acceptResponse?.data?.id,
+          );
+
+          if (nextEmployerContext?.id) {
+            const switchResponse = await switchAccountContextRequest(nextEmployerContext.id);
+            applyAuthSession(switchResponse);
+          }
+
+          clearCompanyInviteReturnTo();
+          clearPersistedVerificationState();
+          setApiErrorCode(null);
+          navigate("/settings", { replace: true });
+          return;
+        } catch {
+          // If auto-accept fails, fall back to the preserved invite route with manual handling.
+        }
+      }
+
       if (!explicitReturnTo) {
         clearCompanyInviteReturnTo();
       }
@@ -621,12 +649,6 @@ export function AuthPage() {
                       </button>
                     </div>
                   )}
-
-                  {isCompanyInviteRegistration ? (
-                    <p className="auth-card__hint">
-                      Регистрация доступна только по приглашению в рабочий профиль компании. Профиль соискателя создан не будет.
-                    </p>
-                  ) : null}
 
                   <div className="auth-form__fields">
                     <label className="auth-form__control">
