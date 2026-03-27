@@ -6,6 +6,9 @@ import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
 import profileIcon from "../../assets/icons/profile.svg";
+import copyIcon from "../../assets/icons/copy.svg";
+import copiedIcon from "../../assets/icons/check-mark.svg";
+import regenerateIcon from "../../assets/icons/reboot.png";
 import {
   CitySelector,
   CitySelection,
@@ -437,6 +440,7 @@ export function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [latestInvitationUrl, setLatestInvitationUrl] = useState<string | null>(null);
+  const [isInviteLinkCopied, setIsInviteLinkCopied] = useState(false);
   const [invitePermissions, setInvitePermissions] = useState<EmployerStaffPermissionState>(
     defaultEmployerStaffPermissions,
   );
@@ -935,6 +939,22 @@ export function SettingsPage() {
       permissions: invitePermissionKeys,
     });
   };
+
+  useEffect(() => {
+    if (!isInviteLinkCopied) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsInviteLinkCopied(false);
+    }, 1600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isInviteLinkCopied]);
+
+  useEffect(() => {
+    setIsInviteLinkCopied(false);
+  }, [latestInvitationUrl]);
 
   const pageClassName = [
     "settings-page",
@@ -1472,19 +1492,33 @@ export function SettingsPage() {
                         <button
                           type="button"
                           className="settings-page__invite-link-button"
+                          aria-label={isInviteLinkCopied ? "Скопировано" : "Копировать ссылку"}
                           onClick={() => {
-                            void navigator.clipboard.writeText(latestInvitationUrl);
+                            void navigator.clipboard.writeText(latestInvitationUrl).then(() => {
+                              setIsInviteLinkCopied(true);
+                            });
                           }}
                         >
-                          Копировать
+                          <img
+                            src={isInviteLinkCopied ? copiedIcon : copyIcon}
+                            alt=""
+                            aria-hidden="true"
+                            className="settings-page__invite-link-icon"
+                          />
                         </button>
                         <button
                           type="button"
                           className="settings-page__invite-link-button"
+                          aria-label="Перегенерировать ссылку"
                           disabled={createEmployerStaffInvitationMutation.isPending || Boolean(inviteEmailError)}
                           onClick={handleCreateStaffInvitation}
                         >
-                          Перегенерировать
+                          <img
+                            src={regenerateIcon}
+                            alt=""
+                            aria-hidden="true"
+                            className="settings-page__invite-link-icon"
+                          />
                         </button>
                       </span>
                     </span>

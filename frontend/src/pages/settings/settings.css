@@ -352,19 +352,38 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--settings-accent);
+  color: var(--color-text-tertiary);
   cursor: pointer;
+  line-height: 0;
   font: inherit;
 }
 
 .settings-page__invite-link-button:hover,
 .settings-page__invite-link-button:focus-visible {
-  color: var(--settings-accent-strong);
+  color: var(--color-text-primary);
 }
 
 .settings-page__invite-link-button:disabled {
   color: var(--color-text-tertiary);
   cursor: not-allowed;
+}
+
+.settings-page__invite-link-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  opacity: 0.72;
+  transition: opacity 0.2s ease;
+}
+
+.settings-page__invite-link-button:hover .settings-page__invite-link-icon,
+.settings-page__invite-link-button:focus-visible .settings-page__invite-link-icon {
+  opacity: 1;
+}
+
+.settings-page__invite-link-button:disabled .settings-page__invite-link-icon {
+  opacity: 0.48;
 }
 
 .settings-page__staff-invitation-list {
