@@ -522,6 +522,7 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
   const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -1333,7 +1334,13 @@ export function SettingsPage() {
           </div>
         </div>
         <div className="settings-page__panel-actions">
-          <Button type="button" variant="danger-ghost" size="md" className="settings-page__account-delete">
+          <Button
+            type="button"
+            variant="danger-ghost"
+            size="md"
+            className="settings-page__account-delete"
+            onClick={() => setIsDeleteAccountModalOpen(true)}
+          >
             Удалить аккаунт
           </Button>
         </div>
@@ -1850,6 +1857,38 @@ export function SettingsPage() {
                     onClick={handleCreateStaffInvitation}
                   >
                     {trimmedInviteEmail ? "Отправить" : "Сгенерировать ссылку"}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
+            <Modal
+              title="Удаление аккаунта"
+              isOpen={isDeleteAccountModalOpen}
+              onClose={() => setIsDeleteAccountModalOpen(false)}
+              panelClassName="settings-page__staff-modal-panel"
+              titleAccentColor="var(--color-danger)"
+            >
+              <div className="settings-page__staff-modal">
+                <p className="settings-page__staff-delete-message">
+                  Вы уверены, что хотите удалить аккаунт? Все данные будут удалены безвозвратно.
+                </p>
+                <div className="settings-page__staff-invite-actions">
+                  <Button
+                    type="button"
+                    variant={outlineVariant}
+                    size="md"
+                    onClick={() => setIsDeleteAccountModalOpen(false)}
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger-ghost"
+                    size="md"
+                    className="settings-page__account-delete"
+                    onClick={() => setIsDeleteAccountModalOpen(false)}
+                  >
+                    Удалить аккаунт
                   </Button>
                 </div>
               </div>

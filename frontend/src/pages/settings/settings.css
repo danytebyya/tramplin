@@ -907,6 +907,16 @@
   border: 1px solid var(--color-danger);
   border-radius: 12px;
   color: var(--color-danger);
+  box-shadow: 0 3px 6px rgba(15, 23, 42, 0.08);
+}
+
+.settings-page__account-delete.button:hover,
+.settings-page__account-delete.button:focus-visible {
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.16);
+}
+
+.settings-page__account-delete.button:active {
+  box-shadow: none;
 }
 
 .settings-page__skeleton {
