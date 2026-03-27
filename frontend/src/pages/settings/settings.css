@@ -884,9 +884,23 @@
 
 .settings-page__account-description {
   margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
+.settings-page__account-block {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-page__account-subtitle {
+  margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--type-body-large-size);
-  line-height: var(--type-body-large-line);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+  font-weight: 500;
 }
 
 .settings-page__account-delete.button {

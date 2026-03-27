@@ -252,7 +252,7 @@ function resolveModerationTitle(role: string | null) {
 function resolvePublicSettingsTabs(role: string | null): SettingsTabItem[] {
   if (role === "employer") {
     return [
-      { label: "Профиль компании", to: "/dashboard/employer" },
+      { label: "Профиль", to: "/dashboard/employer" },
       { label: "Управление возможностями" },
       { label: "Отклики" },
       { label: "Чат" },
@@ -375,6 +375,27 @@ function resolveStaffInvitationStatusLabel(kind: "email" | "link") {
 
 function isFutureDate(value: string) {
   return new Date(value).getTime() > Date.now();
+}
+
+function readAccessTokenPayload(token: string | null) {
+  if (!token || typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decodedPayload = window.atob(normalizedPayload);
+    return JSON.parse(decodedPayload) as {
+      active_membership_id?: string;
+    };
+  } catch {
+    return null;
+  }
 }
 
 function resolveBrowserLabel(userAgent: string | null | undefined) {
@@ -1013,6 +1034,22 @@ export function SettingsPage() {
     () => employerStaffItems.some((item) => item.is_current_user && item.is_primary),
     [employerStaffItems],
   );
+  const activeEmployerMembershipId = useMemo(
+    () => readAccessTokenPayload(accessToken)?.active_membership_id ?? null,
+    [accessToken],
+  );
+  const currentEmployerMembership = useMemo(
+    () =>
+      employerStaffItems.find(
+        (item) =>
+          item.is_current_user || (activeEmployerMembershipId !== null && item.id === activeEmployerMembershipId),
+      ) ?? null,
+    [activeEmployerMembershipId, employerStaffItems],
+  );
+  const canLeaveCurrentCompany =
+    isEmployer &&
+    activeEmployerMembershipId !== null &&
+    (currentEmployerMembership ? !currentEmployerMembership.is_primary : !canViewEmployerStaffSection);
   const invitePermissionKeys = useMemo(
     () => mapEmployerStaffPermissionsToKeys(invitePermissions),
     [invitePermissions],
@@ -1081,7 +1118,7 @@ export function SettingsPage() {
       ]
     : role === "employer"
       ? [
-          { label: "Профиль компании", isDanger: false, onClick: () => navigate("/dashboard/employer") },
+          { label: "Профиль", isDanger: false, onClick: () => navigate("/dashboard/employer") },
           { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
           { label: "Выход", isDanger: true, onClick: handleLogout },
         ]
@@ -1207,10 +1244,41 @@ export function SettingsPage() {
     return (
       <div className="settings-page__panel">
         <div className="settings-page__panel-header">
-          <h3 className="settings-page__panel-title">Удаление аккаунта</h3>
+          <h3 className="settings-page__panel-title">Управление аккаунтом</h3>
         </div>
         <div className="settings-page__panel-body settings-page__panel-body--account">
-          <p className="settings-page__account-description">Все данные будут удалены безвозвратно</p>
+          {canLeaveCurrentCompany ? (
+            <div className="settings-page__account-block">
+              <p className="settings-page__account-subtitle">Выход из компании</p>
+              <p className="settings-page__account-description">
+                Рабочий профиль компании будет отвязан от вашего аккаунта
+              </p>
+              <Button
+                type="button"
+                variant={outlineVariant}
+                size="md"
+                disabled={!currentEmployerMembership || isDeleteStaffItemPending}
+                onClick={() => {
+                  if (!currentEmployerMembership) {
+                    return;
+                  }
+
+                  setPendingDeleteItem({
+                    kind: "membership",
+                    id: currentEmployerMembership.id,
+                    email: currentEmployerMembership.email,
+                    isCurrentUser: true,
+                  });
+                }}
+              >
+                Выйти из компании
+              </Button>
+            </div>
+          ) : null}
+          <div className="settings-page__account-block">
+            <p className="settings-page__account-subtitle">Удаление аккаунта</p>
+            <p className="settings-page__account-description">Все данные будут удалены безвозвратно</p>
+          </div>
         </div>
         <div className="settings-page__panel-actions">
           <Button type="button" variant="danger-ghost" size="md" className="settings-page__account-delete">
@@ -1418,7 +1486,12 @@ export function SettingsPage() {
                                 ) : null}
                               </div>
                               <div className="settings-page__staff-actions" aria-label={`Действия для ${member.email}`}>
-                                <button type="button" className="settings-page__icon-button" aria-label={`Редактировать ${member.email}`} disabled>
+                                <button
+                                  type="button"
+                                  className="settings-page__icon-button"
+                                  aria-label={`Редактировать ${member.email}`}
+                                  disabled={member.is_primary || member.is_current_user}
+                                >
                                   <img src={editIcon} alt="" aria-hidden="true" className="settings-page__icon" />
                                 </button>
                                 <button
@@ -1427,6 +1500,7 @@ export function SettingsPage() {
                                   aria-label={member.is_current_user ? `Покинуть компанию ${member.email}` : `Удалить ${member.email}`}
                                   disabled={
                                     member.is_primary ||
+                                    member.is_current_user ||
                                     deleteEmployerStaffMembershipMutation.isPending ||
                                     ("kind" in member &&
                                       member.kind === "invitation" &&
