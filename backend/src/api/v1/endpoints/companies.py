@@ -10,6 +10,7 @@ from src.models import User
 from src.schemas.company import (
     EmployerInnVerificationRequest,
     EmployerOnboardingRequest,
+    EmployerStaffListRead,
     EmployerVerificationDraftRead,
 )
 from src.schemas.user import UserRead
@@ -59,6 +60,15 @@ def read_employer_verification_draft(
 ) -> dict:
     payload = EmployerService(db).get_verification_draft(current_user)
     return success_response(EmployerVerificationDraftRead.model_validate(payload).model_dump(mode="json"))
+
+
+@router.get("/staff", status_code=status.HTTP_200_OK)
+def list_employer_staff(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = EmployerService(db).list_staff_members(current_user)
+    return success_response(EmployerStaffListRead.model_validate(payload).model_dump(mode="json"))
 
 
 @router.post("/verification-documents", status_code=status.HTTP_200_OK)

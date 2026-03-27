@@ -29,7 +29,7 @@ from src.models import (
     User,
     UserNotificationPreference,
 )
-from src.schemas.company import EmployerOnboardingRequest
+from src.schemas.company import EmployerOnboardingRequest, EmployerStaffListRead, EmployerStaffMemberRead
 from src.realtime.notification_hub import notification_hub
 from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
@@ -83,6 +83,75 @@ class EmployerService:
         self.db.refresh(employer_profile)
         return employer_profile
 
+    def list_staff_members(self, current_user: User) -> EmployerStaffListRead:
+        if current_user.role != UserRole.EMPLOYER:
+            raise AppError(
+                code="EMPLOYER_STAFF_FORBIDDEN",
+                message="Сотрудники компании доступны только работодателям",
+                status_code=403,
+            )
+
+        employer_profile = current_user.employer_profile
+        if employer_profile is None or not employer_profile.inn:
+            raise AppError(
+                code="EMPLOYER_PROFILE_REQUIRED",
+                message="Сначала заполните профиль работодателя",
+                status_code=400,
+            )
+
+        employer = self.db.query(Employer).filter(Employer.inn == employer_profile.inn).one_or_none()
+        if employer is None:
+            return EmployerStaffListRead(
+                items=[
+                    EmployerStaffMemberRead(
+                        id=str(current_user.id),
+                        user_id=str(current_user.id),
+                        email=current_user.email,
+                        role=MembershipRole.OWNER,
+                        permissions=self._resolve_membership_permissions(MembershipRole.OWNER),
+                        invited_at=employer_profile.created_at.date().isoformat(),
+                        is_current_user=True,
+                        is_primary=True,
+                    )
+                ]
+            )
+
+        membership = (
+            self.db.query(EmployerMembership)
+            .filter(EmployerMembership.employer_id == employer.id, EmployerMembership.user_id == current_user.id)
+            .one_or_none()
+        )
+        if membership is None:
+            raise AppError(
+                code="EMPLOYER_STAFF_FORBIDDEN",
+                message="Нет доступа к сотрудникам этой компании",
+                status_code=403,
+            )
+
+        memberships = (
+            self.db.query(EmployerMembership, User)
+            .join(User, User.id == EmployerMembership.user_id)
+            .filter(EmployerMembership.employer_id == employer.id)
+            .order_by(EmployerMembership.is_primary.desc(), EmployerMembership.created_at.asc())
+            .all()
+        )
+
+        return EmployerStaffListRead(
+            items=[
+                EmployerStaffMemberRead(
+                    id=str(membership.id),
+                    user_id=str(user.id),
+                    email=user.email,
+                    role=membership.membership_role,
+                    permissions=self._resolve_membership_permissions(membership.membership_role),
+                    invited_at=membership.created_at.date().isoformat(),
+                    is_current_user=user.id == current_user.id,
+                    is_primary=membership.is_primary,
+                )
+                for membership, user in memberships
+            ]
+        )
+
     def ensure_inn_available(self, current_user: User, inn: str) -> None:
         normalized_inn = inn.strip()
 
@@ -122,6 +191,35 @@ class EmployerService:
                 message="Организация или работодатель с таким ИНН уже зарегистрированы на платформе",
                 status_code=409,
             )
+
+    @staticmethod
+    def _resolve_membership_permissions(role: MembershipRole) -> list[str]:
+        if role == MembershipRole.OWNER:
+            return [
+                "Просмотр откликов",
+                "Создание и редактирование возможностей",
+                "Управление профилем компании",
+                "Управление сотрудниками",
+                "Общение в чате",
+            ]
+
+        if role == MembershipRole.RECRUITER:
+            return [
+                "Просмотр откликов",
+                "Создание и редактирование возможностей",
+                "Общение в чате",
+            ]
+
+        if role == MembershipRole.MANAGER:
+            return [
+                "Просмотр откликов",
+                "Управление профилем компании",
+                "Общение в чате",
+            ]
+
+        return [
+            "Просмотр откликов",
+        ]
 
     def get_verification_document_or_raise(
         self,

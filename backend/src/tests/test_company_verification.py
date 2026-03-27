@@ -296,6 +296,75 @@ def test_employer_can_delete_existing_verification_document(client, db_session):
     assert next_draft_response.json()["data"]["documents"] == []
 
 
+def test_employer_staff_returns_real_company_members(client, db_session):
+    owner_access_token = _register_and_login_employer(client, db_session, email="owner@acme.example")
+    _register_and_login_employer(client, db_session, email="recruiter@acme.example")
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {owner_access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Acme Corp",
+            "inn": "7707083898",
+            "corporate_email": "hr@acme.example",
+            "website": "https://acme.example",
+        },
+    )
+    assert profile_response.status_code == 200
+
+    from src.enums import EmployerVerificationRequestStatus, EmployerType, MembershipRole
+    from src.models import Employer, EmployerMembership, User
+
+    owner = db_session.query(User).filter(User.email == "owner@acme.example").one()
+    recruiter = db_session.query(User).filter(User.email == "recruiter@acme.example").one()
+    employer = Employer(
+        employer_type=EmployerType.COMPANY,
+        display_name="Acme Corp",
+        legal_name="Acme Corp",
+        inn="7707083898",
+        corporate_email="hr@acme.example",
+        website_url="https://acme.example",
+        verification_status=EmployerVerificationRequestStatus.PENDING,
+        created_by=owner.id,
+        updated_by=owner.id,
+    )
+    db_session.add(employer)
+    db_session.flush()
+    db_session.add(
+        EmployerMembership(
+            employer_id=employer.id,
+            user_id=owner.id,
+            membership_role=MembershipRole.OWNER,
+            is_primary=True,
+        )
+    )
+    db_session.add(
+        EmployerMembership(
+            employer_id=employer.id,
+            user_id=recruiter.id,
+            membership_role=MembershipRole.RECRUITER,
+            is_primary=False,
+        )
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/companies/staff",
+        headers={"Authorization": f"Bearer {owner_access_token}"},
+    )
+
+    assert response.status_code == 200
+    items = response.json()["data"]["items"]
+    assert len(items) == 2
+    assert items[0]["email"] == "owner@acme.example"
+    assert items[0]["role"] == "owner"
+    assert items[0]["is_current_user"] is True
+    assert items[0]["is_primary"] is True
+    assert "Управление сотрудниками" in items[0]["permissions"]
+    assert any(item["email"] == "recruiter@acme.example" and item["role"] == "recruiter" for item in items)
+
+
 def test_submit_verification_documents_applies_deleted_document_ids_only_on_submit(client, db_session):
     access_token = _register_and_login_employer(client, db_session, email="pending-delete@example.com")
 

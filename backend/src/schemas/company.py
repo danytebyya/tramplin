@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
-from src.enums import EmployerType
+from src.enums import EmployerType, MembershipRole
 
 
 class EmployerOnboardingRequest(BaseModel):
@@ -104,3 +104,18 @@ class EmployerVerificationDraftRead(BaseModel):
     phone: str | None = None
     social_link: str | None = None
     documents: list[EmployerVerificationDraftDocumentRead]
+
+
+class EmployerStaffMemberRead(BaseModel):
+    id: str
+    user_id: str
+    email: str
+    role: MembershipRole
+    permissions: list[str]
+    invited_at: str
+    is_current_user: bool = False
+    is_primary: bool = False
+
+
+class EmployerStaffListRead(BaseModel):
+    items: list[EmployerStaffMemberRead]

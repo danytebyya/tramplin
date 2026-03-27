@@ -55,6 +55,23 @@ export type EmployerVerificationDraftResponse = {
   };
 };
 
+export type EmployerStaffMember = {
+  id: string;
+  user_id: string;
+  email: string;
+  role: "owner" | "recruiter" | "manager" | "viewer";
+  permissions: string[];
+  invited_at: string;
+  is_current_user: boolean;
+  is_primary: boolean;
+};
+
+export type EmployerStaffListResponse = {
+  data?: {
+    items?: EmployerStaffMember[];
+  };
+};
+
 function getAuthorizedHeaders() {
   const accessToken = useAuthStore.getState().accessToken;
 
@@ -153,6 +170,13 @@ export async function getEmployerVerificationDraft() {
 
 export async function deleteEmployerVerificationDocument(documentId: string) {
   const response = await apiClient.delete(`/companies/verification-documents/${documentId}`, {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
+export async function listEmployerStaff() {
+  const response = await apiClient.get<EmployerStaffListResponse>("/companies/staff", {
     headers: getAuthorizedHeaders(),
   });
   return response.data;

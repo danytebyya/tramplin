@@ -34,6 +34,7 @@ import {
   getModerationSettingsRequest,
   updateModerationSettingsRequest,
 } from "../../features/moderation";
+import { listEmployerStaff } from "../../features/company-verification";
 import { Button, Checkbox, Container, Input, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import "../../widgets/header/header.css";
@@ -49,13 +50,6 @@ type SettingsTabItem = {
   label: string;
   to?: string;
   isCurrent?: boolean;
-};
-
-type EmployerStaffMember = {
-  email: string;
-  role: string;
-  permissions: string[];
-  invitedAt: string;
 };
 
 const notificationPreferenceKeys: NotificationPreferenceKey[] = [
@@ -77,41 +71,6 @@ const defaultNotificationPreferenceGroup: NotificationPreferenceGroup = {
   daily_digest: false,
   weekly_report: false,
 };
-
-const employerStaffMembers: EmployerStaffMember[] = [
-  {
-    email: "a@company.ru",
-    role: "Администратор",
-    permissions: [
-      "Просмотр откликов",
-      "Создание и редактирование возможностей",
-      "Управление профилем",
-      "Общение в чате",
-    ],
-    invitedAt: "15.03.2026",
-  },
-  {
-    email: "hr@company.ru",
-    role: "Администратор",
-    permissions: [
-      "Просмотр откликов",
-      "Создание и редактирование возможностей",
-      "Управление профилем",
-      "Общение в чате",
-    ],
-    invitedAt: "15.03.2026",
-  },
-  {
-    email: "recruiter@company.ru",
-    role: "Рекрутер",
-    permissions: [
-      "Просмотр откликов",
-      "Создание и редактирование возможностей",
-      "Общение в чате",
-    ],
-    invitedAt: "15.03.2026",
-  },
-];
 
 function resolveDefaultNotificationPreferenceGroup(role: string | null): NotificationPreferenceGroup {
   if (role === "junior" || role === "curator" || role === "admin") {
@@ -284,6 +243,22 @@ function resolvePublicSettingsTabs(role: string | null): SettingsTabItem[] {
   ];
 }
 
+function resolveEmployerStaffRoleLabel(role: string) {
+  if (role === "owner") {
+    return "Владелец";
+  }
+
+  if (role === "recruiter") {
+    return "Рекрутер";
+  }
+
+  if (role === "manager") {
+    return "Менеджер";
+  }
+
+  return "Наблюдатель";
+}
+
 function formatDateWithTime(value: string) {
   return new Date(value).toLocaleString("ru-RU", {
     day: "2-digit",
@@ -388,6 +363,7 @@ export function SettingsPage() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
+  const [expandedStaffMemberId, setExpandedStaffMemberId] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -426,6 +402,12 @@ export function SettingsPage() {
     staleTime: 5 * 60 * 1000,
     enabled: isAuthenticated && isModerationRole,
   });
+  const employerStaffQuery = useQuery({
+    queryKey: ["companies", "staff"],
+    queryFn: listEmployerStaff,
+    staleTime: 30 * 1000,
+    enabled: isAuthenticated && isEmployer,
+  });
 
   const user = meData?.data?.user;
   const isProfileLoading = !user;
@@ -433,6 +415,7 @@ export function SettingsPage() {
   const isSessionsLoading = sessionsQuery.isPending;
   const isLoginHistoryLoading = loginHistoryQuery.isPending;
   const isModerationSettingsLoading = isModerationRole && moderationSettingsQuery.isPending;
+  const isEmployerStaffLoading = isEmployer && employerStaffQuery.isPending;
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -708,6 +691,13 @@ export function SettingsPage() {
     () => pushNotifications.filter((item) => visibleNotificationKeySet.has(item.key)),
     [pushNotifications, visibleNotificationKeySet],
   );
+  const employerStaffItems = useMemo(() => {
+    return (employerStaffQuery.data?.data?.items ?? []).map((item) => ({
+      ...item,
+      roleLabel: resolveEmployerStaffRoleLabel(item.role),
+      invitedAtLabel: formatDate(item.invited_at),
+    }));
+  }, [employerStaffQuery.data]);
 
   const pageClassName = [
     "settings-page",
@@ -749,26 +739,20 @@ export function SettingsPage() {
   const renderPublicTabs = () => {
     return (
       <nav className="settings-page__tabs" aria-label="Разделы настроек">
-        {resolvePublicSettingsTabs(role).map((item) =>
-          item.to ? (
-            <NavLink
-              key={item.label}
-              to={item.to}
-              end
-              className={({ isActive }) =>
-                isActive || item.isCurrent
-                  ? "settings-page__tab settings-page__tab--active"
-                  : "settings-page__tab"
+        {resolvePublicSettingsTabs(role).map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            className={item.isCurrent ? "settings-page__tab settings-page__tab--active" : "settings-page__tab"}
+            onClick={() => {
+              if (item.to) {
+                navigate(item.to);
               }
-            >
-              {item.label}
-            </NavLink>
-          ) : (
-            <span key={item.label} className="settings-page__tab">
-              {item.label}
-            </span>
-          ),
-        )}
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
       </nav>
     );
   };
@@ -809,6 +793,7 @@ export function SettingsPage() {
           <label className="settings-page__field">
             <span className="settings-page__field-label">Текущий пароль</span>
             <Input
+              className="input--sm"
               type="password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
@@ -818,6 +803,7 @@ export function SettingsPage() {
           <label className="settings-page__field">
             <span className="settings-page__field-label">Новый пароль</span>
             <Input
+              className="input--sm"
               type="password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
@@ -827,6 +813,7 @@ export function SettingsPage() {
           <label className="settings-page__field">
             <span className="settings-page__field-label">Подтверждение пароля</span>
             <Input
+              className="input--sm"
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
@@ -959,6 +946,7 @@ export function SettingsPage() {
                     <SettingsSkeleton className="settings-page__skeleton--input" />
                   ) : (
                     <Input
+                      className="input--sm"
                       value={fullName}
                       onChange={(event) => setFullName(event.target.value)}
                       placeholder="Введите имя"
@@ -971,6 +959,7 @@ export function SettingsPage() {
                     <SettingsSkeleton className="settings-page__skeleton--input" />
                   ) : (
                     <Input
+                      className="input--sm"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="Введите email"
@@ -1008,38 +997,82 @@ export function SettingsPage() {
             <h2 className="settings-page__section-title">Доступ для сотрудников</h2>
             <div className="settings-page__panel">
               <div className="settings-page__panel-body settings-page__panel-body--staff">
-                <Button type="button" variant={actionVariant} size="md">
+                <Button type="button" variant={actionVariant} size="md" disabled>
                   Пригласить сотрудника
                 </Button>
                 <div className="settings-page__staff-list">
-                  {employerStaffMembers.map((member) => (
-                    <article key={member.email} className="settings-page__staff-card">
-                      <div className="settings-page__staff-card-header">
-                        <div className="settings-page__staff-card-title-group">
-                          <h3 className="settings-page__staff-email">{member.email}</h3>
+                  {isEmployerStaffLoading
+                    ? Array.from({ length: 2 }, (_, index) => (
+                        <article key={`staff-skeleton-${index}`} className="settings-page__staff-card">
+                          <div className="settings-page__staff-card-summary">
+                            <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                          </div>
+                        </article>
+                      ))
+                    : employerStaffItems.length > 0
+                      ? employerStaffItems.map((member) => {
+                        const isExpanded = expandedStaffMemberId === member.id;
+
+                        return (
+                          <article
+                            key={member.id}
+                            className={
+                              isExpanded
+                                ? "settings-page__staff-card settings-page__staff-card--expanded"
+                                : "settings-page__staff-card"
+                            }
+                          >
+                            <div
+                              className="settings-page__staff-card-summary"
+                              onClick={(event) => {
+                                const target = event.target as HTMLElement;
+                                if (target.closest(".settings-page__icon-button")) {
+                                  return;
+                                }
+
+                                setExpandedStaffMemberId((current) => (current === member.id ? null : member.id));
+                              }}
+                            >
+                              <div className="settings-page__staff-card-title-group">
+                                <h3 className="settings-page__staff-email">{member.email}</h3>
+                              </div>
+                              <div className="settings-page__staff-actions" aria-label={`Действия для ${member.email}`}>
+                                <button type="button" className="settings-page__icon-button" aria-label={`Редактировать ${member.email}`} disabled>
+                                  <img src={editIcon} alt="" aria-hidden="true" className="settings-page__icon" />
+                                </button>
+                                <button type="button" className="settings-page__icon-button" aria-label={`Удалить ${member.email}`} disabled>
+                                  <img src={deleteIcon} alt="" aria-hidden="true" className="settings-page__icon" />
+                                </button>
+                              </div>
+                            </div>
+                            <div
+                              className={
+                                isExpanded
+                                  ? "settings-page__staff-card-details-shell settings-page__staff-card-details-shell--expanded"
+                                  : "settings-page__staff-card-details-shell"
+                              }
+                              aria-hidden={!isExpanded}
+                            >
+                              <div className="settings-page__staff-card-body">
+                                <p className="settings-page__staff-role">Роль: {member.roleLabel}</p>
+                                <ul className="settings-page__staff-permission-list">
+                                  {member.permissions.map((permission) => (
+                                    <li key={`${member.id}-${permission}`} className="settings-page__staff-permission-item">
+                                      {permission}
+                                    </li>
+                                  ))}
+                                </ul>
+                                <p className="settings-page__staff-date">Добавлен: {member.invitedAtLabel}</p>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })
+                      : (
+                        <div className="settings-page__staff-empty">
+                          Пока в компании числится только основной аккаунт работодателя или сотрудники еще не добавлены.
                         </div>
-                        <div className="settings-page__staff-actions" aria-label={`Действия для ${member.email}`}>
-                          <button type="button" className="settings-page__icon-button" aria-label={`Редактировать ${member.email}`}>
-                            <img src={editIcon} alt="" aria-hidden="true" className="settings-page__icon" />
-                          </button>
-                          <button type="button" className="settings-page__icon-button" aria-label={`Удалить ${member.email}`}>
-                            <img src={deleteIcon} alt="" aria-hidden="true" className="settings-page__icon" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="settings-page__staff-card-body">
-                        <p className="settings-page__staff-role">Роль: {member.role}</p>
-                        <ul className="settings-page__staff-permission-list">
-                          {member.permissions.map((permission) => (
-                            <li key={`${member.email}-${permission}`} className="settings-page__staff-permission-item">
-                              {permission}
-                            </li>
-                          ))}
-                        </ul>
-                        <p className="settings-page__staff-date">Приглашен: {member.invitedAt}</p>
-                      </div>
-                    </article>
-                  ))}
+                      )}
                 </div>
               </div>
             </div>
