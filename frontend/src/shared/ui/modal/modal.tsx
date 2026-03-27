@@ -2,6 +2,7 @@ import { ButtonHTMLAttributes, CSSProperties, ReactNode, useEffect } from "react
 import { createPortal } from "react-dom";
 
 import { cn } from "../../lib";
+import "./modal.css";
 
 type ModalProps = {
   children: ReactNode;

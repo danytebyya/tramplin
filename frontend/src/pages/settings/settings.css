@@ -700,11 +700,15 @@
 .settings-page__card-body--sessions {
   min-height: 0;
   flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .settings-page__panel--compact:has(.settings-page__sessions-layout),
 .settings-page__card:has(.settings-page__card-body--sessions) {
   min-height: 420px;
+  height: 420px;
+  max-height: 420px;
+  overflow: hidden;
 }
 
 .settings-page__session-list {
@@ -884,9 +888,9 @@
 
 .settings-page__account-description {
   margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--type-body-regular-size);
-  line-height: var(--type-body-regular-line);
+  color: var(--color-text-primary);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
 }
 
 .settings-page__account-block {

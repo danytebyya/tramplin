@@ -7,7 +7,6 @@ import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
-import profileIcon from "../../assets/icons/profile.svg";
 import {
   meRequest,
   performLogout,
@@ -28,6 +27,7 @@ import { env } from "../../shared/config/env";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
+import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
 import "../../widgets/header/header.css";
 import "./employer-verification.css";
 
@@ -1106,61 +1106,7 @@ export function EmployerVerificationPage() {
                       }}
                     />
 
-                    <div
-                      ref={profileMenuRef}
-                      className="header__profile-menu"
-                      onMouseEnter={openProfileMenu}
-                      onMouseLeave={scheduleProfileMenuClose}
-                    >
-                      <button
-                        type="button"
-                        className="header__icon-button"
-                        aria-label="Профиль"
-                        aria-expanded={isProfileMenuOpen}
-                        aria-haspopup="menu"
-                        onClick={() => {
-                          clearProfileMenuCloseTimeout();
-                          setIsProfileMenuPinned((currentPinned) => {
-                            const nextPinned = !currentPinned;
-                            setIsProfileMenuOpen(nextPinned);
-                            return nextPinned;
-                          });
-                        }}
-                      >
-                        <img
-                          src={profileIcon}
-                          alt=""
-                          aria-hidden="true"
-                          className="header__icon-button-image"
-                        />
-                      </button>
-
-                      <div
-                        className={
-                          isProfileMenuOpen
-                            ? "header__profile-dropdown"
-                            : "header__profile-dropdown header__profile-dropdown--hidden"
-                        }
-                        role="menu"
-                        aria-hidden={!isProfileMenuOpen}
-                      >
-                        {profileMenuItems.map((item) => (
-                          <button
-                            key={item.label}
-                            type="button"
-                            className={
-                              item.isDanger
-                                ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
-                                : "header__profile-dropdown-item"
-                            }
-                            role="menuitem"
-                            onClick={item.onClick}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <HeaderProfileMenu items={profileMenuItems} />
                   </div>
                 </div>
               </div>

@@ -2,6 +2,7 @@
   position: relative;
   display: inline-flex;
   --notification-menu-primary: var(--color-primary);
+  --notification-menu-light: var(--color-primary-light);
   --notification-menu-secondary: var(--color-secondary);
   --notification-menu-accent: var(--color-accent);
   --notification-menu-text: var(--color-text-primary);
@@ -22,18 +23,20 @@
 
 .notification-menu__badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: 1px;
+  right: 1px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 6px;
-  border: 1px solid var(--color-bg-primary);
+  min-width: 18px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
   border-radius: 999px;
-  background: var(--notification-menu-secondary);
-  color: var(--color-bg-primary);
-  font-size: 11px;
-  line-height: 1;
+  background: var(--notification-menu-light);
+  color: var(--notification-menu-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
   font-weight: 400;
 }
 
@@ -377,18 +380,21 @@
 
 .home-page--applicant .notification-menu {
   --notification-menu-primary: var(--color-secondary);
+  --notification-menu-light: var(--color-secondary-light);
   --notification-menu-secondary: var(--color-secondary-hover);
   --notification-menu-accent: var(--color-secondary-active);
 }
 
 .home-page--employer .notification-menu {
   --notification-menu-primary: var(--color-primary);
+  --notification-menu-light: var(--color-primary-light);
   --notification-menu-secondary: var(--color-primary-hover);
   --notification-menu-accent: var(--color-primary-active);
 }
 
 .home-page--curator .notification-menu {
   --notification-menu-primary: var(--color-accent);
+  --notification-menu-light: var(--color-accent-light);
   --notification-menu-secondary: var(--color-accent-hover);
   --notification-menu-accent: var(--color-accent-active);
 }
@@ -398,34 +404,37 @@
 .curator-dashboard-page .notification-menu,
 .employer-verification-page .notification-menu {
   --notification-menu-primary: var(--color-accent);
+  --notification-menu-light: var(--color-accent-light);
   --notification-menu-secondary: var(--color-accent-hover);
   --notification-menu-accent: var(--color-accent-active);
 }
 
 .curator-dashboard-page {
   --notification-menu-primary: var(--color-accent);
+  --notification-menu-light: var(--color-accent-light);
   --notification-menu-secondary: var(--color-accent-hover);
   --notification-menu-accent: var(--color-accent-active);
 }
 
 .curator-dashboard-page .notification-menu__badge {
-  background: var(--color-accent);
+  background: var(--notification-menu-light);
   border-color: var(--color-bg-primary);
-  color: var(--color-bg-primary);
+  color: var(--notification-menu-secondary);
 }
 
 .curator-dashboard-page .notification-menu__button .notification-menu__badge {
-  background: var(--color-accent);
+  background: var(--notification-menu-light);
 }
 
 .curator-dashboard-page .notification-menu__button:hover .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button:focus-visible .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button:active .notification-menu__badge {
-  background: var(--color-accent-active);
+  background: var(--notification-menu-light);
 }
 
 .employer-dashboard .notification-menu {
   --notification-menu-primary: var(--color-primary);
+  --notification-menu-light: var(--color-primary-light);
   --notification-menu-secondary: var(--color-primary-hover);
   --notification-menu-accent: var(--color-primary-active);
 }

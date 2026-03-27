@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
-import profileIcon from "../../assets/icons/profile.svg";
 import {
   CitySelector,
   CitySelection,
@@ -29,6 +28,7 @@ import { ModerationDashboardContent } from "../curator-dashboard";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
+import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
 import "../../widgets/header/header.css";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
@@ -297,12 +297,11 @@ export function HomePage() {
 
   const profileMenuItems = isModerationRole
     ? [
-        { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
         { label: "Выход", isDanger: true, onClick: handleLogout },
       ]
     : roleName === "employer"
       ? [
-          { label: "Профиль компании", isDanger: false, onClick: () => navigate("/dashboard/employer") },
+          { label: "Профиль", isDanger: false, onClick: () => navigate("/dashboard/employer") },
           { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
           { label: "Выход", isDanger: true, onClick: handleLogout },
         ]
@@ -517,61 +516,7 @@ export function HomePage() {
                         iconClassName="header__icon-button-image"
                       />
 
-                      <div
-                        ref={profileMenuRef}
-                        className="header__profile-menu"
-                        onMouseEnter={openProfileMenu}
-                        onMouseLeave={scheduleProfileMenuClose}
-                      >
-                        <button
-                          type="button"
-                          className="header__icon-button"
-                          aria-label="Профиль"
-                          aria-expanded={isProfileMenuOpen}
-                          aria-haspopup="menu"
-                          onClick={() => {
-                            clearProfileMenuCloseTimeout();
-                            setIsProfileMenuPinned((currentPinned) => {
-                              const nextPinned = !currentPinned;
-                              setIsProfileMenuOpen(nextPinned);
-                              return nextPinned;
-                            });
-                          }}
-                        >
-                          <img
-                            src={profileIcon}
-                            alt=""
-                            aria-hidden="true"
-                            className="header__icon-button-image"
-                          />
-                        </button>
-
-                        <div
-                          className={
-                            isProfileMenuOpen
-                              ? "header__profile-dropdown"
-                              : "header__profile-dropdown header__profile-dropdown--hidden"
-                          }
-                          role="menu"
-                          aria-hidden={!isProfileMenuOpen}
-                        >
-                          {profileMenuItems.map((item) => (
-                            <button
-                              key={item.label}
-                              type="button"
-                              className={
-                                item.isDanger
-                                  ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
-                                  : "header__profile-dropdown-item"
-                              }
-                              role="menuitem"
-                              onClick={item.onClick}
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <HeaderProfileMenu items={profileMenuItems} />
                     </div>
                   ) : (
                     <>

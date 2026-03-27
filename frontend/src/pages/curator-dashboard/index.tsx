@@ -2,13 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import profileIcon from "../../assets/icons/profile.svg";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
 import { getModerationDashboardRequest } from "../../features/moderation";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Container, Input, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
+import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
 import "../../widgets/header/header.css";
 import "./curator-dashboard.css";
 
@@ -438,64 +438,7 @@ export function CuratorDashboardPage() {
                         iconClassName="header__icon-button-image"
                       />
 
-                      <div
-                        ref={profileMenuRef}
-                        className="header__profile-menu"
-                        onMouseEnter={openProfileMenu}
-                        onMouseLeave={scheduleProfileMenuClose}
-                      >
-                        <button
-                          type="button"
-                          className="header__icon-button"
-                          aria-label="Профиль"
-                          aria-expanded={isProfileMenuOpen}
-                          aria-haspopup="menu"
-                          onClick={() => {
-                            clearProfileMenuCloseTimeout();
-                            setIsProfileMenuPinned((currentPinned) => {
-                              const nextPinned = !currentPinned;
-                              setIsProfileMenuOpen(nextPinned);
-                              return nextPinned;
-                            });
-                          }}
-                        >
-                          <img
-                            src={profileIcon}
-                            alt=""
-                            aria-hidden="true"
-                            className="header__icon-button-image"
-                          />
-                        </button>
-
-                        <div
-                          className={
-                            isProfileMenuOpen
-                              ? "header__profile-dropdown"
-                              : "header__profile-dropdown header__profile-dropdown--hidden"
-                          }
-                          role="menu"
-                        >
-                          {profileMenuItems.map((item) => (
-                            <button
-                              key={item.label}
-                              type="button"
-                              className={
-                                item.isDanger
-                                  ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
-                                  : "header__profile-dropdown-item"
-                              }
-                              role="menuitem"
-                              onClick={() => {
-                                item.onClick?.();
-                                setIsProfileMenuPinned(false);
-                                setIsProfileMenuOpen(false);
-                              }}
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <HeaderProfileMenu items={profileMenuItems} />
                     </div>
                   ) : null}
                 </div>

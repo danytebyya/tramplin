@@ -1,0 +1,95 @@
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+}
+
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 640px);
+  border-radius: 8px;
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-sm);
+  padding: 32px;
+}
+
+.modal__header {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding-right: 32px;
+}
+
+.modal__title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 400;
+}
+
+.modal__title-accent {
+  color: var(--modal-title-accent-color, var(--color-primary));
+  font-weight: 500;
+}
+
+.modal__title-text {
+  color: var(--color-text-primary);
+  font-weight: 400;
+}
+
+.modal__content {
+  margin-top: 24px;
+}
+
+.modal__close {
+  position: absolute;
+  top: -18px;
+  right: -20px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  appearance: none;
+  transition: color var(--transition-base);
+}
+
+.modal__close:hover {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.modal__close:active {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.modal__close-line {
+  position: absolute;
+  top: 11px;
+  left: 3px;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+
+.modal__close-line--reverse {
+  transform: rotate(-45deg);
+}

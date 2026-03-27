@@ -29,7 +29,7 @@ export function EmployerDashboardPage() {
             <Link
               to="/onboarding/employer"
               className="employer-dashboard__icon-button"
-              aria-label="Профиль компании"
+              aria-label="Профиль"
             >
               <img
                 src={profileIcon}

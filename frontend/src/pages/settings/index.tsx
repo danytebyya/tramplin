@@ -420,11 +420,11 @@ function resolveAccountContextSubtitle(role: string | undefined, companyName?: s
   }
 
   if (role === "applicant") {
-    return "профиль соискателя";
+    return "Профиль соискателя";
   }
 
   if (role === "curator" || role === "junior") {
-    return "профиль куратора";
+    return "Профиль куратора";
   }
 
   if (role === "admin") {
@@ -813,6 +813,9 @@ export function SettingsPage() {
       return { isCurrentUser };
     },
     onSuccess: async ({ isCurrentUser }) => {
+      setExpandedStaffMemberId(null);
+      setPendingDeleteItem((current) => (current?.kind === "membership" ? null : current));
+
       if (isCurrentUser) {
         const contextsResponse = await listAccountContextsRequest();
         const baseContext = contextsResponse?.data?.items?.find((item) => item.is_default);
@@ -2533,7 +2536,10 @@ export function SettingsPage() {
                             }
                           >
                             {hasMultipleAccountContexts ? (
-                              <p className="header__profile-contexts-title">Выбор аккаунта</p>
+                              <p className="header__profile-contexts-title">
+                                <span className="header__profile-contexts-title-text">Выбор </span>
+                                <span className="header__profile-contexts-title-accent">аккаунта</span>
+                              </p>
                             ) : null}
                             <div className="header__profile-contexts-list">
                               {accountContextItems.map((item) => {
@@ -2546,7 +2552,9 @@ export function SettingsPage() {
                                     className={
                                       hasMultipleAccountContexts
                                         ? isActive
-                                          ? "header__profile-context-card header__profile-context-card--active"
+                                          ? item.role === "applicant"
+                                            ? "header__profile-context-card header__profile-context-card--active header__profile-context-card--active-applicant"
+                                            : "header__profile-context-card header__profile-context-card--active header__profile-context-card--active-employer"
                                           : "header__profile-context-card"
                                         : "header__profile-context-card header__profile-context-card--static"
                                     }

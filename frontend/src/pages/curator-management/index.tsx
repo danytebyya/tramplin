@@ -1,4 +1,4 @@
-import { Dispatch, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Dispatch, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
@@ -6,7 +6,6 @@ import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 import arrowIcon from "../../assets/icons/arrow.svg";
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
-import profileIcon from "../../assets/icons/profile.svg";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
 import {
   createCuratorRequest,
@@ -14,8 +13,9 @@ import {
   listCuratorsRequest,
 } from "../../features/moderation";
 import { NotificationMenu } from "../../features/notifications";
-import { Button, Checkbox, Container, Input, Modal, Radio, Status } from "../../shared/ui";
+import { Button, Checkbox, Container, InfoTooltip, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
+import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
 import "../../widgets/header/header.css";
 import "./curator-management.css";
 
@@ -31,6 +31,76 @@ const roleOptions: Array<{ value: CuratorRole; label: string }> = [
   { value: "curator", label: "Middle" },
   { value: "junior", label: "Junior" },
 ];
+
+const curatorRoleDescriptions: Record<CuratorRole, ReactNode> = {
+  junior: (
+    <div className="curator-management-page__modal-role-description">
+      <p className="curator-management-page__modal-role-description-title">Права:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>Просмотр заявок на верификацию компаний</li>
+        <li>Первичная проверка документов (ИНН, сайт, соцсети)</li>
+        <li>Модерация вакансий (базовая проверка по чеклисту)</li>
+        <li>Запрос дополнительной информации у работодателя</li>
+        <li>Просмотр своего дашборда (статистика, задачи)</li>
+        <li>Настройки профиля и уведомлений</li>
+      </ul>
+      <p className="curator-management-page__modal-role-description-title">Не может:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>Одобрять/отклонять компании самостоятельно (только отправлять на проверку Middle/Senior)</li>
+        <li>Модерировать стажировки, мероприятия, менторские программы</li>
+      </ul>
+      <p className="curator-management-page__modal-role-description-title">Не имеет доступа:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>К управлению другими кураторами</li>
+        <li>К аналитике и логам платформы</li>
+      </ul>
+    </div>
+  ),
+  curator: (
+    <div className="curator-management-page__modal-role-description">
+      <p className="curator-management-page__modal-role-description-title">Права:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>Все права Junior куратора</li>
+        <li>Самостоятельная верификация компаний (одобрение/отклонение)</li>
+        <li>Модерация всех типов контента (вакансии, стажировки, мероприятия, менторство)</li>
+        <li>Работа с жалобами на контент</li>
+        <li>Просмотр расширенной статистики (своя работа)</li>
+      </ul>
+      <p className="curator-management-page__modal-role-description-title">Не может:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>Управлять другими кураторами (создавать, редактировать, назначать)</li>
+      </ul>
+      <p className="curator-management-page__modal-role-description-title">Не имеет доступа:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>К общей аналитике платформы</li>
+        <li>К изменению сроков проверки (настройки модерации)</li>
+      </ul>
+    </div>
+  ),
+  admin: (
+    <div className="curator-management-page__modal-role-description">
+      <p className="curator-management-page__modal-role-description-title">Права:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>Все права Middle куратора</li>
+        <li>Проверка и корректировка работ Junior&apos;ов (может отменить решение)</li>
+        <li>Модерация мероприятий и менторских программ (приоритетный доступ)</li>
+        <li>Наставничество (назначение задач Junior&apos;ам)</li>
+        <li>Просмотр логов и аналитики (история входов, активные сессии)</li>
+        <li>Частичное управление кураторами (просмотр статистики команды)</li>
+        <li>Изменение настроек модерации (сроки проверки, приоритеты)</li>
+      </ul>
+      <p className="curator-management-page__modal-role-description-title">Не может:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>Создавать/удалять кураторов</li>
+        <li>Изменять роли других кураторов</li>
+      </ul>
+      <p className="curator-management-page__modal-role-description-title">Не имеет доступа:</p>
+      <ul className="curator-management-page__modal-role-description-list">
+        <li>К системным настройкам платформы (только Администратор)</li>
+      </ul>
+    </div>
+  ),
+};
 
 const statusOptions: Array<{ value: CuratorPresence; label: string }> = [
   { value: "online", label: "Online" },
@@ -518,61 +588,7 @@ export function CuratorManagementPage() {
                       iconClassName="header__icon-button-image"
                     />
 
-                    <div
-                      ref={profileMenuRef}
-                      className="header__profile-menu"
-                      onMouseEnter={openProfileMenu}
-                      onMouseLeave={scheduleProfileMenuClose}
-                    >
-                      <button
-                        type="button"
-                        className="header__icon-button"
-                        aria-label="Профиль"
-                        aria-expanded={isProfileMenuOpen}
-                        aria-haspopup="menu"
-                        onClick={() => {
-                          clearProfileMenuCloseTimeout();
-                          setIsProfileMenuPinned((currentPinned) => {
-                            const nextPinned = !currentPinned;
-                            setIsProfileMenuOpen(nextPinned);
-                            return nextPinned;
-                          });
-                        }}
-                      >
-                        <img
-                          src={profileIcon}
-                          alt=""
-                          aria-hidden="true"
-                          className="header__icon-button-image"
-                        />
-                      </button>
-
-                      <div
-                        className={
-                          isProfileMenuOpen
-                            ? "header__profile-dropdown"
-                            : "header__profile-dropdown header__profile-dropdown--hidden"
-                        }
-                        role="menu"
-                        aria-hidden={!isProfileMenuOpen}
-                      >
-                        {profileMenuItems.map((item) => (
-                          <button
-                            key={item.label}
-                            type="button"
-                            className={
-                              item.isDanger
-                                ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
-                                : "header__profile-dropdown-item"
-                            }
-                            role="menuitem"
-                            onClick={item.onClick}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <HeaderProfileMenu items={profileMenuItems} />
                   </div>
                 </div>
               </div>
@@ -897,7 +913,7 @@ export function CuratorManagementPage() {
             <div className="curator-management-page__table-cell curator-management-page__table-cell--check">
               <Checkbox checked={allRowsSelected} onChange={toggleSelectAll} variant="accent" />
             </div>
-            <div className="curator-management-page__table-cell">ФИО</div>
+            <div className="curator-management-page__table-cell">Имя пользователя</div>
             <div className="curator-management-page__table-cell">E-mail</div>
             <div className="curator-management-page__table-cell">Роль</div>
             <div className="curator-management-page__table-cell">Статус</div>
@@ -1044,15 +1060,16 @@ export function CuratorManagementPage() {
         }}
         title="Добавить куратора"
         panelClassName="curator-management-page__modal-panel"
+        titleAccentColor="var(--color-accent)"
       >
         <div className="curator-management-page__modal-form">
           <label className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label">ФИО</span>
+            <span className="curator-management-page__modal-label">Имя пользователя</span>
             <Input
               value={newCuratorName}
               onChange={(event) => setNewCuratorName(event.target.value)}
               placeholder="Введите имя куратора"
-              className="curator-management-page__modal-input"
+              className="input--sm curator-management-page__modal-input"
             />
           </label>
 
@@ -1063,7 +1080,7 @@ export function CuratorManagementPage() {
               value={newCuratorEmail}
               onChange={(event) => setNewCuratorEmail(event.target.value)}
               placeholder="name@example.com"
-              className="curator-management-page__modal-input"
+              className="input--sm curator-management-page__modal-input"
             />
           </label>
 
@@ -1075,7 +1092,7 @@ export function CuratorManagementPage() {
               onChange={(event) => setNewCuratorPassword(event.target.value)}
               maxLength={10}
               placeholder="Введите пароль"
-              className="curator-management-page__modal-input"
+              className="input--sm curator-management-page__modal-input"
             />
           </label>
 
@@ -1088,7 +1105,14 @@ export function CuratorManagementPage() {
                   onChange={() => setNewCuratorRole("junior")}
                   variant="accent"
                 />
-                <span>Junior</span>
+                <span className="curator-management-page__modal-role-option-text">
+                  <span>Junior</span>
+                  <InfoTooltip
+                    className="curator-management-page__modal-role-info"
+                    panelClassName="curator-management-page__modal-role-panel"
+                    text={curatorRoleDescriptions.junior}
+                  />
+                </span>
               </label>
               <label className="curator-management-page__modal-role-option">
                 <Radio
@@ -1096,7 +1120,14 @@ export function CuratorManagementPage() {
                   onChange={() => setNewCuratorRole("curator")}
                   variant="accent"
                 />
-                <span>Middle</span>
+                <span className="curator-management-page__modal-role-option-text">
+                  <span>Middle</span>
+                  <InfoTooltip
+                    className="curator-management-page__modal-role-info"
+                    panelClassName="curator-management-page__modal-role-panel"
+                    text={curatorRoleDescriptions.curator}
+                  />
+                </span>
               </label>
               <label className="curator-management-page__modal-role-option">
                 <Radio
@@ -1104,7 +1135,14 @@ export function CuratorManagementPage() {
                   onChange={() => setNewCuratorRole("admin")}
                   variant="accent"
                 />
-                <span>Senior</span>
+                <span className="curator-management-page__modal-role-option-text">
+                  <span>Senior</span>
+                  <InfoTooltip
+                    className="curator-management-page__modal-role-info"
+                    panelClassName="curator-management-page__modal-role-panel"
+                    text={curatorRoleDescriptions.admin}
+                  />
+                </span>
               </label>
             </div>
           </div>
@@ -1118,6 +1156,7 @@ export function CuratorManagementPage() {
               type="button"
               variant="accent-outline"
               size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--cancel"
               onClick={() => {
                 setCreateCuratorError(null);
                 setIsCreateCuratorModalOpen(false);
@@ -1130,6 +1169,7 @@ export function CuratorManagementPage() {
               type="button"
               variant="accent"
               size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--submit"
               onClick={handleCreateCurator}
               loading={createCuratorMutation.isPending}
               disabled={

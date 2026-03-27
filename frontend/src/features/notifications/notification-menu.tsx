@@ -356,7 +356,7 @@ export function NotificationMenu({
         />
         {unreadCount > 0 ? (
           <span className="notification-menu__badge" aria-label={`Непрочитанных уведомлений: ${unreadCount}`}>
-            {unreadCount > 99 ? "99+" : unreadCount}
+            {unreadCount >= 10 ? "9+" : unreadCount}
           </span>
         ) : null}
       </button>
