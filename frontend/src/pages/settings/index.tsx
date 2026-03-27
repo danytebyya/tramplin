@@ -16,6 +16,7 @@ import {
   listActiveSessionsRequest,
   listLoginHistoryRequest,
   meRequest,
+  AuthSessionListResponse,
   NotificationPreferenceGroup,
   NotificationPreferenceKey,
   performLogout,
@@ -309,13 +310,39 @@ export function SettingsPage() {
   });
   const revokeSessionMutation = useMutation({
     mutationFn: revokeSessionRequest,
-    onSuccess: () => {
+    onSuccess: (_response, revokedSessionId) => {
+      queryClient.setQueryData<AuthSessionListResponse | undefined>(["auth", "sessions"], (current) => {
+        if (!current?.data?.items) {
+          return current;
+        }
+
+        return {
+          ...current,
+          data: {
+            ...current.data,
+            items: current.data.items.filter((session) => session.id !== revokedSessionId),
+          },
+        };
+      });
       void queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
     },
   });
   const revokeOtherSessionsMutation = useMutation({
     mutationFn: revokeOtherSessionsRequest,
     onSuccess: () => {
+      queryClient.setQueryData<AuthSessionListResponse | undefined>(["auth", "sessions"], (current) => {
+        if (!current?.data?.items) {
+          return current;
+        }
+
+        return {
+          ...current,
+          data: {
+            ...current.data,
+            items: current.data.items.filter((session) => session.is_current),
+          },
+        };
+      });
       void queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
     },
   });
@@ -648,9 +675,9 @@ export function SettingsPage() {
                 <NavLink to="/moderation/employers" className="header__category-link">
                   Верификация работодателей
                 </NavLink>
-                <a href="#content-moderation" className="header__category-link">
+                <NavLink to="/moderation/content" className="header__category-link">
                   Модерация контента
-                </a>
+                </NavLink>
                 {role === "admin" ? (
                   <NavLink to="/moderation/curators" className="header__category-link">
                     Управление кураторами

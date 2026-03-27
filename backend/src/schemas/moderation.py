@@ -49,6 +49,55 @@ class EmployerVerificationReviewRequest(BaseModel):
         return normalized_value or None
 
 
+class ContentModerationMetricsRead(BaseModel):
+    total_on_moderation: int
+    in_queue: int
+    reviewed_today: int
+    overdue: int
+
+
+class ContentModerationKindCountRead(BaseModel):
+    all: int
+    vacancies: int
+    internships: int
+    events: int
+    mentorships: int
+
+
+class ContentModerationChecklistRead(BaseModel):
+    salary_specified: bool
+    requirements_completed: bool
+    responsibilities_completed: bool
+    conditions_specified: bool
+
+
+class ContentModerationItemRead(BaseModel):
+    id: str
+    title: str
+    company_name: str
+    author_email: str | None = None
+    submitted_at: str
+    kind: str
+    status: str
+    priority: str
+    salary_label: str
+    tags: list[str]
+    format_label: str
+    short_description: str
+    description: str
+    checklist: ContentModerationChecklistRead
+    moderator_comment: str | None = None
+
+
+class ContentModerationListResponse(BaseModel):
+    metrics: ContentModerationMetricsRead
+    counts: ContentModerationKindCountRead
+    items: list[ContentModerationItemRead]
+    total: int
+    page: int
+    page_size: int
+
+
 class CuratorManagementMetricsRead(BaseModel):
     total_curators: int
     online_curators: int

@@ -13,6 +13,24 @@ Quick start was moved to [QUICKSTART.md](./QUICKSTART.md).
 
 ## Useful Commands
 
+Start local stack:
+
+```bash
+./run.sh
+```
+
+Stop local stack:
+
+```bash
+./stop.sh
+```
+
+Stop local stack and PostgreSQL started outside Docker:
+
+```bash
+STOP_POSTGRES=1 ./stop.sh
+```
+
 Backend:
 
 ```bash

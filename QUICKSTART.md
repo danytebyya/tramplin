@@ -35,6 +35,24 @@ docker compose up -d
 
 Option B: use your own local PostgreSQL and then make sure credentials in `backend/.env` match it.
 
+Alternative: start the full local stack from the project root:
+
+```bash
+./run.sh
+```
+
+To stop frontend and backend later:
+
+```bash
+./stop.sh
+```
+
+To stop PostgreSQL as well when you use a local Homebrew/PostgreSQL instance:
+
+```bash
+STOP_POSTGRES=1 ./stop.sh
+```
+
 ## 4. Start backend
 
 In a new terminal:

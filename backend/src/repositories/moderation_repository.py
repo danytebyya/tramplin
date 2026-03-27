@@ -19,7 +19,7 @@ from src.models import (
     User,
 )
 from src.enums.notifications import NotificationKind
-from src.models.opportunity import ModerationStatus
+from src.models.opportunity import ModerationStatus, OpportunityTag
 class ModerationRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -57,10 +57,28 @@ class ModerationRepository:
     def list_opportunities(self) -> list[Opportunity]:
         stmt = (
             select(Opportunity)
-            .options(selectinload(Opportunity.employer))
+            .options(
+                selectinload(Opportunity.employer),
+                selectinload(Opportunity.location),
+                selectinload(Opportunity.compensation),
+                selectinload(Opportunity.tag_links).selectinload(OpportunityTag.tag),
+            )
             .order_by(Opportunity.created_at.desc())
         )
         return list(self.db.execute(stmt).scalars().all())
+
+    def get_opportunity_by_id(self, opportunity_id: str) -> Opportunity | None:
+        stmt = (
+            select(Opportunity)
+            .options(
+                selectinload(Opportunity.employer),
+                selectinload(Opportunity.location),
+                selectinload(Opportunity.compensation),
+                selectinload(Opportunity.tag_links).selectinload(OpportunityTag.tag),
+            )
+            .where(Opportunity.id == UUID(opportunity_id))
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def list_employers(self) -> list[Employer]:
         stmt = select(Employer)

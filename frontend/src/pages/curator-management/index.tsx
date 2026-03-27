@@ -42,6 +42,13 @@ const sortFieldOptions: Array<{ value: CuratorSortField; label: string }> = [
   { value: "activity", label: "По активности" },
 ];
 
+const curatorMetricDefinitions = [
+  { key: "totalCurators", label: "Всего кураторов:" },
+  { key: "onlineCurators", label: "Онлайн:" },
+  { key: "queuedRequests", label: "В очереди заявок:" },
+  { key: "reviewedToday", label: "Сегодня проверено:" },
+] as const;
+
 function generateCuratorPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
   const targetLength = 10;
@@ -112,15 +119,6 @@ function formatActivityMeta(value: string | null) {
 
   const diffDays = Math.round(diffHours / 24);
   return { minutes: diffMinutes, label: `${diffDays} дн назад` };
-}
-
-function CuratorManagementMetricSkeleton() {
-  return (
-    <article className="curator-management-page__metric-card" aria-hidden="true">
-      <span className="curator-management-page__skeleton curator-management-page__skeleton--metric-label" />
-      <span className="curator-management-page__skeleton curator-management-page__skeleton--metric-value" />
-    </article>
-  );
 }
 
 function CuratorManagementRowSkeleton() {
@@ -591,9 +589,9 @@ export function CuratorManagementPage() {
               <NavLink to="/moderation/employers" className="header__category-link">
                 Верификация работодателей
               </NavLink>
-              <a href="#content-moderation" className="header__category-link">
+              <NavLink to="/moderation/content" className="header__category-link">
                 Модерация контента
-              </a>
+              </NavLink>
               <NavLink to="/moderation/curators" className="header__category-link">
                 Управление кураторами
               </NavLink>
@@ -611,33 +609,28 @@ export function CuratorManagementPage() {
         </header>
 
         <section className="curator-management-page__metrics" aria-label="Статистика кураторов">
-          {curatorsQuery.isPending ? (
-            <>
-              <CuratorManagementMetricSkeleton />
-              <CuratorManagementMetricSkeleton />
-              <CuratorManagementMetricSkeleton />
-              <CuratorManagementMetricSkeleton />
-            </>
-          ) : (
-            <>
-              <article className="curator-management-page__metric-card">
-                <span className="curator-management-page__metric-label">Всего кураторов:</span>
-                <strong className="curator-management-page__metric-value">{totalCurators}</strong>
-              </article>
-              <article className="curator-management-page__metric-card">
-                <span className="curator-management-page__metric-label">Онлайн:</span>
-                <strong className="curator-management-page__metric-value">{onlineCurators}</strong>
-              </article>
-              <article className="curator-management-page__metric-card">
-                <span className="curator-management-page__metric-label">В очереди заявок:</span>
-                <strong className="curator-management-page__metric-value">{queuedRequests}</strong>
-              </article>
-              <article className="curator-management-page__metric-card">
-                <span className="curator-management-page__metric-label">Сегодня проверено:</span>
-                <strong className="curator-management-page__metric-value">{reviewedToday}</strong>
-              </article>
-            </>
-          )}
+          {curatorMetricDefinitions.map((metric) => (
+            <article key={metric.key} className="curator-management-page__metric-card">
+              <span className="curator-management-page__metric-label">{metric.label}</span>
+              {curatorsQuery.isPending ? (
+                <span
+                  className="curator-management-page__skeleton curator-management-page__skeleton--metric-value"
+                  aria-hidden="true"
+                />
+              ) : (
+                <strong className="curator-management-page__metric-value">
+                  {
+                    {
+                      totalCurators,
+                      onlineCurators,
+                      queuedRequests,
+                      reviewedToday,
+                    }[metric.key]
+                  }
+                </strong>
+              )}
+            </article>
+          ))}
         </section>
 
         <section className="curator-management-page__toolbar">

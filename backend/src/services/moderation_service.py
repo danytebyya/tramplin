@@ -8,11 +8,16 @@ from src.enums import EmployerVerificationStatus, UserRole
 from src.enums.notifications import NotificationKind, NotificationSeverity
 from src.enums.statuses import EmployerVerificationRequestStatus
 from src.models import User
-from src.models.opportunity import ModerationStatus, OpportunityType
+from src.models.opportunity import ModerationStatus, OpportunityStatus, OpportunityType, WorkFormat
 from src.repositories import ModerationRepository
 from src.core.security import hash_password
 from src.models import UserNotificationPreference
 from src.schemas.moderation import (
+    ContentModerationChecklistRead,
+    ContentModerationItemRead,
+    ContentModerationKindCountRead,
+    ContentModerationListResponse,
+    ContentModerationMetricsRead,
     CuratorCreateRequest,
     CuratorManagementItemRead,
     CuratorManagementListResponse,
@@ -404,6 +409,182 @@ class ModerationService:
             page=page,
             page_size=page_size,
         )
+
+    def list_content_moderation_items(
+        self,
+        current_user: User,
+        *,
+        search: str | None,
+        kinds: list[str] | None,
+        statuses: list[str] | None,
+        page: int,
+        page_size: int,
+    ) -> ContentModerationListResponse:
+        self._ensure_moderation_access(current_user)
+        opportunities = self.repo.list_opportunities()
+        now = datetime.now(UTC)
+        moderation_settings = self._get_or_create_settings()
+        normalized_search = (search or "").strip().lower()
+        normalized_kinds = {
+            kind for kind in (kinds or []) if kind in {"vacancy", "internship", "event", "mentorship"}
+        }
+        normalized_statuses = {
+            status
+            for status in (statuses or [])
+            if status in {
+                "pending_review",
+                "changes_requested",
+                "approved",
+                "rejected",
+                "unpublished",
+            }
+        }
+
+        counts = ContentModerationKindCountRead(
+            all=len(opportunities),
+            vacancies=len(
+                [item for item in opportunities if self._serialize_opportunity_kind(item.opportunity_type) == "vacancy"]
+            ),
+            internships=len(
+                [item for item in opportunities if self._serialize_opportunity_kind(item.opportunity_type) == "internship"]
+            ),
+            events=len(
+                [item for item in opportunities if self._serialize_opportunity_kind(item.opportunity_type) == "event"]
+            ),
+            mentorships=len(
+                [item for item in opportunities if self._serialize_opportunity_kind(item.opportunity_type) == "mentorship"]
+            ),
+        )
+
+        status_by_opportunity_id = {
+            str(item.id): self._serialize_content_status_value(item) for item in opportunities
+        }
+
+        filtered_items = opportunities
+        if normalized_search:
+            filtered_items = [
+                item
+                for item in filtered_items
+                if normalized_search in item.title.lower()
+                or normalized_search in item.employer.display_name.lower()
+                or (item.contact_email is not None and normalized_search in item.contact_email.lower())
+            ]
+
+        if normalized_kinds and "all" not in normalized_kinds:
+            filtered_items = [
+                item
+                for item in filtered_items
+                if self._serialize_opportunity_kind(item.opportunity_type) in normalized_kinds
+            ]
+
+        if normalized_statuses and "all" not in normalized_statuses:
+            filtered_items = [
+                item
+                for item in filtered_items
+                if status_by_opportunity_id[str(item.id)] in normalized_statuses
+            ]
+
+        filtered_items = sorted(
+            filtered_items,
+            key=lambda item: (
+                self._content_status_sort_weight(status_by_opportunity_id[str(item.id)]),
+                -self._normalize_datetime(item.created_at).timestamp(),
+            ),
+        )
+
+        total = len(filtered_items)
+        start_index = max(page - 1, 0) * page_size
+        end_index = start_index + page_size
+        page_items = filtered_items[start_index:end_index]
+
+        reviewed_today = len(
+            [
+                item
+                for item in opportunities
+                if item.moderated_at is not None
+                and item.moderation_status != ModerationStatus.PENDING_REVIEW
+                and self._normalize_datetime(item.moderated_at).date() == now.date()
+            ]
+        )
+        overdue = len(
+            [
+                item
+                for item in opportunities
+                if item.moderation_status == ModerationStatus.PENDING_REVIEW
+                and self._normalize_datetime(item.created_at)
+                <= self._get_opportunity_overdue_threshold(now, item.opportunity_type, moderation_settings)
+            ]
+        )
+
+        return ContentModerationListResponse(
+            metrics=ContentModerationMetricsRead(
+                total_on_moderation=len(
+                    [item for item in opportunities if status_by_opportunity_id[str(item.id)] != "approved"]
+                ),
+                in_queue=len(
+                    [item for item in opportunities if item.moderation_status == ModerationStatus.PENDING_REVIEW]
+                ),
+                reviewed_today=reviewed_today,
+                overdue=overdue,
+            ),
+            counts=counts,
+            items=[self._serialize_content_moderation_item(item) for item in page_items],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    def approve_content_item(
+        self,
+        current_user: User,
+        opportunity_id: str,
+        payload: EmployerVerificationReviewRequest,
+    ) -> ContentModerationItemRead:
+        self._ensure_moderation_access(current_user)
+        opportunity = self._get_opportunity_or_raise(opportunity_id)
+        opportunity.moderation_status = ModerationStatus.APPROVED
+        opportunity.business_status = OpportunityStatus.ACTIVE
+        opportunity.moderated_by_user_id = current_user.id
+        opportunity.moderated_at = datetime.now(UTC)
+        opportunity.moderation_reason = payload.moderator_comment
+        self.repo.db.add(opportunity)
+        self.repo.db.commit()
+        self.repo.db.refresh(opportunity)
+        return self._serialize_content_moderation_item(opportunity)
+
+    def reject_content_item(
+        self,
+        current_user: User,
+        opportunity_id: str,
+        payload: EmployerVerificationReviewRequest,
+    ) -> ContentModerationItemRead:
+        self._ensure_moderation_access(current_user)
+        opportunity = self._get_opportunity_or_raise(opportunity_id)
+        opportunity.moderation_status = ModerationStatus.REJECTED
+        opportunity.moderated_by_user_id = current_user.id
+        opportunity.moderated_at = datetime.now(UTC)
+        opportunity.moderation_reason = self._resolve_rejection_comment(payload.moderator_comment)
+        self.repo.db.add(opportunity)
+        self.repo.db.commit()
+        self.repo.db.refresh(opportunity)
+        return self._serialize_content_moderation_item(opportunity)
+
+    def request_content_changes(
+        self,
+        current_user: User,
+        opportunity_id: str,
+        payload: EmployerVerificationReviewRequest,
+    ) -> ContentModerationItemRead:
+        self._ensure_moderation_access(current_user)
+        opportunity = self._get_opportunity_or_raise(opportunity_id)
+        opportunity.moderation_status = ModerationStatus.HIDDEN
+        opportunity.moderated_by_user_id = current_user.id
+        opportunity.moderated_at = datetime.now(UTC)
+        opportunity.moderation_reason = self._resolve_request_changes_comment(payload.moderator_comment)
+        self.repo.db.add(opportunity)
+        self.repo.db.commit()
+        self.repo.db.refresh(opportunity)
+        return self._serialize_content_moderation_item(opportunity)
 
     def approve_employer_verification_request(
         self,
@@ -1190,6 +1371,126 @@ class ModerationService:
             rejection_reason=request.rejection_reason,
             documents=documents,
         )
+
+    def _serialize_content_moderation_item(self, opportunity) -> ContentModerationItemRead:
+        salary_label = self._build_opportunity_salary_label(opportunity)
+        tags = [link.tag.name for link in opportunity.tag_links if link.tag is not None][:6]
+        kind = self._serialize_opportunity_kind(opportunity.opportunity_type)
+        status = self._serialize_content_status_value(opportunity)
+        priority = self._serialize_content_priority_value(opportunity.moderation_status)
+
+        checklist = ContentModerationChecklistRead(
+            salary_specified=salary_label != "По договоренности",
+            requirements_completed=len(opportunity.description.strip()) >= 40,
+            responsibilities_completed=len(opportunity.short_description.strip()) >= 20,
+            conditions_specified=bool(opportunity.contact_email or opportunity.location_id or opportunity.work_format),
+        )
+
+        return ContentModerationItemRead(
+            id=str(opportunity.id),
+            title=opportunity.title,
+            company_name=(
+                self._abbreviate_legal_entity_name(opportunity.employer.display_name)
+                if opportunity.employer is not None
+                else "Компания"
+            ),
+            author_email=opportunity.contact_email,
+            submitted_at=self._normalize_datetime(opportunity.created_at).isoformat(),
+            kind=kind,
+            status=status,
+            priority=priority,
+            salary_label=salary_label,
+            tags=tags,
+            format_label=self._format_work_format_label(opportunity.work_format),
+            short_description=opportunity.short_description,
+            description=opportunity.description,
+            checklist=checklist,
+            moderator_comment=opportunity.moderation_reason,
+        )
+
+    def _get_opportunity_or_raise(self, opportunity_id: str):
+        opportunity = self.repo.get_opportunity_by_id(opportunity_id)
+        if opportunity is None:
+            raise AppError(
+                code="CONTENT_MODERATION_NOT_FOUND",
+                message="Публикация не найдена",
+                status_code=404,
+            )
+        return opportunity
+
+    def _serialize_content_status_value(self, opportunity) -> str:
+        status = opportunity.moderation_status
+
+        if status == ModerationStatus.REJECTED:
+            return "rejected"
+
+        if status == ModerationStatus.HIDDEN:
+            return "changes_requested"
+
+        if status == ModerationStatus.BLOCKED:
+            return "unpublished"
+
+        if status == ModerationStatus.PENDING_REVIEW:
+            return "pending_review"
+
+        if opportunity.business_status in {OpportunityStatus.CLOSED, OpportunityStatus.ARCHIVED}:
+            return "unpublished"
+
+        if status == ModerationStatus.APPROVED:
+            return "approved"
+
+        return "pending_review"
+
+    @staticmethod
+    def _serialize_content_priority_value(status: ModerationStatus) -> str:
+        if status == ModerationStatus.BLOCKED:
+            return "complaint"
+        if status == ModerationStatus.HIDDEN:
+            return "changes"
+        if status == ModerationStatus.APPROVED:
+            return "approved"
+        if status == ModerationStatus.REJECTED:
+            return "rejected"
+        return "new"
+
+    @staticmethod
+    def _format_work_format_label(work_format: WorkFormat) -> str:
+        return {
+            WorkFormat.OFFICE: "Офлайн",
+            WorkFormat.OFFLINE: "Офлайн",
+            WorkFormat.HYBRID: "Гибрид",
+            WorkFormat.REMOTE: "Удалённо",
+            WorkFormat.ONLINE: "Онлайн",
+        }.get(work_format, work_format.value.replace("_", " ").title())
+
+    @staticmethod
+    def _content_status_sort_weight(status: str) -> int:
+        order = {
+            "pending_review": 0,
+            "changes_requested": 1,
+            "unpublished": 2,
+            "rejected": 3,
+            "approved": 4,
+        }
+        return order.get(status, 99)
+
+    @staticmethod
+    def _build_opportunity_salary_label(opportunity) -> str:
+        compensation = opportunity.compensation
+        if compensation is None:
+            return "По договоренности"
+
+        salary_from = compensation.salary_from
+        salary_to = compensation.salary_to
+        if salary_from is not None and salary_to is not None:
+            return f"{int(salary_from):,} - {int(salary_to):,} ₽".replace(",", " ")
+        if salary_from is not None:
+            return f"от {int(salary_from):,} ₽".replace(",", " ")
+        if salary_to is not None:
+            return f"до {int(salary_to):,} ₽".replace(",", " ")
+        if compensation.stipend_text:
+            return compensation.stipend_text
+        return "По договоренности"
 
     @staticmethod
     def _serialize_opportunity_kind(opportunity_type: OpportunityType) -> str:

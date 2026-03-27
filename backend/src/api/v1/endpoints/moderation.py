@@ -71,6 +71,72 @@ def list_employer_verification_requests(
     return success_response(payload.model_dump(mode="json"))
 
 
+@router.get("/content-items", status_code=status.HTTP_200_OK)
+def list_content_moderation_items(
+    search: str | None = Query(default=None),
+    kinds: list[str] | None = Query(default=None),
+    statuses: list[str] | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = ModerationService(ModerationRepository(db)).list_content_moderation_items(
+        current_user,
+        search=search,
+        kinds=kinds,
+        statuses=statuses,
+        page=page,
+        page_size=page_size,
+    )
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.post("/content-items/{opportunity_id}/approve", status_code=status.HTTP_200_OK)
+def approve_content_item(
+    opportunity_id: str,
+    payload: EmployerVerificationReviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = ModerationService(ModerationRepository(db)).approve_content_item(
+        current_user,
+        opportunity_id,
+        payload,
+    )
+    return success_response(response.model_dump(mode="json"))
+
+
+@router.post("/content-items/{opportunity_id}/reject", status_code=status.HTTP_200_OK)
+def reject_content_item(
+    opportunity_id: str,
+    payload: EmployerVerificationReviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = ModerationService(ModerationRepository(db)).reject_content_item(
+        current_user,
+        opportunity_id,
+        payload,
+    )
+    return success_response(response.model_dump(mode="json"))
+
+
+@router.post("/content-items/{opportunity_id}/request-changes", status_code=status.HTTP_200_OK)
+def request_content_changes(
+    opportunity_id: str,
+    payload: EmployerVerificationReviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = ModerationService(ModerationRepository(db)).request_content_changes(
+        current_user,
+        opportunity_id,
+        payload,
+    )
+    return success_response(response.model_dump(mode="json"))
+
+
 @router.post("/employer-verification-requests/{request_id}/approve", status_code=status.HTTP_200_OK)
 def approve_employer_verification_request(
     request_id: str,

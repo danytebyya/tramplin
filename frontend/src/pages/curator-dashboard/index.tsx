@@ -513,6 +513,9 @@ export function CuratorDashboardPage() {
               <NavLink to="/moderation/employers" className="header__category-link">
                 Верификация работодателей
               </NavLink>
+              <NavLink to="/moderation/content" className="header__category-link">
+                Модерация контента
+              </NavLink>
               {isAdmin ? (
                 <NavLink to="/moderation/curators" className="header__category-link">
                   Управление кураторами

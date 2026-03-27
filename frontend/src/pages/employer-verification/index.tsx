@@ -1172,9 +1172,9 @@ export function EmployerVerificationPage() {
               <NavLink to="/moderation/employers" className="header__category-link">
                 Верификация работодателей
               </NavLink>
-              <a href="#content-moderation" className="header__category-link">
+              <NavLink to="/moderation/content" className="header__category-link">
                 Модерация контента
-              </a>
+              </NavLink>
               {isAdmin ? (
                 <NavLink to="/moderation/curators" className="header__category-link">
                   Управление кураторами

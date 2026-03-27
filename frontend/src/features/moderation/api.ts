@@ -101,6 +101,74 @@ export type ModerationSettingsResponse = {
   data?: ModerationSettings;
 };
 
+export type ContentModerationStatus =
+  | "pending_review"
+  | "changes_requested"
+  | "approved"
+  | "rejected"
+  | "unpublished";
+
+export type ContentModerationKind = "vacancy" | "internship" | "event" | "mentorship";
+
+export type ContentModerationMetrics = {
+  total_on_moderation: number;
+  in_queue: number;
+  reviewed_today: number;
+  overdue: number;
+};
+
+export type ContentModerationKindCounts = {
+  all: number;
+  vacancies: number;
+  internships: number;
+  events: number;
+  mentorships: number;
+};
+
+export type ContentModerationChecklist = {
+  salary_specified: boolean;
+  requirements_completed: boolean;
+  responsibilities_completed: boolean;
+  conditions_specified: boolean;
+};
+
+export type ContentModerationItem = {
+  id: string;
+  title: string;
+  company_name: string;
+  author_email: string | null;
+  submitted_at: string;
+  kind: ContentModerationKind;
+  status: ContentModerationStatus;
+  priority: "new" | "complaint" | "changes" | "approved" | "rejected";
+  salary_label: string;
+  tags: string[];
+  format_label: string;
+  short_description: string;
+  description: string;
+  checklist: ContentModerationChecklist;
+  moderator_comment: string | null;
+};
+
+export type ContentModerationListResponse = {
+  data?: {
+    metrics?: ContentModerationMetrics;
+    counts?: ContentModerationKindCounts;
+    items?: ContentModerationItem[];
+    total?: number;
+    page?: number;
+    page_size?: number;
+  };
+};
+
+export type ContentModerationListFilters = {
+  search?: string;
+  kinds?: ContentModerationKind[];
+  statuses?: ContentModerationStatus[];
+  page?: number;
+  pageSize?: number;
+};
+
 export type EmployerVerificationRequestStatus =
   | "pending"
   | "under_review"
@@ -155,6 +223,69 @@ export type EmployerVerificationRequestListFilters = {
 
 export async function getModerationDashboardRequest() {
   const response = await apiClient.get<ModerationDashboardResponse>("/moderation/dashboard");
+  return response.data;
+}
+
+export async function listContentModerationItemsRequest(
+  filters: ContentModerationListFilters,
+) {
+  const params = new URLSearchParams();
+
+  if (filters.search) {
+    params.set("search", filters.search);
+  }
+
+  if (filters.kinds && filters.kinds.length > 0) {
+    filters.kinds.forEach((kind) => {
+      params.append("kinds", kind);
+    });
+  }
+
+  if (filters.statuses && filters.statuses.length > 0) {
+    filters.statuses.forEach((status) => {
+      params.append("statuses", status);
+    });
+  }
+
+  params.set("page", String(filters.page ?? 1));
+  params.set("page_size", String(filters.pageSize ?? 6));
+
+  const response = await apiClient.get<ContentModerationListResponse>("/moderation/content-items", {
+    params,
+  });
+  return response.data;
+}
+
+export async function approveContentModerationItemRequest(
+  itemId: string,
+  payload: EmployerVerificationReviewPayload,
+) {
+  const response = await apiClient.post<{ data?: ContentModerationItem }>(
+    `/moderation/content-items/${itemId}/approve`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function rejectContentModerationItemRequest(
+  itemId: string,
+  payload: EmployerVerificationReviewPayload,
+) {
+  const response = await apiClient.post<{ data?: ContentModerationItem }>(
+    `/moderation/content-items/${itemId}/reject`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function requestContentModerationChangesRequest(
+  itemId: string,
+  payload: EmployerVerificationReviewPayload,
+) {
+  const response = await apiClient.post<{ data?: ContentModerationItem }>(
+    `/moderation/content-items/${itemId}/request-changes`,
+    payload,
+  );
   return response.data;
 }
 

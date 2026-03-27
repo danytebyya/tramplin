@@ -401,13 +401,6 @@
   background: var(--color-bg-primary);
   box-shadow: var(--shadow-sm);
   overflow: clip;
-  transition:
-    box-shadow 0.42s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.employer-verification-page__row:hover {
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
 }
 
 .employer-verification-page__row--skeleton {
@@ -559,43 +552,25 @@
 .employer-verification-page__row-details-shell {
   display: grid;
   grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-rows 0.54s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.42s ease;
+  overflow: hidden;
+  transition: grid-template-rows 0.24s ease;
 }
 
 .employer-verification-page__row-details-shell--expanded {
   grid-template-rows: 1fr;
-  opacity: 1;
 }
 
 .employer-verification-page__row-details {
-  min-height: 0;
   overflow: hidden;
-  padding: 0 16px 16px 60px;
 }
 
 .employer-verification-page__details-grid {
   display: grid;
   grid-template-columns: minmax(0, 354px) minmax(240px, 1fr) minmax(280px, 1fr);
   gap: 24px;
-  padding: 20px 0 0;
+  padding: 20px 16px 16px 60px;
   border-radius: 12px;
   background: var(--color-bg-primary);
-  transform: translateY(-6px);
-  transition:
-    transform 0.56s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.42s ease;
-}
-
-.employer-verification-page__row-details-shell--expanded .employer-verification-page__details-grid {
-  transform: translateY(0);
-}
-
-.employer-verification-page__row-details-shell:not(.employer-verification-page__row-details-shell--expanded) .employer-verification-page__details-grid {
-  opacity: 0;
-  pointer-events: none;
 }
 
 .employer-verification-page__details-column {
@@ -992,7 +967,7 @@
     justify-content: flex-start;
   }
 
-  .employer-verification-page__row-details {
+  .employer-verification-page__details-grid {
     padding-left: 16px;
   }
 
