@@ -551,8 +551,7 @@ export function SettingsPage() {
     isEmployer &&
     (
       activeEmployerPermissionKeys.includes("manage_staff") ||
-      (activeEmployerMembershipId !== null &&
-        activeEmployerPermissionKeys.length === 0 &&
+      (activeEmployerPermissionKeys.length === 0 &&
         Boolean(meData?.data?.user?.employer_profile))
     );
 
