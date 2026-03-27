@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import adminAvatarIcon from "../../assets/icons/admin.png";
+import applicantAvatarIcon from "../../assets/icons/applicant.png";
+import employerAvatarIcon from "../../assets/icons/employer.png";
 import profileDropdownIcon from "../../assets/icons/profile.png";
 import profileIcon from "../../assets/icons/profile.svg";
 import {
@@ -22,9 +25,30 @@ type HeaderProfileMenuProps = {
   items: HeaderProfileMenuItem[];
 };
 
-function resolveAccountContextSubtitle(role: string | undefined, companyName?: string | null) {
+function resolveAccountContextAvatar(role: string | undefined) {
   if (role === "employer") {
-    return companyName?.trim() ? abbreviateLegalEntityName(companyName) : "профиль работодателя";
+    return employerAvatarIcon;
+  }
+
+  if (role === "applicant") {
+    return applicantAvatarIcon;
+  }
+
+  if (role === "admin") {
+    return adminAvatarIcon;
+  }
+
+  return profileDropdownIcon;
+}
+
+function resolveAccountContextSubtitle(
+  role: string | undefined,
+  companyName?: string | null,
+  contextLabel?: string,
+) {
+  if (role === "employer") {
+    const source = companyName?.trim() || contextLabel?.trim();
+    return source ? abbreviateLegalEntityName(source) : "профиль работодателя";
   }
 
   if (role === "applicant") {
@@ -260,7 +284,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
                   >
                     <span className="header__profile-context-avatar">
                       <img
-                        src={profileDropdownIcon}
+                        src={resolveAccountContextAvatar(item.role)}
                         alt=""
                         aria-hidden="true"
                         className="header__profile-context-avatar-image"
@@ -271,7 +295,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
                         {user?.display_name ?? item.label ?? "Профиль"}
                       </span>
                       <span className="header__profile-context-role">
-                        {resolveAccountContextSubtitle(item.role, item.company_name)}
+                        {resolveAccountContextSubtitle(item.role, item.company_name, item.label)}
                       </span>
                     </span>
                   </button>

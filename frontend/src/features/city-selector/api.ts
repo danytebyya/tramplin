@@ -10,8 +10,28 @@ export type CitySuggestion = {
   };
 };
 
+export type AddressSuggestion = {
+  id: string;
+  name: string;
+  subtitle?: string;
+  fullAddress: string;
+  point?: {
+    lon: number;
+    lat: number;
+  };
+};
+
+export type ReverseGeocodedAddress = {
+  fullAddress: string;
+  point?: {
+    lon: number;
+    lat: number;
+  };
+};
+
 type TwoGisSuggestItem = {
   id?: string;
+  address_name?: string;
   full_name?: string;
   full_address_name?: string;
   name?: string;
@@ -116,6 +136,55 @@ export async function getCitySuggestions(query: string): Promise<CitySuggestion[
   );
 }
 
+export async function getAddressSuggestions(
+  query: string,
+  cityName?: string,
+): Promise<AddressSuggestion[]> {
+  const normalizedQuery = query.trim();
+
+  if (!normalizedQuery || !env.map2gisKey) {
+    return [];
+  }
+
+  const searchParams = new URLSearchParams({
+    key: env.map2gisKey,
+    q: cityName?.trim() ? `${cityName.trim()}, ${normalizedQuery}` : normalizedQuery,
+    locale: "ru_RU",
+    page_size: "6",
+    fields: "items.point",
+  });
+
+  const response = await fetch(`https://catalog.api.2gis.com/3.0/suggests?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    throw new Error("Failed to load address suggestions");
+  }
+
+  const data = (await response.json()) as TwoGisSuggestResponse;
+  const items = data.result?.items ?? [];
+
+  return items
+    .map((item, index): AddressSuggestion | null => {
+      const fullAddress = item.full_address_name?.trim() || item.full_name?.trim() || item.name?.trim();
+
+      if (!fullAddress) {
+        return null;
+      }
+
+      return {
+        id: item.id ?? `${fullAddress}-${index}`,
+        name: item.name?.trim() || fullAddress,
+        subtitle: item.subtype?.trim(),
+        fullAddress,
+        point:
+          typeof item.point?.lon === "number" && typeof item.point?.lat === "number"
+            ? { lon: item.point.lon, lat: item.point.lat }
+            : undefined,
+      } satisfies AddressSuggestion;
+    })
+    .filter((item): item is AddressSuggestion => item !== null);
+}
+
 export async function getCityViewportByName(cityName: string) {
   const normalizedCityName = cityName.trim().toLowerCase();
 
@@ -142,5 +211,58 @@ export async function getCityViewportByName(cityName: string) {
   return {
     center: [matchedSuggestion.point.lon, matchedSuggestion.point.lat] as [number, number],
     zoom: 11,
+  };
+}
+
+export async function getAddressByPoint(
+  point: {
+    lon: number;
+    lat: number;
+  },
+  cityName?: string,
+): Promise<ReverseGeocodedAddress | null> {
+  if (!env.map2gisKey) {
+    return null;
+  }
+
+  const searchParams = new URLSearchParams({
+    key: env.map2gisKey,
+    lon: String(point.lon),
+    lat: String(point.lat),
+    locale: "ru_RU",
+    page_size: "1",
+    fields: "items.point",
+  });
+
+  const response = await fetch(`https://catalog.api.2gis.com/3.0/items/geocode?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    throw new Error("Failed to reverse geocode address");
+  }
+
+  const data = (await response.json()) as TwoGisSuggestResponse;
+  const item = data.result?.items?.[0];
+  const normalizedCityName = cityName?.trim().toLowerCase() ?? "";
+  const candidates = [
+    item?.full_address_name?.trim(),
+    item?.address_name?.trim(),
+    item?.full_name?.trim(),
+    item?.name?.trim(),
+  ].filter((value): value is string => Boolean(value));
+  const fullAddress =
+    candidates.find((value) => value.toLowerCase() !== normalizedCityName) ??
+    candidates[0] ??
+    "";
+
+  if (!fullAddress) {
+    return null;
+  }
+
+  return {
+    fullAddress,
+    point:
+      typeof item?.point?.lon === "number" && typeof item?.point?.lat === "number"
+        ? { lon: item.point.lon, lat: item.point.lat }
+        : point,
   };
 }

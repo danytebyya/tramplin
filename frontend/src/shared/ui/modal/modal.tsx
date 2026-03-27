@@ -11,6 +11,7 @@ type ModalProps = {
   onClose: () => void;
   panelClassName?: string;
   titleAccentColor?: string;
+  closeOnBackdrop?: boolean;
 };
 
 function renderModalTitle(title: string) {
@@ -52,14 +53,24 @@ export function Modal({
   onClose,
   panelClassName,
   titleAccentColor,
+  closeOnBackdrop = true,
 }: ModalProps) {
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
     const previousOverflow = document.body.style.overflow;
+    const previousBodyOverscrollBehavior = document.body.style.overscrollBehavior;
+    const previousBodyHeight = document.body.style.height;
+
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
     document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    document.body.style.height = "100vh";
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -70,7 +81,11 @@ export function Modal({
     document.addEventListener("keydown", handleEscape);
 
     return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscrollBehavior;
       document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscrollBehavior;
+      document.body.style.height = previousBodyHeight;
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen, onClose]);
@@ -89,7 +104,7 @@ export function Modal({
         type="button"
         className="modal__backdrop"
         aria-label="Закрыть модальное окно"
-        onClick={onClose}
+        onClick={closeOnBackdrop ? onClose : undefined}
       />
       <div className={cn("modal__panel", panelClassName)}>
         <div className="modal__header">

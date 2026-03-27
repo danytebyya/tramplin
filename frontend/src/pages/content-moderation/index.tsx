@@ -6,7 +6,6 @@ import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 import arrowIcon from "../../assets/icons/arrow.svg";
 import editIcon from "../../assets/icons/edit.svg";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
-import { NotificationMenu } from "../../features/notifications";
 import {
   approveContentModerationItemRequest,
   ContentModerationItem,
@@ -19,8 +18,7 @@ import {
 } from "../../features/moderation";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
-import "../../widgets/header/header.css";
+import { Header } from "../../widgets/header";
 import "./content-moderation.css";
 
 type ContentTab = "all" | ContentModerationKind;
@@ -542,54 +540,22 @@ export function ContentModerationPage() {
 
   return (
     <main className={`content-moderation-page content-moderation-page--${themeRole}`}>
-      <header className="header">
-        <div className="header__top">
-          <Container className="home-page__container header__top-container">
-            <div className="header__brand">
-              <Link to="/" className="header__brand-name">Трамплин</Link>
-              <div className="header__logo-badge">Лого</div>
-            </div>
-
-            <div className="header__main">
-              <div className="header__controls">
-                <label className="header__search" aria-label="Поиск">
-                  <Input
-                    type="search"
-                    placeholder="Поиск"
-                    aria-label="Поиск по платформе"
-                    className="input--sm header__search-input"
-                  />
-                </label>
-
-                <div className="header__actions">
-                  <div className="header__account-actions" aria-label="Действия аккаунта">
-                    <NotificationMenu
-                      buttonClassName="header__icon-button"
-                      iconClassName="header__icon-button-image"
-                    />
-
-                    <HeaderProfileMenu items={profileMenuItems} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Container>
-        </div>
-
-        <div className="header__bottom">
-          <Container className="home-page__container header__bottom-container">
-            <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-              <NavLink to="/dashboard/curator" className="header__category-link">Дашборд</NavLink>
-              <NavLink to="/moderation/employers" className="header__category-link">Верификация работодателей</NavLink>
-              <NavLink to="/moderation/content" className="header__category-link">Модерация контента</NavLink>
-              {isAdmin ? (
-                <NavLink to="/moderation/curators" className="header__category-link">Управление кураторами</NavLink>
-              ) : null}
-              <NavLink to="/settings" className="header__category-link">Настройки</NavLink>
-            </nav>
-          </Container>
-        </div>
-      </header>
+      <Header
+        containerClassName="home-page__container"
+        profileMenuItems={profileMenuItems}
+        topNavigation={null}
+        bottomContent={
+          <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
+            <NavLink to="/dashboard/curator" className="header__category-link">Дашборд</NavLink>
+            <NavLink to="/moderation/employers" className="header__category-link">Верификация работодателей</NavLink>
+            <NavLink to="/moderation/content" className="header__category-link">Модерация контента</NavLink>
+            {isAdmin ? (
+              <NavLink to="/moderation/curators" className="header__category-link">Управление кураторами</NavLink>
+            ) : null}
+            <NavLink to="/settings" className="header__category-link">Настройки</NavLink>
+          </nav>
+        }
+      />
 
       <Container className="content-moderation-page__container">
         <header className="content-moderation-page__header">

@@ -1,18 +1,39 @@
-const LEGAL_ENTITY_PREFIXES: Array<[RegExp, string]> = [
-  [/^\s*ОБЩЕСТВО[\s\xa0]+С[\s\xa0]+ОГРАНИЧЕННОЙ[\s\xa0]+ОТВЕТСТВЕННОСТЬЮ\b[\s\xa0]*/i, "ООО "],
-  [/^\s*ПУБЛИЧНОЕ[\s\xa0]+АКЦИОНЕРНОЕ[\s\xa0]+ОБЩЕСТВО\b[\s\xa0]*/i, "ПАО "],
-  [/^\s*НЕПУБЛИЧНОЕ[\s\xa0]+АКЦИОНЕРНОЕ[\s\xa0]+ОБЩЕСТВО\b[\s\xa0]*/i, "НАО "],
-  [/^\s*АКЦИОНЕРНОЕ[\s\xa0]+ОБЩЕСТВО\b[\s\xa0]*/i, "АО "],
-  [/^\s*ИНДИВИДУАЛЬНЫЙ[\s\xa0]+ПРЕДПРИНИМАТЕЛЬ\b[\s\xa0]*/i, "ИП "],
+const LEGAL_ENTITY_REPLACEMENTS: Array<[string, string]> = [
+  ["ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ", "ООО"],
+  ["ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО", "ПАО"],
+  ["НЕПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО", "НАО"],
+  ["АКЦИОНЕРНОЕ ОБЩЕСТВО", "АО"],
+  ["ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ", "ИП"],
+  ["ФЕДЕРАЛЬНОЕ ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ", "ФГБОУ"],
+  ["ФЕДЕРАЛЬНОЕ ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ", "ФГБУ"],
+  ["ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ", "ГБУ"],
+  ["МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ", "МБУ"],
 ];
 
-export function abbreviateLegalEntityName(value: string) {
-  const normalizedValue = value.trim();
+function normalizeLegalEntityName(value: string) {
+  return value
+    .replace(/[\u00a0\u2000-\u200b\u202f\u205f\u3000]/g, " ")
+    .replace(/[«»]/g, "\"")
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
-  for (const [pattern, replacement] of LEGAL_ENTITY_PREFIXES) {
-    if (pattern.test(normalizedValue)) {
-      return normalizedValue.replace(pattern, replacement).trim();
+export function abbreviateLegalEntityName(value: string) {
+  const normalizedValue = normalizeLegalEntityName(value);
+  const upperValue = normalizedValue.toUpperCase();
+
+  for (const [fullName, abbreviation] of LEGAL_ENTITY_REPLACEMENTS) {
+    const matchIndex = upperValue.indexOf(fullName);
+
+    if (matchIndex === -1) {
+      continue;
     }
+
+    const before = normalizedValue.slice(0, matchIndex);
+    const after = normalizedValue.slice(matchIndex + fullName.length).trimStart();
+    const parts = [before.trimEnd(), abbreviation, after].filter(Boolean);
+
+    return parts.join(" ").replace(/\s+/g, " ").trim();
   }
 
   return normalizedValue;

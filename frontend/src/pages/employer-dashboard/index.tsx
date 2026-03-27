@@ -1,13 +1,49 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
 
-import profileIcon from "../../assets/icons/profile.svg";
-import { NotificationMenu } from "../../features/notifications";
+import {
+  CitySelection,
+  readSelectedCityCookie,
+  writeSelectedCityCookie,
+} from "../../features/city-selector";
+import { performLogout, useAuthStore } from "../../features/auth";
 import { Container } from "../../shared/ui";
+import { Footer } from "../../widgets/footer";
+import { Header } from "../../widgets/header";
+import { EmployerHeaderNavigation } from "../../widgets/header/header-navigation";
 import "./employer-dashboard.css";
 
 export function EmployerDashboardPage() {
+  const navigate = useNavigate();
+  const role = useAuthStore((state) => state.role);
+  const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
+
+  if (role !== "employer") {
+    return <Navigate to="/" replace />;
+  }
+
+  const profileMenuItems = [
+    { label: "Профиль компании", onClick: () => navigate("/dashboard/employer") },
+    { label: "Управление возможностями", onClick: () => navigate("/employer/opportunities") },
+    { label: "Настройки", onClick: () => navigate("/settings") },
+    { label: "Выйти", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },
+  ];
+
+  const handleCityChange = (nextCity: CitySelection) => {
+    setSelectedCity(nextCity.name);
+    writeSelectedCityCookie(nextCity.name);
+  };
+
   return (
     <main className="employer-dashboard">
+      <Header
+        containerClassName="employer-dashboard__header-container"
+        profileMenuItems={profileMenuItems}
+        city={selectedCity}
+        onCityChange={handleCityChange}
+        bottomContent={<EmployerHeaderNavigation currentPage="dashboard" />}
+      />
+
       <Container className="employer-dashboard__container">
         <section className="employer-dashboard__hero">
           <div className="employer-dashboard__hero-body">
@@ -19,25 +55,6 @@ export function EmployerDashboardPage() {
               Уведомления помогают не терять новые отклики, статус проверки компании и рекомендации
               по сильным кандидатам.
             </p>
-          </div>
-
-          <div className="employer-dashboard__toolbar" aria-label="Быстрые действия работодателя">
-            <NotificationMenu
-              buttonClassName="employer-dashboard__icon-button"
-              iconClassName="employer-dashboard__icon-button-image"
-            />
-            <Link
-              to="/onboarding/employer"
-              className="employer-dashboard__icon-button"
-              aria-label="Профиль"
-            >
-              <img
-                src={profileIcon}
-                alt=""
-                aria-hidden="true"
-                className="employer-dashboard__icon-button-image"
-              />
-            </Link>
           </div>
         </section>
 
@@ -172,6 +189,8 @@ export function EmployerDashboardPage() {
           </aside>
         </section>
       </Container>
+
+      <Footer theme="employer" />
     </main>
   );
 }

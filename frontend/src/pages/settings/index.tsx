@@ -5,8 +5,6 @@ import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
-import profileIcon from "../../assets/icons/profile.svg";
-import profileDropdownIcon from "../../assets/icons/profile.png";
 import copyIcon from "../../assets/icons/copy.svg";
 import copiedIcon from "../../assets/icons/check-mark-light.png";
 import {
@@ -50,8 +48,10 @@ import {
   listEmployerStaff,
   listEmployerStaffInvitations,
 } from "../../features/company-verification";
+import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Modal, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
+import { Header } from "../../widgets/header";
 import "../../widgets/header/header.css";
 import "./settings.css";
 
@@ -390,50 +390,6 @@ function isFutureDate(value: string) {
   return new Date(value).getTime() > Date.now();
 }
 
-function abbreviateCompanyName(value: string) {
-  const normalizedValue = value.trim();
-  const replacements: Array<[string, string]> = [
-    ["ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ ", "ООО "],
-    ["АКЦИОНЕРНОЕ ОБЩЕСТВО ", "АО "],
-    ["ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО ", "ПАО "],
-    ["НЕПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО ", "НАО "],
-    ["ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ ", "ИП "],
-    ["ФЕДЕРАЛЬНОЕ ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ ", "ФГБОУ "],
-    ["ФЕДЕРАЛЬНОЕ ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ", "ФГБУ "],
-    ["ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ", "ГБУ "],
-    ["МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ", "МБУ "],
-  ];
-  const upperValue = normalizedValue.toUpperCase();
-
-  for (const [fullPrefix, abbreviatedPrefix] of replacements) {
-    if (upperValue.startsWith(fullPrefix)) {
-      return `${abbreviatedPrefix}${normalizedValue.slice(fullPrefix.length)}`.trim();
-    }
-  }
-
-  return normalizedValue;
-}
-
-function resolveAccountContextSubtitle(role: string | undefined, companyName?: string | null) {
-  if (role === "employer") {
-    return companyName?.trim() ? abbreviateCompanyName(companyName) : "профиль работодателя";
-  }
-
-  if (role === "applicant") {
-    return "Профиль соискателя";
-  }
-
-  if (role === "curator" || role === "junior") {
-    return "Профиль куратора";
-  }
-
-  if (role === "admin") {
-    return "профиль администратора";
-  }
-
-  return "профиль пользователя";
-}
-
 function readAccessTokenPayload(token: string | null) {
   if (!token || typeof window === "undefined") {
     return null;
@@ -543,9 +499,7 @@ export function SettingsPage() {
   const isApplicant = role === "applicant";
   const isPublicRole = isEmployer || isApplicant;
   const isAuthenticated = Boolean(accessToken || refreshToken);
-  const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const profileMenuCloseTimeoutRef = useRef<number | null>(null);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [expandedStaffMemberId, setExpandedStaffMemberId] = useState<string | null>(null);
@@ -620,13 +574,6 @@ export function SettingsPage() {
     staleTime: 5 * 60 * 1000,
     enabled: isAuthenticated,
   });
-  const accountContextsQuery = useQuery({
-    queryKey: ["auth", "contexts"],
-    queryFn: listAccountContextsRequest,
-    staleTime: 30 * 1000,
-    enabled: isAuthenticated,
-  });
-
   const moderationSettingsQuery = useQuery({
     queryKey: ["moderation", "settings"],
     queryFn: getModerationSettingsRequest,
@@ -748,36 +695,6 @@ export function SettingsPage() {
     mutationFn: updateModerationSettingsRequest,
     onSuccess: (response) => {
       queryClient.setQueryData(["moderation", "settings"], response);
-    },
-  });
-  const switchAccountContextMutation = useMutation({
-    mutationFn: switchAccountContextRequest,
-    onSuccess: async (response) => {
-      const nextAccessToken = response?.data?.access_token;
-      const nextExpiresIn = response?.data?.expires_in;
-      const currentRefreshToken = useAuthStore.getState().refreshToken;
-      const nextRole = (response?.data?.active_context?.role ?? response?.data?.user?.role ?? "applicant") as
-        | "applicant"
-        | "employer"
-        | "junior"
-        | "curator"
-        | "admin";
-
-      if (nextAccessToken && nextExpiresIn && currentRefreshToken) {
-        useAuthStore.getState().setSession(nextAccessToken, currentRefreshToken, nextRole, nextExpiresIn);
-      }
-
-      setIsProfileMenuPinned(false);
-      setIsProfileMenuOpen(false);
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
-        queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
-        queryClient.invalidateQueries({ queryKey: ["users", "me", "notification-preferences"] }),
-        queryClient.invalidateQueries({ queryKey: ["notifications"] }),
-        queryClient.invalidateQueries({ queryKey: ["companies", "staff"] }),
-        queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] }),
-      ]);
     },
   });
   const createEmployerStaffInvitationMutation = useMutation({
@@ -908,28 +825,10 @@ export function SettingsPage() {
     }
   };
 
-  const openProfileMenu = () => {
-    clearProfileMenuCloseTimeout();
-    setIsProfileMenuOpen(true);
-  };
-
-  const scheduleProfileMenuClose = () => {
-    if (isProfileMenuPinned) {
-      return;
-    }
-
-    clearProfileMenuCloseTimeout();
-    profileMenuCloseTimeoutRef.current = window.setTimeout(() => {
-      setIsProfileMenuOpen(false);
-      profileMenuCloseTimeoutRef.current = null;
-    }, 40);
-  };
-
   const handleLogout = () => {
     void performLogout({
       beforeRedirect: () => {
         setIsProfileMenuPinned(false);
-        setIsProfileMenuOpen(false);
       },
     });
   };
@@ -996,34 +895,6 @@ export function SettingsPage() {
 
     setSearchParams(new URLSearchParams(search), { replace: true });
   }, [hasPendingCompanyInvite, setSearchParams]);
-
-  useEffect(() => {
-    if (!isProfileMenuOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!profileMenuRef.current?.contains(event.target as Node)) {
-        setIsProfileMenuPinned(false);
-        setIsProfileMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsProfileMenuPinned(false);
-        setIsProfileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [isProfileMenuOpen]);
 
   useEffect(() => () => {
     clearProfileMenuCloseTimeout();
@@ -1269,21 +1140,6 @@ export function SettingsPage() {
           { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
           { label: "Выход", isDanger: true, onClick: handleLogout },
         ];
-  const accountContextItems = useMemo(() => {
-    const items = accountContextsQuery.data?.data?.items ?? [];
-    const filteredItems = items.filter((item) => {
-      if (!(item.is_default && item.role === "employer")) {
-        return true;
-      }
-
-      return !items.some((candidate) => candidate.role === "employer" && !candidate.is_default);
-    });
-
-    return filteredItems;
-  }, [accountContextsQuery.data?.data?.items]);
-  const hasAccountContextCards = accountContextItems.length > 0;
-  const hasMultipleAccountContexts = accountContextItems.length > 1;
-
   const handleCityChange = (city: string | CitySelection) => {
     const nextCity = typeof city === "string" ? city : city.name;
     setSelectedCity(nextCity);
@@ -2438,226 +2294,44 @@ export function SettingsPage() {
 
   return (
     <main className={pageClassName}>
-      <header className="header">
-        <div className="header__top">
-          <Container className="home-page__container header__top-container">
-            <div className="header__brand">
-              <Link to="/" className="header__brand-name">
-                Трамплин
-              </Link>
-              <div className="header__logo-badge">Лого</div>
-            </div>
+      <Header
+        containerClassName="home-page__container"
+        profileMenuItems={profileMenuItems}
+        city={selectedCity}
+        onCityChange={handleCityChange}
+        topNavigation={isModerationRole ? null : undefined}
+        notificationOnRealtimeMessage={() => {
+          if (!canViewEmployerStaffSection) {
+            return;
+          }
 
-            <div className="header__main">
-              {isModerationRole ? null : (
-                <nav className="header__nav" aria-label="Основная навигация">
-                  <NavLink to="/" end className="header__nav-link">
-                    Главная
-                  </NavLink>
-                  <a href="#about" className="header__nav-link">
-                    О проекте
-                  </a>
-                </nav>
-              )}
-
-              <div className="header__controls">
-                <label className="header__search" aria-label="Поиск">
-                  <Input
-                    type="search"
-                    placeholder="Поиск"
-                    aria-label="Поиск по платформе"
-                    className="input--sm header__search-input"
-                  />
-                </label>
-
-                <div className="header__actions">
-                  <div className="header__account-actions" aria-label="Действия аккаунта">
-                    <NotificationMenu
-                      buttonClassName="header__icon-button"
-                      iconClassName="header__icon-button-image"
-                      onRealtimeMessage={() => {
-                        if (!canViewEmployerStaffSection) {
-                          return;
-                        }
-
-                        void queryClient.invalidateQueries({ queryKey: ["companies", "staff"] });
-                        void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
-                      }}
-                    />
-
-                    <div
-                      ref={profileMenuRef}
-                      className="header__profile-menu"
-                      onMouseEnter={openProfileMenu}
-                      onMouseLeave={scheduleProfileMenuClose}
-                    >
-                      <button
-                        type="button"
-                        className="header__icon-button"
-                        aria-label="Профиль"
-                        aria-expanded={isProfileMenuOpen}
-                        aria-haspopup="menu"
-                        onClick={() => {
-                          clearProfileMenuCloseTimeout();
-                          setIsProfileMenuPinned((currentPinned) => {
-                            const nextPinned = !currentPinned;
-                            setIsProfileMenuOpen(nextPinned);
-                            return nextPinned;
-                          });
-                        }}
-                      >
-                        <img
-                          src={profileIcon}
-                          alt=""
-                          aria-hidden="true"
-                          className="header__icon-button-image"
-                        />
-                      </button>
-
-                      <div
-                        className={
-                          isProfileMenuOpen
-                            ? hasMultipleAccountContexts
-                              ? "header__profile-dropdown header__profile-dropdown--with-contexts"
-                              : "header__profile-dropdown"
-                            : hasMultipleAccountContexts
-                              ? "header__profile-dropdown header__profile-dropdown--with-contexts header__profile-dropdown--hidden"
-                              : "header__profile-dropdown header__profile-dropdown--hidden"
-                        }
-                        role="menu"
-                        aria-hidden={!isProfileMenuOpen}
-                      >
-                        {hasAccountContextCards ? (
-                          <div
-                            className={
-                              hasMultipleAccountContexts
-                                ? "header__profile-contexts"
-                                : "header__profile-contexts header__profile-contexts--single"
-                            }
-                          >
-                            {hasMultipleAccountContexts ? (
-                              <p className="header__profile-contexts-title">
-                                <span className="header__profile-contexts-title-text">Выбор </span>
-                                <span className="header__profile-contexts-title-accent">аккаунта</span>
-                              </p>
-                            ) : null}
-                            <div className="header__profile-contexts-list">
-                              {accountContextItems.map((item) => {
-                                const isActive = Boolean(item.is_active);
-
-                                return (
-                                  <button
-                                    key={item.id}
-                                    type="button"
-                                    className={
-                                      hasMultipleAccountContexts
-                                        ? isActive
-                                          ? item.role === "applicant"
-                                            ? "header__profile-context-card header__profile-context-card--active header__profile-context-card--active-applicant"
-                                            : "header__profile-context-card header__profile-context-card--active header__profile-context-card--active-employer"
-                                          : "header__profile-context-card"
-                                        : "header__profile-context-card header__profile-context-card--static"
-                                    }
-                                    disabled={!hasMultipleAccountContexts || isActive || switchAccountContextMutation.isPending}
-                                    onClick={() => {
-                                      if (!hasMultipleAccountContexts || isActive) {
-                                        return;
-                                      }
-
-                                      switchAccountContextMutation.mutate(item.id);
-                                    }}
-                                  >
-                                    <span className="header__profile-context-avatar">
-                                      <img
-                                        src={profileDropdownIcon}
-                                        alt=""
-                                        aria-hidden="true"
-                                        className="header__profile-context-avatar-image"
-                                      />
-                                    </span>
-                                    <span className="header__profile-context-copy">
-                                      <span className="header__profile-context-name">
-                                        {user?.display_name ?? item.label ?? "Профиль"}
-                                      </span>
-                                      <span className="header__profile-context-role">
-                                        {resolveAccountContextSubtitle(item.role, item.company_name)}
-                                      </span>
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : null}
-                        {profileMenuItems.map((item) => (
-                          <button
-                            key={item.label}
-                            type="button"
-                            className={
-                              item.isDanger
-                                ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
-                                : "header__profile-dropdown-item"
-                            }
-                            role="menuitem"
-                            onClick={item.onClick}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Container>
-        </div>
-
-        <div className="header__bottom">
-          <Container className="home-page__container header__bottom-container">
-            {isModerationRole ? (
-              <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-                <NavLink to="/" end className="header__category-link">
-                  Дашборд
+          void queryClient.invalidateQueries({ queryKey: ["companies", "staff"] });
+          void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
+        }}
+        bottomContent={
+          isModerationRole ? (
+            <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
+              <NavLink to="/" end className="header__category-link">
+                Дашборд
+              </NavLink>
+              <NavLink to="/moderation/employers" className="header__category-link">
+                Верификация работодателей
+              </NavLink>
+              <NavLink to="/moderation/content" className="header__category-link">
+                Модерация контента
+              </NavLink>
+              {role === "admin" ? (
+                <NavLink to="/moderation/curators" className="header__category-link">
+                  Управление кураторами
                 </NavLink>
-                <NavLink to="/moderation/employers" className="header__category-link">
-                  Верификация работодателей
-                </NavLink>
-                <NavLink to="/moderation/content" className="header__category-link">
-                  Модерация контента
-                </NavLink>
-                {role === "admin" ? (
-                  <NavLink to="/moderation/curators" className="header__category-link">
-                    Управление кураторами
-                  </NavLink>
-                ) : null}
-                <NavLink to="/settings" className="header__category-link">
-                  Настройки
-                </NavLink>
-              </nav>
-            ) : (
-              <>
-                <nav className="header__categories" aria-label="Категории">
-                  <a href="#vacancies" className="header__category-link">
-                    Вакансии
-                  </a>
-                  <a href="#internships" className="header__category-link">
-                    Стажировки
-                  </a>
-                  <a href="#events" className="header__category-link">
-                    Мероприятия
-                  </a>
-                  <a href="#mentorship" className="header__category-link">
-                    Менторство
-                  </a>
-                </nav>
-
-                <CitySelector value={selectedCity} onChange={handleCityChange} />
-              </>
-            )}
-          </Container>
-        </div>
-      </header>
+              ) : null}
+              <NavLink to="/settings" className="header__category-link">
+                Настройки
+              </NavLink>
+            </nav>
+          ) : undefined
+        }
+      />
 
       <Container className="settings-page__container">
         {isModerationRole ? (

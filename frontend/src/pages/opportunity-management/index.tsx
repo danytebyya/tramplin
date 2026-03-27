@@ -1,28 +1,37 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Navigate, Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
+import { Navigate, NavLink, useNavigate } from "react-router-dom";
+
+import arrowIcon from "../../assets/icons/arrow.svg";
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
-import filterIcon from "../../assets/icons/filter.svg";
-import searchIcon from "../../assets/icons/search.svg";
-import sortingIcon from "../../assets/icons/sorting.svg";
 import uploadIcon from "../../assets/icons/upload.svg";
 import {
-  CitySelector,
+  CitySelection,
   readSelectedCityCookie,
   writeSelectedCityCookie,
 } from "../../features/city-selector";
-import { performLogout, useAuthStore } from "../../features/auth";
-import { NotificationMenu } from "../../features/notifications";
-import { Button, Container, Input } from "../../shared/ui";
+import {
+  AddressSuggestion,
+  CitySuggestion,
+  getAddressByPoint,
+  getAddressSuggestions,
+  getCitySuggestions,
+  getCityViewportByName,
+  popularCities,
+} from "../../features/city-selector/api";
+import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import { Badge, Button, Checkbox, Container, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
-import "../../widgets/header/header.css";
+import { Header } from "../../widgets/header";
+import { OpportunityLocationMap, OpportunityLocationPoint } from "./opportunity-location-map";
 import "./opportunity-management.css";
 
 type OpportunityManagementStatus = "active" | "planned" | "removed" | "rejected" | "pending_review";
 type OpportunitySortValue = "newest" | "oldest" | "responses";
+type OpportunitySortDirection = "asc" | "desc";
 
 type OpportunityManagementItem = {
   id: string;
@@ -45,21 +54,30 @@ type OpportunityManagementItem = {
   submittedAtLabel?: string;
 };
 
-type EmployerTabItem = {
-  label: string;
-  to?: string;
-  isCurrent?: boolean;
-};
-
 const DEFAULT_CITY = "Чебоксары";
 const PAGE_SIZE = 5;
-
-const employerTabItems: EmployerTabItem[] = [
-  { label: "Профиль компании", to: "/dashboard/employer" },
-  { label: "Управление возможностями", to: "/employer/opportunities", isCurrent: true },
-  { label: "Отклики" },
-  { label: "Чат" },
-  { label: "Настройки", to: "/settings" },
+const opportunityTypeOptions = [
+  { value: "vacancy", label: "Вакансия" },
+  { value: "internship", label: "Стажировка" },
+  { value: "event", label: "Мероприятие" },
+  { value: "mentorship", label: "Менторская программа" },
+] as const;
+const workFormatOptions = [
+  { value: "offline", label: "Offline" },
+  { value: "hybrid", label: "Гибрид" },
+  { value: "online", label: "Online" },
+] as const;
+const opportunityTagOptions = [
+  "Python",
+  "JavaScript",
+  "React",
+  "SQL",
+  "Docker",
+  "TypeScript",
+  "Analytics",
+  "Design",
+  "Marketing",
+  "Product",
 ];
 
 const statusFilterItems: Array<{ value: OpportunityManagementStatus | "all"; label: string }> = [
@@ -72,8 +90,7 @@ const statusFilterItems: Array<{ value: OpportunityManagementStatus | "all"; lab
 ];
 
 const sortItems: Array<{ value: OpportunitySortValue; label: string }> = [
-  { value: "newest", label: "Сначала новые" },
-  { value: "oldest", label: "Сначала старые" },
+  { value: "newest", label: "По дате публикации" },
   { value: "responses", label: "По откликам" },
 ];
 
@@ -203,6 +220,26 @@ function resolveStatusLabel(status: OpportunityManagementStatus) {
   }
 }
 
+function resolveStatusVariant(status: OpportunityManagementStatus) {
+  if (status === "active") {
+    return "active" as const;
+  }
+
+  if (status === "planned") {
+    return "verified" as const;
+  }
+
+  if (status === "pending_review") {
+    return "pending-review" as const;
+  }
+
+  if (status === "rejected") {
+    return "rejected" as const;
+  }
+
+  return "unpublished" as const;
+}
+
 function resolveSortWeight(item: OpportunityManagementItem, sortValue: OpportunitySortValue) {
   if (sortValue === "responses") {
     return item.responsesCount ?? 0;
@@ -244,18 +281,63 @@ function buildPaginationItems(currentPage: number, totalPages: number) {
   return [1, "ellipsis", currentPage, "ellipsis-right", totalPages];
 }
 
+function formatPointLabel(point: OpportunityLocationPoint) {
+  return `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`;
+}
+
 export function OpportunityManagementPage() {
   const navigate = useNavigate();
   const role = useAuthStore((state) => state.role);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? DEFAULT_CITY);
   const [searchValue, setSearchValue] = useState("");
-  const [statusFilter, setStatusFilter] = useState<OpportunityManagementStatus | "all">("all");
-  const [sortValue, setSortValue] = useState<OpportunitySortValue>("newest");
+  const [selectedStatuses, setSelectedStatuses] = useState<Array<OpportunityManagementStatus | "all">>(["all"]);
+  const [appliedStatuses, setAppliedStatuses] = useState<Array<OpportunityManagementStatus | "all">>(["all"]);
+  const [selectedSortField, setSelectedSortField] = useState<OpportunitySortValue>("newest");
+  const [appliedSortField, setAppliedSortField] = useState<OpportunitySortValue>("newest");
+  const [selectedSortDirection, setSelectedSortDirection] = useState<OpportunitySortDirection>("desc");
+  const [appliedSortDirection, setAppliedSortDirection] = useState<OpportunitySortDirection>("desc");
   const [page, setPage] = useState(1);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [isCreateOpportunityModalOpen, setIsCreateOpportunityModalOpen] = useState(false);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [createOpportunityType, setCreateOpportunityType] =
+    useState<(typeof opportunityTypeOptions)[number]["value"]>("vacancy");
+  const [createOpportunityTitle, setCreateOpportunityTitle] = useState("");
+  const [createOpportunityDescription, setCreateOpportunityDescription] = useState("");
+  const [createOpportunityCity, setCreateOpportunityCity] = useState(selectedCity);
+  const [createOpportunityCityPoint, setCreateOpportunityCityPoint] = useState<OpportunityLocationPoint | null>(
+    popularCities.find((item) => item.name === selectedCity)?.point ?? null,
+  );
+  const [createOpportunitySalary, setCreateOpportunitySalary] = useState("");
+  const [createOpportunityTagQuery, setCreateOpportunityTagQuery] = useState("");
+  const [createOpportunityTags, setCreateOpportunityTags] = useState<string[]>(["Python", "JavaScript", "React"]);
+  const [createOpportunityFormat, setCreateOpportunityFormat] =
+    useState<(typeof workFormatOptions)[number]["value"]>("offline");
+  const [createOpportunityPublishDate, setCreateOpportunityPublishDate] = useState("");
+  const [createOpportunityAddress, setCreateOpportunityAddress] = useState("");
+  const [createOpportunityCitySuggestions, setCreateOpportunityCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [isCitySuggestionsOpen, setIsCitySuggestionsOpen] = useState(false);
+  const [isCitySuggestionsLoading, setIsCitySuggestionsLoading] = useState(false);
+  const [createOpportunityAddressSuggestions, setCreateOpportunityAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isAddressSuggestionsOpen, setIsAddressSuggestionsOpen] = useState(false);
+  const [isAddressSuggestionsLoading, setIsAddressSuggestionsLoading] = useState(false);
+  const [selectedLocationPoint, setSelectedLocationPoint] = useState<OpportunityLocationPoint | null>(null);
+  const [isDraftLocationAddressLoading, setIsDraftLocationAddressLoading] = useState(false);
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  const cityInputRef = useRef<HTMLInputElement | null>(null);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const cityFieldRef = useRef<HTMLDivElement | null>(null);
+  const addressFieldRef = useRef<HTMLDivElement | null>(null);
+  const reverseGeocodeRequestIdRef = useRef(0);
+
+  const meQuery = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: meRequest,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -265,6 +347,14 @@ export function OpportunityManagementPage() {
 
       if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
         setIsSortMenuOpen(false);
+      }
+
+      if (cityFieldRef.current && !cityFieldRef.current.contains(event.target as Node)) {
+        setIsCitySuggestionsOpen(false);
+      }
+
+      if (addressFieldRef.current && !addressFieldRef.current.contains(event.target as Node)) {
+        setIsAddressSuggestionsOpen(false);
       }
     };
 
@@ -277,17 +367,137 @@ export function OpportunityManagementPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchValue, sortValue, statusFilter]);
+  }, [searchValue, appliedSortDirection, appliedSortField, appliedStatuses]);
+
+  useEffect(() => {
+    const normalizedQuery = createOpportunityCity.trim();
+
+    if (!isCreateOpportunityModalOpen || !normalizedQuery) {
+      setCreateOpportunityCitySuggestions([]);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsCitySuggestionsLoading(true);
+
+      void getCitySuggestions(normalizedQuery)
+        .then((items) => {
+          setCreateOpportunityCitySuggestions(items);
+        })
+        .catch(() => {
+          setCreateOpportunityCitySuggestions([]);
+        })
+        .finally(() => {
+          setIsCitySuggestionsLoading(false);
+        });
+    }, 220);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [createOpportunityCity, isCreateOpportunityModalOpen]);
+
+  useEffect(() => {
+    if (!isCreateOpportunityModalOpen || !createOpportunityCity.trim() || createOpportunityCityPoint) {
+      return;
+    }
+
+    let isActive = true;
+
+    void getCityViewportByName(createOpportunityCity)
+      .then((viewport) => {
+        if (!isActive || !viewport) {
+          return;
+        }
+
+        setCreateOpportunityCityPoint({
+          lon: viewport.center[0],
+          lat: viewport.center[1],
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isActive = false;
+    };
+  }, [createOpportunityCity, createOpportunityCityPoint, isCreateOpportunityModalOpen]);
+
+  useEffect(() => {
+    const normalizedQuery = createOpportunityAddress.trim();
+
+    if (!isCreateOpportunityModalOpen || !normalizedQuery) {
+      setCreateOpportunityAddressSuggestions([]);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsAddressSuggestionsLoading(true);
+
+      void getAddressSuggestions(normalizedQuery)
+        .then((items) => {
+          setCreateOpportunityAddressSuggestions(items);
+        })
+        .catch(() => {
+          setCreateOpportunityAddressSuggestions([]);
+        })
+        .finally(() => {
+          setIsAddressSuggestionsLoading(false);
+        });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [createOpportunityAddress, createOpportunityCity, isCreateOpportunityModalOpen]);
 
   if (role !== "employer") {
     return <Navigate to="/" replace />;
   }
 
+  const toggleStatusFilter = (value: OpportunityManagementStatus | "all") => {
+    setSelectedStatuses((current) => {
+      if (value === "all") {
+        return ["all"];
+      }
+
+      const nextItems = current.includes(value)
+        ? current.filter((item) => item !== value && item !== "all")
+        : [...current.filter((item) => item !== "all"), value];
+
+      return nextItems.length > 0 ? nextItems : ["all"];
+    });
+  };
+
+  const applyFilters = () => {
+    setAppliedStatuses(selectedStatuses);
+    setIsStatusMenuOpen(false);
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setSelectedStatuses(["all"]);
+    setAppliedStatuses(["all"]);
+    setIsStatusMenuOpen(false);
+    setPage(1);
+  };
+
+  const applySorting = () => {
+    setAppliedSortField(selectedSortField);
+    setAppliedSortDirection(selectedSortDirection);
+    setIsSortMenuOpen(false);
+    setPage(1);
+  };
+
+  const resetSorting = () => {
+    setSelectedSortField("newest");
+    setAppliedSortField("newest");
+    setSelectedSortDirection("desc");
+    setAppliedSortDirection("desc");
+    setIsSortMenuOpen(false);
+    setPage(1);
+  };
+
   const filteredItems = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
 
     const nextItems = opportunityItems.filter((item) => {
-      if (statusFilter !== "all" && item.status !== statusFilter) {
+      if (!appliedStatuses.includes("all") && !appliedStatuses.includes(item.status)) {
         return false;
       }
 
@@ -310,22 +520,18 @@ export function OpportunityManagementPage() {
     });
 
     nextItems.sort((left, right) => {
-      const leftWeight = resolveSortWeight(left, sortValue);
-      const rightWeight = resolveSortWeight(right, sortValue);
+      const leftWeight = resolveSortWeight(left, appliedSortField);
+      const rightWeight = resolveSortWeight(right, appliedSortField);
 
-      if (sortValue === "oldest") {
+      if (appliedSortDirection === "asc") {
         return leftWeight - rightWeight;
-      }
-
-      if (sortValue === "responses") {
-        return rightWeight - leftWeight;
       }
 
       return rightWeight - leftWeight;
     });
 
     return nextItems;
-  }, [searchValue, sortValue, statusFilter]);
+  }, [appliedSortDirection, appliedSortField, appliedStatuses, searchValue]);
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -344,55 +550,154 @@ export function OpportunityManagementPage() {
     { label: "Настройки", onClick: () => navigate("/settings") },
     { label: "Выйти", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },
   ];
+  const filteredTagOptions = opportunityTagOptions.filter((item) =>
+    item.toLowerCase().includes(createOpportunityTagQuery.trim().toLowerCase()) &&
+    !createOpportunityTags.includes(item),
+  );
+  const preferredCity =
+    meQuery.data?.data?.user?.preferred_city?.trim() || selectedCity;
+  const currentEmployerName =
+    meQuery.data?.data?.user?.employer_profile?.company_name?.trim() || "";
+  const selectedCityPoint = createOpportunityCityPoint;
+  const createOpportunityPreviewPoint = selectedLocationPoint ?? selectedCityPoint;
+  const isCreateOpportunityReady = Boolean(
+    createOpportunityTitle.trim() &&
+    createOpportunityDescription.trim() &&
+    createOpportunityCity.trim() &&
+    createOpportunitySalary.trim() &&
+    createOpportunityTags.length > 0,
+  );
+
+  const handleCityChange = (nextCity: CitySelection) => {
+    setSelectedCity(nextCity.name);
+    writeSelectedCityCookie(nextCity.name);
+  };
+
+  const resetCreateOpportunityForm = () => {
+    setCreateOpportunityType("vacancy");
+    setCreateOpportunityTitle("");
+    setCreateOpportunityDescription("");
+    setCreateOpportunityCity(preferredCity);
+    setCreateOpportunityCityPoint(popularCities.find((item) => item.name === preferredCity)?.point ?? null);
+    setCreateOpportunitySalary("");
+    setCreateOpportunityTagQuery("");
+    setCreateOpportunityTags(["Python", "JavaScript", "React"]);
+    setCreateOpportunityFormat("offline");
+    setCreateOpportunityPublishDate("");
+    setCreateOpportunityAddress("");
+    setCreateOpportunityAddressSuggestions([]);
+    setIsAddressSuggestionsOpen(false);
+    setSelectedLocationPoint(null);
+    setIsDraftLocationAddressLoading(false);
+    setIsMapExpanded(false);
+  };
+
+  useEffect(() => {
+    if (selectedLocationPoint) {
+      return;
+    }
+
+    setCreateOpportunityCity(preferredCity);
+    setCreateOpportunityCityPoint(popularCities.find((item) => item.name === preferredCity)?.point ?? null);
+  }, [preferredCity, selectedLocationPoint]);
+
+  const closeCreateOpportunityModal = () => {
+    setIsCreateOpportunityModalOpen(false);
+    resetCreateOpportunityForm();
+  };
+
+  const handleAddressSuggestionSelect = (item: AddressSuggestion) => {
+    setCreateOpportunityAddress(item.fullAddress);
+    setCreateOpportunityAddressSuggestions([]);
+    setIsAddressSuggestionsOpen(false);
+    addressInputRef.current?.blur();
+
+    if (item.point) {
+      setSelectedLocationPoint(item.point);
+    }
+  };
+
+  const handlePreviewLocationPointChange = (point: OpportunityLocationPoint) => {
+    setSelectedLocationPoint(point);
+
+    const requestId = reverseGeocodeRequestIdRef.current + 1;
+
+    reverseGeocodeRequestIdRef.current = requestId;
+    setIsDraftLocationAddressLoading(true);
+
+    void getAddressByPoint(point, createOpportunityCity)
+      .then((result) => {
+        if (reverseGeocodeRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        const nextAddress = result?.fullAddress ?? "";
+
+        if (nextAddress) {
+          setCreateOpportunityAddress(nextAddress);
+          setCreateOpportunityAddressSuggestions([]);
+          setIsAddressSuggestionsOpen(false);
+        }
+      })
+      .catch(() => {
+        if (reverseGeocodeRequestIdRef.current !== requestId) {
+          return;
+        }
+      })
+      .finally(() => {
+        if (reverseGeocodeRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setIsDraftLocationAddressLoading(false);
+      });
+  };
+
+  const handleCreateOpportunitySubmit = () => {
+    if (!isCreateOpportunityReady) {
+      return;
+    }
+
+    closeCreateOpportunityModal();
+  };
 
   return (
     <main className="opportunity-management-page">
-      <header className="header">
-        <div className="header__top">
-          <Container className="opportunity-management-page__header-container header__top-container">
-            <div className="header__brand">
-              <Link to="/" className="header__brand-name">Трамплин</Link>
-              <div className="header__logo-badge">Лого</div>
-            </div>
-
-            <div className="header__main">
-              <div className="header__controls">
-                <div className="header__actions">
-                  <div className="header__account-actions" aria-label="Действия аккаунта">
-                    <NotificationMenu
-                      buttonClassName="header__icon-button"
-                      iconClassName="header__icon-button-image"
-                    />
-                    <HeaderProfileMenu items={profileMenuItems} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Container>
-        </div>
-      </header>
+      <Header
+        containerClassName="opportunity-management-page__header-container"
+        profileMenuItems={profileMenuItems}
+        city={selectedCity}
+        onCityChange={handleCityChange}
+        topNavigation={
+          <nav className="header__nav" aria-label="Основная навигация">
+            <NavLink to="/" end className="header__nav-link">
+              Главная
+            </NavLink>
+            <a href="#about" className="header__nav-link">
+              О проекте
+            </a>
+          </nav>
+        }
+      />
 
       <Container className="opportunity-management-page__container">
-        <div className="opportunity-management-page__tabs" role="tablist" aria-label="Вкладки работодателя">
-          {employerTabItems.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={
-                item.isCurrent
-                  ? "opportunity-management-page__tab opportunity-management-page__tab--active"
-                  : "opportunity-management-page__tab"
-              }
-              onClick={() => {
-                if (item.to) {
-                  navigate(item.to);
-                }
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <nav className="opportunity-management-page__tabs" aria-label="Разделы работодателя">
+          <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/dashboard/employer")}>
+            Профиль компании
+          </button>
+          <button type="button" className="opportunity-management-page__tab opportunity-management-page__tab--active">
+            Управление возможностями
+          </button>
+          <button type="button" className="opportunity-management-page__tab">
+            Отклики
+          </button>
+          <button type="button" className="opportunity-management-page__tab">
+            Чат
+          </button>
+          <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/settings")}>
+            Настройки
+          </button>
+        </nav>
 
         <section className="opportunity-management-page__metrics" aria-label="Статистика возможностей">
           <article className="opportunity-management-page__metric-card">
@@ -414,8 +719,7 @@ export function OpportunityManagementPage() {
         </section>
 
         <section className="opportunity-management-page__toolbar" aria-label="Управление списком возможностей">
-          <label className="opportunity-management-page__search" aria-label="Поиск по возможностям">
-            <img src={searchIcon} alt="" aria-hidden="true" className="opportunity-management-page__search-icon" />
+          <label className="opportunity-management-page__search header__search" aria-label="Поиск по возможностям">
             <Input
               type="search"
               value={searchValue}
@@ -424,99 +728,174 @@ export function OpportunityManagementPage() {
               className="input--sm opportunity-management-page__search-input"
             />
           </label>
+          <div className="opportunity-management-page__toolbar-actions">
+            <div ref={statusMenuRef} className="opportunity-management-page__filters">
+              <button
+                type="button"
+                className="opportunity-management-page__icon-button opportunity-management-page__icon-button--filter"
+                aria-label="Фильтрация"
+                aria-expanded={isStatusMenuOpen}
+                onClick={() => {
+                  setIsSortMenuOpen(false);
+                  setIsStatusMenuOpen((current) => !current);
+                }}
+              />
 
-          <div ref={statusMenuRef} className="opportunity-management-page__toolbar-menu">
-            <button
+              {isStatusMenuOpen ? (
+                <div className="opportunity-management-page__filters-popover">
+                  <div className="opportunity-management-page__filters-section">
+                    <div className="opportunity-management-page__filters-head">
+                      <h2 className="opportunity-management-page__filters-title">Фильтры</h2>
+                      <button
+                        type="button"
+                        className="opportunity-management-page__filters-reset"
+                        onClick={resetFilters}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="opportunity-management-page__filters-section">
+                    <div className="opportunity-management-page__filters-head">
+                      <h3 className="opportunity-management-page__filters-group-title">По статусам</h3>
+                      <button
+                        type="button"
+                        className="opportunity-management-page__filters-reset"
+                        onClick={() => setSelectedStatuses(["all"])}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                    <div className="opportunity-management-page__filters-options opportunity-management-page__filters-options--checkboxes">
+                      {statusFilterItems.map((item) => (
+                        <label key={item.value} className="opportunity-management-page__filter-option">
+                          <Checkbox
+                            checked={selectedStatuses.includes(item.value)}
+                            onChange={() => toggleStatusFilter(item.value)}
+                            variant="primary"
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="opportunity-management-page__filters-footer">
+                    <Button type="button" variant="primary" size="sm" fullWidth onClick={applyFilters}>
+                      Показать результаты
+                    </Button>
+                    <Button type="button" variant="primary-outline" size="sm" fullWidth onClick={resetFilters}>
+                      Сбросить фильтры
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div ref={sortMenuRef} className="opportunity-management-page__sorting">
+              <button
+                type="button"
+                className="opportunity-management-page__icon-button opportunity-management-page__icon-button--sorting"
+                aria-label="Сортировка"
+                aria-expanded={isSortMenuOpen}
+                onClick={() => {
+                  setIsStatusMenuOpen(false);
+                  setIsSortMenuOpen((current) => !current);
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  className={
+                    appliedSortDirection === "desc"
+                      ? "opportunity-management-page__icon opportunity-management-page__icon--descending"
+                      : "opportunity-management-page__icon opportunity-management-page__icon--ascending"
+                  }
+                />
+              </button>
+
+              {isSortMenuOpen ? (
+                <div className="opportunity-management-page__sorting-popover">
+                  <div className="opportunity-management-page__filters-section">
+                    <div className="opportunity-management-page__filters-head">
+                      <h2 className="opportunity-management-page__filters-title">Сортировка</h2>
+                      <button
+                        type="button"
+                        className="opportunity-management-page__filters-reset"
+                        onClick={resetSorting}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="opportunity-management-page__filters-section">
+                    <div className="opportunity-management-page__filters-options opportunity-management-page__filters-options--radio">
+                      {sortItems.map((item) => (
+                        <label key={item.value} className="opportunity-management-page__filter-option">
+                          <Radio
+                            checked={selectedSortField === item.value}
+                            onChange={() => setSelectedSortField(item.value)}
+                            variant="primary"
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="opportunity-management-page__filters-section">
+                    <div className="opportunity-management-page__filters-options opportunity-management-page__filters-options--radio">
+                      <label className="opportunity-management-page__filter-option">
+                        <Radio
+                          checked={selectedSortDirection === "desc"}
+                          onChange={() => setSelectedSortDirection("desc")}
+                          variant="primary"
+                        />
+                        <span>{selectedSortField === "responses" ? "Сначала больше" : "Сначала новые"}</span>
+                      </label>
+                      <label className="opportunity-management-page__filter-option">
+                        <Radio
+                          checked={selectedSortDirection === "asc"}
+                          onChange={() => setSelectedSortDirection("asc")}
+                          variant="primary"
+                        />
+                        <span>{selectedSortField === "responses" ? "Сначала меньше" : "Сначала старые"}</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="opportunity-management-page__filters-footer">
+                    <Button type="button" variant="primary" size="sm" fullWidth onClick={applySorting}>
+                      Показать результаты
+                    </Button>
+                    <Button type="button" variant="primary-outline" size="sm" fullWidth onClick={resetSorting}>
+                      Сбросить сортировку
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <Button
               type="button"
-              className={
-                isStatusMenuOpen
-                  ? "opportunity-management-page__icon-button opportunity-management-page__icon-button--active"
-                  : "opportunity-management-page__icon-button"
-              }
-              aria-label="Фильтр по статусу"
-              onClick={() => {
-                setIsStatusMenuOpen((current) => !current);
-                setIsSortMenuOpen(false);
-              }}
+              variant="primary"
+              size="md"
+              className="opportunity-management-page__create-button"
+              onClick={() => setIsCreateOpportunityModalOpen(true)}
             >
-              <img src={filterIcon} alt="" aria-hidden="true" className="opportunity-management-page__icon-button-image" />
-            </button>
-            {isStatusMenuOpen ? (
-              <div className="opportunity-management-page__menu-popover">
-                {statusFilterItems.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    className={
-                      statusFilter === item.value
-                        ? "opportunity-management-page__menu-item opportunity-management-page__menu-item--active"
-                        : "opportunity-management-page__menu-item"
-                    }
-                    onClick={() => {
-                      setStatusFilter(item.value);
-                      setIsStatusMenuOpen(false);
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+              Создать возможность
+            </Button>
           </div>
-
-          <div ref={sortMenuRef} className="opportunity-management-page__toolbar-menu">
-            <button
-              type="button"
-              className={
-                isSortMenuOpen
-                  ? "opportunity-management-page__icon-button opportunity-management-page__icon-button--active"
-                  : "opportunity-management-page__icon-button"
-              }
-              aria-label="Сортировка"
-              onClick={() => {
-                setIsSortMenuOpen((current) => !current);
-                setIsStatusMenuOpen(false);
-              }}
-            >
-              <img src={sortingIcon} alt="" aria-hidden="true" className="opportunity-management-page__icon-button-image" />
-            </button>
-            {isSortMenuOpen ? (
-              <div className="opportunity-management-page__menu-popover">
-                {sortItems.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    className={
-                      sortValue === item.value
-                        ? "opportunity-management-page__menu-item opportunity-management-page__menu-item--active"
-                        : "opportunity-management-page__menu-item"
-                    }
-                    onClick={() => {
-                      setSortValue(item.value);
-                      setIsSortMenuOpen(false);
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <Button type="button" variant="primary" size="md" className="opportunity-management-page__create-button">
-            Создать возможность
-          </Button>
         </section>
 
         <section className="opportunity-management-page__grid" aria-label="Карточки возможностей">
           {visibleItems.map((item) => (
             <article key={item.id} className="opportunity-management-page__card">
               <div className="opportunity-management-page__card-body">
-                <span
-                  className={`opportunity-management-page__status opportunity-management-page__status--${item.status}`}
-                >
+                <Status className="opportunity-management-page__status" variant={resolveStatusVariant(item.status)}>
                   {resolveStatusLabel(item.status)}
-                </span>
+                </Status>
 
                 <div className="opportunity-management-page__title-group">
                   <h2 className="opportunity-management-page__card-title">{item.title}</h2>
@@ -529,8 +908,10 @@ export function OpportunityManagementPage() {
                 </div>
 
                 <div className="opportunity-management-page__tags">
-                  {item.tags.map((tag) => (
-                    <span key={`${item.id}-${tag}`} className="opportunity-management-page__tag">{tag}</span>
+                  {item.tags.map((tag, tagIndex) => (
+                    <Badge key={`${item.id}-${tag}-${tagIndex}`} variant="primary">
+                      {tag}
+                    </Badge>
                   ))}
                 </div>
 
@@ -623,14 +1004,20 @@ export function OpportunityManagementPage() {
           ))}
         </section>
 
-        <div className="opportunity-management-page__pagination" aria-label="Пагинация">
+        <nav className="opportunity-management-page__pagination" aria-label="Пагинация">
           <button
             type="button"
             className="opportunity-management-page__pagination-arrow"
-            disabled={currentPage === 1}
             onClick={() => setPage((currentValue) => Math.max(1, currentValue - 1))}
+            disabled={currentPage === 1}
+            aria-label="Предыдущая страница"
           >
-            &lt;
+            <img
+              src={arrowIcon}
+              alt=""
+              aria-hidden="true"
+              className="opportunity-management-page__pagination-arrow-icon opportunity-management-page__pagination-arrow-icon--prev"
+            />
           </button>
           {paginationItems.map((item, index) =>
             typeof item === "number" ? (
@@ -639,8 +1026,8 @@ export function OpportunityManagementPage() {
                 type="button"
                 className={
                   currentPage === item
-                    ? "opportunity-management-page__pagination-item opportunity-management-page__pagination-item--active"
-                    : "opportunity-management-page__pagination-item"
+                    ? "opportunity-management-page__pagination-page opportunity-management-page__pagination-page--active"
+                    : "opportunity-management-page__pagination-page"
                 }
                 onClick={() => setPage(item)}
               >
@@ -655,23 +1042,300 @@ export function OpportunityManagementPage() {
           <button
             type="button"
             className="opportunity-management-page__pagination-arrow"
-            disabled={currentPage === totalPages}
             onClick={() => setPage((currentValue) => Math.min(totalPages, currentValue + 1))}
+            disabled={currentPage === totalPages}
+            aria-label="Следующая страница"
           >
-            &gt;
+            <img
+              src={arrowIcon}
+              alt=""
+              aria-hidden="true"
+              className="opportunity-management-page__pagination-arrow-icon"
+            />
           </button>
-        </div>
+        </nav>
 
-        <div className="opportunity-management-page__city-selector">
-          <CitySelector
-            value={selectedCity}
-            onChange={(nextCity) => {
-              setSelectedCity(nextCity.name);
-              writeSelectedCityCookie(nextCity.name);
-            }}
-          />
-        </div>
       </Container>
+
+      <Modal
+        isOpen={isCreateOpportunityModalOpen}
+        onClose={closeCreateOpportunityModal}
+        title="Создание возможности"
+        panelClassName="opportunity-management-page__modal-panel"
+        titleAccentColor="var(--color-primary)"
+        closeOnBackdrop={false}
+      >
+        <div className="opportunity-management-page__modal-form">
+          <div className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Тип <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <div className="opportunity-management-page__modal-radio-group">
+              {opportunityTypeOptions.map((item) => (
+                <label key={item.value} className="opportunity-management-page__modal-radio-option">
+                  <Radio
+                    checked={createOpportunityType === item.value}
+                    onChange={() => setCreateOpportunityType(item.value)}
+                    variant="primary"
+                  />
+                  <span>{item.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <label className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Название <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <Input
+              value={createOpportunityTitle}
+              onChange={(event) => setCreateOpportunityTitle(event.target.value)}
+              placeholder="Junior Backend-разработчик (Python, FastAPI)"
+              className="input--sm opportunity-management-page__modal-input"
+            />
+          </label>
+
+          <label className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Описание с требованиями, обязанностями и условиями
+              {" "}
+              <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <textarea
+              value={createOpportunityDescription}
+              onChange={(event) => setCreateOpportunityDescription(event.target.value)}
+              placeholder="Разработка и поддержка backend-сервиса на Python (FastAPI), работа с API и базой данных"
+              className="opportunity-management-page__modal-textarea"
+              rows={4}
+            />
+          </label>
+
+          <label className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Работодатель <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <Input
+              value={currentEmployerName}
+              placeholder="*автозаполнение из профиля*"
+              className="input--sm opportunity-management-page__modal-input"
+              disabled
+            />
+          </label>
+
+          <div ref={addressFieldRef} className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Адрес <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <div className="opportunity-management-page__modal-address-head">
+              <Input
+                ref={addressInputRef}
+                value={createOpportunityAddress}
+                onFocus={() => setIsAddressSuggestionsOpen(true)}
+                onBlur={() => {
+                  if (!createOpportunityAddress.trim()) {
+                    setIsAddressSuggestionsOpen(false);
+                  }
+                }}
+                onChange={(event) => {
+                  setCreateOpportunityAddress(event.target.value);
+                  setIsAddressSuggestionsOpen(true);
+                }}
+                placeholder="Начните вводить полный адрес"
+                className="input--sm opportunity-management-page__modal-input"
+              />
+            </div>
+
+            {isAddressSuggestionsOpen ? (
+              <div className="opportunity-management-page__modal-address-dropdown">
+                {isAddressSuggestionsLoading ? (
+                  <div className="opportunity-management-page__modal-address-empty">Загружаем адреса...</div>
+                ) : createOpportunityAddressSuggestions.length > 0 ? (
+                  createOpportunityAddressSuggestions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="opportunity-management-page__modal-address-option"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleAddressSuggestionSelect(item)}
+                    >
+                      <span className="opportunity-management-page__modal-address-option-title">
+                        {item.fullAddress}
+                      </span>
+                      {item.subtitle ? (
+                        <span className="opportunity-management-page__modal-address-option-subtitle">
+                          {item.subtitle}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))
+                ) : (
+                  <div className="opportunity-management-page__modal-address-empty">
+                    Ничего не найдено. Можно выбрать точку на карте.
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {createOpportunityPreviewPoint ? (
+            <div
+              className={
+                isMapExpanded
+                  ? "opportunity-management-page__modal-map-preview opportunity-management-page__modal-map-preview--expanded"
+                  : "opportunity-management-page__modal-map-preview"
+              }
+            >
+              <div className="opportunity-management-page__modal-map-wrap">
+                <button
+                  type="button"
+                  className="opportunity-management-page__modal-map-expand-button"
+                  aria-label={isMapExpanded ? "Свернуть карту" : "Развернуть карту"}
+                  onClick={() => setIsMapExpanded((current) => !current)}
+                >
+                  <span
+                    className={
+                      isMapExpanded
+                        ? "opportunity-management-page__modal-map-expand-icon opportunity-management-page__modal-map-expand-icon--narrow"
+                        : "opportunity-management-page__modal-map-expand-icon"
+                    }
+                    aria-hidden="true"
+                  />
+                </button>
+                <OpportunityLocationMap
+                  className="opportunity-management-page__modal-map"
+                  point={createOpportunityPreviewPoint}
+                  fallbackPoint={selectedCityPoint}
+                  interactive={isMapExpanded}
+                  centerOnPointChange
+                  resizeSignal={isMapExpanded}
+                  onPointChange={handlePreviewLocationPointChange}
+                />
+              </div>
+              {isMapExpanded ? null : (
+                <p className="opportunity-management-page__modal-map-hint">
+                  Чтобы перемещать карту и выбирать точку, сначала разверните её.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          <label className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Зарплата <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <Input
+              value={createOpportunitySalary}
+              onChange={(event) => setCreateOpportunitySalary(event.target.value)}
+              placeholder="Input"
+              className="input--sm opportunity-management-page__modal-input"
+            />
+          </label>
+
+          <div className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Теги <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <Input
+              value={createOpportunityTagQuery}
+              onChange={(event) => setCreateOpportunityTagQuery(event.target.value)}
+              placeholder="Поиск"
+              type="search"
+              className="input--sm opportunity-management-page__modal-input opportunity-management-page__modal-input--search"
+            />
+            {filteredTagOptions.length > 0 ? (
+              <div className="opportunity-management-page__modal-tag-suggestions">
+                {filteredTagOptions.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className="opportunity-management-page__modal-tag-chip opportunity-management-page__modal-tag-chip--ghost"
+                    onClick={() => {
+                      setCreateOpportunityTags((current) => [...current, item]);
+                      setCreateOpportunityTagQuery("");
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="opportunity-management-page__modal-tags">
+              {createOpportunityTags.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className="opportunity-management-page__modal-tag-chip"
+                  onClick={() =>
+                    setCreateOpportunityTags((current) => current.filter((tag) => tag !== item))
+                  }
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">
+              Формат работы <span className="opportunity-management-page__modal-required">*</span>
+            </span>
+            <div className="opportunity-management-page__modal-radio-group">
+              {workFormatOptions.map((item) => (
+                <label key={item.value} className="opportunity-management-page__modal-radio-option">
+                  <Radio
+                    checked={createOpportunityFormat === item.value}
+                    onChange={() => setCreateOpportunityFormat(item.value)}
+                    variant="primary"
+                  />
+                  <span>{item.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <label className="opportunity-management-page__modal-field">
+            <span className="opportunity-management-page__modal-label">Дата (для запланированной публикации)</span>
+            <Input
+              type="date"
+              value={createOpportunityPublishDate}
+              onChange={(event) => setCreateOpportunityPublishDate(event.target.value)}
+              className="input--sm opportunity-management-page__modal-input"
+            />
+          </label>
+
+          <div className="opportunity-management-page__modal-note">
+            <p className="opportunity-management-page__modal-note-title">Срок публикации вакансии: 30 дней</p>
+            <p className="opportunity-management-page__modal-note-text">Отсчёт срока начинается:</p>
+            <ul className="opportunity-management-page__modal-note-list">
+              <li>С момента одобрения карточки куратором</li>
+              <li>После изменения статуса на «Активно»</li>
+            </ul>
+          </div>
+
+          <div className="opportunity-management-page__modal-actions">
+            <Button
+              type="button"
+              variant="primary-outline"
+              size="md"
+              className="opportunity-management-page__modal-cancel"
+              onClick={closeCreateOpportunityModal}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              className="opportunity-management-page__modal-submit"
+              disabled={!isCreateOpportunityReady}
+              onClick={handleCreateOpportunitySubmit}
+            >
+              Отправить
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Footer theme="employer" />
     </main>

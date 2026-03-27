@@ -12,7 +12,6 @@ import {
   performLogout,
   useAuthStore,
 } from "../../features/auth";
-import { NotificationMenu } from "../../features/notifications";
 import {
   approveEmployerVerificationRequest,
   EmployerVerificationRequestItem,
@@ -27,8 +26,7 @@ import { env } from "../../shared/config/env";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
-import "../../widgets/header/header.css";
+import { Header } from "../../widgets/header";
 import "./employer-verification.css";
 
 type VerificationStatusFilter = "all" | EmployerVerificationRequestStatus;
@@ -1062,82 +1060,48 @@ export function EmployerVerificationPage() {
 
   return (
     <main className={`employer-verification-page employer-verification-page--${themeRole}`}>
-      <header className="header">
-        <div className="header__top">
-          <Container className="home-page__container header__top-container">
-            <div className="header__brand">
-              <Link to="/" className="header__brand-name">
-                Трамплин
-              </Link>
-              <div className="header__logo-badge">Лого</div>
-            </div>
-
-            <div className="header__main">
-              <div className="header__controls">
-                <label className="header__search" aria-label="Поиск">
-                  <Input
-                    type="search"
-                    placeholder="Поиск"
-                    aria-label="Поиск по платформе"
-                    className="input--sm header__search-input"
-                  />
-                </label>
-
-                <div className="header__actions">
-                  <div className="header__account-actions" aria-label="Действия аккаунта">
-                    <NotificationMenu
-                      buttonClassName="header__icon-button"
-                      iconClassName="header__icon-button-image"
-                      onRealtimeMessage={() => {
-                        void queryClient.invalidateQueries({
-                          queryKey: ["moderation", "employer-verification-requests"],
-                        });
-                        void queryClient.invalidateQueries({
-                          queryKey: ["moderation", "dashboard"],
-                        });
-                        void queryClient.refetchQueries({
-                          queryKey: ["moderation", "employer-verification-requests"],
-                          type: "active",
-                        });
-                        void queryClient.refetchQueries({
-                          queryKey: ["moderation", "dashboard"],
-                          type: "active",
-                        });
-                      }}
-                    />
-
-                    <HeaderProfileMenu items={profileMenuItems} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Container>
-        </div>
-
-        <div className="header__bottom">
-          <Container className="home-page__container header__bottom-container">
-            <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-              <NavLink to="/" end className="header__category-link">
-                Дашборд
+      <Header
+        containerClassName="home-page__container"
+        profileMenuItems={profileMenuItems}
+        topNavigation={null}
+        notificationOnRealtimeMessage={() => {
+          void queryClient.invalidateQueries({
+            queryKey: ["moderation", "employer-verification-requests"],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["moderation", "dashboard"],
+          });
+          void queryClient.refetchQueries({
+            queryKey: ["moderation", "employer-verification-requests"],
+            type: "active",
+          });
+          void queryClient.refetchQueries({
+            queryKey: ["moderation", "dashboard"],
+            type: "active",
+          });
+        }}
+        bottomContent={
+          <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
+            <NavLink to="/" end className="header__category-link">
+              Дашборд
+            </NavLink>
+            <NavLink to="/moderation/employers" className="header__category-link">
+              Верификация работодателей
+            </NavLink>
+            <NavLink to="/moderation/content" className="header__category-link">
+              Модерация контента
+            </NavLink>
+            {isAdmin ? (
+              <NavLink to="/moderation/curators" className="header__category-link">
+                Управление кураторами
               </NavLink>
-              <NavLink to="/moderation/employers" className="header__category-link">
-                Верификация работодателей
-              </NavLink>
-              <NavLink to="/moderation/content" className="header__category-link">
-                Модерация контента
-              </NavLink>
-              {isAdmin ? (
-                <NavLink to="/moderation/curators" className="header__category-link">
-                  Управление кураторами
-                </NavLink>
-              ) : null}
-              <NavLink to="/settings" className="header__category-link">
-                Настройки
-              </NavLink>
-            </nav>
-          </Container>
-        </div>
-      </header>
+            ) : null}
+            <NavLink to="/settings" className="header__category-link">
+              Настройки
+            </NavLink>
+          </nav>
+        }
+      />
 
       <Container className="employer-verification-page__container">
         <header className="employer-verification-page__header">

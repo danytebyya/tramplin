@@ -23,13 +23,11 @@ import {
   updatePreferredCityRequest,
   useAuthStore,
 } from "../../features/auth";
-import { NotificationMenu } from "../../features/notifications";
 import { ModerationDashboardContent } from "../curator-dashboard";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
-import { HeaderProfileMenu } from "../../widgets/header/header-profile-menu";
-import "../../widgets/header/header.css";
+import { Header } from "../../widgets/header";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import "./home.css";
@@ -476,121 +474,89 @@ export function HomePage() {
 
   return (
     <main className={homePageClassName}>
-      <header className="header">
-        <div className="header__top">
-          <Container className="home-page__container header__top-container">
-            <div className="header__brand">
-              <Link to="/" className="header__brand-name">
-                Трамплин
-              </Link>
-              <div className="header__logo-badge">Лого</div>
-            </div>
-
-            <div className="header__main">
-              {isModerationRole ? null : (
-                <nav className="header__nav" aria-label="Основная навигация">
-                  <NavLink to="/" end className="header__nav-link">
-                    Главная
-                  </NavLink>
-                  <a href="#about" className="header__nav-link">
-                    О проекте
-                  </a>
-                </nav>
-              )}
-
-              <div className="header__controls">
-                <label className="header__search" aria-label="Поиск">
-                  <Input
-                    type="search"
-                    placeholder="Поиск"
-                    aria-label="Поиск по платформе"
-                    className="input--sm header__search-input"
-                  />
-                </label>
-
-                <div className="header__actions">
-                  {isAuthenticated ? (
-                    <div className="header__account-actions" aria-label="Действия аккаунта">
-                      <NotificationMenu
-                        buttonClassName="header__icon-button"
-                        iconClassName="header__icon-button-image"
-                      />
-
-                      <HeaderProfileMenu items={profileMenuItems} />
-                    </div>
-                  ) : (
-                    <>
-                      <Button
-                        type="button"
-                        variant="primary-outline"
-                        size="md"
-                        className="header__action-button header__action-button--login"
-                        onClick={() => navigate("/login")}
-                      >
-                        Вход
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="md"
-                        className="header__action-button header__action-button--register"
-                        onClick={() => navigate("/register")}
-                      >
-                        Регистрация
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Container>
-        </div>
-
-        <div className="header__bottom">
-          <Container className="home-page__container header__bottom-container">
-            {isModerationRole ? (
-              <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-                <NavLink to="/" end className="header__category-link">
-                  Дашборд
+      <Header
+        containerClassName="home-page__container"
+        profileMenuItems={profileMenuItems}
+        city={selectedCity}
+        onCityChange={handleCityChange}
+        isAuthenticated={isAuthenticated}
+        topNavigation={
+          isModerationRole ? null : (
+            <nav className="header__nav" aria-label="Основная навигация">
+              <NavLink to="/" end className="header__nav-link">
+                Главная
+              </NavLink>
+              <a href="#about" className="header__nav-link">
+                О проекте
+              </a>
+            </nav>
+          )
+        }
+        guestActions={
+          <>
+            <Button
+              type="button"
+              variant="primary-outline"
+              size="md"
+              className="header__action-button header__action-button--login"
+              onClick={() => navigate("/login")}
+            >
+              Вход
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              className="header__action-button header__action-button--register"
+              onClick={() => navigate("/register")}
+            >
+              Регистрация
+            </Button>
+          </>
+        }
+        bottomContent={
+          isModerationRole ? (
+            <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
+              <NavLink to="/" end className="header__category-link">
+                Дашборд
+              </NavLink>
+              <NavLink to="/moderation/employers" className="header__category-link">
+                Верификация работодателей
+              </NavLink>
+              <NavLink to="/moderation/content" className="header__category-link">
+                Модерация контента
+              </NavLink>
+              {isAdmin ? (
+                <NavLink to="/moderation/curators" className="header__category-link">
+                  Управление кураторами
                 </NavLink>
-                <NavLink to="/moderation/employers" className="header__category-link">
-                  Верификация работодателей
-                </NavLink>
-                <NavLink to="/moderation/content" className="header__category-link">
-                  Модерация контента
-                </NavLink>
-                {isAdmin ? (
-                  <NavLink to="/moderation/curators" className="header__category-link">
-                    Управление кураторами
-                  </NavLink>
-                ) : null}
-                <NavLink to="/settings" className="header__category-link">
-                  Настройки
-                </NavLink>
+              ) : null}
+              <NavLink to="/settings" className="header__category-link">
+                Настройки
+              </NavLink>
+            </nav>
+          ) : (
+            <>
+              <nav className="header__categories" aria-label="Категории">
+                <a href="#vacancies" className="header__category-link">
+                  Вакансии
+                </a>
+                <a href="#internships" className="header__category-link">
+                  Стажировки
+                </a>
+                <a href="#events" className="header__category-link">
+                  Мероприятия
+                </a>
+                <a href="#mentorship" className="header__category-link">
+                  Менторство
+                </a>
               </nav>
-            ) : (
-              <>
-                <nav className="header__categories" aria-label="Категории">
-                  <a href="#vacancies" className="header__category-link">
-                    Вакансии
-                  </a>
-                  <a href="#internships" className="header__category-link">
-                    Стажировки
-                  </a>
-                  <a href="#events" className="header__category-link">
-                    Мероприятия
-                  </a>
-                  <a href="#mentorship" className="header__category-link">
-                    Менторство
-                  </a>
-                </nav>
 
-                <CitySelector value={selectedCity} onChange={handleCityChange} />
-              </>
-            )}
-          </Container>
-        </div>
-      </header>
+              <CitySelector value={selectedCity} onChange={handleCityChange} />
+            </>
+          )
+        }
+      />
 
       {isModerationRole ? (
         <ModerationDashboardContent footerTheme={isAdmin ? "admin" : "curator"} />

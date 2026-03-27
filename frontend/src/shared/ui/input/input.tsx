@@ -50,6 +50,19 @@ async function writeTextToClipboard(value: string, clipboardData?: DataTransfer 
   }
 }
 
+function setNativeInputValue(element: HTMLInputElement, nextValue: string) {
+  const prototype = Object.getPrototypeOf(element) as HTMLInputElement;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+  const valueSetter = descriptor?.set;
+
+  if (valueSetter) {
+    valueSetter.call(element, nextValue);
+    return;
+  }
+
+  element.value = nextValue;
+}
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   {
     className,
@@ -145,7 +158,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       return;
     }
 
-    element.value = "";
+    setNativeInputValue(element, "");
     setUncontrolledValue("");
     setHasChangedWhileFocused(true);
     element.focus();
