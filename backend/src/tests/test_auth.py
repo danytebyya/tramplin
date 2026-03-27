@@ -658,6 +658,43 @@ def test_active_sessions_marks_only_one_session_as_current_for_same_browser(clie
     assert sum(1 for item in items if item["is_current"]) == 1
 
 
+def test_active_sessions_preserves_current_session_when_user_agent_changes(client, db_session):
+    code = _request_code(client, db_session, "ua-switch@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "ua-switch@example.com",
+            "display_name": "UA Switch",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "UA Switch"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        headers={"User-Agent": "Desktop Browser"},
+        json={"email": "ua-switch@example.com", "password": "StrongPass123"},
+    )
+    assert login_response.status_code == 201
+
+    access_token = login_response.json()["data"]["access_token"]
+    sessions_response = client.get(
+        "/api/v1/auth/sessions",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "Mobile Browser",
+        },
+    )
+
+    assert sessions_response.status_code == 200
+    items = sessions_response.json()["data"]["items"]
+    assert len(items) == 1
+    assert items[0]["is_current"] is True
+
+
 def test_employer_onboarding_flow(client, db_session):
     code = _request_code(client, db_session, "company-owner@example.com")
     register_payload = {

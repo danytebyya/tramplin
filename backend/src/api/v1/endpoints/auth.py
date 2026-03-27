@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_current_user
+from src.api.deps import get_current_access_payload, get_current_user
 from src.db import get_db
 from src.models import User
 from src.schemas.auth import (
@@ -104,11 +104,13 @@ def create_tokens(payload: RefreshRequest, request: Request, db: Session = Depen
 @router.get("/sessions", status_code=status.HTTP_200_OK)
 def list_active_sessions(
     request: Request,
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     payload = AuthService(db).list_sessions(
         current_user,
+        current_session_jti=access_payload.get("jti"),
         current_user_agent=request.headers.get("User-Agent"),
         current_ip_address=request.client.host if request.client else None,
     )

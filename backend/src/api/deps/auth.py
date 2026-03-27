@@ -19,6 +19,19 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    payload = get_current_access_payload(credentials)
+    user_id = payload.get("sub")
+    user = UserRepository(db).get_by_id(user_id)
+    if user is None:
+        logger.warning("auth.access.user_not_found user_id=%s", user_id)
+        raise AppError(code="AUTH_UNAUTHORIZED", message="Пользователь не найден", status_code=401)
+
+    return user
+
+
+def get_current_access_payload(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> dict:
     if credentials is None:
         logger.warning("auth.access.missing_token")
         raise AppError(code="AUTH_UNAUTHORIZED", message="Требуется access token", status_code=401)
@@ -36,9 +49,4 @@ def get_current_user(
         logger.warning("auth.access.invalid_payload missing_sub=true")
         raise AppError(code="AUTH_UNAUTHORIZED", message="Некорректный токен доступа", status_code=401)
 
-    user = UserRepository(db).get_by_id(user_id)
-    if user is None:
-        logger.warning("auth.access.user_not_found user_id=%s", user_id)
-        raise AppError(code="AUTH_UNAUTHORIZED", message="Пользователь не найден", status_code=401)
-
-    return user
+    return payload

@@ -127,8 +127,12 @@ class AuthService:
 
         self._reset_login_failures(normalized_email, normalized_ip)
 
-        access_token, access_exp = create_access_token(subject=str(user.id), role=user.role.value)
         refresh_token, refresh_exp, jti = create_refresh_token(subject=str(user.id))
+        access_token, access_exp = create_access_token(
+            subject=str(user.id),
+            role=user.role.value,
+            session_jti=jti,
+        )
         refresh_token_fingerprint = self._fingerprint_token(refresh_token)
 
         session = RefreshSession(
@@ -243,8 +247,12 @@ class AuthService:
 
         self.auth_repo.revoke_session(str(active_session.id))
 
-        access_token, access_exp = create_access_token(subject=str(user.id), role=user.role.value)
         new_refresh_token, refresh_exp, jti = create_refresh_token(subject=str(user.id))
+        access_token, access_exp = create_access_token(
+            subject=str(user.id),
+            role=user.role.value,
+            session_jti=jti,
+        )
         new_refresh_token_fingerprint = self._fingerprint_token(new_refresh_token)
 
         session = RefreshSession(
@@ -345,6 +353,7 @@ class AuthService:
         self,
         current_user: User,
         *,
+        current_session_jti: str | None,
         current_user_agent: str | None,
         current_ip_address: str | None,
     ) -> AuthSessionListResponse:
@@ -354,6 +363,10 @@ class AuthService:
         current_session_id: str | None = None
 
         for session in sessions:
+            if current_session_jti and session.jti == current_session_jti:
+                current_session_id = str(session.id)
+                break
+
             if (
                 self._normalize_optional_value(session.ip_address) == normalized_current_ip
                 and self._normalize_optional_value(session.user_agent) == normalized_current_agent
