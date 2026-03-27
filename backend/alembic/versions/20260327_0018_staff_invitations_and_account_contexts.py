@@ -8,6 +8,7 @@ Create Date: 2026-03-27 15:10:00
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+from sqlalchemy.dialects import postgresql
 
 
 revision = "20260327_0018"
@@ -19,6 +20,34 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = inspect(bind)
+
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_type
+                WHERE typname = 'membership_role'
+            ) THEN
+                CREATE TYPE membership_role AS ENUM ('owner', 'recruiter', 'manager', 'viewer');
+            ELSIF EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_enum e ON e.enumtypid = t.oid
+                WHERE t.typname = 'membership_role' AND e.enumlabel = 'observer'
+            ) AND NOT EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_enum e ON e.enumtypid = t.oid
+                WHERE t.typname = 'membership_role' AND e.enumlabel = 'viewer'
+            ) THEN
+                ALTER TYPE membership_role RENAME VALUE 'observer' TO 'viewer';
+            END IF;
+        END
+        $$;
+        """
+    )
 
     refresh_columns = {column["name"] for column in inspector.get_columns("refresh_sessions")}
     if "active_role" not in refresh_columns:
@@ -57,7 +86,18 @@ def upgrade() -> None:
             "employer_staff_invitations",
             sa.Column("employer_id", sa.Uuid(), nullable=False),
             sa.Column("invited_email", sa.String(length=320), nullable=False),
-            sa.Column("membership_role", sa.Enum("owner", "recruiter", "manager", "observer", name="membership_role"), nullable=False),
+            sa.Column(
+                "membership_role",
+                postgresql.ENUM(
+                    "owner",
+                    "recruiter",
+                    "manager",
+                    "viewer",
+                    name="membership_role",
+                    create_type=False,
+                ),
+                nullable=False,
+            ),
             sa.Column("token_hash", sa.String(length=128), nullable=False),
             sa.Column("invited_by_user_id", sa.Uuid(), nullable=True),
             sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
