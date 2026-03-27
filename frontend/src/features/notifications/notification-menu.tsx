@@ -20,6 +20,7 @@ type NotificationMenuProps = {
   className?: string;
   buttonClassName?: string;
   iconClassName?: string;
+  onRealtimeMessage?: () => void;
 };
 
 function formatNotificationDate(value: string) {
@@ -69,6 +70,7 @@ export function NotificationMenu({
   className,
   buttonClassName,
   iconClassName,
+  onRealtimeMessage,
 }: NotificationMenuProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -195,6 +197,7 @@ export function NotificationMenu({
     onMessage: () => {
       void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
       void queryClient.refetchQueries({ queryKey: ["notifications", "feed"], type: "active" });
+      onRealtimeMessage?.();
     },
   });
 

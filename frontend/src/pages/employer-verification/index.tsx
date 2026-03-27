@@ -14,7 +14,6 @@ import {
   useAuthStore,
 } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
-import { useNotificationsRealtime } from "../../features/notifications";
 import {
   approveEmployerVerificationRequest,
   EmployerVerificationRequestItem,
@@ -38,7 +37,7 @@ type VerificationSortField = "date" | "alphabet";
 type VerificationSortDirection = "asc" | "desc";
 
 const PAGE_SIZE = 5;
-const SKELETON_ROW_COUNT = 3;
+const SKELETON_ROW_COUNT = 5;
 const statusOptions: Array<{ value: EmployerVerificationRequestStatus; label: string }> = [
   { value: "pending", label: "На рассмотрении" },
   { value: "approved", label: "Одобрено" },
@@ -600,26 +599,6 @@ export function EmployerVerificationPage() {
     staleTime: 30 * 1000,
   });
 
-  useNotificationsRealtime({
-    enabled: isAuthenticated && isModerationRole,
-    onMessage: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["moderation", "employer-verification-requests"],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["moderation", "dashboard"],
-      });
-      void queryClient.refetchQueries({
-        queryKey: ["moderation", "employer-verification-requests"],
-        type: "active",
-      });
-      void queryClient.refetchQueries({
-        queryKey: ["moderation", "dashboard"],
-        type: "active",
-      });
-    },
-  });
-
   useEffect(() => {
     const normalizedSearch = search.trim();
     if (normalizedSearch === appliedSearch) {
@@ -1100,6 +1079,22 @@ export function EmployerVerificationPage() {
                     <NotificationMenu
                       buttonClassName="header__icon-button"
                       iconClassName="header__icon-button-image"
+                      onRealtimeMessage={() => {
+                        void queryClient.invalidateQueries({
+                          queryKey: ["moderation", "employer-verification-requests"],
+                        });
+                        void queryClient.invalidateQueries({
+                          queryKey: ["moderation", "dashboard"],
+                        });
+                        void queryClient.refetchQueries({
+                          queryKey: ["moderation", "employer-verification-requests"],
+                          type: "active",
+                        });
+                        void queryClient.refetchQueries({
+                          queryKey: ["moderation", "dashboard"],
+                          type: "active",
+                        });
+                      }}
                     />
 
                     <div
