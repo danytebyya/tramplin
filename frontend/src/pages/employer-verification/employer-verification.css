@@ -447,7 +447,6 @@
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .employer-verification-page__row-company {

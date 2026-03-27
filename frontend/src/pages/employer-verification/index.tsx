@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { renderAsync } from "docx-preview";
@@ -1028,6 +1028,15 @@ export function EmployerVerificationPage() {
     setModeratorComment(nextId ? item.moderator_comment ?? item.rejection_reason ?? "" : "");
   };
 
+  const handleRowClick = (event: ReactMouseEvent<HTMLElement>, item: EmployerVerificationRequestItem) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input, textarea, select, label")) {
+      return;
+    }
+
+    handleExpand(item);
+  };
+
   const handleApprove = (requestId: string) => {
     approveMutation.mutate({ requestId, comment: moderatorComment.trim() });
   };
@@ -1487,7 +1496,11 @@ export function EmployerVerificationPage() {
               const isVerifiedItem = item.status === "approved";
 
               return (
-                <article key={item.id} className="employer-verification-page__row">
+                <article
+                  key={item.id}
+                  className="employer-verification-page__row"
+                  onClick={(event) => handleRowClick(event, item)}
+                >
                   <div
                     className={
                       isExpanded
