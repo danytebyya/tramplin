@@ -2,6 +2,7 @@ from src.models.auth_login_event import AuthLoginEvent
 from src.models.employer_verification import (
     Employer,
     EmployerMembership,
+    EmployerStaffInvitation,
     EmployerVerificationDocument,
     EmployerVerificationRequest,
     MediaFile,
@@ -37,6 +38,7 @@ __all__ = [
     "CuratorProfile",
     "Employer",
     "EmployerMembership",
+    "EmployerStaffInvitation",
     "EmployerVerificationRequest",
     "EmployerVerificationDocument",
     "MediaFile",

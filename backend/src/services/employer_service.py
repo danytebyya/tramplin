@@ -1,6 +1,7 @@
 import hashlib
+import secrets
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -8,6 +9,8 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import DataError, ProgrammingError
 from sqlalchemy.orm import Session, selectinload
 
+from src.core.config import settings
+from src.core.security import hash_token
 from src.enums import (
     EmployerVerificationRequestStatus,
     EmployerVerificationStatus,
@@ -23,13 +26,21 @@ from src.models import (
     Employer,
     EmployerMembership,
     EmployerProfile,
+    EmployerStaffInvitation,
     EmployerVerificationDocument,
     EmployerVerificationRequest,
     MediaFile,
     User,
     UserNotificationPreference,
 )
-from src.schemas.company import EmployerOnboardingRequest, EmployerStaffListRead, EmployerStaffMemberRead
+from src.schemas.company import (
+    EmployerOnboardingRequest,
+    EmployerStaffInvitationListRead,
+    EmployerStaffInvitationRead,
+    EmployerStaffInviteRequest,
+    EmployerStaffListRead,
+    EmployerStaffMemberRead,
+)
 from src.realtime.notification_hub import notification_hub
 from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
@@ -83,24 +94,21 @@ class EmployerService:
         self.db.refresh(employer_profile)
         return employer_profile
 
-    def list_staff_members(self, current_user: User) -> EmployerStaffListRead:
-        if current_user.role != UserRole.EMPLOYER:
-            raise AppError(
-                code="EMPLOYER_STAFF_FORBIDDEN",
-                message="Сотрудники компании доступны только работодателям",
-                status_code=403,
-            )
-
-        employer_profile = current_user.employer_profile
-        if employer_profile is None or not employer_profile.inn:
-            raise AppError(
-                code="EMPLOYER_PROFILE_REQUIRED",
-                message="Сначала заполните профиль работодателя",
-                status_code=400,
-            )
-
-        employer = self.db.query(Employer).filter(Employer.inn == employer_profile.inn).one_or_none()
+    def list_staff_members(
+        self,
+        current_user: User,
+        *,
+        access_payload: dict | None = None,
+    ) -> EmployerStaffListRead:
+        employer, membership = self._resolve_staff_access(current_user=current_user, access_payload=access_payload)
         if employer is None:
+            employer_profile = current_user.employer_profile
+            if employer_profile is None:
+                raise AppError(
+                    code="EMPLOYER_PROFILE_REQUIRED",
+                    message="Сначала заполните профиль работодателя",
+                    status_code=400,
+                )
             return EmployerStaffListRead(
                 items=[
                     EmployerStaffMemberRead(
@@ -115,12 +123,6 @@ class EmployerService:
                     )
                 ]
             )
-
-        membership = (
-            self.db.query(EmployerMembership)
-            .filter(EmployerMembership.employer_id == employer.id, EmployerMembership.user_id == current_user.id)
-            .one_or_none()
-        )
         if membership is None:
             raise AppError(
                 code="EMPLOYER_STAFF_FORBIDDEN",
@@ -151,6 +153,210 @@ class EmployerService:
                 for membership, user in memberships
             ]
         )
+
+    def list_staff_invitations(
+        self,
+        current_user: User,
+        *,
+        access_payload: dict | None = None,
+    ) -> EmployerStaffInvitationListRead:
+        employer, membership = self._resolve_staff_access(current_user=current_user, access_payload=access_payload)
+        self._ensure_staff_management_allowed(membership)
+
+        items = (
+            self.db.query(EmployerStaffInvitation)
+            .filter(
+                EmployerStaffInvitation.employer_id == employer.id,
+                EmployerStaffInvitation.revoked_at.is_(None),
+                EmployerStaffInvitation.accepted_at.is_(None),
+            )
+            .order_by(EmployerStaffInvitation.created_at.desc())
+            .all()
+        )
+        return EmployerStaffInvitationListRead(
+            items=[
+                EmployerStaffInvitationRead(
+                    id=str(item.id),
+                    email=item.invited_email,
+                    role=item.membership_role,
+                    status="pending" if item.expires_at > datetime.now(UTC) else "expired",
+                    invited_at=item.created_at.date().isoformat(),
+                    expires_at=item.expires_at.date().isoformat(),
+                )
+                for item in items
+            ]
+        )
+
+    def invite_staff_member(
+        self,
+        current_user: User,
+        payload: EmployerStaffInviteRequest,
+        *,
+        access_payload: dict | None = None,
+    ) -> EmployerStaffInvitationRead:
+        employer, membership = self._resolve_staff_access(current_user=current_user, access_payload=access_payload)
+        self._ensure_staff_management_allowed(membership)
+
+        existing_user = self.db.query(User).filter(User.email == payload.email).one_or_none()
+        if existing_user is not None:
+            existing_membership = (
+                self.db.query(EmployerMembership)
+                .filter(
+                    EmployerMembership.employer_id == employer.id,
+                    EmployerMembership.user_id == existing_user.id,
+                )
+                .one_or_none()
+            )
+            if existing_membership is not None:
+                raise AppError(
+                    code="EMPLOYER_STAFF_ALREADY_EXISTS",
+                    message="Пользователь уже привязан к этой компании",
+                    status_code=409,
+                )
+
+        token = secrets.token_urlsafe(24)
+        invitation = EmployerStaffInvitation(
+            employer_id=employer.id,
+            invited_email=payload.email,
+            membership_role=payload.role,
+            token_hash=hash_token(token),
+            invited_by_user_id=current_user.id,
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+        self.db.add(invitation)
+        self.db.commit()
+        self.db.refresh(invitation)
+
+        invitation_url = (
+            f"{settings.frontend_base_url.rstrip('/')}/settings"
+            f"?invite_token={token}&mode=accept-company-invite"
+        )
+        if existing_user is not None:
+            body = (
+                f"Вас пригласили в компанию {employer.display_name}.\n\n"
+                "У вас уже есть аккаунт на Трамплин. После перехода по ссылке новый рабочий профиль компании "
+                "будет добавлен как отдельный контекст, и вы сможете быстро переключаться между профилями.\n\n"
+                f"Ссылка: {invitation_url}"
+            )
+        else:
+            body = (
+                f"Вас пригласили в компанию {employer.display_name}.\n\n"
+                "Если у вас ещё нет аккаунта в Трамплин, зарегистрируйтесь как соискатель по этой почте, "
+                "а затем откройте ссылку приглашения, чтобы привязать рабочий профиль компании.\n\n"
+                f"Ссылка: {invitation_url}"
+            )
+        self._send_moderation_email(
+            recipient=payload.email,
+            subject=f"Приглашение в компанию {employer.display_name}",
+            body=body,
+        )
+
+        return EmployerStaffInvitationRead(
+            id=str(invitation.id),
+            email=invitation.invited_email,
+            role=invitation.membership_role,
+            status="pending",
+            invited_at=invitation.created_at.date().isoformat(),
+            expires_at=invitation.expires_at.date().isoformat(),
+        )
+
+    def accept_staff_invitation(
+        self,
+        current_user: User,
+        *,
+        token: str,
+    ) -> EmployerStaffMemberRead:
+        invitation = (
+            self.db.query(EmployerStaffInvitation)
+            .filter(EmployerStaffInvitation.token_hash == hash_token(token))
+            .one_or_none()
+        )
+        if invitation is None or invitation.revoked_at is not None or invitation.accepted_at is not None:
+            raise AppError(
+                code="EMPLOYER_INVITATION_NOT_FOUND",
+                message="Приглашение не найдено или уже недоступно",
+                status_code=404,
+            )
+        invitation_expires_at = (
+            invitation.expires_at.replace(tzinfo=UTC)
+            if invitation.expires_at.tzinfo is None
+            else invitation.expires_at
+        )
+        if invitation_expires_at <= datetime.now(UTC):
+            raise AppError(
+                code="EMPLOYER_INVITATION_EXPIRED",
+                message="Срок действия приглашения истёк",
+                status_code=410,
+            )
+        if current_user.email.lower() != invitation.invited_email.lower():
+            raise AppError(
+                code="EMPLOYER_INVITATION_EMAIL_MISMATCH",
+                message="Приглашение привязано к другой почте",
+                status_code=403,
+            )
+
+        membership = (
+            self.db.query(EmployerMembership)
+            .filter(
+                EmployerMembership.employer_id == invitation.employer_id,
+                EmployerMembership.user_id == current_user.id,
+            )
+            .one_or_none()
+        )
+        if membership is None:
+            membership = EmployerMembership(
+                employer_id=invitation.employer_id,
+                user_id=current_user.id,
+                membership_role=invitation.membership_role,
+                is_primary=False,
+            )
+            self.db.add(membership)
+            self.db.flush()
+
+        invitation.accepted_at = datetime.now(UTC)
+        self.db.add(invitation)
+        self.db.commit()
+
+        employer = self.db.query(Employer).filter(Employer.id == invitation.employer_id).one()
+        return EmployerStaffMemberRead(
+            id=str(membership.id),
+            user_id=str(current_user.id),
+            email=current_user.email,
+            role=membership.membership_role,
+            permissions=self._resolve_membership_permissions(membership.membership_role),
+            invited_at=membership.created_at.date().isoformat(),
+            is_current_user=True,
+            is_primary=membership.is_primary,
+        )
+
+    def leave_company(
+        self,
+        current_user: User,
+        *,
+        membership_id: str,
+    ) -> None:
+        membership = (
+            self.db.query(EmployerMembership)
+            .filter(
+                EmployerMembership.id == UUID(str(membership_id)),
+                EmployerMembership.user_id == current_user.id,
+            )
+            .one_or_none()
+        )
+        if membership is None:
+            raise AppError(
+                code="EMPLOYER_MEMBERSHIP_NOT_FOUND",
+                message="Привязка к компании не найдена",
+                status_code=404,
+            )
+        if membership.is_primary:
+            raise AppError(
+                code="EMPLOYER_MEMBERSHIP_PRIMARY_FORBIDDEN",
+                message="Основной профиль компании нельзя отвязать через приглашение",
+                status_code=409,
+            )
+        self.db.delete(membership)
+        self.db.commit()
 
     def ensure_inn_available(self, current_user: User, inn: str) -> None:
         normalized_inn = inn.strip()
@@ -220,6 +426,72 @@ class EmployerService:
         return [
             "Просмотр откликов",
         ]
+
+    def _resolve_staff_access(
+        self,
+        *,
+        current_user: User,
+        access_payload: dict | None,
+    ) -> tuple[Employer | None, EmployerMembership | None]:
+        effective_role = (access_payload or {}).get("active_role") or current_user.role.value
+        active_employer_id = (access_payload or {}).get("active_employer_id")
+        active_membership_id = (access_payload or {}).get("active_membership_id")
+
+        if effective_role != UserRole.EMPLOYER.value:
+            raise AppError(
+                code="EMPLOYER_STAFF_FORBIDDEN",
+                message="Сотрудники компании доступны только работодателям",
+                status_code=403,
+            )
+
+        if active_employer_id:
+            employer = self.db.query(Employer).filter(Employer.id == UUID(str(active_employer_id))).one_or_none()
+            if employer is None:
+                raise AppError(
+                    code="EMPLOYER_NOT_FOUND",
+                    message="Компания не найдена",
+                    status_code=404,
+                )
+            membership = None
+            if active_membership_id:
+                membership = (
+                    self.db.query(EmployerMembership)
+                    .filter(
+                        EmployerMembership.id == UUID(str(active_membership_id)),
+                        EmployerMembership.user_id == current_user.id,
+                        EmployerMembership.employer_id == employer.id,
+                    )
+                    .one_or_none()
+                )
+            return employer, membership
+
+        employer_profile = current_user.employer_profile
+        if employer_profile is None or not employer_profile.inn:
+            raise AppError(
+                code="EMPLOYER_PROFILE_REQUIRED",
+                message="Сначала заполните профиль работодателя",
+                status_code=400,
+            )
+
+        employer = self.db.query(Employer).filter(Employer.inn == employer_profile.inn).one_or_none()
+        if employer is None:
+            return None, None
+
+        membership = (
+            self.db.query(EmployerMembership)
+            .filter(EmployerMembership.employer_id == employer.id, EmployerMembership.user_id == current_user.id)
+            .one_or_none()
+        )
+        return employer, membership
+
+    @staticmethod
+    def _ensure_staff_management_allowed(membership: EmployerMembership | None) -> None:
+        if membership is None or membership.membership_role != MembershipRole.OWNER:
+            raise AppError(
+                code="EMPLOYER_STAFF_MANAGEMENT_FORBIDDEN",
+                message="Управление сотрудниками доступно только владельцу компании",
+                status_code=403,
+            )
 
     def get_verification_document_or_raise(
         self,

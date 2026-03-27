@@ -3,13 +3,15 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_current_user
+from src.api.deps import get_current_access_payload, get_current_user
 from src.db import get_db
 from src.enums import UserRole
 from src.models import User
 from src.schemas.company import (
     EmployerInnVerificationRequest,
     EmployerOnboardingRequest,
+    EmployerStaffInvitationAcceptRequest,
+    EmployerStaffInviteRequest,
     EmployerStaffListRead,
     EmployerVerificationDraftRead,
 )
@@ -64,11 +66,57 @@ def read_employer_verification_draft(
 
 @router.get("/staff", status_code=status.HTTP_200_OK)
 def list_employer_staff(
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = EmployerService(db).list_staff_members(current_user)
+    payload = EmployerService(db).list_staff_members(current_user, access_payload=access_payload)
     return success_response(EmployerStaffListRead.model_validate(payload).model_dump(mode="json"))
+
+
+@router.get("/staff/invitations", status_code=status.HTTP_200_OK)
+def list_employer_staff_invitations(
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = EmployerService(db).list_staff_invitations(current_user, access_payload=access_payload)
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.post("/staff/invitations", status_code=status.HTTP_201_CREATED)
+def invite_employer_staff_member(
+    payload: EmployerStaffInviteRequest,
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    invitation = EmployerService(db).invite_staff_member(
+        current_user,
+        payload,
+        access_payload=access_payload,
+    )
+    return success_response(invitation.model_dump(mode="json"))
+
+
+@router.post("/staff/invitations/accept", status_code=status.HTTP_200_OK)
+def accept_employer_staff_invitation(
+    payload: EmployerStaffInvitationAcceptRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    member = EmployerService(db).accept_staff_invitation(current_user, token=payload.token)
+    return success_response(member.model_dump(mode="json"))
+
+
+@router.delete("/staff/memberships/{membership_id}", status_code=status.HTTP_200_OK)
+def leave_employer_company(
+    membership_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    EmployerService(db).leave_company(current_user, membership_id=membership_id)
+    return success_response({"deleted": True})
 
 
 @router.post("/verification-documents", status_code=status.HTTP_200_OK)

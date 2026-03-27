@@ -27,7 +27,14 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def create_access_token(subject: str, role: str, session_jti: str | None = None) -> tuple[str, datetime]:
+def create_access_token(
+    subject: str,
+    role: str,
+    session_jti: str | None = None,
+    active_role: str | None = None,
+    active_employer_id: str | None = None,
+    active_membership_id: str | None = None,
+) -> tuple[str, datetime]:
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     payload = {
         "sub": subject,
@@ -39,6 +46,12 @@ def create_access_token(subject: str, role: str, session_jti: str | None = None)
     }
     if session_jti:
         payload["jti"] = session_jti
+    if active_role:
+        payload["active_role"] = active_role
+    if active_employer_id:
+        payload["active_employer_id"] = active_employer_id
+    if active_membership_id:
+        payload["active_membership_id"] = active_membership_id
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     return token, expires_at
 

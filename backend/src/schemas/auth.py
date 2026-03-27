@@ -137,3 +137,30 @@ class AuthLoginHistoryItemRead(BaseModel):
 
 class AuthLoginHistoryResponse(BaseModel):
     items: list[AuthLoginHistoryItemRead]
+
+
+class AccountContextRead(BaseModel):
+    id: str
+    role: UserRole
+    label: str
+    company_name: str | None = None
+    employer_id: str | None = None
+    membership_id: str | None = None
+    is_default: bool = False
+    is_active: bool = False
+
+
+class AccountContextListResponse(BaseModel):
+    items: list[AccountContextRead]
+
+
+class AccountContextSwitchRequest(BaseModel):
+    context_id: str
+
+
+class AccountContextSwitchResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: dict
+    active_context: AccountContextRead

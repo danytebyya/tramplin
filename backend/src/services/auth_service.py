@@ -16,9 +16,12 @@ from src.core.security import (
     verify_password,
 )
 from src.enums import TokenType, UserRole, UserStatus
-from src.models import ApplicantProfile, AuthLoginEvent, RefreshSession, User
+from src.models import ApplicantProfile, AuthLoginEvent, Employer, EmployerMembership, RefreshSession, User
 from src.repositories import AuthRepository, UserRepository
 from src.schemas.auth import (
+    AccountContextListResponse,
+    AccountContextRead,
+    AccountContextSwitchResponse,
     AuthLoginHistoryItemRead,
     AuthLoginHistoryResponse,
     AuthSessionListResponse,
@@ -132,6 +135,7 @@ class AuthService:
             subject=str(user.id),
             role=user.role.value,
             session_jti=jti,
+            active_role=user.role.value,
         )
         refresh_token_fingerprint = self._fingerprint_token(refresh_token)
 
@@ -141,6 +145,7 @@ class AuthService:
             jti=jti,
             user_agent=user_agent,
             ip_address=ip_address,
+            active_role=user.role,
             expires_at=refresh_exp,
         )
         self.auth_repo.create_session(session)
@@ -252,6 +257,11 @@ class AuthService:
             subject=str(user.id),
             role=user.role.value,
             session_jti=jti,
+            active_role=active_session.active_role.value if active_session.active_role is not None else user.role.value,
+            active_employer_id=str(active_session.active_employer_id) if active_session.active_employer_id else None,
+            active_membership_id=str(active_session.active_membership_id)
+            if active_session.active_membership_id
+            else None,
         )
         new_refresh_token_fingerprint = self._fingerprint_token(new_refresh_token)
 
@@ -261,6 +271,9 @@ class AuthService:
             jti=jti,
             user_agent=user_agent,
             ip_address=ip_address,
+            active_role=active_session.active_role or user.role,
+            active_employer_id=active_session.active_employer_id,
+            active_membership_id=active_session.active_membership_id,
             expires_at=refresh_exp,
         )
         self.auth_repo.create_session(session)
@@ -423,6 +436,134 @@ class AuthService:
             ]
         )
 
+    def list_account_contexts(
+        self,
+        current_user: User,
+        *,
+        current_session_jti: str | None,
+    ) -> AccountContextListResponse:
+        active_session = (
+            self.auth_repo.get_active_session_by_jti(current_user.id, current_session_jti)
+            if current_session_jti
+            else None
+        )
+        active_context_id = self._build_context_id(
+            active_role=(
+                active_session.active_role.value if active_session and active_session.active_role else current_user.role.value
+            ),
+            membership_id=(
+                str(active_session.active_membership_id)
+                if active_session and active_session.active_membership_id
+                else None
+            ),
+        )
+        items = [self._build_base_context(current_user, active_context_id=active_context_id)]
+
+        for membership, employer in self._list_user_memberships(current_user):
+            context_id = self._build_context_id(
+                active_role=UserRole.EMPLOYER.value,
+                membership_id=str(membership.id),
+            )
+            items.append(
+                AccountContextRead(
+                    id=context_id,
+                    role=UserRole.EMPLOYER,
+                    label=employer.display_name,
+                    company_name=employer.display_name,
+                    employer_id=str(employer.id),
+                    membership_id=str(membership.id),
+                    is_default=False,
+                    is_active=context_id == active_context_id,
+                )
+            )
+
+        return AccountContextListResponse(items=items)
+
+    def switch_account_context(
+        self,
+        current_user: User,
+        *,
+        current_session_jti: str,
+        context_id: str,
+    ) -> AccountContextSwitchResponse:
+        session = self.auth_repo.get_active_session_by_jti(current_user.id, current_session_jti)
+        if session is None:
+            raise AppError(
+                code="AUTH_SESSION_NOT_FOUND",
+                message="Текущая сессия не найдена",
+                status_code=404,
+            )
+
+        base_context_id = self._build_context_id(active_role=current_user.role.value, membership_id=None)
+
+        if context_id == base_context_id:
+            session.active_role = current_user.role
+            session.active_employer_id = None
+            session.active_membership_id = None
+            active_context = self._build_base_context(current_user, active_context_id=context_id)
+        else:
+            matched_membership: EmployerMembership | None = None
+            matched_employer: Employer | None = None
+
+            for membership, employer in self._list_user_memberships(current_user):
+                candidate_context_id = self._build_context_id(
+                    active_role=UserRole.EMPLOYER.value,
+                    membership_id=str(membership.id),
+                )
+                if candidate_context_id == context_id:
+                    matched_membership = membership
+                    matched_employer = employer
+                    break
+
+            if matched_membership is None or matched_employer is None:
+                raise AppError(
+                    code="AUTH_CONTEXT_NOT_FOUND",
+                    message="Контекст не найден",
+                    status_code=404,
+                )
+
+            session.active_role = UserRole.EMPLOYER
+            session.active_employer_id = matched_employer.id
+            session.active_membership_id = matched_membership.id
+            active_context = AccountContextRead(
+                id=context_id,
+                role=UserRole.EMPLOYER,
+                label=matched_employer.display_name,
+                company_name=matched_employer.display_name,
+                employer_id=str(matched_employer.id),
+                membership_id=str(matched_membership.id),
+                is_default=False,
+                is_active=True,
+            )
+
+        access_token, access_exp = create_access_token(
+            subject=str(current_user.id),
+            role=current_user.role.value,
+            session_jti=session.jti,
+            active_role=session.active_role.value if session.active_role is not None else current_user.role.value,
+            active_employer_id=str(session.active_employer_id) if session.active_employer_id else None,
+            active_membership_id=str(session.active_membership_id) if session.active_membership_id else None,
+        )
+        self.db.commit()
+
+        return AccountContextSwitchResponse(
+            access_token=access_token,
+            expires_in=int((access_exp - datetime.now(UTC)).total_seconds()),
+            user={
+                "id": str(current_user.id),
+                "email": current_user.email,
+                "display_name": current_user.display_name,
+                "role": current_user.role.value,
+                "status": current_user.status.value,
+                "has_employer_profile": (
+                    self.user_repo.has_employer_profile(current_user.id)
+                    if current_user.role == UserRole.EMPLOYER
+                    else False
+                ),
+            },
+            active_context=active_context,
+        )
+
     def _ensure_login_allowed(self, email: str, ip_address: str) -> None:
         rate_limit_service.ensure_allowed(
             "auth_login_email",
@@ -473,6 +614,39 @@ class AuthService:
             return None
         normalized_value = value.strip().lower()
         return normalized_value or None
+
+    def _build_base_context(self, user: User, *, active_context_id: str) -> AccountContextRead:
+        role_label_map = {
+            UserRole.APPLICANT: "Личный профиль",
+            UserRole.EMPLOYER: "Основной профиль работодателя",
+            UserRole.JUNIOR: "Профиль junior-куратора",
+            UserRole.CURATOR: "Профиль куратора",
+            UserRole.ADMIN: "Профиль администратора",
+        }
+        context_id = self._build_context_id(active_role=user.role.value, membership_id=None)
+        return AccountContextRead(
+            id=context_id,
+            role=user.role,
+            label=role_label_map.get(user.role, user.display_name),
+            company_name=None,
+            employer_id=None,
+            membership_id=None,
+            is_default=True,
+            is_active=context_id == active_context_id,
+        )
+
+    def _list_user_memberships(self, user: User) -> list[tuple[EmployerMembership, Employer]]:
+        return list(
+            self.db.query(EmployerMembership, Employer)
+            .join(Employer, Employer.id == EmployerMembership.employer_id)
+            .filter(EmployerMembership.user_id == user.id)
+            .order_by(EmployerMembership.created_at.asc())
+            .all()
+        )
+
+    @staticmethod
+    def _build_context_id(*, active_role: str, membership_id: str | None) -> str:
+        return f"{active_role}:{membership_id or 'base'}"
 
     @staticmethod
     def _fingerprint_token(token: str) -> str:

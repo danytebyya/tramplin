@@ -62,6 +62,22 @@ class EmployerMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
+class EmployerStaffInvitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "employer_staff_invitations"
+
+    employer_id: Mapped[str] = mapped_column(Uuid(as_uuid=True), ForeignKey("employers.id"), nullable=False)
+    invited_email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    membership_role: Mapped[MembershipRole] = mapped_column(
+        Enum(MembershipRole, name="membership_role", values_callable=enum_values),
+        nullable=False,
+    )
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    invited_by_user_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class MediaFile(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "media_files"
 

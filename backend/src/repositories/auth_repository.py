@@ -15,6 +15,16 @@ class AuthRepository:
         self.db.add(session)
         return session
 
+    def get_active_session_by_jti(self, user_id: str | UUID, jti: str) -> RefreshSession | None:
+        normalized_user_id = UUID(str(user_id))
+        stmt = select(RefreshSession).where(
+            RefreshSession.user_id == normalized_user_id,
+            RefreshSession.jti == jti,
+            RefreshSession.revoked_at.is_(None),
+            RefreshSession.expires_at > datetime.now(UTC),
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def get_active_session_by_hash(self, token_hash: str) -> RefreshSession | None:
         stmt = select(RefreshSession).where(
             RefreshSession.token_hash == token_hash,

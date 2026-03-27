@@ -5,6 +5,7 @@ from src.api.deps import get_current_access_payload, get_current_user
 from src.db import get_db
 from src.models import User
 from src.schemas.auth import (
+    AccountContextSwitchRequest,
     EmailCheckRequest,
     LoginRequest,
     LogoutRequest,
@@ -124,6 +125,34 @@ def list_login_history(
 ) -> dict:
     payload = AuthService(db).list_login_history(current_user)
     return success_response(payload.model_dump(mode="json"))
+
+
+@router.get("/contexts", status_code=status.HTTP_200_OK)
+def list_account_contexts(
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = AuthService(db).list_account_contexts(
+        current_user,
+        current_session_jti=access_payload.get("jti"),
+    )
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.post("/context", status_code=status.HTTP_200_OK)
+def switch_account_context(
+    payload: AccountContextSwitchRequest,
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = AuthService(db).switch_account_context(
+        current_user,
+        current_session_jti=access_payload.get("jti"),
+        context_id=payload.context_id,
+    )
+    return success_response(response.model_dump(mode="json"))
 
 
 @router.delete("/sessions/current", status_code=status.HTTP_200_OK)

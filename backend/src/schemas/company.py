@@ -119,3 +119,30 @@ class EmployerStaffMemberRead(BaseModel):
 
 class EmployerStaffListRead(BaseModel):
     items: list[EmployerStaffMemberRead]
+
+
+class EmployerStaffInviteRequest(BaseModel):
+    email: EmailStr
+    role: MembershipRole
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower().strip()
+
+
+class EmployerStaffInvitationRead(BaseModel):
+    id: str
+    email: str
+    role: MembershipRole
+    status: str
+    invited_at: str
+    expires_at: str
+
+
+class EmployerStaffInvitationListRead(BaseModel):
+    items: list[EmployerStaffInvitationRead]
+
+
+class EmployerStaffInvitationAcceptRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=255)
