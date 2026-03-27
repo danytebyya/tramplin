@@ -6,6 +6,7 @@ import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
 import profileIcon from "../../assets/icons/profile.svg";
+import profileDropdownIcon from "../../assets/icons/profile.png";
 import copyIcon from "../../assets/icons/copy.svg";
 import copiedIcon from "../../assets/icons/check-mark-light.png";
 import {
@@ -389,9 +390,33 @@ function isFutureDate(value: string) {
   return new Date(value).getTime() > Date.now();
 }
 
-function resolveAccountContextSubtitle(role: string | undefined) {
+function abbreviateCompanyName(value: string) {
+  const normalizedValue = value.trim();
+  const replacements: Array<[string, string]> = [
+    ["ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ ", "ООО "],
+    ["АКЦИОНЕРНОЕ ОБЩЕСТВО ", "АО "],
+    ["ПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО ", "ПАО "],
+    ["НЕПУБЛИЧНОЕ АКЦИОНЕРНОЕ ОБЩЕСТВО ", "НАО "],
+    ["ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ ", "ИП "],
+    ["ФЕДЕРАЛЬНОЕ ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ ОБРАЗОВАТЕЛЬНОЕ УЧРЕЖДЕНИЕ ", "ФГБОУ "],
+    ["ФЕДЕРАЛЬНОЕ ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ", "ФГБУ "],
+    ["ГОСУДАРСТВЕННОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ", "ГБУ "],
+    ["МУНИЦИПАЛЬНОЕ БЮДЖЕТНОЕ УЧРЕЖДЕНИЕ ", "МБУ "],
+  ];
+  const upperValue = normalizedValue.toUpperCase();
+
+  for (const [fullPrefix, abbreviatedPrefix] of replacements) {
+    if (upperValue.startsWith(fullPrefix)) {
+      return `${abbreviatedPrefix}${normalizedValue.slice(fullPrefix.length)}`.trim();
+    }
+  }
+
+  return normalizedValue;
+}
+
+function resolveAccountContextSubtitle(role: string | undefined, companyName?: string | null) {
   if (role === "employer") {
-    return "профиль работодателя";
+    return companyName?.trim() ? abbreviateCompanyName(companyName) : "профиль работодателя";
   }
 
   if (role === "applicant") {
@@ -1251,17 +1276,7 @@ export function SettingsPage() {
       return !items.some((candidate) => candidate.role === "employer" && !candidate.is_default);
     });
 
-    return [...filteredItems].sort((left, right) => {
-      if ((left.is_active ?? false) !== (right.is_active ?? false)) {
-        return left.is_active ? -1 : 1;
-      }
-
-      if ((left.is_default ?? false) !== (right.is_default ?? false)) {
-        return left.is_default ? -1 : 1;
-      }
-
-      return (left.label ?? "").localeCompare(right.label ?? "", "ru");
-    });
+    return filteredItems;
   }, [accountContextsQuery.data?.data?.items]);
   const hasAccountContextCards = accountContextItems.length > 0;
   const hasMultipleAccountContexts = accountContextItems.length > 1;
@@ -2529,13 +2544,15 @@ export function SettingsPage() {
                                     key={item.id}
                                     type="button"
                                     className={
-                                      isActive
-                                        ? "header__profile-context-card header__profile-context-card--active"
-                                        : "header__profile-context-card"
+                                      hasMultipleAccountContexts
+                                        ? isActive
+                                          ? "header__profile-context-card header__profile-context-card--active"
+                                          : "header__profile-context-card"
+                                        : "header__profile-context-card header__profile-context-card--static"
                                     }
-                                    disabled={isActive || switchAccountContextMutation.isPending}
+                                    disabled={!hasMultipleAccountContexts || isActive || switchAccountContextMutation.isPending}
                                     onClick={() => {
-                                      if (isActive) {
+                                      if (!hasMultipleAccountContexts || isActive) {
                                         return;
                                       }
 
@@ -2544,7 +2561,7 @@ export function SettingsPage() {
                                   >
                                     <span className="header__profile-context-avatar">
                                       <img
-                                        src={profileIcon}
+                                        src={profileDropdownIcon}
                                         alt=""
                                         aria-hidden="true"
                                         className="header__profile-context-avatar-image"
@@ -2555,7 +2572,7 @@ export function SettingsPage() {
                                         {user?.display_name ?? item.label ?? "Профиль"}
                                       </span>
                                       <span className="header__profile-context-role">
-                                        {resolveAccountContextSubtitle(item.role)}
+                                        {resolveAccountContextSubtitle(item.role, item.company_name)}
                                       </span>
                                     </span>
                                   </button>
