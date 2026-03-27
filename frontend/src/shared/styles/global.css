@@ -1616,6 +1616,14 @@ a {
   margin: 0;
 }
 
+.modal__title-accent {
+  color: var(--modal-title-accent-color, var(--color-primary));
+}
+
+.modal__title-text {
+  color: var(--color-text-primary);
+}
+
 .modal__content {
   margin-top: 20px;
 }

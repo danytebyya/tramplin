@@ -59,10 +59,7 @@ function closeSocket() {
   activeSocket.onclose = null;
   activeSocket.onerror = null;
 
-  if (
-    activeSocket.readyState === WebSocket.OPEN ||
-    activeSocket.readyState === WebSocket.CONNECTING
-  ) {
+  if (activeSocket.readyState === WebSocket.OPEN) {
     activeSocket.close();
   }
 }

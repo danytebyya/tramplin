@@ -233,6 +233,18 @@ function resolveOutlineVariant(role: string | null) {
   return "secondary-outline" as const;
 }
 
+function resolveModalTitleAccentColor(role: string | null) {
+  if (role === "employer") {
+    return "var(--color-primary)";
+  }
+
+  if (role === "junior" || role === "curator" || role === "admin") {
+    return "var(--color-accent)";
+  }
+
+  return "var(--color-secondary)";
+}
+
 function resolveCheckboxVariant(role: string | null) {
   if (role === "employer") {
     return "primary" as const;
@@ -392,6 +404,7 @@ function readAccessTokenPayload(token: string | null) {
     const decodedPayload = window.atob(normalizedPayload);
     return JSON.parse(decodedPayload) as {
       active_membership_id?: string;
+      active_permissions?: string[];
     };
   } catch {
     return null;
@@ -478,6 +491,7 @@ export function SettingsPage() {
   const themeRole = resolveThemeRole(role);
   const actionVariant = resolveActionVariant(role);
   const outlineVariant = resolveOutlineVariant(role);
+  const modalTitleAccentColor = resolveModalTitleAccentColor(role);
   const checkboxVariant = resolveCheckboxVariant(role);
   const isModerationRole = role === "junior" || role === "curator" || role === "admin";
   const isEmployer = role === "employer";
@@ -517,11 +531,14 @@ export function SettingsPage() {
     defaultEmployerStaffPermissions,
   );
   const [staffInviteAcceptError, setStaffInviteAcceptError] = useState<string | null>(null);
-  const [staffInviteAcceptSuccess, setStaffInviteAcceptSuccess] = useState<string | null>(null);
+  const autoAcceptedInviteTokenRef = useRef<string | null>(null);
 
   const inviteToken = searchParams.get("invite_token");
   const inviteMode = searchParams.get("mode");
   const hasPendingCompanyInvite = inviteMode === "accept-company-invite" && Boolean(inviteToken);
+  const accessTokenPayload = useMemo(() => readAccessTokenPayload(accessToken), [accessToken]);
+  const activeEmployerMembershipId = accessTokenPayload?.active_membership_id ?? null;
+  const activeEmployerPermissionKeys = accessTokenPayload?.active_permissions ?? [];
 
   const { data: meData } = useQuery({
     queryKey: ["auth", "me"],
@@ -529,6 +546,14 @@ export function SettingsPage() {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+  const canManageEmployerStaffByState =
+    isEmployer &&
+    (
+      activeEmployerPermissionKeys.includes("manage_staff") ||
+      (activeEmployerMembershipId !== null &&
+        activeEmployerPermissionKeys.length === 0 &&
+        Boolean(meData?.data?.user?.employer_profile))
+    );
 
   const sessionsQuery = useQuery({
     queryKey: ["auth", "sessions"],
@@ -561,28 +586,29 @@ export function SettingsPage() {
     queryKey: ["companies", "staff"],
     queryFn: listEmployerStaff,
     staleTime: 30 * 1000,
-    enabled: isAuthenticated && isEmployer,
+    enabled: isAuthenticated && canManageEmployerStaffByState,
     retry: false,
   });
   const employerStaffInvitationsQuery = useQuery({
     queryKey: ["companies", "staff", "invitations"],
     queryFn: listEmployerStaffInvitations,
     staleTime: 30 * 1000,
-    enabled: isAuthenticated && isEmployer,
+    enabled: isAuthenticated && canManageEmployerStaffByState,
     retry: false,
   });
 
   const user = meData?.data?.user;
+  const canManageEmployerStaff = canManageEmployerStaffByState;
   const isProfileLoading = !user;
   const isNotificationLoading = notificationPreferencesQuery.isPending;
   const isSessionsLoading = sessionsQuery.isPending;
   const isLoginHistoryLoading = loginHistoryQuery.isPending;
   const isModerationSettingsLoading = isModerationRole && moderationSettingsQuery.isPending;
-  const isEmployerStaffLoading = isEmployer && employerStaffQuery.isPending;
-  const isEmployerStaffInvitationsLoading = isEmployer && employerStaffInvitationsQuery.isPending;
+  const isEmployerStaffLoading = canManageEmployerStaff && employerStaffQuery.isPending;
+  const isEmployerStaffInvitationsLoading = canManageEmployerStaff && employerStaffInvitationsQuery.isPending;
   const isEmployerStaffForbidden =
     employerStaffQuery.error && (employerStaffQuery.error as any)?.response?.data?.error?.code === "EMPLOYER_STAFF_MANAGEMENT_FORBIDDEN";
-  const canViewEmployerStaffSection = isEmployer && !isEmployerStaffForbidden;
+  const canViewEmployerStaffSection = canManageEmployerStaff && !isEmployerStaffForbidden;
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -679,9 +705,13 @@ export function SettingsPage() {
       setInviteError(null);
     },
     onSuccess: (response) => {
-      setLatestInvitationUrl(response?.data?.invitation_url ?? null);
+      const invitationUrl = response?.data?.invitation_url ?? null;
+      setLatestInvitationUrl(invitationUrl);
       setInviteEmail("");
       setInvitePermissions(defaultEmployerStaffPermissions);
+      if (trimmedInviteEmail) {
+        setIsStaffInviteModalOpen(false);
+      }
       void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
     },
     onError: (error: any) => {
@@ -721,10 +751,13 @@ export function SettingsPage() {
             useAuthStore.getState().setSession(nextAccessToken, currentRefreshToken, nextRole, nextExpiresIn);
           }
         }
+
+        navigate("/", { replace: true });
       }
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["companies", "staff"] }),
+        queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] }),
         queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
         queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
       ]);
@@ -742,7 +775,6 @@ export function SettingsPage() {
     mutationFn: acceptEmployerStaffInvitation,
     onMutate: () => {
       setStaffInviteAcceptError(null);
-      setStaffInviteAcceptSuccess(null);
     },
     onSuccess: async (response) => {
       const contextsResponse = await listAccountContextsRequest();
@@ -767,7 +799,6 @@ export function SettingsPage() {
         }
       }
 
-      setStaffInviteAcceptSuccess("Рабочий профиль компании добавлен и активирован.");
       clearCompanyInviteReturnTo();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["companies", "staff"] }),
@@ -1034,10 +1065,6 @@ export function SettingsPage() {
     () => employerStaffItems.some((item) => item.is_current_user && item.is_primary),
     [employerStaffItems],
   );
-  const activeEmployerMembershipId = useMemo(
-    () => readAccessTokenPayload(accessToken)?.active_membership_id ?? null,
-    [accessToken],
-  );
   const currentEmployerMembership = useMemo(
     () =>
       employerStaffItems.find(
@@ -1050,6 +1077,16 @@ export function SettingsPage() {
     isEmployer &&
     activeEmployerMembershipId !== null &&
     (currentEmployerMembership ? !currentEmployerMembership.is_primary : !canViewEmployerStaffSection);
+  const currentCompanyLeaveTarget = useMemo(
+    () =>
+      activeEmployerMembershipId
+        ? {
+            membershipId: activeEmployerMembershipId,
+            email: currentEmployerMembership?.email ?? user?.email ?? "текущего профиля",
+          }
+        : null,
+    [activeEmployerMembershipId, currentEmployerMembership?.email, user?.email],
+  );
   const invitePermissionKeys = useMemo(
     () => mapEmployerStaffPermissionsToKeys(invitePermissions),
     [invitePermissions],
@@ -1105,6 +1142,24 @@ export function SettingsPage() {
   useEffect(() => {
     setIsInviteLinkCopied(false);
   }, [latestInvitationUrl]);
+
+  useEffect(() => {
+    if (!hasPendingCompanyInvite || !inviteToken || !isAuthenticated) {
+      return;
+    }
+
+    if (autoAcceptedInviteTokenRef.current === inviteToken) {
+      return;
+    }
+
+    autoAcceptedInviteTokenRef.current = inviteToken;
+    acceptEmployerStaffInvitationMutation.mutate(inviteToken);
+  }, [
+    acceptEmployerStaffInvitationMutation,
+    hasPendingCompanyInvite,
+    inviteToken,
+    isAuthenticated,
+  ]);
 
   const pageClassName = [
     "settings-page",
@@ -1243,9 +1298,6 @@ export function SettingsPage() {
   const renderAccountManagementPanel = () => {
     return (
       <div className="settings-page__panel">
-        <div className="settings-page__panel-header">
-          <h3 className="settings-page__panel-title">Управление аккаунтом</h3>
-        </div>
         <div className="settings-page__panel-body settings-page__panel-body--account">
           {canLeaveCurrentCompany ? (
             <div className="settings-page__account-block">
@@ -1257,16 +1309,16 @@ export function SettingsPage() {
                 type="button"
                 variant={outlineVariant}
                 size="md"
-                disabled={!currentEmployerMembership || isDeleteStaffItemPending}
+                disabled={!currentCompanyLeaveTarget || isDeleteStaffItemPending}
                 onClick={() => {
-                  if (!currentEmployerMembership) {
+                  if (!currentCompanyLeaveTarget) {
                     return;
                   }
 
                   setPendingDeleteItem({
                     kind: "membership",
-                    id: currentEmployerMembership.id,
-                    email: currentEmployerMembership.email,
+                    id: currentCompanyLeaveTarget.membershipId,
+                    email: currentCompanyLeaveTarget.email,
                     isCurrentUser: true,
                   });
                 }}
@@ -1390,41 +1442,35 @@ export function SettingsPage() {
       <>
         {renderPublicTabs()}
 
-        {hasPendingCompanyInvite ? (
+        {hasPendingCompanyInvite && (acceptEmployerStaffInvitationMutation.isPending || staffInviteAcceptError) ? (
           <section className="settings-page__section">
             <h2 className="settings-page__section-title">Приглашение в компанию</h2>
             <div className="settings-page__panel">
               <div className="settings-page__panel-body settings-page__panel-body--staff">
                 <div className="settings-page__staff-link-card">
-                  <p className="settings-page__staff-link-title">Доступен рабочий профиль компании</p>
+                  <p className="settings-page__staff-link-title">Подключаем рабочий профиль компании</p>
                   <p className="settings-page__staff-link-value">
-                    После подтверждения к вашему аккаунту будет привязан дополнительный контекст работодателя.
+                    Приглашение применяется автоматически, отдельное подтверждение не требуется.
                   </p>
                   {staffInviteAcceptError ? (
                     <p className="settings-page__form-message settings-page__form-message--error">
                       {staffInviteAcceptError}
                     </p>
                   ) : null}
-                  {staffInviteAcceptSuccess ? (
-                    <p className="settings-page__form-message settings-page__form-message--success">
-                      {staffInviteAcceptSuccess}
-                    </p>
+                  {staffInviteAcceptError && inviteToken ? (
+                    <Button
+                      type="button"
+                      variant={actionVariant}
+                      size="md"
+                      loading={acceptEmployerStaffInvitationMutation.isPending}
+                      onClick={() => {
+                        autoAcceptedInviteTokenRef.current = null;
+                        acceptEmployerStaffInvitationMutation.mutate(inviteToken);
+                      }}
+                    >
+                      Повторить
+                    </Button>
                   ) : null}
-                  <Button
-                    type="button"
-                    variant={actionVariant}
-                    size="md"
-                    loading={acceptEmployerStaffInvitationMutation.isPending}
-                    onClick={() => {
-                      if (!inviteToken) {
-                        return;
-                      }
-
-                      acceptEmployerStaffInvitationMutation.mutate(inviteToken);
-                    }}
-                  >
-                    Принять приглашение
-                  </Button>
                 </div>
               </div>
             </div>
@@ -1661,8 +1707,10 @@ export function SettingsPage() {
               onClose={() => {
                 setIsStaffInviteModalOpen(false);
                 setInviteError(null);
+                setLatestInvitationUrl(null);
               }}
               panelClassName="settings-page__staff-modal-panel"
+              titleAccentColor={modalTitleAccentColor}
             >
               <div className="settings-page__staff-modal">
                 <label className="settings-page__field">
@@ -1749,7 +1797,7 @@ export function SettingsPage() {
                 {inviteError ? (
                   <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p>
                 ) : null}
-                {latestInvitationUrl ? (
+                {!trimmedInviteEmail && latestInvitationUrl ? (
                   <label className="settings-page__field">
                     <span className="settings-page__field-label">Ссылка приглашения</span>
                     <span className="settings-page__invite-link-shell">
@@ -1801,7 +1849,7 @@ export function SettingsPage() {
                     disabled={invitePermissionKeys.length === 0 || Boolean(inviteEmailError)}
                     onClick={handleCreateStaffInvitation}
                   >
-                    {trimmedInviteEmail ? "Отправить приглашение" : "Сгенерировать ссылку"}
+                    {trimmedInviteEmail ? "Отправить" : "Сгенерировать ссылку"}
                   </Button>
                 </div>
               </div>
@@ -1823,6 +1871,7 @@ export function SettingsPage() {
                 setPendingDeleteItem(null);
               }}
               panelClassName="settings-page__staff-modal-panel"
+              titleAccentColor={modalTitleAccentColor}
             >
               <div className="settings-page__staff-modal">
                 <p className="settings-page__staff-delete-message">

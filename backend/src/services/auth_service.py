@@ -15,7 +15,7 @@ from src.core.security import (
     hash_token,
     verify_password,
 )
-from src.enums import TokenType, UserRole, UserStatus
+from src.enums import MembershipRole, TokenType, UserRole, UserStatus
 from src.models import (
     ApplicantProfile,
     AuthLoginEvent,
@@ -49,6 +49,49 @@ class AuthService:
         self.auth_repo = AuthRepository(db)
 
     logger = logging.getLogger(__name__)
+
+    @staticmethod
+    def _resolve_membership_permission_keys(role: MembershipRole) -> list[str]:
+        if role == MembershipRole.OWNER:
+            return [
+                "view_responses",
+                "manage_opportunities",
+                "manage_company_profile",
+                "manage_staff",
+                "access_chat",
+            ]
+
+        if role == MembershipRole.RECRUITER:
+            return [
+                "view_responses",
+                "manage_opportunities",
+                "access_chat",
+            ]
+
+        if role == MembershipRole.MANAGER:
+            return [
+                "view_responses",
+                "manage_company_profile",
+                "access_chat",
+            ]
+
+        return [
+            "view_responses",
+        ]
+
+    def _resolve_active_permissions(self, membership_id) -> list[str] | None:
+        if membership_id is None:
+            return None
+
+        membership = (
+            self.db.query(EmployerMembership)
+            .filter(EmployerMembership.id == membership_id)
+            .one_or_none()
+        )
+        if membership is None:
+            return None
+
+        return membership.permissions or self._resolve_membership_permission_keys(membership.membership_role)
 
     def register(self, payload: RegisterRequest) -> User:
         normalized_email = payload.email.lower()
@@ -314,6 +357,7 @@ class AuthService:
             active_membership_id=str(active_session.active_membership_id)
             if active_session.active_membership_id
             else None,
+            active_permissions=self._resolve_active_permissions(active_session.active_membership_id),
         )
         new_refresh_token_fingerprint = self._fingerprint_token(new_refresh_token)
 
@@ -595,6 +639,7 @@ class AuthService:
             active_role=session.active_role.value if session.active_role is not None else current_user.role.value,
             active_employer_id=str(session.active_employer_id) if session.active_employer_id else None,
             active_membership_id=str(session.active_membership_id) if session.active_membership_id else None,
+            active_permissions=self._resolve_active_permissions(session.active_membership_id),
         )
         self.db.commit()
 

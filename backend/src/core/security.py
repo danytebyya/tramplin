@@ -34,6 +34,7 @@ def create_access_token(
     active_role: str | None = None,
     active_employer_id: str | None = None,
     active_membership_id: str | None = None,
+    active_permissions: list[str] | None = None,
 ) -> tuple[str, datetime]:
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     payload = {
@@ -52,6 +53,8 @@ def create_access_token(
         payload["active_employer_id"] = active_employer_id
     if active_membership_id:
         payload["active_membership_id"] = active_membership_id
+    if active_permissions:
+        payload["active_permissions"] = active_permissions
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     return token, expires_at
 

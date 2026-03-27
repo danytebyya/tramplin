@@ -2,6 +2,7 @@ from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy import select
 
+from src.core.security import decode_token
 from src.enums import EmployerType, MembershipRole, UserRole
 from src.models import Employer, EmployerMembership, EmployerProfile, Notification, User
 from src.tests.test_auth import _request_code
@@ -125,6 +126,13 @@ def test_existing_user_can_accept_company_invitation_and_switch_context(client, 
     )
     assert switch_response.status_code == 200
     assert switch_response.json()["data"]["active_context"]["role"] == UserRole.EMPLOYER.value
+    switched_access_token = switch_response.json()["data"]["access_token"]
+    switched_payload = decode_token(switched_access_token)
+    assert switched_payload["active_permissions"] == [
+        "view_responses",
+        "manage_opportunities",
+        "access_chat",
+    ]
 
 
 def test_staff_member_can_leave_company_membership(client, db_session, monkeypatch):
