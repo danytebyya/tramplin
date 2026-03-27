@@ -243,7 +243,7 @@ class EmployerService:
             permissions=permissions,
             token_hash=hash_token(token),
             invited_by_user_id=current_user.id,
-            expires_at=datetime.now(UTC) + timedelta(days=7),
+            expires_at=datetime.now(UTC) + timedelta(days=1),
         )
         self.db.add(invitation)
         self.db.commit()

@@ -453,6 +453,13 @@
   word-break: break-word;
 }
 
+.settings-page__staff-pending-label {
+  margin: 8px 0 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+}
+
 .settings-page__staff-actions {
   display: flex;
   align-items: center;

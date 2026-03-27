@@ -341,6 +341,10 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString("ru-RU");
 }
 
+function isFutureDate(value: string) {
+  return new Date(value).getTime() > Date.now();
+}
+
 function resolveBrowserLabel(userAgent: string | null | undefined) {
   const normalizedUserAgent = userAgent ?? "";
   const platformMatch = normalizedUserAgent.match(/\(([^)]+)\)/);
@@ -908,17 +912,42 @@ export function SettingsPage() {
   const employerStaffItems = useMemo(() => {
     return (employerStaffQuery.data?.data?.items ?? []).map((item) => ({
       ...item,
+      kind: "member" as const,
       roleLabel: resolveEmployerStaffRoleLabel(item.role),
       invitedAtLabel: formatDate(item.invited_at),
     }));
   }, [employerStaffQuery.data]);
   const employerStaffInvitationItems = useMemo(() => {
-    return (employerStaffInvitationsQuery.data?.data?.items ?? []).map((item) => ({
+    return (employerStaffInvitationsQuery.data?.data?.items ?? [])
+      .filter((item) => item.status !== "expired" && isFutureDate(item.expires_at))
+      .map((item) => ({
       ...item,
       roleLabel: resolveEmployerStaffRoleLabel(item.role),
       invitedAtLabel: formatDate(item.invited_at),
+      expiresAtLabel: formatDate(item.expires_at),
     }));
   }, [employerStaffInvitationsQuery.data]);
+  const linkOnlyInvitationItems = useMemo(
+    () => employerStaffInvitationItems.filter((item) => !item.email),
+    [employerStaffInvitationItems],
+  );
+  const emailInvitationStaffItems = useMemo(() => {
+    return employerStaffInvitationItems
+      .filter((item) => Boolean(item.email))
+      .map((item) => ({
+        ...item,
+        kind: "invitation" as const,
+        id: `invitation-${item.id}`,
+        email: item.email as string,
+        permissions: item.permissions ?? [],
+        is_current_user: false,
+        is_primary: false,
+      }));
+  }, [employerStaffInvitationItems]);
+  const combinedEmployerStaffItems = useMemo(
+    () => [...employerStaffItems, ...emailInvitationStaffItems],
+    [emailInvitationStaffItems, employerStaffItems],
+  );
   const invitePermissionKeys = useMemo(
     () => mapEmployerStaffPermissionsToKeys(invitePermissions),
     [invitePermissions],
@@ -1264,12 +1293,12 @@ export function SettingsPage() {
                   Пригласить сотрудника
                 </Button>
                 <div className="settings-page__staff-invitations">
-                  <h3 className="settings-page__staff-subtitle">Активные приглашения</h3>
+                  <h3 className="settings-page__staff-subtitle">Активные ссылки приглашений</h3>
                   {isEmployerStaffInvitationsLoading ? (
                     <SettingsSkeleton className="settings-page__skeleton--session-line" />
-                  ) : employerStaffInvitationItems.length > 0 ? (
+                  ) : linkOnlyInvitationItems.length > 0 ? (
                     <div className="settings-page__staff-invitation-list">
-                      {employerStaffInvitationItems.map((item) => (
+                      {linkOnlyInvitationItems.map((item) => (
                         <article key={item.id} className="settings-page__staff-invitation-card">
                           <div className="settings-page__staff-invitation-head">
                             <p className="settings-page__staff-email">
@@ -1293,7 +1322,7 @@ export function SettingsPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="settings-page__staff-empty">Активных приглашений пока нет.</div>
+                    <div className="settings-page__staff-empty">Активных ссылок приглашений пока нет.</div>
                   )}
                 </div>
                 <div className="settings-page__staff-list">
@@ -1305,8 +1334,8 @@ export function SettingsPage() {
                           </div>
                         </article>
                       ))
-                    : employerStaffItems.length > 0
-                      ? employerStaffItems.map((member) => {
+                    : combinedEmployerStaffItems.length > 0
+                      ? combinedEmployerStaffItems.map((member) => {
                         const isExpanded = expandedStaffMemberId === member.id;
 
                         return (
@@ -1331,6 +1360,9 @@ export function SettingsPage() {
                             >
                               <div className="settings-page__staff-card-title-group">
                                 <h3 className="settings-page__staff-email">{member.email}</h3>
+                                {"kind" in member && member.kind === "invitation" ? (
+                                  <p className="settings-page__staff-pending-label">Приглашение ожидает подтверждения</p>
+                                ) : null}
                               </div>
                               <div className="settings-page__staff-actions" aria-label={`Действия для ${member.email}`}>
                                 <button type="button" className="settings-page__icon-button" aria-label={`Редактировать ${member.email}`} disabled>
@@ -1340,7 +1372,11 @@ export function SettingsPage() {
                                   type="button"
                                   className="settings-page__icon-button"
                                   aria-label={member.is_current_user ? `Покинуть компанию ${member.email}` : `Удалить ${member.email}`}
-                                  disabled={member.is_primary || deleteEmployerStaffMembershipMutation.isPending}
+                                  disabled={
+                                    member.is_primary ||
+                                    deleteEmployerStaffMembershipMutation.isPending ||
+                                    ("kind" in member && member.kind === "invitation")
+                                  }
                                   onClick={() => {
                                     deleteEmployerStaffMembershipMutation.mutate({
                                       membershipId: member.id,
@@ -1370,7 +1406,11 @@ export function SettingsPage() {
                                       </li>
                                     ))}
                                   </ul>
-                                  <p className="settings-page__staff-date">Добавлен: {member.invitedAtLabel}</p>
+                                  {"kind" in member && member.kind === "invitation" ? (
+                                    <p className="settings-page__staff-date">Действует до: {member.expiresAtLabel}</p>
+                                  ) : (
+                                    <p className="settings-page__staff-date">Добавлен: {member.invitedAtLabel}</p>
+                                  )}
                                 </div>
                               </div>
                             </div>
