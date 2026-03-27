@@ -504,6 +504,10 @@
   align-items: center;
 }
 
+.content-moderation-page__row-summary--centered {
+  align-items: center;
+}
+
 .content-moderation-page__row-leading {
   display: flex;
   align-items: flex-start;
@@ -511,6 +515,7 @@
   padding-top: 2px;
 }
 
+.content-moderation-page__row-summary--centered .content-moderation-page__row-leading,
 .content-moderation-page__row-summary--expanded .content-moderation-page__row-leading {
   align-items: center;
   padding-top: 0;

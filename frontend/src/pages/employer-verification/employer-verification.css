@@ -420,6 +420,10 @@
   align-items: center;
 }
 
+.employer-verification-page__row-summary--centered {
+  align-items: center;
+}
+
 .employer-verification-page__row-leading {
   display: flex;
   align-items: flex-start ;
@@ -427,6 +431,7 @@
   padding-top: 2px;
 }
 
+.employer-verification-page__row-summary--centered .employer-verification-page__row-leading,
 .employer-verification-page__row-summary--expanded .employer-verification-page__row-leading {
   align-items: center;
   padding-top: 0;

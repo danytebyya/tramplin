@@ -1492,6 +1492,8 @@ export function EmployerVerificationPage() {
                     className={
                       isExpanded
                         ? "employer-verification-page__row-summary employer-verification-page__row-summary--expanded"
+                        : isVerifiedItem
+                          ? "employer-verification-page__row-summary employer-verification-page__row-summary--centered"
                         : "employer-verification-page__row-summary"
                     }
                   >

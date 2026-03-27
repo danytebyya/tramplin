@@ -905,7 +905,11 @@ export function ContentModerationPage() {
                       className="content-moderation-page__row"
                       onClick={(event) => handleRowClick(event, item)}
                     >
-                      <div className={isExpanded ? "content-moderation-page__row-summary content-moderation-page__row-summary--expanded" : "content-moderation-page__row-summary"}>
+                      <div className={isExpanded
+                        ? "content-moderation-page__row-summary content-moderation-page__row-summary--expanded"
+                        : isApproved
+                          ? "content-moderation-page__row-summary content-moderation-page__row-summary--centered"
+                          : "content-moderation-page__row-summary"}>
                         <div className="content-moderation-page__row-leading">
                           <Checkbox checked={selectedIds.includes(item.id)} onChange={() => toggleSelectedId(item.id)} variant="accent" />
                         </div>
