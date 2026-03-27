@@ -701,6 +701,10 @@ class ModerationService:
             employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
 
             if action == self.SIDE_EFFECT_ACTION_APPROVE:
+                self._send_approved_email(
+                    verification_request=verification_request,
+                    employer_profile=employer_profile,
+                )
                 self._create_approved_notification(verification_request=verification_request)
             elif action == self.SIDE_EFFECT_ACTION_REJECT:
                 self._send_rejection_email(
@@ -767,6 +771,49 @@ class ModerationService:
             created_at=datetime.now(UTC),
             profile_scope={"profile_role": UserRole.EMPLOYER.value},
         )
+
+    @staticmethod
+    def _build_approved_email_body(*, verification_request) -> str:
+        return (
+            "Заявка на верификацию работодателя одобрена.\n\n"
+            f"Компания: {verification_request.legal_name}\n"
+            f"ИНН: {verification_request.inn}\n\n"
+            "Теперь компания подтверждена на платформе, и вы можете продолжать работу в личном кабинете."
+        )
+
+    def _send_approved_email(
+        self,
+        *,
+        verification_request,
+        employer_profile,
+    ) -> None:
+        employer_user = self._get_notification_target_user(verification_request.submitted_by)
+        if employer_user is not None and not self._is_notification_enabled(
+            employer_user,
+            "email_company_profile_changes",
+        ):
+            return
+
+        recipient = self._resolve_request_changes_email_recipient(
+            verification_request=verification_request,
+            employer_profile=employer_profile,
+        )
+        if recipient is None:
+            return
+
+        subject = "Трамплин: верификация компании подтверждена"
+        body = self._build_approved_email_body(
+            verification_request=verification_request,
+        )
+
+        try:
+            send_email(recipient=recipient, subject=subject, body=body)
+        except Exception:
+            self.logger.warning(
+                "moderation.approved_email.failed request_id=%s recipient=%s",
+                verification_request.id,
+                recipient,
+            )
 
     def _create_rejected_notification(self, *, verification_request, moderator_comment: str | None) -> None:
         if verification_request.submitted_by is None:
