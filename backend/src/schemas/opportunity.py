@@ -19,6 +19,8 @@ class OpportunityPublicRead(BaseModel):
     latitude: float
     longitude: float
     accent: str
+    business_status: str
+    moderation_status: str
 
 
 class OpportunityFeedResponse(BaseModel):

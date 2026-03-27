@@ -37,6 +37,8 @@ class OpportunityService:
             "latitude": float(location.latitude or Decimal("56.130000")),
             "longitude": float(location.longitude or Decimal("47.250000")),
             "accent": self._accent_value(kind, index),
+            "business_status": opportunity.business_status.value,
+            "moderation_status": opportunity.moderation_status.value,
         }
 
     @staticmethod

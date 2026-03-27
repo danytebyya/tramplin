@@ -18,3 +18,5 @@ def test_list_public_opportunities_returns_seeded_it_feed(client, db_session):
     assert any(item["format"] == "remote" for item in items)
     assert any(item["format"] == "hybrid" for item in items)
     assert any(item["format"] == "office" for item in items)
+    assert all(item["business_status"] == "active" for item in items)
+    assert all(item["moderation_status"] == "approved" for item in items)

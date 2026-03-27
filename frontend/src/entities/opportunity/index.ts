@@ -1,5 +1,7 @@
 export type OpportunityFormat = "office" | "hybrid" | "remote";
 export type OpportunityKind = "vacancy" | "internship" | "event" | "mentorship";
+export type OpportunityBusinessStatus = "draft" | "scheduled" | "active" | "closed" | "archived";
+export type OpportunityModerationStatus = "pending_review" | "approved" | "rejected" | "hidden" | "blocked";
 
 export type Opportunity = {
   id: string;
@@ -19,6 +21,8 @@ export type Opportunity = {
   latitude: number;
   longitude: number;
   accent: "cyan" | "amber" | "blue" | "slate";
+  businessStatus: OpportunityBusinessStatus;
+  moderationStatus: OpportunityModerationStatus;
 };
 
 export const opportunityViewOptions = [

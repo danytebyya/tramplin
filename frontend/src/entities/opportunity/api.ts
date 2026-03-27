@@ -19,6 +19,8 @@ type OpportunityApiItem = {
   latitude: number;
   longitude: number;
   accent: Opportunity["accent"];
+  business_status: Opportunity["businessStatus"];
+  moderation_status: Opportunity["moderationStatus"];
 };
 
 type OpportunityFeedResponse = {
@@ -27,27 +29,35 @@ type OpportunityFeedResponse = {
   };
 };
 
+function isPublicOpportunity(item: OpportunityApiItem) {
+  return item.business_status === "active" && item.moderation_status === "approved";
+}
+
 export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
   const response = await apiClient.get<OpportunityFeedResponse>("/opportunities");
   const items = response.data?.data?.items ?? [];
 
-  return items.map((item) => ({
-    id: item.id,
-    title: item.title,
-    companyName: item.company_name,
-    companyVerified: item.company_verified,
-    companyRating: item.company_rating,
-    companyReviewsCount: item.company_reviews_count,
-    salaryLabel: item.salary_label,
-    locationLabel: item.location_label,
-    format: item.format,
-    kind: item.kind,
-    levelLabel: item.level_label,
-    employmentLabel: item.employment_label,
-    description: item.description,
-    tags: item.tags,
-    latitude: item.latitude,
-    longitude: item.longitude,
-    accent: item.accent,
-  }));
+  return items
+    .filter(isPublicOpportunity)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      companyName: item.company_name,
+      companyVerified: item.company_verified,
+      companyRating: item.company_rating,
+      companyReviewsCount: item.company_reviews_count,
+      salaryLabel: item.salary_label,
+      locationLabel: item.location_label,
+      format: item.format,
+      kind: item.kind,
+      levelLabel: item.level_label,
+      employmentLabel: item.employment_label,
+      description: item.description,
+      tags: item.tags,
+      latitude: item.latitude,
+      longitude: item.longitude,
+      accent: item.accent,
+      businessStatus: item.business_status,
+      moderationStatus: item.moderation_status,
+    }));
 }
