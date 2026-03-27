@@ -3,6 +3,8 @@ from dataclasses import dataclass
 import logging
 
 from sqlalchemy.exc import DataError, ProgrammingError
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.enums import EmployerVerificationStatus, UserRole
 from src.enums.notifications import NotificationKind, NotificationSeverity
@@ -742,6 +744,13 @@ class ModerationService:
         if verification_request.submitted_by is None:
             return
 
+        employer_user = self._get_notification_target_user(verification_request.submitted_by)
+        if employer_user is not None and not self._is_notification_enabled(
+            employer_user,
+            "push_company_profile_changes",
+        ):
+            return
+
         NotificationService(self.repo.db).create_notification(
             user_id=verification_request.submitted_by,
             kind=NotificationKind.EMPLOYER_VERIFICATION,
@@ -760,6 +769,13 @@ class ModerationService:
 
     def _create_rejected_notification(self, *, verification_request, moderator_comment: str | None) -> None:
         if verification_request.submitted_by is None:
+            return
+
+        employer_user = self._get_notification_target_user(verification_request.submitted_by)
+        if employer_user is not None and not self._is_notification_enabled(
+            employer_user,
+            "push_company_profile_changes",
+        ):
             return
 
         NotificationService(self.repo.db).create_notification(
@@ -785,6 +801,13 @@ class ModerationService:
         moderator_comment: str | None,
     ) -> None:
         if verification_request.submitted_by is None:
+            return
+
+        employer_user = self._get_notification_target_user(verification_request.submitted_by)
+        if employer_user is not None and not self._is_notification_enabled(
+            employer_user,
+            "push_company_profile_changes",
+        ):
             return
 
         NotificationService(self.repo.db).create_notification(
@@ -1208,6 +1231,13 @@ class ModerationService:
         employer_profile,
         moderator_comment: str | None,
     ) -> None:
+        employer_user = self._get_notification_target_user(verification_request.submitted_by)
+        if employer_user is not None and not self._is_notification_enabled(
+            employer_user,
+            "email_company_profile_changes",
+        ):
+            return
+
         recipient = self._resolve_request_changes_email_recipient(
             verification_request=verification_request,
             employer_profile=employer_profile,
@@ -1250,6 +1280,13 @@ class ModerationService:
         employer_profile,
         moderator_comment: str | None,
     ) -> None:
+        employer_user = self._get_notification_target_user(verification_request.submitted_by)
+        if employer_user is not None and not self._is_notification_enabled(
+            employer_user,
+            "email_company_profile_changes",
+        ):
+            return
+
         recipient = self._resolve_request_changes_email_recipient(
             verification_request=verification_request,
             employer_profile=employer_profile,
@@ -1285,6 +1322,31 @@ class ModerationService:
             return employer_profile.corporate_email
 
         return None
+
+    def _get_notification_target_user(self, user_id):
+        if user_id is None:
+            return None
+
+        stmt = (
+            select(User)
+            .options(selectinload(User.notification_preferences))
+            .where(User.id == user_id)
+        )
+        return self.repo.db.execute(stmt).scalar_one_or_none()
+
+    @staticmethod
+    def _is_notification_enabled(user: User, preference_key: str) -> bool:
+        preferences = user.notification_preferences
+        if preferences is None:
+            if user.role == UserRole.EMPLOYER:
+                return preference_key in {
+                    "email_new_verification_requests",
+                    "push_new_verification_requests",
+                    "email_company_profile_changes",
+                    "push_company_profile_changes",
+                }
+            return False
+        return bool(getattr(preferences, preference_key, False))
 
     @staticmethod
     def _build_request_changes_email_body(*, verification_request, moderator_comment: str | None) -> str:

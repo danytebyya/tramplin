@@ -49,6 +49,9 @@ class UserService:
             self._apply_default_notification_preferences(preferences, current_user.role)
             self.db.commit()
             self.db.refresh(preferences)
+        elif self._upgrade_legacy_notification_preferences(preferences, current_user.role):
+            self.db.commit()
+            self.db.refresh(preferences)
         return self._serialize_notification_preferences(preferences)
 
     def update_notification_preferences(
@@ -71,6 +74,23 @@ class UserService:
 
     @staticmethod
     def _apply_default_notification_preferences(preferences, role: UserRole) -> None:
+        if role == UserRole.EMPLOYER:
+            preferences.email_new_verification_requests = True
+            preferences.email_content_complaints = False
+            preferences.email_overdue_reviews = False
+            preferences.email_company_profile_changes = True
+            preferences.email_publication_changes = False
+            preferences.email_daily_digest = False
+            preferences.email_weekly_report = False
+            preferences.push_new_verification_requests = True
+            preferences.push_content_complaints = False
+            preferences.push_overdue_reviews = False
+            preferences.push_company_profile_changes = True
+            preferences.push_publication_changes = False
+            preferences.push_daily_digest = False
+            preferences.push_weekly_report = False
+            return
+
         if role not in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}:
             return
 
@@ -88,6 +108,36 @@ class UserService:
         preferences.push_publication_changes = False
         preferences.push_daily_digest = False
         preferences.push_weekly_report = False
+
+    @classmethod
+    def _upgrade_legacy_notification_preferences(cls, preferences, role: UserRole) -> bool:
+        if role != UserRole.EMPLOYER:
+            return False
+
+        if not cls._matches_legacy_employer_defaults(preferences):
+            return False
+
+        cls._apply_default_notification_preferences(preferences, role)
+        return True
+
+    @staticmethod
+    def _matches_legacy_employer_defaults(preferences) -> bool:
+        return (
+            preferences.email_new_verification_requests is True
+            and preferences.email_content_complaints is False
+            and preferences.email_overdue_reviews is False
+            and preferences.email_company_profile_changes is False
+            and preferences.email_publication_changes is False
+            and preferences.email_daily_digest is False
+            and preferences.email_weekly_report is False
+            and preferences.push_new_verification_requests is True
+            and preferences.push_content_complaints is False
+            and preferences.push_overdue_reviews is False
+            and preferences.push_company_profile_changes is False
+            and preferences.push_publication_changes is False
+            and preferences.push_daily_digest is False
+            and preferences.push_weekly_report is False
+        )
 
     @staticmethod
     def _serialize_notification_preferences(preferences) -> UserNotificationPreferencesRead:

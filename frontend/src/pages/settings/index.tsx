@@ -73,6 +73,18 @@ const defaultNotificationPreferenceGroup: NotificationPreferenceGroup = {
 };
 
 function resolveDefaultNotificationPreferenceGroup(role: string | null): NotificationPreferenceGroup {
+  if (role === "employer") {
+    return {
+      new_verification_requests: true,
+      content_complaints: false,
+      overdue_reviews: false,
+      company_profile_changes: true,
+      publication_changes: false,
+      daily_digest: false,
+      weekly_report: false,
+    };
+  }
+
   if (role === "junior" || role === "curator" || role === "admin") {
     return {
       new_verification_requests: false,

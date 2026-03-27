@@ -315,7 +315,10 @@ def test_approve_employer_verification_request_updates_statuses(client, db_sessi
     ).scalar_one()
     notification = db_session.execute(
         select(Notification)
-        .where(Notification.user_id == employer_profile.user_id)
+        .where(
+            Notification.user_id == employer_profile.user_id,
+            Notification.title == "Верификация одобрена",
+        )
         .order_by(Notification.created_at.desc())
     ).scalars().first()
 
@@ -360,7 +363,10 @@ def test_request_employer_verification_changes_marks_profile(client, db_session)
 
     notification = db_session.execute(
         select(Notification)
-        .where(Notification.user_id == employer_profile.user_id)
+        .where(
+            Notification.user_id == employer_profile.user_id,
+            Notification.title == "Запрос дополнительной информации",
+        )
         .order_by(Notification.created_at.desc())
     ).scalars().first()
     assert notification is not None
@@ -403,7 +409,10 @@ def test_reject_employer_verification_request_keeps_profile_unverified_and_notif
     ).scalar_one()
     notification = db_session.execute(
         select(Notification)
-        .where(Notification.user_id == employer_profile.user_id)
+        .where(
+            Notification.user_id == employer_profile.user_id,
+            Notification.title == "Верификация отклонена",
+        )
         .order_by(Notification.created_at.desc())
     ).scalars().first()
 
@@ -450,6 +459,142 @@ def test_reject_employer_verification_request_sends_email_to_employer(client, db
     assert "Reject Email Corp" in sent_messages[0][2]
 
 
+def test_reject_employer_verification_request_skips_email_when_disabled(
+    client,
+    db_session,
+    monkeypatch,
+):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="curator-verification-reject-email-disabled@example.com",
+    )
+    employer_email = "employer-verification-reject-email-disabled@example.com"
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email=employer_email,
+        company_name="Reject Email Disabled Corp",
+        inn="7707083887",
+    )
+
+    employer_token = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": employer_email, "password": "StrongPass123"},
+    ).json()["data"]["access_token"]
+    preferences_response = client.put(
+        "/api/v1/users/me/notification-preferences",
+        headers={"Authorization": f"Bearer {employer_token}"},
+        json={
+            "email_notifications": {
+                "new_verification_requests": True,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+            "push_notifications": {
+                "new_verification_requests": True,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": True,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+        },
+    )
+    assert preferences_response.status_code == 200
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.moderation_service.send_email", fake_send_email)
+
+    response = client.post(
+        f"/api/v1/moderation/employer-verification-requests/{request_id}/reject",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={"moderator_comment": "Заявка отклонена"},
+    )
+
+    assert response.status_code == 200
+    assert sent_messages == []
+
+
+def test_request_employer_verification_changes_skips_push_notification_when_disabled(
+    client,
+    db_session,
+):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="curator-verification-push-disabled@example.com",
+    )
+    employer_email = "employer-verification-push-disabled@example.com"
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email=employer_email,
+        company_name="Push Disabled Corp",
+        inn="7707083886",
+    )
+
+    employer_token = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": employer_email, "password": "StrongPass123"},
+    ).json()["data"]["access_token"]
+    preferences_response = client.put(
+        "/api/v1/users/me/notification-preferences",
+        headers={"Authorization": f"Bearer {employer_token}"},
+        json={
+            "email_notifications": {
+                "new_verification_requests": True,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": True,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+            "push_notifications": {
+                "new_verification_requests": True,
+                "content_complaints": False,
+                "overdue_reviews": False,
+                "company_profile_changes": False,
+                "publication_changes": False,
+                "daily_digest": False,
+                "weekly_report": False,
+            },
+        },
+    )
+    assert preferences_response.status_code == 200
+
+    response = client.post(
+        f"/api/v1/moderation/employer-verification-requests/{request_id}/request-changes",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={"moderator_comment": "Нужен актуальный документ"},
+    )
+
+    assert response.status_code == 200
+
+    employer_profile = db_session.execute(
+        select(EmployerProfile).where(EmployerProfile.inn == "7707083886")
+    ).scalar_one()
+    notification = db_session.execute(
+        select(Notification)
+        .where(
+            Notification.user_id == employer_profile.user_id,
+            Notification.title == "Запрос дополнительной информации",
+        )
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
+    assert notification is None
+
+
 def test_request_employer_verification_changes_uses_default_comment_when_empty(client, db_session):
     curator_token = _register_curator(
         client,
@@ -477,7 +622,10 @@ def test_request_employer_verification_changes_uses_default_comment_when_empty(c
     ).scalar_one()
     notification = db_session.execute(
         select(Notification)
-        .where(Notification.user_id == employer_profile.user_id)
+        .where(
+            Notification.user_id == employer_profile.user_id,
+            Notification.title == "Запрос дополнительной информации",
+        )
         .order_by(Notification.created_at.desc())
     ).scalars().first()
 
@@ -520,7 +668,10 @@ def test_reject_employer_verification_request_uses_default_comment_when_empty(cl
     ).scalar_one()
     notification = db_session.execute(
         select(Notification)
-        .where(Notification.user_id == employer_profile.user_id)
+        .where(
+            Notification.user_id == employer_profile.user_id,
+            Notification.title == "Верификация отклонена",
+        )
         .order_by(Notification.created_at.desc())
     ).scalars().first()
 
@@ -576,7 +727,10 @@ def test_request_employer_verification_changes_keeps_status_when_email_delivery_
     ).scalar_one()
     notification = db_session.execute(
         select(Notification)
-        .where(Notification.user_id == employer_profile.user_id)
+        .where(
+            Notification.user_id == employer_profile.user_id,
+            Notification.title == "Запрос дополнительной информации",
+        )
         .order_by(Notification.created_at.desc())
     ).scalars().first()
 
