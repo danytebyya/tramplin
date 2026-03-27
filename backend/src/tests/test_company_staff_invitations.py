@@ -1,10 +1,12 @@
+from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
+from uuid import UUID
 
 from sqlalchemy import select
 
 from src.core.security import decode_token
 from src.enums import EmployerType, MembershipRole, UserRole
-from src.models import Employer, EmployerMembership, EmployerProfile, Notification, User
+from src.models import Employer, EmployerMembership, EmployerProfile, Notification, RefreshSession, User
 from src.tests.test_auth import _request_code
 
 
@@ -237,6 +239,69 @@ def test_owner_can_remove_staff_with_active_employer_context(client, db_session,
         json={"context_id": company_context["id"]},
     )
     assert switched_response.status_code == 200
+
+    delete_response = client.delete(
+        f"/api/v1/companies/staff/memberships/{membership_id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert delete_response.status_code == 200
+
+
+def test_owner_can_remove_staff_when_revoked_sessions_still_reference_membership(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-remove-revoked@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-remove-revoked@example.com",
+        company_name="Remove Revoked Corp",
+        inn="7707083822",
+    )
+    applicant_token = _register_and_login(
+        client,
+        db_session,
+        email="staff-remove-revoked@example.com",
+        role="applicant",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "staff-remove-revoked@example.com", "permissions": ["view_responses"]},
+    )
+    invite_token = parse_qs(urlparse(invite_response.json()["data"]["invitation_url"]).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"token": invite_token},
+    )
+    membership_id = accept_response.json()["data"]["id"]
+    membership = db_session.execute(
+        select(EmployerMembership).where(EmployerMembership.id == UUID(membership_id))
+    ).scalar_one()
+    applicant = db_session.execute(
+        select(User).where(User.email == "staff-remove-revoked@example.com")
+    ).scalar_one()
+
+    db_session.add(
+        RefreshSession(
+            user_id=applicant.id,
+            token_hash="revoked-session-token-hash",
+            jti="revoked-session-jti",
+            active_role=UserRole.EMPLOYER,
+            active_employer_id=membership.employer_id,
+            active_membership_id=membership.id,
+            expires_at=datetime.now(UTC),
+            revoked_at=datetime.now(UTC),
+        )
+    )
+    db_session.commit()
 
     delete_response = client.delete(
         f"/api/v1/companies/staff/memberships/{membership_id}",

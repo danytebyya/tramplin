@@ -447,7 +447,6 @@ class EmployerService:
             .filter(
                 RefreshSession.user_id == membership.user_id,
                 RefreshSession.active_membership_id == membership.id,
-                RefreshSession.revoked_at.is_(None),
             )
             .all()
         )
