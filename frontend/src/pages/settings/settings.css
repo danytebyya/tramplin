@@ -229,12 +229,13 @@
 }
 
 .settings-page__panel-body--profile,
-.settings-page__panel-body--security {
+.settings-page__panel-body--security,
+.settings-page__panel-body--account {
   gap: 24px;
 }
 
 .settings-page__panel-body--notification {
-  padding-top: 16px;
+  padding-top: 8px;
 }
 
 .settings-page__panel-actions {
@@ -282,7 +283,7 @@
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
-  padding: 20px 24px;
+  padding: 32px;
 }
 
 .settings-page__staff-card-title-group {
@@ -328,6 +329,7 @@
 
 .settings-page__staff-card-details-shell {
   display: grid;
+  overflow: hidden;
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.22s ease;
 }
@@ -336,9 +338,11 @@
   grid-template-rows: 1fr;
 }
 
-.settings-page__staff-card-body {
-  min-height: 0;
+.settings-page__staff-card-details {
   overflow: hidden;
+}
+
+.settings-page__staff-card-body {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -496,8 +500,49 @@
   gap: 12px;
 }
 
+.settings-page__sessions-layout {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
 .settings-page__history-list {
   overflow: hidden;
+}
+
+.settings-page__panel-body--sessions,
+.settings-page__card-body--sessions {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.settings-page__panel--compact:has(.settings-page__sessions-layout),
+.settings-page__card:has(.settings-page__card-body--sessions) {
+  min-height: 420px;
+}
+
+.settings-page__session-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-right: 6px;
+  padding-bottom: 72px;
+}
+
+.settings-page__sessions-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  padding-top: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--color-bg-primary) 32%);
+}
+
+.settings-page__sessions-footer .button {
+  width: 100%;
 }
 
 .settings-page__session-item,
@@ -651,6 +696,19 @@
 
 .settings-page__form-message--success {
   color: var(--color-success);
+}
+
+.settings-page__account-description {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
+}
+
+.settings-page__account-delete.button {
+  border: 1px solid var(--color-danger);
+  border-radius: 12px;
+  color: var(--color-danger);
 }
 
 .settings-page__skeleton {

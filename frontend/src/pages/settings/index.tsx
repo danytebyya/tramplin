@@ -845,6 +845,24 @@ export function SettingsPage() {
     );
   };
 
+  const renderAccountManagementPanel = () => {
+    return (
+      <div className="settings-page__panel">
+        <div className="settings-page__panel-header">
+          <h3 className="settings-page__panel-title">Удаление аккаунта</h3>
+        </div>
+        <div className="settings-page__panel-body settings-page__panel-body--account">
+          <p className="settings-page__account-description">Все данные будут удалены безвозвратно</p>
+        </div>
+        <div className="settings-page__panel-actions">
+          <Button type="button" variant="danger-ghost" size="md" className="settings-page__account-delete">
+            Удалить аккаунт
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   const renderSessionsPanel = () => {
     return (
       <div className="settings-page__panel settings-page__panel--compact">
@@ -852,57 +870,59 @@ export function SettingsPage() {
           <h3 className="settings-page__panel-title">Активные сессии</h3>
         </div>
         <div className="settings-page__panel-body settings-page__panel-body--sessions">
-          <div className="settings-page__session-list">
-            {isSessionsLoading
-              ? Array.from({ length: 3 }, (_, index) => (
-                  <div key={`session-skeleton-${index}`} className="settings-page__session-item">
-                    <SettingsSkeleton className="settings-page__skeleton--dot" />
-                    <div className="settings-page__session-content">
-                      <SettingsSkeleton className="settings-page__skeleton--session-line" />
-                      <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
-                      <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+          <div className="settings-page__sessions-layout">
+            <div className="settings-page__session-list">
+              {isSessionsLoading
+                ? Array.from({ length: 3 }, (_, index) => (
+                    <div key={`session-skeleton-${index}`} className="settings-page__session-item">
+                      <SettingsSkeleton className="settings-page__skeleton--dot" />
+                      <div className="settings-page__session-content">
+                        <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                        <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                        <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                      </div>
                     </div>
-                  </div>
-                ))
-              : sessionItems.map((session) => (
-                  <div key={session.id} className="settings-page__session-item">
-                    <span className="settings-page__session-dot" aria-hidden="true" />
-                    <div className="settings-page__session-content">
-                      <p className="settings-page__session-title">{session.title}</p>
-                      <p className="settings-page__session-meta">{session.meta}</p>
-                      <p className="settings-page__session-date">{session.date}</p>
-                      <Button
-                        type="button"
-                        variant="accent-ghost"
-                        size="md"
-                        className={
-                          session.isCurrent
-                            ? "settings-page__session-action settings-page__session-action--disabled"
-                            : "settings-page__session-action"
-                        }
-                        disabled={session.isCurrent || isSessionActionPending}
-                        onClick={() => {
-                          revokeSessionMutation.mutate(session.id);
-                        }}
-                      >
-                        Завершить сессию
-                      </Button>
+                  ))
+                : sessionItems.map((session) => (
+                    <div key={session.id} className="settings-page__session-item">
+                      <span className="settings-page__session-dot" aria-hidden="true" />
+                      <div className="settings-page__session-content">
+                        <p className="settings-page__session-title">{session.title}</p>
+                        <p className="settings-page__session-meta">{session.meta}</p>
+                        <p className="settings-page__session-date">{session.date}</p>
+                        <Button
+                          type="button"
+                          variant="accent-ghost"
+                          size="md"
+                          className={
+                            session.isCurrent
+                              ? "settings-page__session-action settings-page__session-action--disabled"
+                              : "settings-page__session-action"
+                          }
+                          disabled={session.isCurrent || isSessionActionPending}
+                          onClick={() => {
+                            revokeSessionMutation.mutate(session.id);
+                          }}
+                        >
+                          Завершить сессию
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+            </div>
+            <div className="settings-page__sessions-footer">
+              <Button
+                type="button"
+                variant={actionVariant}
+                size="md"
+                loading={revokeOtherSessionsMutation.isPending}
+                disabled={isSessionActionPending}
+                onClick={() => revokeOtherSessionsMutation.mutate()}
+              >
+                Завершить все другие сессии
+              </Button>
+            </div>
           </div>
-        </div>
-        <div className="settings-page__panel-actions">
-          <Button
-            type="button"
-            variant={actionVariant}
-            size="md"
-            loading={revokeOtherSessionsMutation.isPending}
-            disabled={isSessionActionPending}
-            onClick={() => revokeOtherSessionsMutation.mutate()}
-          >
-            Завершить все другие сессии
-          </Button>
         </div>
       </div>
     );
@@ -943,6 +963,95 @@ export function SettingsPage() {
     return (
       <>
         {renderPublicTabs()}
+
+        {isEmployer ? (
+          <section className="settings-page__section">
+            <h2 className="settings-page__section-title">Доступ для сотрудников</h2>
+            <div className="settings-page__panel">
+              <div className="settings-page__panel-body settings-page__panel-body--staff">
+                <Button type="button" variant={actionVariant} size="md">
+                  Пригласить сотрудника
+                </Button>
+                <div className="settings-page__staff-list">
+                  {isEmployerStaffLoading
+                    ? Array.from({ length: 2 }, (_, index) => (
+                        <article key={`staff-skeleton-${index}`} className="settings-page__staff-card">
+                          <div className="settings-page__staff-card-summary">
+                            <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                          </div>
+                        </article>
+                      ))
+                    : employerStaffItems.length > 0
+                      ? employerStaffItems.map((member) => {
+                        const isExpanded = expandedStaffMemberId === member.id;
+
+                        return (
+                          <article
+                            key={member.id}
+                            className={
+                              isExpanded
+                                ? "settings-page__staff-card settings-page__staff-card--expanded"
+                                : "settings-page__staff-card"
+                            }
+                          >
+                            <div
+                              className="settings-page__staff-card-summary"
+                              onClick={(event) => {
+                                const target = event.target as HTMLElement;
+                                if (target.closest(".settings-page__icon-button")) {
+                                  return;
+                                }
+
+                                setExpandedStaffMemberId((current) => (current === member.id ? null : member.id));
+                              }}
+                            >
+                              <div className="settings-page__staff-card-title-group">
+                                <h3 className="settings-page__staff-email">{member.email}</h3>
+                              </div>
+                              <div className="settings-page__staff-actions" aria-label={`Действия для ${member.email}`}>
+                                <button type="button" className="settings-page__icon-button" aria-label={`Редактировать ${member.email}`} disabled>
+                                  <img src={editIcon} alt="" aria-hidden="true" className="settings-page__icon" />
+                                </button>
+                                <button type="button" className="settings-page__icon-button" aria-label={`Удалить ${member.email}`} disabled>
+                                  <img src={deleteIcon} alt="" aria-hidden="true" className="settings-page__icon" />
+                                </button>
+                              </div>
+                            </div>
+                            <div
+                              className={
+                                isExpanded
+                                  ? "settings-page__staff-card-details-shell settings-page__staff-card-details-shell--expanded"
+                                  : "settings-page__staff-card-details-shell"
+                              }
+                              aria-hidden={!isExpanded}
+                            >
+                              <div className="settings-page__staff-card-details">
+                                <div className="settings-page__staff-card-body">
+                                  <p className="settings-page__staff-role">Роль: {member.roleLabel}</p>
+                                  <ul className="settings-page__staff-permission-list">
+                                    {member.permissions.map((permission) => (
+                                      <li key={`${member.id}-${permission}`} className="settings-page__staff-permission-item">
+                                        {permission}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <p className="settings-page__staff-date">Добавлен: {member.invitedAtLabel}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })
+                      : (
+                        <div className="settings-page__staff-empty">
+                          Пока в компании числится только основной аккаунт работодателя или сотрудники еще не добавлены.
+                        </div>
+                      )}
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {isApplicant ? (
           <section className="settings-page__section">
@@ -1000,98 +1109,6 @@ export function SettingsPage() {
         ) : null}
 
         <section className="settings-page__section">
-          <h2 className="settings-page__section-title">Безопасность</h2>
-          {renderSecurityPanel()}
-        </section>
-
-        {isEmployer ? (
-          <section className="settings-page__section">
-            <h2 className="settings-page__section-title">Доступ для сотрудников</h2>
-            <div className="settings-page__panel">
-              <div className="settings-page__panel-body settings-page__panel-body--staff">
-                <Button type="button" variant={actionVariant} size="md" disabled>
-                  Пригласить сотрудника
-                </Button>
-                <div className="settings-page__staff-list">
-                  {isEmployerStaffLoading
-                    ? Array.from({ length: 2 }, (_, index) => (
-                        <article key={`staff-skeleton-${index}`} className="settings-page__staff-card">
-                          <div className="settings-page__staff-card-summary">
-                            <SettingsSkeleton className="settings-page__skeleton--session-line" />
-                          </div>
-                        </article>
-                      ))
-                    : employerStaffItems.length > 0
-                      ? employerStaffItems.map((member) => {
-                        const isExpanded = expandedStaffMemberId === member.id;
-
-                        return (
-                          <article
-                            key={member.id}
-                            className={
-                              isExpanded
-                                ? "settings-page__staff-card settings-page__staff-card--expanded"
-                                : "settings-page__staff-card"
-                            }
-                          >
-                            <div
-                              className="settings-page__staff-card-summary"
-                              onClick={(event) => {
-                                const target = event.target as HTMLElement;
-                                if (target.closest(".settings-page__icon-button")) {
-                                  return;
-                                }
-
-                                setExpandedStaffMemberId((current) => (current === member.id ? null : member.id));
-                              }}
-                            >
-                              <div className="settings-page__staff-card-title-group">
-                                <h3 className="settings-page__staff-email">{member.email}</h3>
-                              </div>
-                              <div className="settings-page__staff-actions" aria-label={`Действия для ${member.email}`}>
-                                <button type="button" className="settings-page__icon-button" aria-label={`Редактировать ${member.email}`} disabled>
-                                  <img src={editIcon} alt="" aria-hidden="true" className="settings-page__icon" />
-                                </button>
-                                <button type="button" className="settings-page__icon-button" aria-label={`Удалить ${member.email}`} disabled>
-                                  <img src={deleteIcon} alt="" aria-hidden="true" className="settings-page__icon" />
-                                </button>
-                              </div>
-                            </div>
-                            <div
-                              className={
-                                isExpanded
-                                  ? "settings-page__staff-card-details-shell settings-page__staff-card-details-shell--expanded"
-                                  : "settings-page__staff-card-details-shell"
-                              }
-                              aria-hidden={!isExpanded}
-                            >
-                              <div className="settings-page__staff-card-body">
-                                <p className="settings-page__staff-role">Роль: {member.roleLabel}</p>
-                                <ul className="settings-page__staff-permission-list">
-                                  {member.permissions.map((permission) => (
-                                    <li key={`${member.id}-${permission}`} className="settings-page__staff-permission-item">
-                                      {permission}
-                                    </li>
-                                  ))}
-                                </ul>
-                                <p className="settings-page__staff-date">Добавлен: {member.invitedAtLabel}</p>
-                              </div>
-                            </div>
-                          </article>
-                        );
-                      })
-                      : (
-                        <div className="settings-page__staff-empty">
-                          Пока в компании числится только основной аккаунт работодателя или сотрудники еще не добавлены.
-                        </div>
-                      )}
-                </div>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
-        <section className="settings-page__section">
           <h2 className="settings-page__section-title">Уведомления</h2>
           <div className="settings-page__notification-grid">
             <div className="settings-page__panel settings-page__panel--notification">
@@ -1128,10 +1145,20 @@ export function SettingsPage() {
           </div>
         </section>
 
+        <section className="settings-page__section">
+          <h2 className="settings-page__section-title">Безопасность</h2>
+          {renderSecurityPanel()}
+        </section>
+
         <div className="settings-page__summary-grid">
           {renderLoginHistoryPanel()}
           {renderSessionsPanel()}
         </div>
+
+        <section className="settings-page__section">
+          <h2 className="settings-page__section-title">Управление аккаунтом</h2>
+          {renderAccountManagementPanel()}
+        </section>
       </>
     );
   };
@@ -1254,57 +1281,59 @@ export function SettingsPage() {
             <h2 className="settings-page__card-title">Активные сессии</h2>
           </div>
           <div className="settings-page__card-body settings-page__card-body--sessions">
-            <div className="settings-page__session-list">
-              {isSessionsLoading
-                ? Array.from({ length: 3 }, (_, index) => (
-                    <div key={`session-skeleton-${index}`} className="settings-page__session-item">
-                      <SettingsSkeleton className="settings-page__skeleton--dot" />
-                      <div className="settings-page__session-content">
-                        <SettingsSkeleton className="settings-page__skeleton--session-line" />
-                        <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
-                        <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+            <div className="settings-page__sessions-layout">
+              <div className="settings-page__session-list">
+                {isSessionsLoading
+                  ? Array.from({ length: 3 }, (_, index) => (
+                      <div key={`session-skeleton-${index}`} className="settings-page__session-item">
+                        <SettingsSkeleton className="settings-page__skeleton--dot" />
+                        <div className="settings-page__session-content">
+                          <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                          <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                          <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                        </div>
                       </div>
-                    </div>
-                  ))
-                : sessionItems.map((session) => (
-                    <div key={session.id} className="settings-page__session-item">
-                      <span className="settings-page__session-dot" aria-hidden="true" />
-                      <div className="settings-page__session-content">
-                        <p className="settings-page__session-title">{session.title}</p>
-                        <p className="settings-page__session-meta">{session.meta}</p>
-                        <p className="settings-page__session-date">{session.date}</p>
-                        <Button
-                          type="button"
-                          variant="accent-ghost"
-                          size="md"
-                          className={
-                            session.isCurrent
-                              ? "settings-page__session-action settings-page__session-action--disabled"
-                              : "settings-page__session-action"
-                          }
-                          disabled={session.isCurrent || isSessionActionPending}
-                          onClick={() => {
-                            revokeSessionMutation.mutate(session.id);
-                          }}
-                        >
-                          Завершить сессию
-                        </Button>
+                    ))
+                  : sessionItems.map((session) => (
+                      <div key={session.id} className="settings-page__session-item">
+                        <span className="settings-page__session-dot" aria-hidden="true" />
+                        <div className="settings-page__session-content">
+                          <p className="settings-page__session-title">{session.title}</p>
+                          <p className="settings-page__session-meta">{session.meta}</p>
+                          <p className="settings-page__session-date">{session.date}</p>
+                          <Button
+                            type="button"
+                            variant="accent-ghost"
+                            size="md"
+                            className={
+                              session.isCurrent
+                                ? "settings-page__session-action settings-page__session-action--disabled"
+                                : "settings-page__session-action"
+                            }
+                            disabled={session.isCurrent || isSessionActionPending}
+                            onClick={() => {
+                              revokeSessionMutation.mutate(session.id);
+                            }}
+                          >
+                            Завершить сессию
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+              </div>
+              <div className="settings-page__sessions-footer">
+                <Button
+                  type="button"
+                  variant={actionVariant}
+                  size="md"
+                  loading={revokeOtherSessionsMutation.isPending}
+                  disabled={isSessionActionPending}
+                  onClick={() => revokeOtherSessionsMutation.mutate()}
+                >
+                  Завершить все другие сессии
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="settings-page__card-footer settings-page__card-footer--stacked">
-            <Button
-              type="button"
-              variant={actionVariant}
-              size="md"
-              loading={revokeOtherSessionsMutation.isPending}
-              disabled={isSessionActionPending}
-              onClick={() => revokeOtherSessionsMutation.mutate()}
-            >
-              Завершить все другие сессии
-            </Button>
           </div>
         </section>
 
