@@ -458,6 +458,7 @@ class EmployerService:
                 action_label="Открыть настройки",
                 action_url="/settings",
                 payload={"company_id": str(employer.id), "event": "company_membership_removed"},
+                profile_scope={"profile_role": UserRole.APPLICANT.value},
             )
         self.db.commit()
         self._publish_staff_realtime_update(employer=employer)
@@ -675,6 +676,7 @@ class EmployerService:
                 action_label="Открыть настройки",
                 action_url="/settings",
                 payload={"company_id": str(employer.id), "event": "company_membership_left"},
+                profile_scope={"profile_role": UserRole.EMPLOYER.value, "employer_id": str(employer.id)},
             )
 
     def _publish_staff_realtime_update(self, *, employer: Employer) -> None:
@@ -952,6 +954,7 @@ class EmployerService:
             action_label="Открыть профиль",
             action_url="/onboarding/employer",
             payload={"verification_request_id": str(verification_request.id)},
+            profile_scope={"profile_role": UserRole.EMPLOYER.value, "employer_id": str(employer.id)},
         )
         if previous_status == EmployerVerificationRequestStatus.SUSPENDED and previous_reviewed_by is not None:
             self._notify_curator_about_resubmitted_verification_request(

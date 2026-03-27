@@ -1,12 +1,15 @@
+from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 from sqlalchemy import select
 
 from src.core.security import decode_token
+from src.enums import EmployerType, MembershipRole, UserRole
 from src.models import Notification
 from src.realtime.notification_hub import notification_hub
 from src.tests.test_auth import _request_code
 from src.tests.test_employer_verification_moderation import _create_verification_request, _register_curator
+from src.models import Employer, EmployerMembership, EmployerProfile, User
 
 
 def _register_and_login(client, db_session, *, email: str, role: str):
@@ -32,6 +35,39 @@ def _register_and_login(client, db_session, *, email: str, role: str):
     return login_response.json()["data"]["access_token"]
 
 
+def _create_company_for_owner(db_session, *, owner_email: str, company_name: str, inn: str) -> Employer:
+    owner = db_session.execute(select(User).where(User.email == owner_email)).scalar_one()
+    employer_profile = EmployerProfile(
+        user_id=owner.id,
+        employer_type=EmployerType.COMPANY,
+        company_name=company_name,
+        inn=inn,
+        corporate_email=owner.email,
+    )
+    employer = Employer(
+        employer_type=EmployerType.COMPANY,
+        display_name=company_name,
+        legal_name=company_name,
+        inn=inn,
+        corporate_email=owner.email,
+        created_by=owner.id,
+        updated_by=owner.id,
+    )
+    db_session.add(employer_profile)
+    db_session.add(employer)
+    db_session.flush()
+    db_session.add(
+        EmployerMembership(
+            employer_id=employer.id,
+            user_id=owner.id,
+            membership_role=MembershipRole.OWNER,
+            is_primary=True,
+        )
+    )
+    db_session.commit()
+    return employer
+
+
 def test_list_notifications_bootstraps_employer_feed(client, db_session):
     access_token = _register_and_login(
         client,
@@ -50,6 +86,77 @@ def test_list_notifications_bootstraps_employer_feed(client, db_session):
     assert len(body["data"]["items"]) == 4
     assert body["data"]["items"][0]["is_read"] is False
     assert body["data"]["items"][-1]["title"] == "Добро пожаловать в Трамплин!"
+
+
+def test_staff_employer_context_has_permission_specific_welcome_and_no_applicant_notifications(
+    client,
+    db_session,
+    monkeypatch,
+):
+    owner_token = _register_and_login(client, db_session, email="notifications-owner@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="notifications-owner@example.com",
+        company_name="Notifications Staff Corp",
+        inn="7707083821",
+    )
+    staff_token = _register_and_login(client, db_session, email="notifications-staff@example.com", role="applicant")
+
+    monkeypatch.setattr("src.services.employer_service.send_email", lambda recipient, subject, body: None)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "notifications-staff@example.com", "permissions": ["view_responses", "access_chat"]},
+    )
+    invite_token = parse_qs(urlparse(invite_response.json()["data"]["invitation_url"]).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {staff_token}"},
+        json={"token": invite_token},
+    )
+    membership_id = accept_response.json()["data"]["id"]
+
+    contexts_response = client.get(
+        "/api/v1/auth/contexts",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+    company_context = next(
+        item
+        for item in contexts_response.json()["data"]["items"]
+        if item["role"] == UserRole.EMPLOYER.value and item["membership_id"] == membership_id
+    )
+    switch_response = client.post(
+        "/api/v1/auth/context",
+        headers={"Authorization": f"Bearer {staff_token}"},
+        json={"context_id": company_context["id"]},
+    )
+    employer_access_token = switch_response.json()["data"]["access_token"]
+
+    employer_feed_response = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+    )
+    assert employer_feed_response.status_code == 200
+    employer_titles = [item["title"] for item in employer_feed_response.json()["data"]["items"]]
+    employer_messages = [item["message"] for item in employer_feed_response.json()["data"]["items"]]
+    assert "Профиль создан" not in employer_titles
+    assert any("Просмотр откликов" in message and "Общение в чате" in message for message in employer_messages)
+
+    leave_response = client.delete(
+        f"/api/v1/companies/staff/memberships/{membership_id}",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+    )
+    assert leave_response.status_code == 200
+
+    applicant_feed_response = client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {staff_token}"},
+    )
+    assert applicant_feed_response.status_code == 200
+    applicant_titles = [item["title"] for item in applicant_feed_response.json()["data"]["items"]]
+    assert "Профиль создан" in applicant_titles
 
 
 def test_mark_notification_as_read_updates_unread_count(client, db_session):
@@ -151,6 +258,7 @@ def test_hidden_notification_signature_prevents_recreation(client, db_session):
         action_label=notification.get("action_label"),
         action_url=notification.get("action_url"),
         payload=None,
+        profile_scope={"profile_role": UserRole.EMPLOYER.value},
     )
     db_session.commit()
 

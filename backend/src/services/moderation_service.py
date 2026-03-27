@@ -765,6 +765,7 @@ class ModerationService:
                 "status": EmployerVerificationRequestStatus.APPROVED.value,
             },
             created_at=datetime.now(UTC),
+            profile_scope={"profile_role": UserRole.EMPLOYER.value},
         )
 
     def _create_rejected_notification(self, *, verification_request, moderator_comment: str | None) -> None:
@@ -792,6 +793,7 @@ class ModerationService:
                 "status": EmployerVerificationRequestStatus.REJECTED.value,
             },
             created_at=datetime.now(UTC),
+            profile_scope={"profile_role": UserRole.EMPLOYER.value},
         )
 
     def _create_request_changes_notification(
@@ -824,6 +826,7 @@ class ModerationService:
                 "status": EmployerVerificationRequestStatus.SUSPENDED.value,
             },
             created_at=datetime.now(UTC),
+            profile_scope={"profile_role": UserRole.EMPLOYER.value},
         )
 
     @classmethod

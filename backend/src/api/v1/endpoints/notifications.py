@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.orm import Session
 
-from src.api.deps import get_current_user
+from src.api.deps import get_current_access_payload, get_current_user
 from src.core.security import TokenPayloadError, decode_token, ensure_token_type
 from src.db import get_db
 from src.enums import TokenType
@@ -40,48 +40,53 @@ def get_current_user_by_access_token(token: str, db: Session) -> User:
 
 @router.get("", status_code=status.HTTP_200_OK)
 def list_notifications(
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = NotificationService(db).list_for_user(current_user)
+    payload = NotificationService(db).list_for_user(current_user, access_payload=access_payload)
     return success_response(payload.model_dump(mode="json"))
 
 
 @router.get("/unread-count", status_code=status.HTTP_200_OK)
 def get_unread_notifications_count(
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = NotificationService(db).get_unread_count(current_user)
+    payload = NotificationService(db).get_unread_count(current_user, access_payload=access_payload)
     return success_response(payload.model_dump(mode="json"))
 
 
 @router.post("/{notification_id}/read", status_code=status.HTTP_200_OK)
 def mark_notification_as_read(
     notification_id: str,
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = NotificationService(db).mark_as_read(current_user, notification_id)
+    payload = NotificationService(db).mark_as_read(current_user, notification_id, access_payload=access_payload)
     return success_response(payload.model_dump(mode="json"))
 
 
 @router.post("/{notification_id}/hide", status_code=status.HTTP_200_OK)
 def hide_notification(
     notification_id: str,
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = NotificationService(db).hide(current_user, notification_id)
+    payload = NotificationService(db).hide(current_user, notification_id, access_payload=access_payload)
     return success_response(payload.model_dump(mode="json"))
 
 
 @router.delete("", status_code=status.HTTP_200_OK)
 def clear_notifications(
+    access_payload: dict = Depends(get_current_access_payload),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    payload = NotificationService(db).clear_all(current_user)
+    payload = NotificationService(db).clear_all(current_user, access_payload=access_payload)
     return success_response(payload.model_dump(mode="json"))
 
 
