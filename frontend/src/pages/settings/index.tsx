@@ -303,7 +303,6 @@ export function SettingsPage() {
   const [internshipReviewHours, setInternshipReviewHours] = useState("24");
   const [eventReviewHours, setEventReviewHours] = useState("24");
   const [mentorshipReviewHours, setMentorshipReviewHours] = useState("24");
-  const [isCurrentSessionLogoutPending, setIsCurrentSessionLogoutPending] = useState(false);
   const updatePreferredCityMutation = useMutation({
     mutationFn: updatePreferredCityRequest,
     onSuccess: (response) => {
@@ -409,21 +408,6 @@ export function SettingsPage() {
         setIsProfileMenuOpen(false);
       },
     });
-  };
-
-  const handleCurrentSessionLogout = async () => {
-    setIsCurrentSessionLogoutPending(true);
-
-    try {
-      await performLogout({
-        beforeRedirect: () => {
-          setIsProfileMenuPinned(false);
-          setIsProfileMenuOpen(false);
-        },
-      });
-    } finally {
-      setIsCurrentSessionLogoutPending(false);
-    }
   };
 
   useEffect(() => {
@@ -549,8 +533,7 @@ export function SettingsPage() {
   }, [sessionsQuery.data]);
   const isSessionActionPending =
     revokeSessionMutation.isPending ||
-    revokeOtherSessionsMutation.isPending ||
-    isCurrentSessionLogoutPending;
+    revokeOtherSessionsMutation.isPending;
   const loginHistoryItems = useMemo(() => {
     return (loginHistoryQuery.data?.data?.items ?? [])
       .slice(0, 7)
@@ -927,15 +910,13 @@ export function SettingsPage() {
                             type="button"
                             variant="accent-ghost"
                             size="md"
-                            className="settings-page__session-action"
-                            loading={session.isCurrent && isCurrentSessionLogoutPending}
-                            disabled={isSessionActionPending}
+                            className={
+                              session.isCurrent
+                                ? "settings-page__session-action settings-page__session-action--disabled"
+                                : "settings-page__session-action"
+                            }
+                            disabled={session.isCurrent || isSessionActionPending}
                             onClick={() => {
-                              if (session.isCurrent) {
-                                void handleCurrentSessionLogout();
-                                return;
-                              }
-
                               revokeSessionMutation.mutate(session.id);
                             }}
                           >

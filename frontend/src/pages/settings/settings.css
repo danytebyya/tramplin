@@ -290,6 +290,14 @@
   text-align: left;
 }
 
+.settings-page__session-action.button.button--accent-ghost:disabled,
+.settings-page__session-action--disabled.button.button--accent-ghost {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+  opacity: 1;
+  box-shadow: none;
+}
+
 .settings-page__session-action.button.button--accent-ghost:not(.button--loading):not(:disabled):hover {
   color: var(--settings-accent-strong);
   box-shadow: none;
