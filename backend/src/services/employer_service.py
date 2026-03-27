@@ -475,6 +475,14 @@ class EmployerService:
                 profile_scope={"profile_role": UserRole.APPLICANT.value},
             )
         self.db.commit()
+        notification_hub.publish_to_users_sync(
+            [str(removed_user.id)],
+            {
+                "type": "company_membership_removed",
+                "company_id": str(employer.id),
+                "membership_id": str(membership.id),
+            },
+        )
         self._publish_staff_realtime_update(employer=employer)
 
     def ensure_inn_available(self, current_user: User, inn: str) -> None:

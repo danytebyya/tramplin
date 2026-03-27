@@ -310,6 +310,61 @@ def test_owner_can_remove_staff_when_revoked_sessions_still_reference_membership
     assert delete_response.status_code == 200
 
 
+def test_owner_removal_publishes_realtime_event_for_removed_staff(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-realtime-remove@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-realtime-remove@example.com",
+        company_name="Realtime Remove Corp",
+        inn="7707083825",
+    )
+    applicant_token = _register_and_login(
+        client,
+        db_session,
+        email="staff-realtime-remove@example.com",
+        role="applicant",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+    published_events: list[tuple[list[str], dict]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    def fake_publish(user_ids, payload) -> None:
+        published_events.append((list(user_ids), payload))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+    monkeypatch.setattr("src.services.employer_service.notification_hub.publish_to_users_sync", fake_publish)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "staff-realtime-remove@example.com", "permissions": ["view_responses"]},
+    )
+    invite_token = parse_qs(urlparse(invite_response.json()["data"]["invitation_url"]).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"token": invite_token},
+    )
+    membership_id = accept_response.json()["data"]["id"]
+    staff_user = db_session.execute(
+        select(User).where(User.email == "staff-realtime-remove@example.com")
+    ).scalar_one()
+
+    delete_response = client.delete(
+        f"/api/v1/companies/staff/memberships/{membership_id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert delete_response.status_code == 200
+    assert any(
+        user_ids == [str(staff_user.id)] and payload["type"] == "company_membership_removed"
+        for user_ids, payload in published_events
+    )
+
+
 def test_owner_can_create_link_only_invitation(client, db_session, monkeypatch):
     owner_token = _register_and_login(client, db_session, email="owner-link@example.com", role="employer")
     _create_company_for_owner(

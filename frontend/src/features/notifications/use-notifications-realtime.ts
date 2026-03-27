@@ -11,10 +11,10 @@ function getNotificationsWebSocketUrl(accessToken: string) {
 
 type UseNotificationsRealtimeOptions = {
   enabled?: boolean;
-  onMessage?: () => void;
+  onMessage?: (payload?: Record<string, unknown>) => void;
 };
 
-type MessageListener = () => void;
+type MessageListener = (payload?: Record<string, unknown>) => void;
 
 type NotificationsSocketManager = {
   accessToken: string | null;
@@ -39,9 +39,9 @@ function clearReconnectTimeout() {
   }
 }
 
-function notifyListeners() {
+function notifyListeners(payload?: Record<string, unknown>) {
   socketManager.listeners.forEach((listener) => {
-    listener();
+    listener(payload);
   });
 }
 
@@ -92,8 +92,16 @@ function connectSocket() {
   const nextSocket = new WebSocket(getNotificationsWebSocketUrl(socketManager.accessToken));
   socketManager.socket = nextSocket;
 
-  nextSocket.onmessage = () => {
-    notifyListeners();
+  nextSocket.onmessage = (event) => {
+    let payload: Record<string, unknown> | undefined;
+
+    try {
+      payload = JSON.parse(event.data) as Record<string, unknown>;
+    } catch {
+      payload = undefined;
+    }
+
+    notifyListeners(payload);
   };
 
   nextSocket.onclose = () => {
@@ -145,8 +153,8 @@ export function useNotificationsRealtime(options: UseNotificationsRealtimeOption
       return;
     }
 
-    const listener = () => {
-      onMessageRef.current?.();
+    const listener = (payload?: Record<string, unknown>) => {
+      onMessageRef.current?.(payload);
     };
 
     socketManager.listeners.add(listener);

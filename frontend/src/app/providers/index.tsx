@@ -1,8 +1,17 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ReactNode, useEffect, useMemo } from "react";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, useNavigate } from "react-router-dom";
 
-import { clearClientSession, listActiveSessionsRequest, isAccessTokenExpired, restoreAuthSession, useAuthStore } from "../../features/auth";
+import {
+  clearClientSession,
+  isAccessTokenExpired,
+  listAccountContextsRequest,
+  listActiveSessionsRequest,
+  restoreAuthSession,
+  switchAccountContextRequest,
+  useAuthStore,
+} from "../../features/auth";
+import { useNotificationsRealtime } from "../../features/notifications";
 
 type AppProvidersProps = {
   children: ReactNode;
@@ -20,11 +29,85 @@ const SESSION_REFRESH_BUFFER_MS = 60 * 1000;
 const SESSION_VALIDATION_INTERVAL_MS = 15 * 1000;
 
 function AuthSessionBootstrap() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const accessTokenExpiresAt = useAuthStore((state) => state.accessTokenExpiresAt);
   const lastActivityAt = useAuthStore((state) => state.lastActivityAt);
   const isHydrated = useAuthStore((state) => state.isHydrated);
+
+  useNotificationsRealtime({
+    enabled: Boolean(accessToken),
+    onMessage: (payload) => {
+      if (payload?.type !== "company_membership_removed") {
+        return;
+      }
+
+      const removedMembershipId =
+        typeof payload.membership_id === "string" ? payload.membership_id : null;
+      const currentAccessToken = useAuthStore.getState().accessToken;
+      const currentRefreshToken = useAuthStore.getState().refreshToken;
+
+      if (!removedMembershipId || !currentAccessToken || !currentRefreshToken) {
+        return;
+      }
+
+      try {
+        const [, tokenPayload] = currentAccessToken.split(".");
+        if (!tokenPayload) {
+          return;
+        }
+
+        const decodedPayload = JSON.parse(
+          window.atob(tokenPayload.replace(/-/g, "+").replace(/_/g, "/")),
+        ) as { active_membership_id?: string };
+
+        if (decodedPayload.active_membership_id !== removedMembershipId) {
+          return;
+        }
+      } catch {
+        return;
+      }
+
+      void (async () => {
+        try {
+          const contextsResponse = await listAccountContextsRequest();
+          const baseContext = contextsResponse?.data?.items?.find((item) => item.is_default);
+
+          if (!baseContext?.id) {
+            clearClientSession();
+            return;
+          }
+
+          const switchResponse = await switchAccountContextRequest(baseContext.id);
+          const nextAccessToken = switchResponse?.data?.access_token;
+          const nextExpiresIn = switchResponse?.data?.expires_in;
+          const nextRole = (switchResponse?.data?.active_context?.role ?? switchResponse?.data?.user?.role ?? "applicant") as
+            | "applicant"
+            | "employer"
+            | "junior"
+            | "curator"
+            | "admin";
+
+          if (!nextAccessToken || !nextExpiresIn) {
+            clearClientSession();
+            return;
+          }
+
+          useAuthStore.getState().setSession(nextAccessToken, currentRefreshToken, nextRole, nextExpiresIn);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
+            queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
+            queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+          ]);
+          navigate("/", { replace: true });
+        } catch {
+          clearClientSession();
+        }
+      })();
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
