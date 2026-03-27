@@ -248,3 +248,45 @@ def test_link_only_invitation_can_be_accepted_by_registered_applicant(client, db
     assert accept_response.status_code == 200
     assert accept_response.json()["data"]["role"] == "manager"
     assert sent_messages == []
+
+
+def test_invited_user_can_register_without_applicant_profile(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-register-invite@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-register-invite@example.com",
+        company_name="Invite Register Corp",
+        inn="7707083815",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "new-staff@example.com", "role": "recruiter"},
+    )
+    assert invite_response.status_code == 201
+    invite_token = parse_qs(urlparse(invite_response.json()["data"]["invitation_url"]).query)["invite_token"][0]
+
+    code = _request_code(client, db_session, "new-staff@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "new-staff@example.com",
+            "display_name": "New Staff",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "company_invite_token": invite_token,
+        },
+    )
+
+    assert register_response.status_code == 201
+    assert register_response.json()["data"]["user"]["role"] == "applicant"
+    assert register_response.json()["data"]["user"]["applicant_profile"] is None

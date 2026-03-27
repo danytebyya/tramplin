@@ -8,7 +8,13 @@ import { z } from "zod";
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
-import { applyAuthSession, loginRequest, resolvePostAuthRoute } from "../../features/auth";
+import {
+  applyAuthSession,
+  isCompanyInviteReturnTo,
+  loginRequest,
+  readCompanyInviteReturnTo,
+  resolvePostAuthRoute,
+} from "../../features/auth";
 import { Button, Container, Input } from "../../shared/ui";
 import "../auth/auth.css";
 import "./login.css";
@@ -40,7 +46,8 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [apiError, setApiError] = useState<string | null>(null);
   const searchParams = new URLSearchParams(location.search);
-  const returnTo = searchParams.get("returnTo");
+  const returnTo = searchParams.get("returnTo") ?? readCompanyInviteReturnTo();
+  const isCompanyInviteLogin = isCompanyInviteReturnTo(returnTo);
 
   const {
     register,
@@ -77,12 +84,12 @@ export function LoginPage() {
   };
 
   return (
-    <main className="auth-page auth-page--secondary-theme login-page">
+    <main className={isCompanyInviteLogin ? "auth-page login-page" : "auth-page auth-page--secondary-theme login-page"}>
       <Container className="auth-page__content" variant="auth-page">
         <section className="auth-page__hero">
           <div className="auth-page__hero-content login-page__hero-content">
             <div className="auth-page__brand-stage">
-              <WaveAuraBackground variant="secondary" />
+              <WaveAuraBackground variant={isCompanyInviteLogin ? "primary" : "secondary"} />
               <span className="auth-page__brand">Трамплин</span>
             </div>
           </div>
@@ -107,7 +114,7 @@ export function LoginPage() {
                       autoComplete="email"
                       error={errors.email?.message}
                       clearable
-                      className="input--secondary"
+                      className={isCompanyInviteLogin ? undefined : "input--secondary"}
                       {...register("email")}
                     />
                     {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
@@ -121,7 +128,7 @@ export function LoginPage() {
                       autoComplete="current-password"
                       error={errors.password?.message}
                       clearable
-                      className="input--secondary"
+                      className={isCompanyInviteLogin ? undefined : "input--secondary"}
                       {...register("password")}
                     />
                     {errors.password && <span className="auth-form__error">{errors.password.message}</span>}
@@ -131,7 +138,7 @@ export function LoginPage() {
                 </div>
 
                 <div className="login-page__actions">
-                  <Button type="submit" variant="secondary" fullWidth loading={loginMutation.isPending}>
+                  <Button type="submit" variant={isCompanyInviteLogin ? "primary" : "secondary"} fullWidth loading={loginMutation.isPending}>
                     Войти
                   </Button>
                 </div>

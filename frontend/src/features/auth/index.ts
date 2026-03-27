@@ -1,6 +1,12 @@
 import { apiClient } from "../../shared/api/client";
 import { AUTH_STORAGE_KEY, clearPersistedAuthSession, isAccessTokenExpired, restoreAuthSession, useAuthStore } from "./session";
 export { clearClientSession, logoutCurrentSessionRequest, performLogout } from "./logout";
+export {
+  clearCompanyInviteReturnTo,
+  isCompanyInviteReturnTo,
+  persistCompanyInviteReturnTo,
+  readCompanyInviteReturnTo,
+} from "./company-invite";
 
 export type { AuthRole } from "./session";
 export {
@@ -19,6 +25,7 @@ export type RegisterPayload = {
   display_name: string;
   verification_code: string;
   role: "applicant" | "employer";
+  company_invite_token?: string;
   applicant_profile?: {
     full_name?: string;
   };
@@ -42,6 +49,29 @@ export type AuthSuccessResponse = {
       role?: "applicant" | "employer" | "junior" | "curator" | "admin";
       has_employer_profile?: boolean;
     };
+  };
+};
+
+export type AccountContextItem = {
+  id: string;
+  role?: "applicant" | "employer" | "junior" | "curator" | "admin";
+  label?: string;
+  company_name?: string | null;
+  employer_id?: string | null;
+  membership_id?: string | null;
+  is_default?: boolean;
+  is_active?: boolean;
+};
+
+export type AccountContextListResponse = {
+  data?: {
+    items?: AccountContextItem[];
+  };
+};
+
+export type AccountContextSwitchResponse = AuthSuccessResponse & {
+  data?: AuthSuccessResponse["data"] & {
+    active_context?: AccountContextItem;
   };
 };
 
@@ -215,6 +245,18 @@ export async function updateNotificationPreferencesRequest(payload: {
     "/users/me/notification-preferences",
     payload,
   );
+  return response.data;
+}
+
+export async function listAccountContextsRequest() {
+  const response = await apiClient.get<AccountContextListResponse>("/auth/contexts");
+  return response.data;
+}
+
+export async function switchAccountContextRequest(contextId: string) {
+  const response = await apiClient.post<AccountContextSwitchResponse>("/auth/context", {
+    context_id: contextId,
+  });
   return response.data;
 }
 

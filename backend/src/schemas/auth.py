@@ -16,6 +16,7 @@ class RegisterRequest(BaseModel):
     verification_code: str = Field()
     role: UserRole
     applicant_profile: ApplicantRegistrationPayload | None = None
+    company_invite_token: str | None = Field(default=None, min_length=16, max_length=255)
 
     @field_validator("display_name")
     @classmethod
@@ -52,7 +53,11 @@ class RegisterRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_profiles(self) -> "RegisterRequest":
-        if self.role == UserRole.APPLICANT and self.applicant_profile is None:
+        if (
+            self.role == UserRole.APPLICANT
+            and self.applicant_profile is None
+            and self.company_invite_token is None
+        ):
             raise ValueError("Для регистрации соискателя требуется профиль соискателя")
         return self
 

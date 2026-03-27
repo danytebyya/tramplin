@@ -264,25 +264,39 @@
   gap: 16px;
 }
 
-.settings-page__staff-invite,
 .settings-page__staff-invitations {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.settings-page__staff-invite-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.8fr);
-  gap: 16px;
+.settings-page__staff-modal-panel.modal__panel {
+  width: min(100%, 560px);
+}
+
+.settings-page__staff-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-page__staff-permissions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-page__staff-permissions-hint {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .settings-page__staff-invite-actions {
-  display: flex;
-}
-
-.settings-page__staff-invite-actions .button {
-  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .settings-page__staff-link-card,
@@ -339,6 +353,10 @@
 .settings-page__copy-link:hover,
 .settings-page__copy-link:focus-visible {
   color: var(--settings-accent-strong);
+}
+
+.settings-page__section--account-management {
+  margin-top: 24px;
 }
 
 .settings-page__staff-card {

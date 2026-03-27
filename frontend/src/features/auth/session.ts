@@ -9,6 +9,31 @@ export type AuthRole = "guest" | "applicant" | "employer" | "junior" | "curator"
 export const AUTH_STORAGE_KEY = "tramplin.auth.session";
 const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
+function readJwtPayload(token: string) {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decodedPayload = window.atob(normalizedPayload);
+    return JSON.parse(decodedPayload) as {
+      active_role?: AuthRole;
+    };
+  } catch {
+    return null;
+  }
+}
+
+function resolveEffectiveRole(accessToken: string, fallbackRole: AuthRole) {
+  if (typeof window === "undefined") {
+    return fallbackRole;
+  }
+
+  return readJwtPayload(accessToken)?.active_role ?? fallbackRole;
+}
+
 function readCookie(name: string) {
   if (typeof document === "undefined") {
     return null;
@@ -91,7 +116,7 @@ export const useAuthStore = create<AuthState>()(
         set({
           accessToken,
           refreshToken,
-          role,
+          role: resolveEffectiveRole(accessToken, role),
           accessTokenExpiresAt: Date.now() + expiresInSeconds * 1000,
           lastActivityAt: Date.now(),
         }),

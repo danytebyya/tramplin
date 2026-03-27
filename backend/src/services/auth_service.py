@@ -16,7 +16,15 @@ from src.core.security import (
     verify_password,
 )
 from src.enums import TokenType, UserRole, UserStatus
-from src.models import ApplicantProfile, AuthLoginEvent, Employer, EmployerMembership, RefreshSession, User
+from src.models import (
+    ApplicantProfile,
+    AuthLoginEvent,
+    Employer,
+    EmployerMembership,
+    EmployerStaffInvitation,
+    RefreshSession,
+    User,
+)
 from src.repositories import AuthRepository, UserRepository
 from src.schemas.auth import (
     AccountContextListResponse,
@@ -64,6 +72,12 @@ class AuthService:
             consume=True,
         )
 
+        if payload.company_invite_token is not None:
+            self._get_valid_company_invitation_for_registration(
+                normalized_email,
+                payload.company_invite_token,
+            )
+
         user = User(
             email=normalized_email,
             display_name=payload.display_name,
@@ -72,7 +86,7 @@ class AuthService:
             status=UserStatus.ACTIVE,
         )
 
-        if payload.role == UserRole.APPLICANT:
+        if payload.role == UserRole.APPLICANT and payload.applicant_profile is not None:
             user.applicant_profile = ApplicantProfile(
                 full_name=payload.applicant_profile.full_name
                 if payload.applicant_profile
@@ -97,6 +111,44 @@ class AuthService:
         self.db.refresh(user)
         self.logger.info("auth.register.persisted email=%s user_id=%s", user.email, user.id)
         return user
+
+    def _get_valid_company_invitation_for_registration(
+        self,
+        email: str,
+        token: str,
+    ) -> EmployerStaffInvitation:
+        invitation = (
+            self.db.query(EmployerStaffInvitation)
+            .filter(EmployerStaffInvitation.token_hash == hash_token(token))
+            .one_or_none()
+        )
+        if invitation is None or invitation.revoked_at is not None or invitation.accepted_at is not None:
+            raise AppError(
+                code="EMPLOYER_INVITATION_NOT_FOUND",
+                message="Приглашение не найдено или уже недоступно",
+                status_code=404,
+            )
+
+        invitation_expires_at = (
+            invitation.expires_at.replace(tzinfo=UTC)
+            if invitation.expires_at.tzinfo is None
+            else invitation.expires_at
+        )
+        if invitation_expires_at <= datetime.now(UTC):
+            raise AppError(
+                code="EMPLOYER_INVITATION_EXPIRED",
+                message="Срок действия приглашения истёк",
+                status_code=410,
+            )
+
+        if invitation.invited_email is not None and invitation.invited_email.lower() != email:
+            raise AppError(
+                code="EMPLOYER_INVITATION_EMAIL_MISMATCH",
+                message="Приглашение привязано к другой почте",
+                status_code=403,
+            )
+
+        return invitation
 
     def login(self, payload: LoginRequest, user_agent: str | None, ip_address: str | None) -> dict:
         normalized_email = payload.email.lower()

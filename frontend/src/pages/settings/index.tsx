@@ -17,13 +17,18 @@ import {
   AuthSessionListResponse,
   NotificationPreferenceGroup,
   NotificationPreferenceKey,
+  clearCompanyInviteReturnTo,
   getNotificationPreferencesRequest,
+  listAccountContextsRequest,
   listActiveSessionsRequest,
   listLoginHistoryRequest,
   meRequest,
   performLogout,
+  persistCompanyInviteReturnTo,
+  readCompanyInviteReturnTo,
   revokeOtherSessionsRequest,
   revokeSessionRequest,
+  switchAccountContextRequest,
   updateMeRequest,
   updateNotificationPreferencesRequest,
   updatePreferredCityRequest,
@@ -40,7 +45,7 @@ import {
   listEmployerStaff,
   listEmployerStaffInvitations,
 } from "../../features/company-verification";
-import { Button, Checkbox, Container, Input, Select, Status } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, Modal, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import "../../widgets/header/header.css";
 import "./settings.css";
@@ -276,11 +281,33 @@ function resolveEmployerStaffRoleLabel(role: string) {
   return "Наблюдатель";
 }
 
-const employerStaffRoleOptions = [
-  { value: "recruiter", label: "Рекрутер" },
-  { value: "manager", label: "Менеджер" },
-  { value: "viewer", label: "Наблюдатель" },
-];
+type EmployerStaffPermissionState = {
+  canReviewResponses: boolean;
+  canManageOpportunities: boolean;
+  canManageCompanyProfile: boolean;
+};
+
+const defaultEmployerStaffPermissions: EmployerStaffPermissionState = {
+  canReviewResponses: true,
+  canManageOpportunities: false,
+  canManageCompanyProfile: false,
+};
+
+function resolveEmployerStaffInvitationRole(permissions: EmployerStaffPermissionState) {
+  if (permissions.canManageOpportunities && permissions.canManageCompanyProfile) {
+    return null;
+  }
+
+  if (permissions.canManageCompanyProfile) {
+    return "manager" as const;
+  }
+
+  if (permissions.canManageOpportunities) {
+    return "recruiter" as const;
+  }
+
+  return "viewer" as const;
+}
 
 function formatDateWithTime(value: string) {
   return new Date(value).toLocaleString("ru-RU", {
@@ -391,10 +418,13 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("recruiter");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [latestInvitationUrl, setLatestInvitationUrl] = useState<string | null>(null);
+  const [invitePermissions, setInvitePermissions] = useState<EmployerStaffPermissionState>(
+    defaultEmployerStaffPermissions,
+  );
   const [staffInviteAcceptError, setStaffInviteAcceptError] = useState<string | null>(null);
   const [staffInviteAcceptSuccess, setStaffInviteAcceptSuccess] = useState<string | null>(null);
 
@@ -555,6 +585,7 @@ export function SettingsPage() {
     onSuccess: (response) => {
       setLatestInvitationUrl(response?.data?.invitation_url ?? null);
       setInviteEmail("");
+      setInvitePermissions(defaultEmployerStaffPermissions);
       void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
     },
     onError: (error: any) => {
@@ -569,11 +600,35 @@ export function SettingsPage() {
       setStaffInviteAcceptError(null);
       setStaffInviteAcceptSuccess(null);
     },
-    onSuccess: async () => {
-      setStaffInviteAcceptSuccess("Рабочий профиль компании добавлен. Теперь его можно будет использовать после переключения контекста.");
+    onSuccess: async (response) => {
+      const contextsResponse = await listAccountContextsRequest();
+      const nextEmployerContext = contextsResponse?.data?.items?.find(
+        (item) => item.role === "employer" && item.membership_id === response?.data?.id,
+      );
+
+      if (nextEmployerContext?.id) {
+        const switchResponse = await switchAccountContextRequest(nextEmployerContext.id);
+        const nextAccessToken = switchResponse?.data?.access_token;
+        const nextExpiresIn = switchResponse?.data?.expires_in;
+        const currentRefreshToken = useAuthStore.getState().refreshToken;
+        const nextRole = (switchResponse?.data?.active_context?.role ?? switchResponse?.data?.user?.role ?? "applicant") as
+          | "applicant"
+          | "employer"
+          | "junior"
+          | "curator"
+          | "admin";
+
+        if (nextAccessToken && nextExpiresIn && currentRefreshToken) {
+          useAuthStore.getState().setSession(nextAccessToken, currentRefreshToken, nextRole, nextExpiresIn);
+        }
+      }
+
+      setStaffInviteAcceptSuccess("Рабочий профиль компании добавлен и активирован.");
+      clearCompanyInviteReturnTo();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["companies", "staff"] }),
         queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
       ]);
       const nextSearchParams = new URLSearchParams(searchParams);
       nextSearchParams.delete("invite_token");
@@ -662,6 +717,26 @@ export function SettingsPage() {
     setEventReviewHours(String(settings.event_review_hours));
     setMentorshipReviewHours(String(settings.mentorship_review_hours));
   }, [moderationSettingsQuery.data]);
+
+  useEffect(() => {
+    if (hasPendingCompanyInvite) {
+      persistCompanyInviteReturnTo(`/settings?${searchParams.toString()}`);
+    }
+  }, [hasPendingCompanyInvite, searchParams]);
+
+  useEffect(() => {
+    const persistedInviteReturnTo = readCompanyInviteReturnTo();
+    if (!persistedInviteReturnTo || hasPendingCompanyInvite) {
+      return;
+    }
+
+    const [pathname, search = ""] = persistedInviteReturnTo.split("?");
+    if (pathname !== "/settings") {
+      return;
+    }
+
+    setSearchParams(new URLSearchParams(search), { replace: true });
+  }, [hasPendingCompanyInvite, setSearchParams]);
 
   useEffect(() => {
     if (!isProfileMenuOpen) {
@@ -785,6 +860,10 @@ export function SettingsPage() {
       invitedAtLabel: formatDate(item.invited_at),
     }));
   }, [employerStaffInvitationsQuery.data]);
+  const resolvedInviteRole = useMemo(
+    () => resolveEmployerStaffInvitationRole(invitePermissions),
+    [invitePermissions],
+  );
 
   const pageClassName = [
     "settings-page",
@@ -1085,66 +1164,14 @@ export function SettingsPage() {
             <h2 className="settings-page__section-title">Доступ для сотрудников</h2>
             <div className="settings-page__panel">
               <div className="settings-page__panel-body settings-page__panel-body--staff">
-                <div className="settings-page__staff-invite">
-                  <p className="settings-page__staff-link-value">
-                    Можно сразу отправить приглашение на почту или создать только ссылку и передать её вручную.
-                  </p>
-                  <div className="settings-page__staff-invite-grid">
-                    <label className="settings-page__field">
-                      <span className="settings-page__field-label">Почта сотрудника</span>
-                      <Input
-                        className="input--sm"
-                        value={inviteEmail}
-                        onChange={(event) => setInviteEmail(event.target.value)}
-                        placeholder="Введите email или оставьте пустым"
-                      />
-                    </label>
-                    <label className="settings-page__field">
-                      <span className="settings-page__field-label">Роль доступа</span>
-                      <Select
-                        className="select-field--sm"
-                        size="sm"
-                        variant={role === "employer" ? "primary" : "secondary"}
-                        value={inviteRole}
-                        options={employerStaffRoleOptions}
-                        onValueChange={setInviteRole}
-                      />
-                    </label>
-                  </div>
-                  <div className="settings-page__staff-invite-actions">
-                    <Button
-                      type="button"
-                      variant={actionVariant}
-                      size="md"
-                      loading={createEmployerStaffInvitationMutation.isPending}
-                      onClick={() => {
-                        createEmployerStaffInvitationMutation.mutate({
-                          email: inviteEmail.trim() || undefined,
-                          role: inviteRole as "recruiter" | "manager" | "viewer",
-                        });
-                      }}
-                    >
-                      Создать приглашение
-                    </Button>
-                  </div>
-                  {inviteError ? <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p> : null}
-                  {latestInvitationUrl ? (
-                    <div className="settings-page__staff-link-card">
-                      <p className="settings-page__staff-link-title">Ссылка приглашения</p>
-                      <p className="settings-page__staff-link-value">{latestInvitationUrl}</p>
-                      <Button
-                        type="button"
-                        variant={outlineVariant}
-                        size="md"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(latestInvitationUrl);
-                        }}
-                      >
-                        Скопировать ссылку
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
+                <Button
+                  type="button"
+                  variant={actionVariant}
+                  size="md"
+                  onClick={() => setIsStaffInviteModalOpen(true)}
+                >
+                  Пригласить сотрудника
+                </Button>
                 <div className="settings-page__staff-invitations">
                   <h3 className="settings-page__staff-subtitle">Активные приглашения</h3>
                   {isEmployerStaffInvitationsLoading ? (
@@ -1256,6 +1283,116 @@ export function SettingsPage() {
                 </div>
               </div>
             </div>
+            <Modal
+              title="Приглашение сотрудника"
+              isOpen={isStaffInviteModalOpen}
+              onClose={() => {
+                setIsStaffInviteModalOpen(false);
+                setInviteError(null);
+              }}
+              panelClassName="settings-page__staff-modal-panel"
+            >
+              <div className="settings-page__staff-modal">
+                <label className="settings-page__field">
+                  <span className="settings-page__field-label">Почта сотрудника</span>
+                  <Input
+                    className="input--sm"
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    placeholder="Введите email или оставьте пустым"
+                  />
+                </label>
+                <div className="settings-page__staff-permissions">
+                  <p className="settings-page__staff-subtitle">Доступы сотрудника</p>
+                  <label className="settings-page__checkbox-row">
+                    <Checkbox checked variant={checkboxVariant} disabled />
+                    <span className="settings-page__checkbox-label">Просмотр откликов</span>
+                  </label>
+                  <label className="settings-page__checkbox-row">
+                    <Checkbox
+                      checked={invitePermissions.canManageOpportunities}
+                      variant={checkboxVariant}
+                      onChange={(event) =>
+                        setInvitePermissions((current) => ({
+                          ...current,
+                          canManageOpportunities: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="settings-page__checkbox-label">Создание и редактирование возможностей</span>
+                  </label>
+                  <label className="settings-page__checkbox-row">
+                    <Checkbox
+                      checked={invitePermissions.canManageCompanyProfile}
+                      variant={checkboxVariant}
+                      onChange={(event) =>
+                        setInvitePermissions((current) => ({
+                          ...current,
+                          canManageCompanyProfile: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="settings-page__checkbox-label">Управление профилем компании</span>
+                  </label>
+                  <p className="settings-page__staff-permissions-hint">
+                    Доступ к чату будет выдан автоматически для расширенных доступов.
+                  </p>
+                </div>
+                {resolvedInviteRole === null ? (
+                  <p className="settings-page__form-message settings-page__form-message--error">
+                    Сейчас можно выдать либо доступ к возможностям, либо доступ к профилю компании.
+                  </p>
+                ) : null}
+                {inviteError ? (
+                  <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p>
+                ) : null}
+                {latestInvitationUrl ? (
+                  <div className="settings-page__staff-link-card">
+                    <p className="settings-page__staff-link-title">Ссылка приглашения</p>
+                    <p className="settings-page__staff-link-value">{latestInvitationUrl}</p>
+                    <Button
+                      type="button"
+                      variant={outlineVariant}
+                      size="md"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(latestInvitationUrl);
+                      }}
+                    >
+                      Скопировать ссылку
+                    </Button>
+                  </div>
+                ) : null}
+                <div className="settings-page__staff-invite-actions">
+                  <Button
+                    type="button"
+                    variant={outlineVariant}
+                    size="md"
+                    onClick={() => setIsStaffInviteModalOpen(false)}
+                  >
+                    Закрыть
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={actionVariant}
+                    size="md"
+                    loading={createEmployerStaffInvitationMutation.isPending}
+                    disabled={resolvedInviteRole === null}
+                    onClick={() => {
+                      if (!resolvedInviteRole) {
+                        return;
+                      }
+
+                      createEmployerStaffInvitationMutation.mutate({
+                        email: inviteEmail.trim() || undefined,
+                        role: resolvedInviteRole,
+                      });
+                    }}
+                  >
+                    {inviteEmail.trim() ? "Отправить приглашение" : "Сгенерировать ссылку"}
+                  </Button>
+                </div>
+              </div>
+            </Modal>
           </section>
         ) : null}
 
@@ -1361,7 +1498,7 @@ export function SettingsPage() {
           {renderSessionsPanel()}
         </div>
 
-        <section className="settings-page__section">
+        <section className="settings-page__section settings-page__section--account-management">
           <h2 className="settings-page__section-title">Управление аккаунтом</h2>
           {renderAccountManagementPanel()}
         </section>

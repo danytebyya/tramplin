@@ -12,7 +12,11 @@ import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAura
 import {
   applyAuthSession,
   checkEmailAvailabilityRequest,
+  clearCompanyInviteReturnTo,
+  isCompanyInviteReturnTo,
   loginRequest,
+  persistCompanyInviteReturnTo,
+  readCompanyInviteReturnTo,
   registerRequest,
   resolvePostAuthRoute,
   requestEmailVerificationCode,
@@ -133,10 +137,10 @@ export function AuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
-  const explicitReturnTo = searchParams.get("returnTo");
+  const explicitReturnTo = searchParams.get("returnTo") ?? readCompanyInviteReturnTo();
   const inviteReturnParams = explicitReturnTo ? new URLSearchParams(explicitReturnTo.split("?")[1] ?? "") : null;
   const isCompanyInviteRegistration =
-    inviteReturnParams?.get("mode") === "accept-company-invite" && Boolean(inviteReturnParams.get("invite_token"));
+    isCompanyInviteReturnTo(explicitReturnTo);
   const legalReturnTo = explicitReturnTo || `${location.pathname}${location.search}${location.hash}`;
   const [step, setStep] = useState<VerificationStep>(initialPersistedState?.step ?? "form");
   const [apiError, setApiError] = useState<string | null>(initialPersistedState?.apiError ?? null);
@@ -188,7 +192,7 @@ export function AuthPage() {
 
   const selectedRole = watch("role");
   const selectedEmail = watch("email");
-  const roleTheme = selectedRole === "applicant" ? "secondary" : "primary";
+  const roleTheme = isCompanyInviteRegistration ? "primary" : selectedRole === "applicant" ? "secondary" : "primary";
   const roleGhostVariant = roleTheme === "secondary" ? "secondary-ghost" : "ghost";
   const inputThemeClassName = roleTheme === "secondary" ? "input--secondary" : undefined;
   const checkboxTheme = roleTheme === "secondary" ? "secondary" : "primary";
@@ -205,6 +209,14 @@ export function AuthPage() {
 
     setValue("role", "applicant", { shouldValidate: true });
   }, [isCompanyInviteRegistration, selectedRole, setValue]);
+
+  useEffect(() => {
+    if (!explicitReturnTo || !isCompanyInviteReturnTo(explicitReturnTo)) {
+      return;
+    }
+
+    persistCompanyInviteReturnTo(explicitReturnTo);
+  }, [explicitReturnTo]);
 
   useEffect(() => {
     if (step !== "form") {
@@ -338,8 +350,9 @@ export function AuthPage() {
           verification_code: code,
           display_name: resolveDisplayName(values.email),
           role: values.role,
+          company_invite_token: inviteReturnParams?.get("invite_token") ?? undefined,
           applicant_profile:
-            values.role === "applicant"
+            values.role === "applicant" && !isCompanyInviteRegistration
               ? {
                   full_name: resolveDisplayName(values.email),
                 }
@@ -363,6 +376,9 @@ export function AuthPage() {
       const hasEmployerProfile = data?.data?.user?.has_employer_profile;
 
       applyAuthSession(data);
+      if (!explicitReturnTo) {
+        clearCompanyInviteReturnTo();
+      }
 
       clearPersistedVerificationState();
       setApiErrorCode(null);
@@ -570,44 +586,45 @@ export function AuthPage() {
 
               {!isCodeStep ? (
                 <form className="auth-form" onSubmit={handleSubmit(handleFormSubmit)}>
-                  <div
-                    className={
-                      selectedRole === "applicant"
-                        ? "segmented-switch segmented-switch--second-active auth-form__role-switch"
-                        : "segmented-switch auth-form__role-switch"
-                    }
-                    role="tablist"
-                    aria-label="Выбор роли"
-                  >
-                    <span className="segmented-switch__indicator" aria-hidden="true" />
-                    <button
-                      type="button"
-                      className={
-                        selectedRole === "employer"
-                          ? "segmented-switch__option segmented-switch__option--active"
-                          : "segmented-switch__option"
-                      }
-                      disabled={isCompanyInviteRegistration}
-                      onClick={() => setValue("role", "employer", { shouldValidate: true })}
-                    >
-                      Работодатель
-                    </button>
-                    <button
-                      type="button"
+                  {isCompanyInviteRegistration ? null : (
+                    <div
                       className={
                         selectedRole === "applicant"
-                          ? "segmented-switch__option segmented-switch__option--active"
-                          : "segmented-switch__option"
+                          ? "segmented-switch segmented-switch--second-active auth-form__role-switch"
+                          : "segmented-switch auth-form__role-switch"
                       }
-                      onClick={() => setValue("role", "applicant", { shouldValidate: true })}
+                      role="tablist"
+                      aria-label="Выбор роли"
                     >
-                      Соискатель
-                    </button>
-                  </div>
+                      <span className="segmented-switch__indicator" aria-hidden="true" />
+                      <button
+                        type="button"
+                        className={
+                          selectedRole === "employer"
+                            ? "segmented-switch__option segmented-switch__option--active"
+                            : "segmented-switch__option"
+                        }
+                        onClick={() => setValue("role", "employer", { shouldValidate: true })}
+                      >
+                        Работодатель
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          selectedRole === "applicant"
+                            ? "segmented-switch__option segmented-switch__option--active"
+                            : "segmented-switch__option"
+                        }
+                        onClick={() => setValue("role", "applicant", { shouldValidate: true })}
+                      >
+                        Соискатель
+                      </button>
+                    </div>
+                  )}
 
                   {isCompanyInviteRegistration ? (
                     <p className="auth-card__hint">
-                      Для принятия приглашения в компанию регистрация доступна только как соискатель.
+                      Регистрация доступна только по приглашению в рабочий профиль компании. Профиль соискателя создан не будет.
                     </p>
                   ) : null}
 

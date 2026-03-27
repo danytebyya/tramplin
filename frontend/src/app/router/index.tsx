@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ReactElement } from "react";
 
-import { meRequest, useAuthStore } from "../../features/auth";
+import { isCompanyInviteReturnTo, meRequest, persistCompanyInviteReturnTo, readCompanyInviteReturnTo, useAuthStore } from "../../features/auth";
 import { AuthPage } from "../../pages/auth";
 import { ContentModerationPage } from "../../pages/content-moderation";
 import { CuratorDashboardPage } from "../../pages/curator-dashboard";
@@ -43,8 +43,10 @@ function useEmployerProfileAccess() {
     hasEmployerProfile: Boolean(currentUserQuery.data?.data?.user?.employer_profile),
     employerVerificationStatus:
       currentUserQuery.data?.data?.user?.employer_profile?.verification_status ?? null,
+    baseUserRole: currentUserQuery.data?.data?.user?.role ?? null,
     requiresEmployerOnboarding:
       role === "employer" &&
+      currentUserQuery.data?.data?.user?.role === "employer" &&
       (!currentUserQuery.data?.data?.user?.employer_profile ||
         currentUserQuery.data?.data?.user?.employer_profile?.verification_status === "unverified"),
   };
@@ -71,6 +73,7 @@ function ProtectedRoute({ children }: { children: ReactElement }) {
     const isCompanyInviteFlow = searchParams.get("mode") === "accept-company-invite" && searchParams.get("invite_token");
 
     if (isCompanyInviteFlow) {
+      persistCompanyInviteReturnTo(returnTo);
       return <Navigate to={`/register?returnTo=${encodeURIComponent(returnTo)}`} replace />;
     }
 
@@ -91,6 +94,7 @@ function ProtectedRoute({ children }: { children: ReactElement }) {
 }
 
 function GuestOnlyRoute({ children }: { children: ReactElement }) {
+  const location = useLocation();
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const isHydrated = useAuthStore((state) => state.isHydrated);
@@ -99,8 +103,14 @@ function GuestOnlyRoute({ children }: { children: ReactElement }) {
     return null;
   }
 
+  const persistedCompanyInviteReturnTo = readCompanyInviteReturnTo();
+  const currentReturnTo = `${location.pathname}${location.search}${location.hash}`;
+  if (isCompanyInviteReturnTo(currentReturnTo)) {
+    persistCompanyInviteReturnTo(currentReturnTo);
+  }
+
   if (accessToken || refreshToken) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={persistedCompanyInviteReturnTo || "/"} replace />;
   }
 
   return children;
