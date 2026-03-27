@@ -1431,9 +1431,6 @@ export function SettingsPage() {
                     />
                     <span className="settings-page__checkbox-label">Общение в чате</span>
                   </label>
-                  <p className="settings-page__staff-permissions-hint">
-                    Можно выдать любой набор доступов. Пустое приглашение создать нельзя.
-                  </p>
                 </div>
                 {inviteError ? (
                   <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p>
