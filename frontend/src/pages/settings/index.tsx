@@ -197,6 +197,24 @@ function resolveSessionTitle(userAgent: string | null | undefined, isCurrent: bo
   return isCurrent ? `${baseTitle} (текущая)` : baseTitle;
 }
 
+function compareSessionsByPriority(
+  left: { is_current: boolean; created_at: string; id: string },
+  right: { is_current: boolean; created_at: string; id: string },
+) {
+  if (left.is_current !== right.is_current) {
+    return left.is_current ? -1 : 1;
+  }
+
+  const leftTimestamp = new Date(left.created_at).getTime();
+  const rightTimestamp = new Date(right.created_at).getTime();
+
+  if (leftTimestamp !== rightTimestamp) {
+    return rightTimestamp - leftTimestamp;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
 function resolveLoginStatus(isSuccess: boolean, failureReason: string | null | undefined) {
   if (isSuccess) {
     return {
@@ -285,6 +303,7 @@ export function SettingsPage() {
   const [internshipReviewHours, setInternshipReviewHours] = useState("24");
   const [eventReviewHours, setEventReviewHours] = useState("24");
   const [mentorshipReviewHours, setMentorshipReviewHours] = useState("24");
+  const [isCurrentSessionLogoutPending, setIsCurrentSessionLogoutPending] = useState(false);
   const updatePreferredCityMutation = useMutation({
     mutationFn: updatePreferredCityRequest,
     onSuccess: (response) => {
@@ -390,6 +409,21 @@ export function SettingsPage() {
         setIsProfileMenuOpen(false);
       },
     });
+  };
+
+  const handleCurrentSessionLogout = async () => {
+    setIsCurrentSessionLogoutPending(true);
+
+    try {
+      await performLogout({
+        beforeRedirect: () => {
+          setIsProfileMenuPinned(false);
+          setIsProfileMenuOpen(false);
+        },
+      });
+    } finally {
+      setIsCurrentSessionLogoutPending(false);
+    }
   };
 
   useEffect(() => {
@@ -503,7 +537,9 @@ export function SettingsPage() {
   };
 
   const sessionItems = useMemo(() => {
-    return (sessionsQuery.data?.data?.items ?? []).map((session) => ({
+    return [...(sessionsQuery.data?.data?.items ?? [])]
+      .sort(compareSessionsByPriority)
+      .map((session) => ({
       id: session.id,
       title: resolveSessionTitle(session.user_agent, session.is_current),
       meta: `IP: ${session.ip_address ?? "Не определён"}`,
@@ -511,6 +547,10 @@ export function SettingsPage() {
       isCurrent: session.is_current,
     }));
   }, [sessionsQuery.data]);
+  const isSessionActionPending =
+    revokeSessionMutation.isPending ||
+    revokeOtherSessionsMutation.isPending ||
+    isCurrentSessionLogoutPending;
   const loginHistoryItems = useMemo(() => {
     return (loginHistoryQuery.data?.data?.items ?? [])
       .slice(0, 7)
@@ -888,10 +928,11 @@ export function SettingsPage() {
                             variant="accent-ghost"
                             size="md"
                             className="settings-page__session-action"
-                            disabled={revokeSessionMutation.isPending}
+                            loading={session.isCurrent && isCurrentSessionLogoutPending}
+                            disabled={isSessionActionPending}
                             onClick={() => {
                               if (session.isCurrent) {
-                                handleLogout();
+                                void handleCurrentSessionLogout();
                                 return;
                               }
 
@@ -911,6 +952,7 @@ export function SettingsPage() {
                 variant={actionVariant}
                 size="md"
                 loading={revokeOtherSessionsMutation.isPending}
+                disabled={isSessionActionPending}
                 onClick={() => revokeOtherSessionsMutation.mutate()}
               >
                 Завершить все другие сессии

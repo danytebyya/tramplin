@@ -32,6 +32,9 @@ apiClient.interceptors.response.use(
     const refreshToken = useAuthStore.getState().refreshToken;
     const isUnauthorized = error?.response?.status === 401;
     const isRefreshRequest = originalRequest?.url?.includes("/auth/tokens");
+    const isCurrentSessionLogoutRequest =
+      originalRequest?.url?.includes("/auth/sessions/current") &&
+      String(originalRequest?.method ?? "").toLowerCase() === "delete";
     const isLoginRequest =
       originalRequest?.url?.includes("/auth/sessions") &&
       String(originalRequest?.method ?? "").toLowerCase() === "post";
@@ -54,7 +57,12 @@ apiClient.interceptors.response.use(
       }
     }
 
-    if (isUnauthorized && typeof window !== "undefined" && !isLoginRequest) {
+    if (
+      isUnauthorized &&
+      typeof window !== "undefined" &&
+      !isLoginRequest &&
+      !isCurrentSessionLogoutRequest
+    ) {
       useAuthStore.getState().clearSession();
       clearPersistedAuthSession();
 
