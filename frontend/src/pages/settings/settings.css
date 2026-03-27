@@ -327,6 +327,46 @@
   word-break: break-word;
 }
 
+.settings-page__invite-link-shell {
+  position: relative;
+  display: block;
+}
+
+.settings-page__invite-link-input.input {
+  width: 100%;
+  padding-right: 250px;
+  color: var(--color-text-secondary);
+}
+
+.settings-page__invite-link-actions {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateY(-50%);
+}
+
+.settings-page__invite-link-button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--settings-accent);
+  cursor: pointer;
+  font: inherit;
+}
+
+.settings-page__invite-link-button:hover,
+.settings-page__invite-link-button:focus-visible {
+  color: var(--settings-accent-strong);
+}
+
+.settings-page__invite-link-button:disabled {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
 .settings-page__staff-invitation-list {
   display: flex;
   flex-direction: column;

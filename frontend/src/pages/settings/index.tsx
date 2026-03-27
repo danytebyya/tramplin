@@ -282,6 +282,10 @@ function resolveEmployerStaffRoleLabel(role: string) {
   return "Наблюдатель";
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 type EmployerStaffPermissionState = {
   canReviewResponses: boolean;
   canManageOpportunities: boolean;
@@ -915,6 +919,22 @@ export function SettingsPage() {
     () => mapEmployerStaffPermissionsToKeys(invitePermissions),
     [invitePermissions],
   );
+  const trimmedInviteEmail = inviteEmail.trim();
+  const inviteEmailError =
+    trimmedInviteEmail.length > 0 && !isValidEmail(trimmedInviteEmail)
+      ? "Введите корректный email"
+      : null;
+
+  const handleCreateStaffInvitation = () => {
+    if (inviteEmailError || invitePermissionKeys.length === 0) {
+      return;
+    }
+
+    createEmployerStaffInvitationMutation.mutate({
+      email: trimmedInviteEmail || undefined,
+      permissions: invitePermissionKeys,
+    });
+  };
 
   const pageClassName = [
     "settings-page",
@@ -1360,7 +1380,11 @@ export function SettingsPage() {
                   <Input
                     className="input--sm"
                     value={inviteEmail}
-                    onChange={(event) => setInviteEmail(event.target.value)}
+                    error={inviteEmailError ?? undefined}
+                    onChange={(event) => {
+                      setInviteEmail(event.target.value);
+                      setInviteError(null);
+                    }}
                     placeholder="Введите email или оставьте пустым"
                   />
                 </label>
@@ -1436,20 +1460,35 @@ export function SettingsPage() {
                   <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p>
                 ) : null}
                 {latestInvitationUrl ? (
-                  <div className="settings-page__staff-link-card">
-                    <p className="settings-page__staff-link-title">Ссылка приглашения</p>
-                    <p className="settings-page__staff-link-value">{latestInvitationUrl}</p>
-                    <Button
-                      type="button"
-                      variant={outlineVariant}
-                      size="md"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(latestInvitationUrl);
-                      }}
-                    >
-                      Скопировать ссылку
-                    </Button>
-                  </div>
+                  <label className="settings-page__field">
+                    <span className="settings-page__field-label">Ссылка приглашения</span>
+                    <span className="settings-page__invite-link-shell">
+                      <input
+                        className="input input--sm settings-page__invite-link-input"
+                        value={latestInvitationUrl}
+                        readOnly
+                      />
+                      <span className="settings-page__invite-link-actions">
+                        <button
+                          type="button"
+                          className="settings-page__invite-link-button"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(latestInvitationUrl);
+                          }}
+                        >
+                          Копировать
+                        </button>
+                        <button
+                          type="button"
+                          className="settings-page__invite-link-button"
+                          disabled={createEmployerStaffInvitationMutation.isPending || Boolean(inviteEmailError)}
+                          onClick={handleCreateStaffInvitation}
+                        >
+                          Перегенерировать
+                        </button>
+                      </span>
+                    </span>
+                  </label>
                 ) : null}
                 <div className="settings-page__staff-invite-actions">
                   <Button
@@ -1465,19 +1504,10 @@ export function SettingsPage() {
                     variant={actionVariant}
                     size="md"
                     loading={createEmployerStaffInvitationMutation.isPending}
-                    disabled={invitePermissionKeys.length === 0}
-                    onClick={() => {
-                      if (invitePermissionKeys.length === 0) {
-                        return;
-                      }
-
-                      createEmployerStaffInvitationMutation.mutate({
-                        email: inviteEmail.trim() || undefined,
-                        permissions: invitePermissionKeys,
-                      });
-                    }}
+                    disabled={invitePermissionKeys.length === 0 || Boolean(inviteEmailError)}
+                    onClick={handleCreateStaffInvitation}
                   >
-                    {inviteEmail.trim() ? "Отправить приглашение" : "Сгенерировать ссылку"}
+                    {trimmedInviteEmail ? "Отправить приглашение" : "Сгенерировать ссылку"}
                   </Button>
                 </div>
               </div>
