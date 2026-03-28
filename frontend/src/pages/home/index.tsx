@@ -17,11 +17,11 @@ import {
   listFavoriteOpportunitiesRequest,
   removeFavoriteOpportunityRequest,
 } from "../../features/favorites";
+import { subscribeOpportunityWorkflow } from "../../features/opportunity-workflow";
 import {
-  hasWorkflowApplication,
-  submitWorkflowApplication,
-  subscribeOpportunityWorkflow,
-} from "../../features/opportunity-workflow";
+  listMyAppliedOpportunityIdsRequest,
+  submitOpportunityApplicationRequest,
+} from "../../features/applications";
 import {
   meRequest,
   performLogout,
@@ -32,7 +32,7 @@ import { ModerationDashboardContent } from "../curator-dashboard";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
-import { Header } from "../../widgets/header";
+import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import "./home.css";
@@ -92,7 +92,6 @@ export function HomePage() {
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
   const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
-  const [workflowRevision, setWorkflowRevision] = useState(0);
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
   const mapPanelLiveRef = useRef<HTMLDivElement | null>(null);
   const mapPanelProxyContentRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +136,12 @@ export function HomePage() {
     enabled: isAuthenticated && !isModerationRole,
     staleTime: 60 * 1000,
   });
+  const myApplicationsQuery = useQuery({
+    queryKey: ["applications", "mine", "opportunity-ids"],
+    queryFn: listMyAppliedOpportunityIdsRequest,
+    enabled: isAuthenticated && roleName === "applicant" && !isModerationRole,
+    staleTime: 60 * 1000,
+  });
   const updatePreferredCityMutation = useMutation({
     mutationFn: updatePreferredCityRequest,
     onSuccess: (response) => {
@@ -160,18 +165,21 @@ export function HomePage() {
       queryClient.setQueryData(["favorites", "opportunities"], response);
     },
   });
+  const submitApplicationMutation = useMutation({
+    mutationFn: submitOpportunityApplicationRequest,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+      ]);
+    },
+  });
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
-  const appliedOpportunityIds = useMemo(() => {
-    const applicantEmail = currentUserQuery.data?.data?.user?.email?.trim() ?? "";
-
-    if (!applicantEmail) {
-      return [];
-    }
-
-    return opportunities
-      .filter((item) => hasWorkflowApplication(item.id, applicantEmail))
-      .map((item) => item.id);
-  }, [currentUserQuery.data?.data?.user?.email, opportunities, workflowRevision]);
+  const appliedOpportunityIds = useMemo(
+    () => myApplicationsQuery.data?.data?.opportunity_ids ?? [],
+    [myApplicationsQuery.data?.data?.opportunity_ids],
+  );
 
   const getExpandedRect = () => ({
     top: MAP_EXPANDED_TOP_OFFSET,
@@ -243,7 +251,6 @@ export function HomePage() {
 
   useEffect(() => {
     return subscribeOpportunityWorkflow(() => {
-      setWorkflowRevision((current) => current + 1);
       void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
     });
   }, [queryClient]);
@@ -322,11 +329,7 @@ export function HomePage() {
         { label: "Выход", isDanger: true, onClick: handleLogout },
       ]
     : roleName === "employer"
-      ? [
-          { label: "Профиль", isDanger: false, onClick: () => navigate("/dashboard/employer") },
-          { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
-          { label: "Выход", isDanger: true, onClick: handleLogout },
-        ]
+      ? buildEmployerProfileMenuItems(navigate)
       : [
           { label: "Профиль", isDanger: false },
           { label: "Мои отклики", isDanger: false },
@@ -506,23 +509,11 @@ export function HomePage() {
       return;
     }
 
-    const applicantEmail = currentUserQuery.data?.data?.user?.email?.trim() ?? "";
-    const applicantName = currentUserQuery.data?.data?.user?.display_name?.trim() ?? applicantEmail ?? "Соискатель";
-
-    if (!applicantEmail || hasWorkflowApplication(opportunityId, applicantEmail)) {
+    if (appliedOpportunityIds.includes(opportunityId) || submitApplicationMutation.isPending) {
       return;
     }
 
-    submitWorkflowApplication({
-      opportunityId,
-      applicantName,
-      applicantEmail,
-    });
-
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
-      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
-    ]);
+    submitApplicationMutation.mutate(opportunityId);
   };
 
   return (

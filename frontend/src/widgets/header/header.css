@@ -263,6 +263,12 @@
   width: 328px;
 }
 
+.header__profile-dropdown--extended-menu {
+  width: 388px;
+  padding: 14px 0;
+  border-radius: 14px;
+}
+
 .header__profile-dropdown::before {
   content: "";
   position: absolute;
@@ -315,6 +321,13 @@
 .header__profile-dropdown-item--danger:active {
   color: var(--color-danger-active);
   background: rgba(239, 68, 68, 0.14);
+}
+
+.header__profile-dropdown--extended-menu .header__profile-dropdown-item {
+  padding: 18px 34px;
+  font-size: 21px;
+  line-height: 29px;
+  font-weight: 400;
 }
 
 .header__profile-contexts {

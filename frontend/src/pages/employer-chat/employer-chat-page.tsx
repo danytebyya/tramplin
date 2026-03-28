@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
-import { performLogout, useAuthStore } from "../../features/auth";
+import { useAuthStore } from "../../features/auth";
 import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { Header } from "../../widgets/header";
+import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import { EmployerHeaderNavigation } from "../../widgets/header/header-navigation";
 import { ChatWorkspace } from "../../widgets/chat-workspace";
 import "./employer-chat.css";
@@ -19,13 +19,7 @@ export function EmployerChatPage() {
     return <Navigate to="/" replace />;
   }
 
-  const profileMenuItems = [
-    { label: "Профиль компании", onClick: () => navigate("/dashboard/employer") },
-    { label: "Управление возможностями", onClick: () => navigate("/employer/opportunities") },
-    { label: "Чат", onClick: () => navigate("/employer/chat") },
-    { label: "Настройки", onClick: () => navigate("/settings") },
-    { label: "Выйти", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },
-  ];
+  const profileMenuItems = buildEmployerProfileMenuItems(navigate);
 
   const handleCityChange = (nextCity: CitySelection) => {
     setSelectedCity(nextCity.name);

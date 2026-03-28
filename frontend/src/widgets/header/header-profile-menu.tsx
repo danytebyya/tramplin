@@ -118,6 +118,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
   const hasAccountContextCards = accountContextItems.length > 0;
   const hasMultipleAccountContexts = accountContextItems.length > 1;
   const activeContextRole = accountContextItems.find((item) => item.is_active)?.role;
+  const hasExtendedNavigationMenu = items.length >= 6;
 
   const clearProfileMenuCloseTimeout = () => {
     if (profileMenuCloseTimeoutRef.current !== null) {
@@ -247,10 +248,14 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
           isProfileMenuOpen
             ? hasMultipleAccountContexts
               ? "header__profile-dropdown header__profile-dropdown--with-contexts"
-              : "header__profile-dropdown"
+              : hasExtendedNavigationMenu
+                ? "header__profile-dropdown header__profile-dropdown--extended-menu"
+                : "header__profile-dropdown"
             : hasMultipleAccountContexts
               ? "header__profile-dropdown header__profile-dropdown--with-contexts header__profile-dropdown--hidden"
-              : "header__profile-dropdown header__profile-dropdown--hidden"
+              : hasExtendedNavigationMenu
+                ? "header__profile-dropdown header__profile-dropdown--extended-menu header__profile-dropdown--hidden"
+                : "header__profile-dropdown header__profile-dropdown--hidden"
         }
         role="menu"
         aria-hidden={!isProfileMenuOpen}

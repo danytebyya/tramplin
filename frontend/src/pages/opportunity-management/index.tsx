@@ -33,11 +33,11 @@ import {
   getCityViewportByName,
   popularCities,
 } from "../../features/city-selector/api";
-import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import { meRequest, useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
 import { Badge, Button, Checkbox, Container, DateInput, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { Header } from "../../widgets/header";
+import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import { OpportunityLocationMap, OpportunityLocationPoint } from "./opportunity-location-map";
 import "./opportunity-management.css";
 
@@ -936,11 +936,7 @@ export function OpportunityManagementPage() {
     closed: managementItems.filter((item) => item.status === "removed" || item.status === "rejected").length,
   };
 
-  const profileMenuItems = [
-    { label: "Профиль компании", onClick: () => navigate("/dashboard/employer") },
-    { label: "Настройки", onClick: () => navigate("/settings") },
-    { label: "Выйти", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },
-  ];
+  const profileMenuItems = buildEmployerProfileMenuItems(navigate);
   const tagCatalog = useMemo(() => {
     const mergedCategories = new Map<string, OpportunityTagCatalogCategory>();
 

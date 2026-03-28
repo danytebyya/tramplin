@@ -53,7 +53,7 @@ import {
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Modal, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { Header } from "../../widgets/header";
+import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import "../../widgets/header/header.css";
 import "./settings.css";
 
@@ -1227,11 +1227,7 @@ export function SettingsPage() {
         { label: "Выход", isDanger: true, onClick: handleLogout },
       ]
     : role === "employer"
-      ? [
-          { label: "Профиль", isDanger: false, onClick: () => navigate("/dashboard/employer") },
-          { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
-          { label: "Выход", isDanger: true, onClick: handleLogout },
-        ]
+      ? buildEmployerProfileMenuItems(navigate)
       : [
           { label: "Профиль", isDanger: false, onClick: () => navigate("/dashboard/applicant") },
           { label: "Мои отклики", isDanger: false },
