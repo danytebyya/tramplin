@@ -1,0 +1,30 @@
+.employer-chat-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(239, 246, 255, 0.92), var(--color-bg-primary) 38%);
+}
+
+.employer-chat-page .header__top {
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-bg-primary) 0%,
+      var(--color-secondary) 13%,
+      var(--color-primary) 37%,
+      #487CEE 74%,
+      #ACE7F1 100%
+    );
+}
+
+.employer-chat-page .header__top-container.container,
+.employer-chat-page .header__bottom-container.container,
+.employer-chat-page__container.container {
+  width: min(1080px, 100%);
+  padding: 0 24px;
+}
+
+.employer-chat-page__container.container {
+  padding-top: 28px;
+  padding-bottom: 40px;
+}

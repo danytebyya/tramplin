@@ -1,0 +1,70 @@
+.networking-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top right, rgba(45, 212, 191, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(240, 253, 250, 0.96), var(--color-bg-primary) 38%);
+}
+
+.networking-page .header__top {
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-bg-primary) 0%,
+      #61D0C6 10%,
+      var(--color-secondary) 35%,
+      #5EA8F5 74%,
+      #CFE9FF 100%
+    );
+}
+
+.networking-page .header__top-container.container,
+.networking-page .header__bottom-container.container,
+.networking-page__container.container {
+  width: min(1080px, 100%);
+  padding: 0 24px;
+}
+
+.networking-page__container.container {
+  padding-top: 28px;
+  padding-bottom: 40px;
+}
+
+.networking-page__navigation {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.networking-page__navigation-link {
+  position: relative;
+  padding: 0 16px 5px;
+  color: var(--color-text-tertiary);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+  text-decoration: none;
+}
+
+.networking-page__navigation-link:hover,
+.networking-page__navigation-link:focus-visible {
+  color: var(--color-text-primary);
+}
+
+.networking-page__navigation-link--active {
+  color: var(--color-text-primary);
+}
+
+.networking-page__navigation-link--active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-secondary);
+}
+
+.networking-page__navigation-link[aria-disabled="true"] {
+  cursor: default;
+}

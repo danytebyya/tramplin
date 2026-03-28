@@ -8,12 +8,14 @@ import { ContentModerationPage } from "../../pages/content-moderation";
 import { CuratorDashboardPage } from "../../pages/curator-dashboard";
 import { CuratorManagementPage } from "../../pages/curator-management";
 import { EmployerDashboardPage } from "../../pages/employer-dashboard";
+import { EmployerChatPage } from "../../pages/employer-chat";
 import { EmployerOnboardingPage } from "../../pages/employer-onboarding";
 import { EmployerVerificationPage } from "../../pages/employer-verification";
 import { LoginPage } from "../../pages/login";
 import { LegalDocumentPage } from "../../pages/legal/index";
 import { HomePage } from "../../pages/home";
 import { OpportunityManagementPage } from "../../pages/opportunity-management";
+import { NetworkingPage } from "../../pages/networking";
 import { SettingsPage } from "../../pages/settings";
 import { SeekerDashboardPage } from "../../pages/seeker-dashboard";
 import { UiKitPage } from "../../pages/ui-kit";
@@ -281,6 +283,14 @@ export function AppRouter() {
         }
       />
       <Route
+        path="/employer/chat"
+        element={
+          <ProtectedRoute>
+            <EmployerChatPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/moderation/employers"
         element={
           <ProtectedRoute>
@@ -309,6 +319,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SeekerDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/networking"
+        element={
+          <ProtectedRoute>
+            <NetworkingPage />
           </ProtectedRoute>
         }
       />
