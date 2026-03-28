@@ -559,6 +559,7 @@ export function OpportunityManagementPage() {
   const [selectedLocationPoint, setSelectedLocationPoint] = useState<OpportunityLocationPoint | null>(null);
   const [isDraftLocationAddressLoading, setIsDraftLocationAddressLoading] = useState(false);
   const [expandedModalTagsCount, setExpandedModalTagsCount] = useState<number>(MODAL_TAGS_INITIAL_COUNT);
+  const [expandedCardTags] = useState<Record<string, number>>({});
   const [workflowRevision, setWorkflowRevision] = useState(0);
   const [replacedSeedOpportunityIds, setReplacedSeedOpportunityIds] = useState<string[]>([]);
   const [formErrors, setFormErrors] = useState<OpportunityFormErrors>({});
@@ -1469,6 +1470,14 @@ export function OpportunityManagementPage() {
               className="opportunity-management-page__card"
               onClick={() => setSelectedOpportunityId(item.id)}
             >
+              {(() => {
+                const visibleTagLimit = resolveVisibleTagLimit(
+                  expandedCardTags[item.id],
+                  item.tags.length,
+                  CARD_TAGS_INITIAL_COUNT,
+                );
+
+                return (
               <div className="opportunity-management-page__card-body">
                 <Status className="opportunity-management-page__status" variant={resolveStatusVariant(item.status)}>
                   {resolveStatusLabel(item.status)}
@@ -1486,7 +1495,7 @@ export function OpportunityManagementPage() {
 
                 <div className="opportunity-management-page__tags">
                   {item.tags
-                    .slice(0, CARD_TAGS_INITIAL_COUNT)
+                    .slice(0, visibleTagLimit)
                     .map((tag, tagIndex) => (
                     <Badge key={`${item.id}-${tag}-${tagIndex}`} variant="primary">
                       {tag}
@@ -1601,6 +1610,8 @@ export function OpportunityManagementPage() {
                   </div>
                 </div>
               </div>
+                );
+              })()}
             </article>
           ))}
         </section>
