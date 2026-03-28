@@ -7,6 +7,7 @@ Create Date: 2026-03-28 17:10:00.000000
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "20260328_0022"
@@ -16,6 +17,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    user_role_enum = postgresql.ENUM(
+        "guest",
+        "applicant",
+        "employer",
+        "junior",
+        "curator",
+        "admin",
+        name="user_role",
+        create_type=False,
+    )
+
     op.create_table(
         "chat_user_keys",
         sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, nullable=False),
@@ -43,7 +55,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("conversation_id", sa.Uuid(), sa.ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("sender_user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("sender_role", sa.Enum("guest", "applicant", "employer", "junior", "curator", "admin", name="user_role", create_type=False), nullable=False),
+        sa.Column("sender_role", user_role_enum, nullable=False),
         sa.Column("ciphertext", sa.Text(), nullable=False),
         sa.Column("iv", sa.String(length=120), nullable=False),
         sa.Column("salt", sa.String(length=120), nullable=False),
