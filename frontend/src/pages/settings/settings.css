@@ -775,6 +775,10 @@
   flex-direction: column;
 }
 
+.settings-page__sessions-layout--without-footer {
+  justify-content: flex-start;
+}
+
 .settings-page__history-list {
   overflow: hidden;
 }
@@ -789,8 +793,6 @@
 .settings-page__panel--compact:has(.settings-page__sessions-layout),
 .settings-page__card:has(.settings-page__card-body--sessions) {
   min-height: 420px;
-  height: 420px;
-  max-height: 420px;
   overflow: hidden;
 }
 
@@ -800,6 +802,10 @@
   overflow-y: auto;
   padding-right: 6px;
   padding-bottom: 72px;
+}
+
+.settings-page__sessions-layout--without-footer .settings-page__session-list {
+  padding-bottom: 0;
 }
 
 .settings-page__sessions-footer {

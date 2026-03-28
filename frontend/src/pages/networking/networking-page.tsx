@@ -7,6 +7,7 @@ import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { Header } from "../../widgets/header";
 import { ChatWorkspace } from "../../widgets/chat-workspace";
+import "../settings/settings.css";
 import "./networking.css";
 
 export function NetworkingPage() {
@@ -30,31 +31,30 @@ export function NetworkingPage() {
   };
 
   return (
-    <main className="networking-page">
+    <main className="networking-page settings-page settings-page--applicant">
       <Header
         containerClassName="networking-page__header-container"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
-        bottomContent={
-          <nav className="networking-page__navigation" aria-label="Навигация соискателя">
-            <span className="networking-page__navigation-link" aria-disabled="true">
-              Карьерный трек
-            </span>
-            <span className="networking-page__navigation-link" aria-disabled="true">
-              Отклики
-            </span>
-            <span className="networking-page__navigation-link networking-page__navigation-link--active">
-              Нетворкинг
-            </span>
-            <span className="networking-page__navigation-link" aria-disabled="true">
-              Настройки
-            </span>
-          </nav>
-        }
       />
 
-      <Container className="networking-page__container">
+      <Container className="settings-page__container networking-page__container">
+        <nav className="settings-page__tabs" aria-label="Навигация соискателя">
+          <button type="button" className="settings-page__tab">
+            Карьерный трек
+          </button>
+          <button type="button" className="settings-page__tab">
+            Отклики
+          </button>
+          <button type="button" className="settings-page__tab settings-page__tab--active">
+            Нетворкинг
+          </button>
+          <button type="button" className="settings-page__tab" onClick={() => navigate("/settings")}>
+            Настройки
+          </button>
+        </nav>
+
         <ChatWorkspace
           title="Нетворкинг"
           subtitle="Личный защищенный канал связи с работодателями и рекрутерами"

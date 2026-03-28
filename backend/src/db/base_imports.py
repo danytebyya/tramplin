@@ -1,4 +1,5 @@
 from src.models import (
+    Application,
     ApplicantProfile,
     ChatConversation,
     ChatConversationReadState,
@@ -23,6 +24,7 @@ from src.models import (
 
 __all__ = [
     "User",
+    "Application",
     "ChatUserKey",
     "ChatConversation",
     "ChatMessage",

@@ -6,7 +6,6 @@ import { useAuthStore } from "../../features/auth";
 import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
-import { EmployerHeaderNavigation } from "../../widgets/header/header-navigation";
 import { ChatWorkspace } from "../../widgets/chat-workspace";
 import "./employer-chat.css";
 
@@ -33,13 +32,33 @@ export function EmployerChatPage() {
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
-        bottomContent={<EmployerHeaderNavigation currentPage="chat" />}
       />
 
       <Container className="employer-chat-page__container">
+        <nav className="employer-chat-page__tabs" aria-label="Разделы работодателя">
+          <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/dashboard/employer")}>
+            Профиль компании
+          </button>
+          <button
+            type="button"
+            className="employer-chat-page__tab"
+            onClick={() => navigate("/employer/opportunities")}
+          >
+            Управление возможностями
+          </button>
+          <button type="button" className="employer-chat-page__tab">
+            Отклики
+          </button>
+          <button type="button" className="employer-chat-page__tab employer-chat-page__tab--active">
+            Чат
+          </button>
+          <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/settings")}>
+            Настройки
+          </button>
+        </nav>
+
         <ChatWorkspace
           title="Чат"
-          subtitle="Защищенный канал для диалогов с кандидатами в реальном времени"
           emptyTitle="Выберите диалог"
           emptyText="Откройте существующую переписку или начните новый диалог с кандидатом из списка слева."
           createConversationPayload={(contact) => ({

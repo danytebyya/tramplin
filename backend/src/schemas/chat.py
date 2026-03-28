@@ -14,6 +14,7 @@ class ChatParticipantRead(BaseModel):
     company_id: str | None = None
     public_key_jwk: dict | None = None
     is_online: bool = False
+    last_seen_at: str | None = None
 
 
 class ChatConversationCreateRequest(BaseModel):
@@ -78,6 +79,7 @@ class ChatContactRead(BaseModel):
     employer_id: str | None = None
     public_key_jwk: dict | None = None
     is_online: bool = False
+    last_seen_at: str | None = None
     has_conversation: bool = False
     conversation_id: str | None = None
 

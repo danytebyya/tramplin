@@ -67,7 +67,7 @@ function resolveAccountContextSubtitle(
 }
 
 function resolveProfileAccentColor(role: string | undefined) {
-  if (role === "employer") {
+  if (!role || role === "employer") {
     return "var(--color-primary)";
   }
 
@@ -115,10 +115,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
     });
   }, [accountContextsQuery.data?.data?.items]);
 
-  const hasAccountContextCards = accountContextItems.length > 0;
-  const hasMultipleAccountContexts = accountContextItems.length > 1;
   const activeContextRole = accountContextItems.find((item) => item.is_active)?.role;
-  const hasExtendedNavigationMenu = items.length >= 6;
 
   const clearProfileMenuCloseTimeout = () => {
     if (profileMenuCloseTimeoutRef.current !== null) {
@@ -217,6 +214,14 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
   }
 
   const user = meQuery.data?.data?.user;
+  const currentRole = activeContextRole ?? user?.role;
+  const isModerationRole = currentRole === "curator" || currentRole === "junior" || currentRole === "admin";
+  const hasAccountContextCards = !isModerationRole && accountContextItems.length > 0;
+  const hasMultipleAccountContexts = !isModerationRole && accountContextItems.length > 1;
+  const visibleItems =
+    isModerationRole
+      ? items.filter((item) => item.isDanger || item.label === "Выход")
+      : items;
 
   return (
     <div
@@ -248,14 +253,10 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
           isProfileMenuOpen
             ? hasMultipleAccountContexts
               ? "header__profile-dropdown header__profile-dropdown--with-contexts"
-              : hasExtendedNavigationMenu
-                ? "header__profile-dropdown header__profile-dropdown--extended-menu"
-                : "header__profile-dropdown"
+              : "header__profile-dropdown"
             : hasMultipleAccountContexts
               ? "header__profile-dropdown header__profile-dropdown--with-contexts header__profile-dropdown--hidden"
-              : hasExtendedNavigationMenu
-                ? "header__profile-dropdown header__profile-dropdown--extended-menu header__profile-dropdown--hidden"
-                : "header__profile-dropdown header__profile-dropdown--hidden"
+              : "header__profile-dropdown header__profile-dropdown--hidden"
         }
         role="menu"
         aria-hidden={!isProfileMenuOpen}
@@ -288,8 +289,8 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
                     : "header__profile-context-card--active-employer";
                 const cardClassName = [
                   "header__profile-context-card",
-                  isActive ? "header__profile-context-card--active" : "",
-                  isActive ? activeRoleClass : "",
+                  hasMultipleAccountContexts && isActive ? "header__profile-context-card--active" : "",
+                  hasMultipleAccountContexts && isActive ? activeRoleClass : "",
                   !hasMultipleAccountContexts ? "header__profile-context-card--static" : "",
                 ]
                   .filter(Boolean)
@@ -331,7 +332,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
             </div>
           </div>
         ) : null}
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <button
             key={item.label}
             type="button"

@@ -23,6 +23,7 @@ class OpportunityPublicRead(BaseModel):
     accent: str
     business_status: str
     moderation_status: str
+    responses_count: int = 0
 
 
 class OpportunityFeedResponse(BaseModel):

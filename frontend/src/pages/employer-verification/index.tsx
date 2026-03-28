@@ -26,7 +26,7 @@ import { env } from "../../shared/config/env";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { Header } from "../../widgets/header";
+import { buildModerationProfileMenuItems, CuratorHeaderNavigation, Header } from "../../widgets/header";
 import "./employer-verification.css";
 
 type VerificationStatusFilter = "all" | EmployerVerificationRequestStatus;
@@ -945,10 +945,7 @@ export function EmployerVerificationPage() {
     setSelectedIds([]);
   }, [verificationRequestsQuery.data?.data?.items, appliedSortDirection, appliedSortField]);
 
-  const profileMenuItems = [
-    { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
-    { label: "Выход", isDanger: true, onClick: handleLogout },
-  ];
+  const profileMenuItems = buildModerationProfileMenuItems();
 
   const applyFilters = () => {
     setAppliedSearch(search.trim());
@@ -1080,27 +1077,7 @@ export function EmployerVerificationPage() {
             type: "active",
           });
         }}
-        bottomContent={
-          <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-            <NavLink to="/" end className="header__category-link">
-              Дашборд
-            </NavLink>
-            <NavLink to="/moderation/employers" className="header__category-link">
-              Верификация работодателей
-            </NavLink>
-            <NavLink to="/moderation/content" className="header__category-link">
-              Модерация контента
-            </NavLink>
-            {isAdmin ? (
-              <NavLink to="/moderation/curators" className="header__category-link">
-                Управление кураторами
-              </NavLink>
-            ) : null}
-            <NavLink to="/settings" className="header__category-link">
-              Настройки
-            </NavLink>
-          </nav>
-        }
+        bottomContent={<CuratorHeaderNavigation isAdmin={isAdmin} currentPage="employers" />}
       />
 
       <Container className="employer-verification-page__container">

@@ -32,7 +32,7 @@ import { ModerationDashboardContent } from "../curator-dashboard";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
-import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
+import { buildEmployerProfileMenuItems, buildModerationProfileMenuItems, CuratorHeaderNavigation, Header } from "../../widgets/header";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import "./home.css";
@@ -325,9 +325,7 @@ export function HomePage() {
   };
 
   const profileMenuItems = isModerationRole
-    ? [
-        { label: "Выход", isDanger: true, onClick: handleLogout },
-      ]
+    ? buildModerationProfileMenuItems()
     : roleName === "employer"
       ? buildEmployerProfileMenuItems(navigate)
       : [
@@ -560,25 +558,7 @@ export function HomePage() {
         }
         bottomContent={
           isModerationRole ? (
-            <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-              <NavLink to="/" end className="header__category-link">
-                Дашборд
-              </NavLink>
-              <NavLink to="/moderation/employers" className="header__category-link">
-                Верификация работодателей
-              </NavLink>
-              <NavLink to="/moderation/content" className="header__category-link">
-                Модерация контента
-              </NavLink>
-              {isAdmin ? (
-                <NavLink to="/moderation/curators" className="header__category-link">
-                  Управление кураторами
-                </NavLink>
-              ) : null}
-              <NavLink to="/settings" className="header__category-link">
-                Настройки
-              </NavLink>
-            </nav>
+            <CuratorHeaderNavigation isAdmin={isAdmin} currentPage="dashboard" />
           ) : (
             <>
               <nav className="header__categories" aria-label="Категории">

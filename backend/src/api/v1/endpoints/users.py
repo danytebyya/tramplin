@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session
 from src.api.deps import get_current_user
 from src.db import get_db
 from src.models import User
+from src.realtime import presence_hub
 from src.schemas.auth import RegisterRequest
 from src.schemas.user import (
     ApplicantProfileRead,
     CuratorProfileRead,
     EmployerProfileRead,
+    UserPresenceRead,
     UserNotificationPreferencesUpdateRequest,
     UserPreferredCityUpdateRequest,
     UserRead,
@@ -32,6 +34,10 @@ def _serialize_user(user: User) -> dict:
         role=user.role,
         status=user.status,
         created_at=user.created_at,
+        presence=UserPresenceRead(
+            is_online=presence_hub.is_user_online(user.id),
+            last_seen_at=user.last_seen_at,
+        ),
         applicant_profile=(
             ApplicantProfileRead.model_validate(user.applicant_profile)
             if user.role.value == "applicant" and user.applicant_profile is not None

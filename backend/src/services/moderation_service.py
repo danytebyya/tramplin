@@ -569,7 +569,8 @@ class ModerationService:
             opportunity=opportunity,
             title="Публикация одобрена" if opportunity.business_status == OpportunityStatus.ACTIVE else "Публикация запланирована",
             message=(
-                "Возможность прошла модерацию и опубликована."
+                "Ваша заявка успешно опубликована 🎉\n"
+                "Теперь она доступна пользователям — ожидайте отклики и управляйте ими в личном кабинете."
                 if opportunity.business_status == OpportunityStatus.ACTIVE
                 else "Возможность прошла модерацию и будет опубликована по запланированной дате."
             ),

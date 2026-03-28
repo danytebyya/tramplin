@@ -19,6 +19,7 @@ type SocketManager = {
   reconnectTimeoutId: number | null;
   listeners: Set<Listener>;
   shouldReconnect: boolean;
+  failedAttempts: number;
 };
 
 const socketManager: SocketManager = {
@@ -27,6 +28,7 @@ const socketManager: SocketManager = {
   reconnectTimeoutId: null,
   listeners: new Set(),
   shouldReconnect: false,
+  failedAttempts: 0,
 };
 
 function clearReconnectTimeout() {
@@ -68,6 +70,11 @@ function scheduleReconnect() {
     return;
   }
 
+  if (socketManager.failedAttempts >= 3) {
+    socketManager.shouldReconnect = false;
+    return;
+  }
+
   socketManager.reconnectTimeoutId = window.setTimeout(() => {
     connectSocket();
   }, 2000);
@@ -89,6 +96,10 @@ function connectSocket() {
   const nextSocket = new WebSocket(getChatWebSocketUrl(socketManager.accessToken));
   socketManager.socket = nextSocket;
 
+  nextSocket.onopen = () => {
+    socketManager.failedAttempts = 0;
+  };
+
   nextSocket.onmessage = (event) => {
     try {
       notifyListeners(JSON.parse(event.data) as ChatRealtimeEvent);
@@ -100,6 +111,9 @@ function connectSocket() {
   nextSocket.onclose = () => {
     if (socketManager.socket === nextSocket) {
       socketManager.socket = null;
+    }
+    if (nextSocket.readyState === WebSocket.CLOSED) {
+      socketManager.failedAttempts += 1;
     }
     scheduleReconnect();
   };
@@ -114,6 +128,7 @@ function ensureSocket(accessToken: string) {
     socketManager.shouldReconnect = false;
     closeSocket();
     socketManager.accessToken = accessToken;
+    socketManager.failedAttempts = 0;
   }
 
   socketManager.shouldReconnect = true;
@@ -127,6 +142,7 @@ function releaseSocket() {
 
   socketManager.shouldReconnect = false;
   socketManager.accessToken = null;
+  socketManager.failedAttempts = 0;
   closeSocket();
 }
 

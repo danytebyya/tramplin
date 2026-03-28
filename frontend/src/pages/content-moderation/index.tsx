@@ -19,7 +19,7 @@ import {
 } from "../../features/moderation";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { Header } from "../../widgets/header";
+import { buildModerationProfileMenuItems, CuratorHeaderNavigation, Header } from "../../widgets/header";
 import "./content-moderation.css";
 
 type ContentTab = "all" | ContentModerationKind;
@@ -471,19 +471,7 @@ export function ContentModerationPage() {
     }, 40);
   };
 
-  const handleLogout = () => {
-    void performLogout({
-      beforeRedirect: () => {
-        setIsProfileMenuPinned(false);
-        setIsProfileMenuOpen(false);
-      },
-    });
-  };
-
-  const profileMenuItems = [
-    { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
-    { label: "Выход", isDanger: true, onClick: handleLogout },
-  ];
+  const profileMenuItems = buildModerationProfileMenuItems();
 
   const toggleFilterValue = <T extends string>(
     nextValue: T | "all",
@@ -588,17 +576,7 @@ export function ContentModerationPage() {
         containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
         topNavigation={null}
-        bottomContent={
-          <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-            <NavLink to="/dashboard/curator" className="header__category-link">Дашборд</NavLink>
-            <NavLink to="/moderation/employers" className="header__category-link">Верификация работодателей</NavLink>
-            <NavLink to="/moderation/content" className="header__category-link">Модерация контента</NavLink>
-            {isAdmin ? (
-              <NavLink to="/moderation/curators" className="header__category-link">Управление кураторами</NavLink>
-            ) : null}
-            <NavLink to="/settings" className="header__category-link">Настройки</NavLink>
-          </nav>
-        }
+        bottomContent={<CuratorHeaderNavigation isAdmin={isAdmin} currentPage="content" />}
       />
 
       <Container className="content-moderation-page__container">

@@ -391,7 +391,7 @@ export function NotificationMenu({
         <div ref={contentRef} className="notification-menu__content">
           {hasLoadError ? (
             <div className="notification-menu__empty">
-              Не удалось загрузить уведомления. Проверьте backend и обновите страницу.
+              Не удалось загрузить уведомления.
             </div>
           ) : null}
 

@@ -10,7 +10,6 @@ import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import { useAuthStore } from "../../features/auth";
-import { EmployerHeaderNavigation } from "../../widgets/header/header-navigation";
 import "./employer-dashboard.css";
 
 export function EmployerDashboardPage() {
@@ -36,10 +35,31 @@ export function EmployerDashboardPage() {
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
-        bottomContent={<EmployerHeaderNavigation currentPage="dashboard" />}
       />
 
       <Container className="employer-dashboard__container">
+        <nav className="employer-dashboard__tabs" aria-label="Разделы работодателя">
+          <button type="button" className="employer-dashboard__tab employer-dashboard__tab--active">
+            Профиль компании
+          </button>
+          <button
+            type="button"
+            className="employer-dashboard__tab"
+            onClick={() => navigate("/employer/opportunities")}
+          >
+            Управление возможностями
+          </button>
+          <button type="button" className="employer-dashboard__tab">
+            Отклики
+          </button>
+          <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/employer/chat")}>
+            Чат
+          </button>
+          <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/settings")}>
+            Настройки
+          </button>
+        </nav>
+
         <section className="employer-dashboard__hero">
           <div className="employer-dashboard__hero-body">
             <p className="employer-dashboard__eyebrow">Дашборд работодателя</p>

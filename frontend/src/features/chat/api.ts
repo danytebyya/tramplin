@@ -15,20 +15,24 @@ export type ChatParticipant = {
   userId: string;
   displayName: string;
   role: string;
+  avatarUrl: string | null;
   companyName: string | null;
   companyId: string | null;
   publicKeyJwk: JsonWebKey | null;
   isOnline: boolean;
+  lastSeenAt: string | null;
 };
 
 type ChatParticipantApi = {
   user_id: string;
   display_name: string;
   role: string;
+  avatar_url?: string | null;
   company_name?: string | null;
   company_id?: string | null;
   public_key_jwk?: JsonWebKey | null;
   is_online?: boolean;
+  last_seen_at?: string | null;
 };
 
 export type ChatMessage = {
@@ -77,10 +81,12 @@ export type ChatContact = {
   userId: string;
   role: string;
   displayName: string;
+  avatarUrl: string | null;
   companyName: string | null;
   employerId: string | null;
   publicKeyJwk: JsonWebKey | null;
   isOnline: boolean;
+  lastSeenAt: string | null;
   hasConversation: boolean;
   conversationId: string | null;
 };
@@ -89,10 +95,12 @@ type ChatContactApi = {
   user_id: string;
   role: string;
   display_name: string;
+  avatar_url?: string | null;
   company_name?: string | null;
   employer_id?: string | null;
   public_key_jwk?: JsonWebKey | null;
   is_online?: boolean;
+  last_seen_at?: string | null;
   has_conversation?: boolean;
   conversation_id?: string | null;
 };
@@ -113,10 +121,12 @@ function mapParticipant(item: ChatParticipantApi): ChatParticipant {
     userId: item.user_id,
     displayName: item.display_name,
     role: item.role,
+    avatarUrl: item.avatar_url ?? null,
     companyName: item.company_name ?? null,
     companyId: item.company_id ?? null,
     publicKeyJwk: item.public_key_jwk ?? null,
     isOnline: Boolean(item.is_online),
+    lastSeenAt: item.last_seen_at ?? null,
   };
 }
 
@@ -150,10 +160,12 @@ function mapContact(item: ChatContactApi): ChatContact {
     userId: item.user_id,
     role: item.role,
     displayName: item.display_name,
+    avatarUrl: item.avatar_url ?? null,
     companyName: item.company_name ?? null,
     employerId: item.employer_id ?? null,
     publicKeyJwk: item.public_key_jwk ?? null,
     isOnline: Boolean(item.is_online),
+    lastSeenAt: item.last_seen_at ?? null,
     hasConversation: Boolean(item.has_conversation),
     conversationId: item.conversation_id ?? null,
   };
@@ -209,7 +221,9 @@ export async function sendChatMessageRequest(payload: {
   iv: string;
   salt: string;
 }) {
-  const response = await apiClient.post<{ data?: ChatMessageApi }>("/chat/messages", payload);
+  const response = await apiClient.post<{ data?: ChatMessageApi }>("/chat/messages", payload, {
+    timeout: 2500,
+  });
   if (!response.data?.data) {
     throw new Error("Не удалось отправить сообщение");
   }

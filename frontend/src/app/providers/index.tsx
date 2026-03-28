@@ -12,7 +12,9 @@ import {
   switchAccountContextRequest,
   useAuthStore,
 } from "../../features/auth";
+import { ensureChatKeyPair, upsertMyChatKeyRequest } from "../../features/chat";
 import { useNotificationsRealtime } from "../../features/notifications";
+import { usePresenceRealtime } from "../../features/presence";
 
 type AppProvidersProps = {
   children: ReactNode;
@@ -229,6 +231,66 @@ function AuthSessionBootstrap() {
   return null;
 }
 
+function ChatKeyBootstrap() {
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+
+  useEffect(() => {
+    if (!isHydrated || !accessToken) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    void (async () => {
+      const pair = await ensureChatKeyPair();
+      if (isCancelled) {
+        return;
+      }
+
+      await upsertMyChatKeyRequest({
+        algorithm: pair.algorithm,
+        public_key_jwk: pair.publicKeyJwk,
+      });
+    })().catch(() => {
+      // Silent bootstrap: chat key provisioning should not break app startup.
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [accessToken, isHydrated]);
+
+  return null;
+}
+
+function PresenceRealtimeBootstrap() {
+  const queryClient = useQueryClient();
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
+
+  usePresenceRealtime(
+    (event) => {
+      if (event.type !== "presence_updated") {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["chat", "contacts"] });
+      void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+      void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
+    {
+      enabled: isHydrated && Boolean(accessToken),
+    },
+  );
+
+  if (!isHydrated || !accessToken) {
+    return null;
+  }
+
+  return null;
+}
+
 export function AppProviders({ children }: AppProvidersProps) {
   const queryClient = useMemo(() => appQueryClient, []);
 
@@ -241,6 +303,8 @@ export function AppProviders({ children }: AppProvidersProps) {
         }}
       >
         <AuthSessionBootstrap />
+        <ChatKeyBootstrap />
+        <PresenceRealtimeBootstrap />
         {children}
       </BrowserRouter>
     </QueryClientProvider>

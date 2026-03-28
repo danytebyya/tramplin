@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -7,6 +8,7 @@ import anyio
 from src.enums import UserRole
 from src.models import ChatConversation, ChatConversationReadState, ChatMessage, EmployerMembership, User
 from src.realtime.chat_hub import chat_hub
+from src.realtime.presence_hub import presence_hub
 from src.repositories.chat_repository import ChatRepository
 from src.schemas.chat import (
     ChatContactListResponse,
@@ -24,6 +26,8 @@ from src.schemas.chat import (
     ChatUserKeyUpsertRequest,
 )
 from src.utils.errors import AppError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -70,7 +74,8 @@ class ChatService:
                         company_name=employer.display_name,
                         employer_id=str(employer.id),
                         public_key_jwk=key.public_key_jwk if key else None,
-                        is_online=chat_hub.is_user_online(user.id),
+                        is_online=presence_hub.is_user_online(user.id),
+                        last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
                         has_conversation=conversation is not None,
                         conversation_id=str(conversation.id) if conversation else None,
                     )
@@ -84,7 +89,8 @@ class ChatService:
                 display_name=profile.full_name if profile and profile.full_name else user.display_name,
                 employer_id=scope.employer_id,
                 public_key_jwk=key.public_key_jwk if key else None,
-                is_online=chat_hub.is_user_online(user.id),
+                is_online=presence_hub.is_user_online(user.id),
+                last_seen_at=user.last_seen_at.isoformat() if user.last_seen_at else None,
                 has_conversation=conversation is not None,
                 conversation_id=str(conversation.id) if conversation else None,
             )
@@ -113,6 +119,14 @@ class ChatService:
         access_payload: dict | None = None,
     ) -> ChatConversationCreateResponse:
         scope = self._resolve_scope(current_user=current_user, access_payload=access_payload)
+        logger.info(
+            "chat.create_conversation.started user_id=%s role=%s employer_id=%s applicant_user_id=%s employer_user_id=%s",
+            current_user.id,
+            scope.profile_role,
+            scope.employer_id,
+            payload.applicant_user_id,
+            payload.employer_user_id,
+        )
 
         if scope.profile_role == UserRole.APPLICANT.value:
             if payload.employer_user_id is None or payload.employer_id is None:
@@ -153,6 +167,14 @@ class ChatService:
                 created_by_user_id=str(current_user.id),
             )
         self.db.commit()
+        logger.info(
+            "chat.create_conversation.succeeded user_id=%s conversation_id=%s applicant_user_id=%s employer_user_id=%s employer_id=%s",
+            current_user.id,
+            conversation.id,
+            applicant_user_id,
+            employer_user_id,
+            employer_id,
+        )
 
         row = self._load_conversation_row(conversation_id=str(conversation.id), current_user=current_user, scope=scope)
         return ChatConversationCreateResponse(
@@ -182,6 +204,15 @@ class ChatService:
     ) -> ChatMessageRead:
         scope = self._resolve_scope(current_user=current_user, access_payload=access_payload)
         conversation = self._ensure_conversation_access(payload.conversation_id, current_user, scope)
+        logger.info(
+            "chat.send_message.started user_id=%s conversation_id=%s role=%s ciphertext_len=%s iv_len=%s salt_len=%s",
+            current_user.id,
+            payload.conversation_id,
+            scope.profile_role,
+            len(payload.ciphertext),
+            len(payload.iv),
+            len(payload.salt),
+        )
 
         message = self.repo.create_message(
             conversation_id=payload.conversation_id,
@@ -197,6 +228,13 @@ class ChatService:
         own_read_state.last_read_at = message.created_at
         self.db.add(own_read_state)
         self.db.commit()
+        logger.info(
+            "chat.send_message.succeeded user_id=%s conversation_id=%s message_id=%s created_at=%s",
+            current_user.id,
+            payload.conversation_id,
+            message.id,
+            message.created_at.isoformat(),
+        )
 
         message_read = self._map_message(conversation=conversation, current_user=current_user, message=message)
         event = {
@@ -294,7 +332,8 @@ class ChatService:
                 company_name=employer.display_name,
                 company_id=str(employer.id),
                 public_key_jwk=key.public_key_jwk if key else None,
-                is_online=chat_hub.is_user_online(employer_user.id),
+                is_online=presence_hub.is_user_online(employer_user.id),
+                last_seen_at=employer_user.last_seen_at.isoformat() if employer_user.last_seen_at else None,
             )
         else:
             applicant_user = row[1]
@@ -305,7 +344,8 @@ class ChatService:
                 display_name=applicant_profile.full_name if applicant_profile and applicant_profile.full_name else applicant_user.display_name,
                 role=applicant_user.role.value,
                 public_key_jwk=key.public_key_jwk if key else None,
-                is_online=chat_hub.is_user_online(applicant_user.id),
+                is_online=presence_hub.is_user_online(applicant_user.id),
+                last_seen_at=applicant_user.last_seen_at.isoformat() if applicant_user.last_seen_at else None,
             )
 
         messages = self.repo.list_messages(str(conversation.id))

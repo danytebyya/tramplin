@@ -38,3 +38,47 @@ export function EmployerHeaderNavigation({ currentPage }: EmployerHeaderNavigati
     </nav>
   );
 }
+
+type CuratorHeaderNavigationProps = {
+  isAdmin?: boolean;
+  currentPage: "dashboard" | "employers" | "content" | "curators" | "settings";
+};
+
+export function CuratorHeaderNavigation({ isAdmin = false, currentPage }: CuratorHeaderNavigationProps) {
+  return (
+    <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
+      <NavLink
+        to="/dashboard/curator"
+        className={currentPage === "dashboard" ? "header__category-link active" : "header__category-link"}
+      >
+        Дашборд
+      </NavLink>
+      <NavLink
+        to="/moderation/employers"
+        className={currentPage === "employers" ? "header__category-link active" : "header__category-link"}
+      >
+        Верификация работодателей
+      </NavLink>
+      <NavLink
+        to="/moderation/content"
+        className={currentPage === "content" ? "header__category-link active" : "header__category-link"}
+      >
+        Модерация контента
+      </NavLink>
+      {isAdmin ? (
+        <NavLink
+          to="/moderation/curators"
+          className={currentPage === "curators" ? "header__category-link active" : "header__category-link"}
+        >
+          Управление кураторами
+        </NavLink>
+      ) : null}
+      <NavLink
+        to="/settings"
+        className={currentPage === "settings" ? "header__category-link active" : "header__category-link"}
+      >
+        Настройки
+      </NavLink>
+    </nav>
+  );
+}

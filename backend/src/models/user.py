@@ -1,4 +1,6 @@
-from sqlalchemy import Enum, Index, String, func
+from datetime import datetime
+
+from sqlalchemy import DateTime, Enum, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -25,6 +27,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         default=UserStatus.ACTIVE,
         nullable=False,
     )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     __table_args__ = (
         Index("uq_users_email_lower", func.lower(email), unique=True),
     )

@@ -42,7 +42,16 @@ class OpportunityService:
         employer, membership = self._resolve_employer_access(current_user=current_user, access_payload=access_payload)
         self._ensure_manage_opportunities_allowed(membership)
         opportunities = self.repo.list_by_employer_id(str(employer.id))
-        return [self._serialize_employer_opportunity(opportunity) for opportunity in opportunities]
+        response_counts = self.repo.count_active_applications_by_opportunity_ids(
+            [str(opportunity.id) for opportunity in opportunities]
+        )
+        return [
+            self._serialize_employer_opportunity(
+                opportunity,
+                responses_count=response_counts.get(str(opportunity.id), 0),
+            )
+            for opportunity in opportunities
+        ]
 
     def create_employer_item(
         self,
@@ -194,9 +203,15 @@ class OpportunityService:
             "accent": self._accent_value(kind, index),
             "business_status": self._resolve_public_business_status(opportunity).value,
             "moderation_status": opportunity.moderation_status.value,
+            "responses_count": 0,
         }
 
-    def _serialize_employer_opportunity(self, opportunity: Opportunity) -> EmployerOpportunityRead:
+    def _serialize_employer_opportunity(
+        self,
+        opportunity: Opportunity,
+        *,
+        responses_count: int = 0,
+    ) -> EmployerOpportunityRead:
         location = opportunity.location
         tags = [link.tag.name for link in opportunity.tag_links if link.tag is not None]
         opportunity_type = self._kind_value(opportunity.opportunity_type)
@@ -236,7 +251,7 @@ class OpportunityService:
             planned_publish_at=starts_at.isoformat() if starts_at is not None else None,
             latitude=float(location.latitude or Decimal("56.130000")) if location is not None else 56.13,
             longitude=float(location.longitude or Decimal("47.250000")) if location is not None else 47.25,
-            responses_count=0,
+            responses_count=responses_count,
             event_type=event_type,
             mentorship_direction=mentorship_direction,
             mentor_experience=self._level_label(opportunity.level) if opportunity.opportunity_type == OpportunityType.MENTORSHIP_PROGRAM else None,

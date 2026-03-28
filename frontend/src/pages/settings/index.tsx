@@ -53,7 +53,7 @@ import {
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Modal, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
+import { buildEmployerProfileMenuItems, buildModerationProfileMenuItems, CuratorHeaderNavigation, Header } from "../../widgets/header";
 import "../../widgets/header/header.css";
 import "./settings.css";
 
@@ -213,7 +213,7 @@ function resolveThemeRole(role: string | null) {
 }
 
 function resolveActionVariant(role: string | null) {
-  if (role === "employer") {
+  if (role === null || role === "employer") {
     return "primary" as const;
   }
 
@@ -225,7 +225,7 @@ function resolveActionVariant(role: string | null) {
 }
 
 function resolveOutlineVariant(role: string | null) {
-  if (role === "employer") {
+  if (role === null || role === "employer") {
     return "primary-outline" as const;
   }
 
@@ -237,7 +237,7 @@ function resolveOutlineVariant(role: string | null) {
 }
 
 function resolveModalTitleAccentColor(role: string | null) {
-  if (role === "employer") {
+  if (role === null || role === "employer") {
     return "var(--color-primary)";
   }
 
@@ -249,7 +249,7 @@ function resolveModalTitleAccentColor(role: string | null) {
 }
 
 function resolveCheckboxVariant(role: string | null) {
-  if (role === "employer") {
+  if (role === null || role === "employer") {
     return "primary" as const;
   }
 
@@ -986,6 +986,7 @@ export function SettingsPage() {
         isCurrent: session.is_current,
       }));
   }, [sessionsQuery.data]);
+  const hasOtherSessions = useMemo(() => sessionItems.some((session) => !session.isCurrent), [sessionItems]);
 
   const isSessionActionPending =
     revokeSessionMutation.isPending ||
@@ -1222,10 +1223,7 @@ export function SettingsPage() {
   ].join(" ");
 
   const profileMenuItems = isModerationRole
-    ? [
-        { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
-        { label: "Выход", isDanger: true, onClick: handleLogout },
-      ]
+    ? buildModerationProfileMenuItems()
     : role === "employer"
       ? buildEmployerProfileMenuItems(navigate)
       : [
@@ -1407,7 +1405,13 @@ export function SettingsPage() {
           <h3 className="settings-page__panel-title">Активные сессии</h3>
         </div>
         <div className="settings-page__panel-body settings-page__panel-body--sessions">
-          <div className="settings-page__sessions-layout">
+          <div
+            className={
+              hasOtherSessions
+                ? "settings-page__sessions-layout"
+                : "settings-page__sessions-layout settings-page__sessions-layout--without-footer"
+            }
+          >
             <div className="settings-page__session-list">
               {isSessionsLoading
                 ? Array.from({ length: 3 }, (_, index) => (
@@ -1447,18 +1451,20 @@ export function SettingsPage() {
                     </div>
                   ))}
             </div>
-            <div className="settings-page__sessions-footer">
-              <Button
-                type="button"
-                variant={actionVariant}
-                size="md"
-                loading={revokeOtherSessionsMutation.isPending}
-                disabled={isSessionActionPending}
-                onClick={() => revokeOtherSessionsMutation.mutate()}
-              >
-                Завершить все другие сессии
-              </Button>
-            </div>
+            {hasOtherSessions ? (
+              <div className="settings-page__sessions-footer">
+                <Button
+                  type="button"
+                  variant={actionVariant}
+                  size="md"
+                  loading={revokeOtherSessionsMutation.isPending}
+                  disabled={isSessionActionPending}
+                  onClick={() => revokeOtherSessionsMutation.mutate()}
+                >
+                  Завершить все другие сессии
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -2194,7 +2200,13 @@ export function SettingsPage() {
             <h2 className="settings-page__card-title">Активные сессии</h2>
           </div>
           <div className="settings-page__card-body settings-page__card-body--sessions">
-            <div className="settings-page__sessions-layout">
+            <div
+              className={
+                hasOtherSessions
+                  ? "settings-page__sessions-layout"
+                  : "settings-page__sessions-layout settings-page__sessions-layout--without-footer"
+              }
+            >
               <div className="settings-page__session-list">
                 {isSessionsLoading
                   ? Array.from({ length: 3 }, (_, index) => (
@@ -2234,18 +2246,20 @@ export function SettingsPage() {
                       </div>
                     ))}
               </div>
-              <div className="settings-page__sessions-footer">
-                <Button
-                  type="button"
-                  variant={actionVariant}
-                  size="md"
-                  loading={revokeOtherSessionsMutation.isPending}
-                  disabled={isSessionActionPending}
-                  onClick={() => revokeOtherSessionsMutation.mutate()}
-                >
-                  Завершить все другие сессии
-                </Button>
-              </div>
+              {hasOtherSessions ? (
+                <div className="settings-page__sessions-footer">
+                  <Button
+                    type="button"
+                    variant={actionVariant}
+                    size="md"
+                    loading={revokeOtherSessionsMutation.isPending}
+                    disabled={isSessionActionPending}
+                    onClick={() => revokeOtherSessionsMutation.mutate()}
+                  >
+                    Завершить все другие сессии
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
@@ -2378,25 +2392,7 @@ export function SettingsPage() {
         }}
         bottomContent={
           isModerationRole ? (
-            <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
-              <NavLink to="/" end className="header__category-link">
-                Дашборд
-              </NavLink>
-              <NavLink to="/moderation/employers" className="header__category-link">
-                Верификация работодателей
-              </NavLink>
-              <NavLink to="/moderation/content" className="header__category-link">
-                Модерация контента
-              </NavLink>
-              {role === "admin" ? (
-                <NavLink to="/moderation/curators" className="header__category-link">
-                  Управление кураторами
-                </NavLink>
-              ) : null}
-              <NavLink to="/settings" className="header__category-link">
-                Настройки
-              </NavLink>
-            </nav>
+            <CuratorHeaderNavigation isAdmin={role === "admin"} currentPage="settings" />
           ) : undefined
         }
       />

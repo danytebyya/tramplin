@@ -1,5 +1,8 @@
 const CHAT_CRYPTO_STORAGE_KEY = "tramplin.chat.keypair.v1";
 const CHAT_CRYPTO_ALGORITHM = "ECDH_P256";
+const CHAT_PLAINTEXT_PREFIX = "plain:";
+const CHAT_PLAINTEXT_IV = "plain-iv-000";
+const CHAT_PLAINTEXT_SALT = "plain-salt-000";
 
 type StoredKeyPair = {
   algorithm: string;
@@ -128,9 +131,17 @@ export async function ensureChatKeyPair() {
 export async function encryptChatMessage(params: {
   plaintext: string;
   ownPrivateKeyJwk: JsonWebKey;
-  counterpartPublicKeyJwk: JsonWebKey;
+  counterpartPublicKeyJwk?: JsonWebKey | null;
   conversationId: string;
 }) {
+  if (!params.counterpartPublicKeyJwk) {
+    return {
+      ciphertext: `${CHAT_PLAINTEXT_PREFIX}${encodeBase64(encodeText(params.plaintext))}`,
+      iv: CHAT_PLAINTEXT_IV,
+      salt: CHAT_PLAINTEXT_SALT,
+    };
+  }
+
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveEncryptionKey(
@@ -159,9 +170,17 @@ export async function decryptChatMessage(params: {
   iv: string;
   salt: string;
   ownPrivateKeyJwk: JsonWebKey;
-  counterpartPublicKeyJwk: JsonWebKey;
+  counterpartPublicKeyJwk?: JsonWebKey | null;
   conversationId: string;
 }) {
+  if (params.ciphertext.startsWith(CHAT_PLAINTEXT_PREFIX)) {
+    return new TextDecoder().decode(decodeBase64(params.ciphertext.slice(CHAT_PLAINTEXT_PREFIX.length)));
+  }
+
+  if (!params.counterpartPublicKeyJwk) {
+    throw new Error("Missing counterpart key");
+  }
+
   const key = await deriveEncryptionKey(
     params.ownPrivateKeyJwk,
     params.counterpartPublicKeyJwk,

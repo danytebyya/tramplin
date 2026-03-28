@@ -402,6 +402,8 @@
 .settings-page--curator .notification-menu,
 .settings-page--admin .notification-menu,
 .curator-dashboard-page .notification-menu,
+.curator-management-page .notification-menu,
+.content-moderation-page .notification-menu,
 .employer-verification-page .notification-menu {
   --notification-menu-primary: var(--color-accent);
   --notification-menu-light: var(--color-accent-light);
@@ -409,26 +411,38 @@
   --notification-menu-accent: var(--color-accent-active);
 }
 
-.curator-dashboard-page {
+.curator-dashboard-page,
+.curator-management-page,
+.content-moderation-page {
   --notification-menu-primary: var(--color-accent);
   --notification-menu-light: var(--color-accent-light);
   --notification-menu-secondary: var(--color-accent-hover);
   --notification-menu-accent: var(--color-accent-active);
 }
 
-.curator-dashboard-page .notification-menu__badge {
+.curator-dashboard-page .notification-menu__badge,
+.curator-management-page .notification-menu__badge,
+.content-moderation-page .notification-menu__badge {
   background: var(--notification-menu-light);
   border-color: var(--color-bg-primary);
   color: var(--notification-menu-secondary);
 }
 
-.curator-dashboard-page .notification-menu__button .notification-menu__badge {
+.curator-dashboard-page .notification-menu__button .notification-menu__badge,
+.curator-management-page .notification-menu__button .notification-menu__badge,
+.content-moderation-page .notification-menu__button .notification-menu__badge {
   background: var(--notification-menu-light);
 }
 
 .curator-dashboard-page .notification-menu__button:hover .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button:focus-visible .notification-menu__badge,
-.curator-dashboard-page .notification-menu__button:active .notification-menu__badge {
+.curator-dashboard-page .notification-menu__button:active .notification-menu__badge,
+.curator-management-page .notification-menu__button:hover .notification-menu__badge,
+.curator-management-page .notification-menu__button:focus-visible .notification-menu__badge,
+.curator-management-page .notification-menu__button:active .notification-menu__badge,
+.content-moderation-page .notification-menu__button:hover .notification-menu__badge,
+.content-moderation-page .notification-menu__button:focus-visible .notification-menu__badge,
+.content-moderation-page .notification-menu__button:active .notification-menu__badge {
   background: var(--notification-menu-light);
 }
 

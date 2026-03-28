@@ -31,6 +31,11 @@ class CuratorProfileRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserPresenceRead(BaseModel):
+    is_online: bool = False
+    last_seen_at: datetime | None = None
+
+
 class UserRead(BaseModel):
     id: UUID
     email: EmailStr
@@ -39,6 +44,7 @@ class UserRead(BaseModel):
     role: UserRole
     status: UserStatus
     created_at: datetime
+    presence: UserPresenceRead
     applicant_profile: ApplicantProfileRead | None = None
     employer_profile: EmployerProfileRead | None = None
     curator_profile: CuratorProfileRead | None = None

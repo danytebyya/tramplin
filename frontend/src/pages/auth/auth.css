@@ -67,6 +67,15 @@ body:has(.auth-page)::-webkit-scrollbar {
 }
 
 .auth-page__brand-stage {
+  --wave-aura-primary-rgb: 37, 99, 235;
+  --wave-aura-primary-soft-rgb: 129, 188, 255;
+  --wave-aura-primary-softest-rgb: 219, 234, 254;
+  --wave-aura-secondary-rgb: 59, 130, 246;
+  --wave-aura-secondary-soft-rgb: 147, 223, 255;
+  --wave-aura-secondary-softest-rgb: 239, 246, 255;
+  --wave-aura-orb-opacity: 1;
+  --wave-aura-orb-width: calc(34rem + 40px);
+  --wave-aura-orb-height: calc(23.5rem + 40px);
   position: relative;
   display: flex;
   align-items: center;
@@ -75,16 +84,32 @@ body:has(.auth-page)::-webkit-scrollbar {
   min-height: calc(100vh - 96px);
 }
 
+.auth-page__brand-stage .wave-aura__orb {
+  filter: blur(18px) saturate(152%) brightness(1.06);
+  opacity: 1;
+}
+
+.auth-page__brand-stage .wave-aura__streaks {
+  filter: saturate(144%) brightness(1.08);
+}
+
+.auth-page__brand-stage .wave-aura__streak::before {
+  box-shadow: 0 0 1.7rem rgba(var(--wave-aura-dominant-soft-rgb), 0.22);
+}
+
+.auth-page__brand-stage .wave-aura__streak::after {
+  box-shadow: 0 0 1.9rem rgba(var(--wave-aura-accent-soft-rgb), 0.24);
+}
+
 .auth-page__brand {
   position: relative;
   z-index: 1;
-  text-align: center;
-  color: var(--color-text-primary);
-  font-size: 72px;
-  line-height: 72px;
-  font-weight: 400;
-  letter-spacing: -0.04em;
-  text-shadow: 0 14px 36px rgba(255, 255, 255, 0.42);
+  display: block;
+  width: min(340px, 84vw);
+  max-width: min(340px, 84vw);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 44px rgba(37, 99, 235, 0.28));
 }
 
 .auth-page__panel {

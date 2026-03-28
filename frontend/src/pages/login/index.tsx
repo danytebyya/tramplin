@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
+import logoPrimary from "../../assets/icons/logo-primary.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
   applyAuthSession,
@@ -48,6 +49,7 @@ export function LoginPage() {
   const searchParams = new URLSearchParams(location.search);
   const returnTo = searchParams.get("returnTo") ?? readCompanyInviteReturnTo();
   const isCompanyInviteLogin = isCompanyInviteReturnTo(returnTo);
+  const brandLogo = logoPrimary;
 
   const {
     register,
@@ -84,13 +86,13 @@ export function LoginPage() {
   };
 
   return (
-    <main className={isCompanyInviteLogin ? "auth-page login-page" : "auth-page auth-page--secondary-theme login-page"}>
+    <main className="auth-page login-page">
       <Container className="auth-page__content" variant="auth-page">
         <section className="auth-page__hero">
           <div className="auth-page__hero-content login-page__hero-content">
             <div className="auth-page__brand-stage">
-              <WaveAuraBackground variant={isCompanyInviteLogin ? "primary" : "secondary"} />
-              <span className="auth-page__brand">Трамплин</span>
+              <WaveAuraBackground variant="primary" withInteractionOrb />
+              <img src={brandLogo} alt="Трамплин" className="auth-page__brand" />
             </div>
           </div>
         </section>
@@ -114,7 +116,6 @@ export function LoginPage() {
                       autoComplete="email"
                       error={errors.email?.message}
                       clearable
-                      className={isCompanyInviteLogin ? undefined : "input--secondary"}
                       {...register("email")}
                     />
                     {errors.email && <span className="auth-form__error">{errors.email.message}</span>}
@@ -128,7 +129,6 @@ export function LoginPage() {
                       autoComplete="current-password"
                       error={errors.password?.message}
                       clearable
-                      className={isCompanyInviteLogin ? undefined : "input--secondary"}
                       {...register("password")}
                     />
                     {errors.password && <span className="auth-form__error">{errors.password.message}</span>}
@@ -138,7 +138,7 @@ export function LoginPage() {
                 </div>
 
                 <div className="login-page__actions">
-                  <Button type="submit" variant={isCompanyInviteLogin ? "primary" : "secondary"} fullWidth loading={loginMutation.isPending}>
+                  <Button type="submit" variant="primary" fullWidth loading={loginMutation.isPending}>
                     Войти
                   </Button>
                 </div>

@@ -3,11 +3,10 @@
     linear-gradient(
       90deg,
       var(--color-bg-primary) 0%,
-      var(--color-secondary) 9%,
-      var(--color-primary) 21%,
-      #2EB7DD 49%,
-      #07B3D5 68%,
-      #A4BDF3 100%
+      var(--color-secondary) 13%,
+      var(--color-primary) 37%,
+      #487CEE 74%,
+      #ACE7F1 100%
     );
 }
 
@@ -82,15 +81,11 @@
 }
 
 .header__logo-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 9px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #475569;
-  font-size: var(--type-body-small-size);
-  line-height: var(--type-body-small-line);
+  display: block;
+  width: 137px;
+  height: 56px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .header__nav {
@@ -263,12 +258,6 @@
   width: 328px;
 }
 
-.header__profile-dropdown--extended-menu {
-  width: 388px;
-  padding: 14px 0;
-  border-radius: 14px;
-}
-
 .header__profile-dropdown::before {
   content: "";
   position: absolute;
@@ -323,12 +312,6 @@
   background: rgba(239, 68, 68, 0.14);
 }
 
-.header__profile-dropdown--extended-menu .header__profile-dropdown-item {
-  padding: 18px 34px;
-  font-size: 21px;
-  line-height: 29px;
-  font-weight: 400;
-}
 
 .header__profile-contexts {
   display: flex;
@@ -392,20 +375,15 @@
 
 .header__profile-context-card--static {
   cursor: default;
+  transition: none;
 }
 
 .header__profile-context-card--static:hover,
 .header__profile-context-card--static:focus-visible,
 .header__profile-context-card--static:disabled {
-  border-color: rgba(226, 232, 240, 0.96);
+  border-color: transparent;
   background: var(--color-bg-primary);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-}
-
-.header__profile-context-card--static.header__profile-context-card--active:hover,
-.header__profile-context-card--static.header__profile-context-card--active:focus-visible,
-.header__profile-context-card--static.header__profile-context-card--active:disabled {
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
 }
 
 .header__profile-context-card--static.header__profile-context-card--active-employer:hover,

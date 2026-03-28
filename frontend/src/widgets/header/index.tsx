@@ -2,9 +2,12 @@ import { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { CitySelection, CitySelector } from "../../features/city-selector";
+import { useAuthStore } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
 import { cn } from "../../shared/lib";
 import { Container, Input } from "../../shared/ui";
+import logoPrimary from "../../assets/icons/logo-primary.svg";
+import logoSecondary from "../../assets/icons/logo-secondary.svg";
 import { HeaderProfileMenu, HeaderProfileMenuItem } from "./header-profile-menu";
 import "./header.css";
 
@@ -33,20 +36,26 @@ export function Header({
   showSearch = true,
   notificationOnRealtimeMessage,
 }: HeaderProps) {
+  const role = useAuthStore((state) => state.role);
   const resolvedTopNavigation = topNavigation === undefined ? (
     <nav className="header__nav" aria-label="Основная навигация">
       <a href="/" className="header__nav-link">Главная</a>
       <a href="/#about" className="header__nav-link">О проекте</a>
     </nav>
   ) : topNavigation;
+  const logoSource =
+    !isAuthenticated || role === "employer" || role === "curator" || role === "junior" || role === "admin"
+      ? logoPrimary
+      : logoSecondary;
 
   return (
     <header className="header">
       <div className="header__top">
         <Container className={cn(containerClassName, "header__top-container")}>
           <div className="header__brand">
-            <Link to="/" className="header__brand-name">Трамплин</Link>
-            <div className="header__logo-badge">Лого</div>
+            <Link to="/" className="header__brand-name" aria-label="Трамплин">
+              <img src={logoSource} alt="" aria-hidden="true" className="header__logo-badge" />
+            </Link>
           </div>
 
           <div className="header__main">
@@ -112,3 +121,5 @@ export function Header({
 }
 
 export { buildEmployerProfileMenuItems } from "./profile-menu-items";
+export { buildModerationProfileMenuItems } from "./profile-menu-items";
+export { CuratorHeaderNavigation } from "./header-navigation";
