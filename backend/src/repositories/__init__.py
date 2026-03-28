@@ -4,6 +4,7 @@ from src.repositories.favorite_repository import FavoriteRepository
 from src.repositories.moderation_repository import ModerationRepository
 from src.repositories.notification_repository import NotificationRepository
 from src.repositories.opportunity_repository import OpportunityRepository
+from src.repositories.tag_repository import TagRepository
 from src.repositories.user_repository import UserRepository
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "ModerationRepository",
     "NotificationRepository",
     "OpportunityRepository",
+    "TagRepository",
 ]

@@ -8,6 +8,7 @@ from src.services.moderation_service import ModerationService
 from src.services.notification_service import NotificationService
 from src.services.opportunity_service import OpportunityService
 from src.services.rate_limit_service import rate_limit_service
+from src.services.tag_service import TagService
 from src.services.user_service import UserService
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "ModerationService",
     "NotificationService",
     "OpportunityService",
+    "TagService",
     "UserService",
     "send_email",
     "rate_limit_service",

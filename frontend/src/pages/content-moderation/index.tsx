@@ -16,6 +16,13 @@ import {
   rejectContentModerationItemRequest,
   requestContentModerationChangesRequest,
 } from "../../features/moderation";
+import {
+  isWorkflowOpportunityId,
+  listWorkflowOpportunities,
+  reviewWorkflowOpportunity,
+  subscribeOpportunityWorkflow,
+  toModerationOpportunityItem,
+} from "../../features/opportunity-workflow";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { Header } from "../../widgets/header";
@@ -164,6 +171,7 @@ export function ContentModerationPage() {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [moderatorComment, setModeratorComment] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [workflowRevision, setWorkflowRevision] = useState(0);
 
   useQuery({
     queryKey: ["auth", "me"],
@@ -189,6 +197,12 @@ export function ContentModerationPage() {
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
+
+  useEffect(() => {
+    return subscribeOpportunityWorkflow(() => {
+      setWorkflowRevision((current) => current + 1);
+    });
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -287,7 +301,11 @@ export function ContentModerationPage() {
       return { previousData };
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["moderation", "dashboard"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["moderation", "dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["opportunities", "feed"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+      ]);
     },
     onError: (
       error: unknown,
@@ -302,20 +320,38 @@ export function ContentModerationPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ itemId, comment }: { itemId: string; comment: string }) =>
-      approveContentModerationItemRequest(itemId, { moderator_comment: comment || null }),
+    mutationFn: async ({ itemId, comment }: { itemId: string; comment: string }) => {
+      if (isWorkflowOpportunityId(itemId)) {
+        reviewWorkflowOpportunity(itemId, "approve", comment || null);
+        return;
+      }
+
+      await approveContentModerationItemRequest(itemId, { moderator_comment: comment || null });
+    },
     ...createReviewMutationHandlers("approved"),
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({ itemId, comment }: { itemId: string; comment: string }) =>
-      rejectContentModerationItemRequest(itemId, { moderator_comment: comment || null }),
+    mutationFn: async ({ itemId, comment }: { itemId: string; comment: string }) => {
+      if (isWorkflowOpportunityId(itemId)) {
+        reviewWorkflowOpportunity(itemId, "reject", comment || null);
+        return;
+      }
+
+      await rejectContentModerationItemRequest(itemId, { moderator_comment: comment || null });
+    },
     ...createReviewMutationHandlers("rejected"),
   });
 
   const requestChangesMutation = useMutation({
-    mutationFn: ({ itemId, comment }: { itemId: string; comment: string }) =>
-      requestContentModerationChangesRequest(itemId, { moderator_comment: comment || null }),
+    mutationFn: async ({ itemId, comment }: { itemId: string; comment: string }) => {
+      if (isWorkflowOpportunityId(itemId)) {
+        reviewWorkflowOpportunity(itemId, "request_changes", comment || null);
+        return;
+      }
+
+      await requestContentModerationChangesRequest(itemId, { moderator_comment: comment || null });
+    },
     ...createReviewMutationHandlers("changes_requested"),
   });
 
@@ -328,16 +364,28 @@ export function ContentModerationPage() {
       itemIds: string[];
     }) => {
       if (action === "request-changes") {
-        await Promise.all(itemIds.map((itemId) => requestContentModerationChangesRequest(itemId, { moderator_comment: null })));
+        await Promise.all(itemIds.map((itemId) =>
+          isWorkflowOpportunityId(itemId)
+            ? Promise.resolve(reviewWorkflowOpportunity(itemId, "request_changes", null))
+            : requestContentModerationChangesRequest(itemId, { moderator_comment: null }),
+        ));
         return;
       }
 
       if (action === "reject") {
-        await Promise.all(itemIds.map((itemId) => rejectContentModerationItemRequest(itemId, { moderator_comment: null })));
+        await Promise.all(itemIds.map((itemId) =>
+          isWorkflowOpportunityId(itemId)
+            ? Promise.resolve(reviewWorkflowOpportunity(itemId, "reject", null))
+            : rejectContentModerationItemRequest(itemId, { moderator_comment: null }),
+        ));
         return;
       }
 
-      await Promise.all(itemIds.map((itemId) => approveContentModerationItemRequest(itemId, { moderator_comment: null })));
+      await Promise.all(itemIds.map((itemId) =>
+        isWorkflowOpportunityId(itemId)
+          ? Promise.resolve(reviewWorkflowOpportunity(itemId, "approve", null))
+          : approveContentModerationItemRequest(itemId, { moderator_comment: null }),
+      ));
     },
     onMutate: async ({
       action,
@@ -357,7 +405,11 @@ export function ContentModerationPage() {
       return { previousData };
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["moderation", "dashboard"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["moderation", "dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["opportunities", "feed"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+      ]);
     },
     onError: (
       error,
@@ -371,7 +423,34 @@ export function ContentModerationPage() {
     },
   });
 
-  const items = contentQuery.data?.data?.items ?? [];
+  const workflowItems = useMemo(
+    () =>
+      listWorkflowOpportunities()
+        .map((item) => toModerationOpportunityItem(item))
+        .filter((item) => {
+          const matchesSearch = !appliedSearch.trim()
+            || [
+              item.title,
+              item.company_name,
+              item.author_email ?? "",
+              item.salary_label,
+              item.description,
+              ...item.tags,
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(appliedSearch.trim().toLowerCase());
+          const matchesKind = selectedTab === "all" || item.kind === selectedTab;
+          const matchesStatus = appliedStatuses.includes("all") || appliedStatuses.includes(item.status);
+
+          return matchesSearch && matchesKind && matchesStatus;
+        }),
+    [appliedSearch, appliedStatuses, selectedTab, workflowRevision],
+  );
+  const items = useMemo(
+    () => [...workflowItems, ...(contentQuery.data?.data?.items ?? [])],
+    [contentQuery.data?.data?.items, workflowItems],
+  );
   const sortedItems = useMemo(() => {
     return [...items].sort((left, right) => {
       if (appliedSortField === "alphabet") {
@@ -385,7 +464,7 @@ export function ContentModerationPage() {
     });
   }, [appliedSortDirection, appliedSortField, items]);
 
-  const total = contentQuery.data?.data?.total ?? 0;
+  const total = items.length;
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
   const pageNumbers = buildPageNumbers(page, totalPages);
   const allRowsSelected = sortedItems.length > 0 && selectedIds.length === sortedItems.length;
@@ -396,8 +475,37 @@ export function ContentModerationPage() {
     requestChangesMutation.isPending ||
     bulkActionMutation.isPending;
   const isTableLoading = contentQuery.isPending;
-  const counts = contentQuery.data?.data?.counts;
-  const metrics = contentQuery.data?.data?.metrics;
+  const counts = useMemo(() => {
+    const serverCounts = contentQuery.data?.data?.counts;
+    const localCounts = {
+      all: workflowItems.length,
+      vacancies: workflowItems.filter((item) => item.kind === "vacancy").length,
+      internships: workflowItems.filter((item) => item.kind === "internship").length,
+      events: workflowItems.filter((item) => item.kind === "event").length,
+      mentorships: workflowItems.filter((item) => item.kind === "mentorship").length,
+    };
+
+    return {
+      all: (serverCounts?.all ?? 0) + localCounts.all,
+      vacancies: (serverCounts?.vacancies ?? 0) + localCounts.vacancies,
+      internships: (serverCounts?.internships ?? 0) + localCounts.internships,
+      events: (serverCounts?.events ?? 0) + localCounts.events,
+      mentorships: (serverCounts?.mentorships ?? 0) + localCounts.mentorships,
+    };
+  }, [contentQuery.data?.data?.counts, workflowItems]);
+  const metrics = useMemo(() => {
+    const serverMetrics = contentQuery.data?.data?.metrics;
+    return {
+      total_on_moderation: (serverMetrics?.total_on_moderation ?? 0) + workflowItems.length,
+      in_queue:
+        (serverMetrics?.in_queue ?? 0) +
+        workflowItems.filter((item) => item.status === "pending_review").length,
+      reviewed_today:
+        (serverMetrics?.reviewed_today ?? 0) +
+        workflowItems.filter((item) => item.status === "approved" || item.status === "rejected").length,
+      overdue: serverMetrics?.overdue ?? 0,
+    };
+  }, [contentQuery.data?.data?.metrics, workflowItems]);
 
   if (!isModerationRole) {
     return <Navigate to="/" replace />;

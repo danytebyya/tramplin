@@ -15,6 +15,7 @@ import "./map-view.css";
 type MapViewProps = {
   opportunities: Opportunity[];
   favoriteOpportunityIds: string[];
+  appliedOpportunityIds?: string[];
   selectedOpportunityId: string | null;
   selectedCity: string;
   selectedCityViewport?: {
@@ -29,6 +30,7 @@ type MapViewProps = {
   onSelectCity: (city: string) => void;
   onCloseDetails: () => void;
   onToggleExpand: () => void;
+  onApply?: (opportunityId: string) => void;
 };
 
 const mapCenter = [47.2512, 56.1287];
@@ -230,6 +232,7 @@ function applyViewport(
 export function MapView({
   opportunities,
   favoriteOpportunityIds,
+  appliedOpportunityIds = [],
   selectedOpportunityId,
   selectedCity,
   selectedCityViewport,
@@ -241,6 +244,7 @@ export function MapView({
   onSelectCity,
   onCloseDetails,
   onToggleExpand,
+  onApply,
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<Map | null>(null);
@@ -283,6 +287,9 @@ export function MapView({
   );
   const isSelectedOpportunityFavorite = selectedOpportunity
     ? favoriteOpportunityIds.includes(selectedOpportunity.id)
+    : false;
+  const isSelectedOpportunityApplied = selectedOpportunity
+    ? appliedOpportunityIds.includes(selectedOpportunity.id)
     : false;
 
   useEffect(() => {
@@ -786,8 +793,10 @@ export function MapView({
                 variant="secondary"
                 size="sm"
                 className="map-view__details-apply"
+                disabled={roleName !== "employer" && isSelectedOpportunityApplied}
+                onClick={() => onApply?.(selectedOpportunity.id)}
               >
-                Откликнуться
+                {roleName !== "employer" && isSelectedOpportunityApplied ? "Отклик отправлен" : "Откликнуться"}
               </Button>
               <button
                 type="button"

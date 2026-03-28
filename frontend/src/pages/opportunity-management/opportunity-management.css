@@ -407,6 +407,29 @@
   gap: 6px;
 }
 
+.opportunity-management-page__tags-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px dashed rgba(30, 64, 175, 0.24);
+  border-radius: 999px;
+  background: rgba(219, 234, 254, 0.55);
+  color: var(--color-primary);
+  font-size: var(--type-caption-size);
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.opportunity-management-page__tags-more:hover,
+.opportunity-management-page__tags-more:focus-visible {
+  border-color: rgba(30, 64, 175, 0.4);
+  background: rgba(219, 234, 254, 0.9);
+}
+
 .opportunity-management-page__details {
   display: flex;
   flex-direction: column;
@@ -609,6 +632,7 @@
 }
 
 .opportunity-management-page__modal-input.input,
+.opportunity-management-page__modal-date-input,
 .opportunity-management-page__modal-textarea,
 .opportunity-management-page__modal-field .select {
   width: 100%;
@@ -699,7 +723,7 @@
 .opportunity-management-page__modal-radio-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 16px;
 }
 
 .opportunity-management-page__modal-radio-option {
@@ -941,11 +965,22 @@
   background-color: var(--color-text-primary);
 }
 
-.opportunity-management-page__modal-tag-suggestions,
-.opportunity-management-page__modal-tags {
+.opportunity-management-page__modal-tag-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.opportunity-management-page__modal-tag-suggestions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.opportunity-management-page__modal-tag-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .opportunity-management-page__modal-tag-chip {
@@ -969,6 +1004,18 @@
   color: var(--color-primary);
 }
 
+.opportunity-management-page__modal-tag-chip--more {
+  border: 1px dashed rgba(30, 64, 175, 0.28);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--color-primary);
+}
+
+.opportunity-management-page__modal-tag-empty {
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
 .opportunity-management-page__modal-note {
   display: flex;
   flex-direction: column;
@@ -979,16 +1026,16 @@
 .opportunity-management-page__modal-note-text {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--type-body-regular-size);
-  line-height: var(--type-body-regular-line);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .opportunity-management-page__modal-note-list {
   margin: 0;
   padding-left: 20px;
   color: var(--color-text-primary);
-  font-size: var(--type-body-regular-size);
-  line-height: var(--type-body-regular-line);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .opportunity-management-page__modal-actions {

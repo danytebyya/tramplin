@@ -1,5 +1,6 @@
 export { Button } from "./button/button";
 export { Input } from "./input/input";
+export { DateInput } from "./date-input/date-input";
 export { CodeInput } from "./code-input/code-input";
 export { Checkbox } from "./checkbox/checkbox";
 export { Radio } from "./radio/radio";

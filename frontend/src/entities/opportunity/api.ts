@@ -1,4 +1,5 @@
 import { apiClient } from "../../shared/api/client";
+import { listWorkflowOpportunities, toPublicOpportunity } from "../../features/opportunity-workflow";
 import type { Opportunity } from "./index";
 
 type OpportunityApiItem = {
@@ -36,8 +37,13 @@ function isPublicOpportunity(item: OpportunityApiItem) {
 export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
   const response = await apiClient.get<OpportunityFeedResponse>("/opportunities");
   const items = response.data?.data?.items ?? [];
+  const workflowItems = listWorkflowOpportunities()
+    .map((item) => toPublicOpportunity(item))
+    .filter(Boolean) as Opportunity[];
 
-  return items
+  return [
+    ...workflowItems,
+    ...items
     .filter(isPublicOpportunity)
     .map((item) => ({
       id: item.id,
@@ -59,5 +65,6 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
       accent: item.accent,
       businessStatus: item.business_status,
       moderationStatus: item.moderation_status,
-    }));
+    })),
+  ];
 }

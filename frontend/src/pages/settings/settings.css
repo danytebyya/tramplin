@@ -280,7 +280,17 @@
   width: min(100%, 560px);
 }
 
+.settings-page__delete-account-modal-panel.modal__panel {
+  width: min(100%, 860px);
+}
+
 .settings-page__staff-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-page__delete-account-modal {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -568,6 +578,74 @@
   color: var(--color-text-secondary);
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
+}
+
+.settings-page__delete-account-text,
+.settings-page__delete-account-note-title,
+.settings-page__delete-account-note-text {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+}
+
+.settings-page__delete-account-warning {
+  margin: -8px 0 0;
+  color: var(--color-text-primary);
+  font-size: calc(var(--type-h3-size) + 2px);
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.settings-page__delete-account-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-page__delete-account-list {
+  margin: 0;
+  padding-left: 28px;
+  color: var(--color-text-primary);
+  font-size: calc(var(--type-h3-size) - 2px);
+  line-height: 1.45;
+}
+
+.settings-page__delete-account-list li + li {
+  margin-top: 4px;
+}
+
+.settings-page__delete-account-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-page__delete-account-note-title {
+  color: #667085;
+  font-size: calc(var(--type-h3-size) - 2px);
+  line-height: 1.4;
+}
+
+.settings-page__delete-account-note-text {
+  color: #667085;
+  font-size: calc(var(--type-h3-size) - 1px);
+  line-height: 1.45;
+}
+
+.settings-page__delete-account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.settings-page__delete-account-actions .button {
+  width: 100%;
+}
+
+.settings-page__delete-account-submit.button {
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
 }
 
 .settings-page__staff-empty {

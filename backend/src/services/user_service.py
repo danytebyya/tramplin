@@ -1,12 +1,27 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import delete, select
+
 from src.utils.errors import AppError
 from src.models import User
+from src.models import (
+    AuthLoginEvent,
+    Employer,
+    EmployerMembership,
+    EmployerStaffInvitation,
+    FavoriteOpportunity,
+    Notification,
+    Opportunity,
+    RefreshSession,
+    UserNotificationPreference,
+)
 from src.repositories.user_repository import UserRepository
 from src.schemas.user import (
     UserNotificationPreferencesRead,
     UserNotificationPreferencesUpdateRequest,
     UserUpdateRequest,
 )
-from src.enums import UserRole
+from src.enums import MembershipRole, UserRole, UserStatus
 
 
 class UserService:
@@ -41,6 +56,102 @@ class UserService:
         self.db.commit()
         self.db.refresh(updated_user)
         return updated_user
+
+    def delete_account(self, current_user: User) -> None:
+        now = datetime.now(UTC)
+        current_user_with_profiles = self.user_repo.get_by_id(current_user.id, with_profiles=True)
+        if current_user_with_profiles is None:
+            raise AppError(
+                code="USER_NOT_FOUND",
+                message="Пользователь не найден.",
+                status_code=404,
+            )
+
+        primary_owned_employer_ids = list(
+            self.db.execute(
+                select(EmployerMembership.employer_id).where(
+                    EmployerMembership.user_id == current_user.id,
+                    EmployerMembership.is_primary.is_(True),
+                    EmployerMembership.membership_role == MembershipRole.OWNER,
+                )
+            ).scalars().all()
+        )
+
+        if primary_owned_employer_ids:
+            has_other_staff = self.db.execute(
+                select(EmployerMembership.id).where(
+                    EmployerMembership.employer_id.in_(primary_owned_employer_ids),
+                    EmployerMembership.user_id != current_user.id,
+                )
+            ).scalar_one_or_none()
+            if has_other_staff is not None:
+                raise AppError(
+                    code="USER_DELETE_HAS_EMPLOYEES",
+                    message="Удаление невозможно, пока в компании есть сотрудники.",
+                    status_code=409,
+                )
+
+            self.db.execute(
+                delete(EmployerStaffInvitation).where(
+                    EmployerStaffInvitation.employer_id.in_(primary_owned_employer_ids)
+                )
+            )
+            self.db.execute(
+                delete(EmployerMembership).where(
+                    EmployerMembership.employer_id.in_(primary_owned_employer_ids)
+                )
+            )
+
+            owned_employers = list(
+                self.db.execute(
+                    select(Employer).where(Employer.id.in_(primary_owned_employer_ids))
+                ).scalars().all()
+            )
+            for employer in owned_employers:
+                employer.deleted_at = now
+                self.db.add(employer)
+
+            owned_opportunities = list(
+                self.db.execute(
+                    select(Opportunity).where(
+                        Opportunity.employer_id.in_(primary_owned_employer_ids),
+                        Opportunity.deleted_at.is_(None),
+                    )
+                ).scalars().all()
+            )
+            for opportunity in owned_opportunities:
+                opportunity.deleted_at = now
+                self.db.add(opportunity)
+
+        self.db.execute(
+            delete(EmployerStaffInvitation).where(
+                EmployerStaffInvitation.invited_email == current_user.email,
+                EmployerStaffInvitation.accepted_at.is_(None),
+            )
+        )
+        self.db.execute(delete(EmployerMembership).where(EmployerMembership.user_id == current_user.id))
+        self.db.execute(delete(Notification).where(Notification.user_id == current_user.id))
+        self.db.execute(delete(FavoriteOpportunity).where(FavoriteOpportunity.user_id == current_user.id))
+        self.db.execute(delete(UserNotificationPreference).where(UserNotificationPreference.user_id == current_user.id))
+        self.db.execute(delete(RefreshSession).where(RefreshSession.user_id == current_user.id))
+        self.db.execute(delete(AuthLoginEvent).where(AuthLoginEvent.user_id == current_user.id))
+
+        if current_user_with_profiles.applicant_profile is not None:
+            self.db.delete(current_user_with_profiles.applicant_profile)
+        if current_user_with_profiles.employer_profile is not None:
+            self.db.delete(current_user_with_profiles.employer_profile)
+        if current_user_with_profiles.curator_profile is not None:
+            self.db.delete(current_user_with_profiles.curator_profile)
+
+        current_user_with_profiles.email = f"deleted-{current_user.id}@deleted.local"
+        current_user_with_profiles.display_name = "Удаленный аккаунт"
+        current_user_with_profiles.password_hash = "deleted"
+        current_user_with_profiles.preferred_city = None
+        current_user_with_profiles.status = UserStatus.ARCHIVED
+        current_user_with_profiles.deleted_at = now
+        self.db.add(current_user_with_profiles)
+
+        self.db.commit()
 
     def get_notification_preferences(self, current_user: User) -> UserNotificationPreferencesRead:
         preferences = self.user_repo.get_notification_preferences(current_user.id)

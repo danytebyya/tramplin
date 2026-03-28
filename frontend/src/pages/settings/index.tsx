@@ -18,7 +18,9 @@ import {
   AuthSessionListResponse,
   NotificationPreferenceGroup,
   NotificationPreferenceKey,
+  clearClientSession,
   clearCompanyInviteReturnTo,
+  deleteCurrentUserRequest,
   getNotificationPreferencesRequest,
   listAccountContextsRequest,
   listActiveSessionsRequest,
@@ -522,9 +524,11 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteEmailServerError, setInviteEmailServerError] = useState<string | null>(null);
   const [latestInvitationUrl, setLatestInvitationUrl] = useState<string | null>(null);
   const [isInviteLinkCopied, setIsInviteLinkCopied] = useState(false);
   const [invitePermissions, setInvitePermissions] = useState<EmployerStaffPermissionState>(
@@ -537,7 +541,7 @@ export function SettingsPage() {
   const inviteMode = searchParams.get("mode");
   const hasPendingCompanyInvite = inviteMode === "accept-company-invite" && Boolean(inviteToken);
   const accessTokenPayload = useMemo(() => readAccessTokenPayload(accessToken), [accessToken]);
-  const activeEmployerMembershipId = accessTokenPayload?.active_membership_id ?? null;
+  const activeEmployerMembershipIdFromToken = accessTokenPayload?.active_membership_id ?? null;
   const activeEmployerPermissionKeys = accessTokenPayload?.active_permissions ?? [];
 
   const { data: meData } = useQuery({
@@ -579,6 +583,12 @@ export function SettingsPage() {
     queryFn: getModerationSettingsRequest,
     staleTime: 5 * 60 * 1000,
     enabled: isAuthenticated && isModerationRole,
+  });
+  const accountContextsQuery = useQuery({
+    queryKey: ["auth", "contexts"],
+    queryFn: listAccountContextsRequest,
+    staleTime: 30 * 1000,
+    enabled: isAuthenticated,
   });
   const employerStaffQuery = useQuery({
     queryKey: ["companies", "staff"],
@@ -701,11 +711,13 @@ export function SettingsPage() {
     mutationFn: createEmployerStaffInvitation,
     onMutate: () => {
       setInviteError(null);
+      setInviteEmailServerError(null);
     },
     onSuccess: (response) => {
       const invitationUrl = response?.data?.invitation_url ?? null;
       setLatestInvitationUrl(invitationUrl);
       setInviteEmail("");
+      setInviteEmailServerError(null);
       setInvitePermissions(defaultEmployerStaffPermissions);
       if (trimmedInviteEmail) {
         setIsStaffInviteModalOpen(false);
@@ -713,8 +725,18 @@ export function SettingsPage() {
       void queryClient.invalidateQueries({ queryKey: ["companies", "staff", "invitations"] });
     },
     onError: (error: any) => {
+      const errorCode = error?.response?.data?.error?.code;
+      const errorMessage =
+        error?.response?.data?.error?.message ?? "Не удалось создать приглашение. Попробуйте еще раз.";
+
+      if (errorCode === "EMPLOYER_STAFF_INVITATION_ALREADY_SENT") {
+        setInviteEmailServerError(errorMessage);
+        setInviteError(null);
+        return;
+      }
+
       setInviteError(
-        error?.response?.data?.error?.message ?? "Не удалось создать приглашение. Попробуйте еще раз.",
+        errorMessage,
       );
     },
   });
@@ -814,6 +836,20 @@ export function SettingsPage() {
     onError: (error: any) => {
       setStaffInviteAcceptError(
         error?.response?.data?.error?.message ?? "Не удалось принять приглашение. Попробуйте еще раз.",
+      );
+    },
+  });
+  const deleteCurrentUserMutation = useMutation({
+    mutationFn: deleteCurrentUserRequest,
+    onMutate: () => {
+      setDeleteAccountError(null);
+    },
+    onSuccess: () => {
+      clearClientSession({ redirectTo: "/" });
+    },
+    onError: (error: any) => {
+      setDeleteAccountError(
+        error?.response?.data?.error?.message ?? "Не удалось удалить аккаунт. Попробуйте еще раз.",
       );
     },
   });
@@ -1020,6 +1056,14 @@ export function SettingsPage() {
     () => employerStaffItems.some((item) => item.is_current_user && item.is_primary),
     [employerStaffItems],
   );
+  const activeEmployerMembershipIdFromContext = useMemo(
+    () =>
+      accountContextsQuery.data?.data?.items?.find(
+        (item) => item.role === "employer" && item.is_active && item.membership_id,
+      )?.membership_id ?? null,
+    [accountContextsQuery.data?.data?.items],
+  );
+  const activeEmployerMembershipId = activeEmployerMembershipIdFromToken ?? activeEmployerMembershipIdFromContext;
   const currentEmployerMembership = useMemo(
     () =>
       employerStaffItems.find(
@@ -1042,6 +1086,11 @@ export function SettingsPage() {
         : null,
     [activeEmployerMembershipId, currentEmployerMembership?.email, user?.email],
   );
+  const hasManagedEmployees =
+    isEmployer &&
+    Boolean(currentEmployerMembership?.is_primary) &&
+    employerStaffItems.some((item) => !item.is_current_user);
+  const isDeleteAccountBlockedByEmployees = Boolean(hasManagedEmployees);
   const invitePermissionKeys = useMemo(
     () => mapEmployerStaffPermissionsToKeys(invitePermissions),
     [invitePermissions],
@@ -1051,9 +1100,10 @@ export function SettingsPage() {
     trimmedInviteEmail.length > 0 && !isValidEmail(trimmedInviteEmail)
       ? "Введите корректный email"
       : null;
+  const resolvedInviteEmailError = inviteEmailError ?? inviteEmailServerError;
 
   const handleCreateStaffInvitation = () => {
-    if (inviteEmailError || invitePermissionKeys.length === 0) {
+    if (resolvedInviteEmailError || invitePermissionKeys.length === 0) {
       return;
     }
 
@@ -1080,6 +1130,24 @@ export function SettingsPage() {
       membershipId: pendingDeleteItem.id,
       isCurrentUser: pendingDeleteItem.isCurrentUser,
     });
+  };
+
+  const closeDeleteAccountModal = () => {
+    if (deleteCurrentUserMutation.isPending) {
+      return;
+    }
+
+    setDeleteAccountError(null);
+    setIsDeleteAccountModalOpen(false);
+  };
+
+  const handleDeleteAccount = () => {
+    if (isDeleteAccountBlockedByEmployees) {
+      setDeleteAccountError("Удаление невозможно, пока в компании есть сотрудники.");
+      return;
+    }
+
+    deleteCurrentUserMutation.mutate();
   };
 
   useEffect(() => {
@@ -1292,7 +1360,10 @@ export function SettingsPage() {
             variant="danger-ghost"
             size="md"
             className="settings-page__account-delete"
-            onClick={() => setIsDeleteAccountModalOpen(true)}
+            onClick={() => {
+              setDeleteAccountError(null);
+              setIsDeleteAccountModalOpen(true);
+            }}
           >
             Удалить аккаунт
           </Button>
@@ -1678,10 +1749,11 @@ export function SettingsPage() {
                   <Input
                     className="input--sm"
                     value={inviteEmail}
-                    error={inviteEmailError ?? undefined}
+                    error={resolvedInviteEmailError ?? undefined}
                     onChange={(event) => {
                       setInviteEmail(event.target.value);
                       setInviteError(null);
+                      setInviteEmailServerError(null);
                     }}
                     placeholder="Введите email или оставьте пустым"
                   />
@@ -1806,42 +1878,10 @@ export function SettingsPage() {
                     variant={actionVariant}
                     size="md"
                     loading={createEmployerStaffInvitationMutation.isPending}
-                    disabled={invitePermissionKeys.length === 0 || Boolean(inviteEmailError)}
+                    disabled={invitePermissionKeys.length === 0 || Boolean(resolvedInviteEmailError)}
                     onClick={handleCreateStaffInvitation}
                   >
                     {trimmedInviteEmail ? "Отправить" : "Сгенерировать ссылку"}
-                  </Button>
-                </div>
-              </div>
-            </Modal>
-            <Modal
-              title="Удаление аккаунта"
-              isOpen={isDeleteAccountModalOpen}
-              onClose={() => setIsDeleteAccountModalOpen(false)}
-              panelClassName="settings-page__staff-modal-panel"
-              titleAccentColor="var(--color-danger)"
-            >
-              <div className="settings-page__staff-modal">
-                <p className="settings-page__staff-delete-message">
-                  Вы уверены, что хотите удалить аккаунт? Все данные будут удалены безвозвратно.
-                </p>
-                <div className="settings-page__staff-invite-actions">
-                  <Button
-                    type="button"
-                    variant={outlineVariant}
-                    size="md"
-                    onClick={() => setIsDeleteAccountModalOpen(false)}
-                  >
-                    Отмена
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="danger-ghost"
-                    size="md"
-                    className="settings-page__account-delete"
-                    onClick={() => setIsDeleteAccountModalOpen(false)}
-                  >
-                    Удалить аккаунт
                   </Button>
                 </div>
               </div>
@@ -2342,6 +2382,71 @@ export function SettingsPage() {
 
         {isModerationRole ? renderModerationLayout() : renderPublicLayout()}
       </Container>
+
+      <Modal
+        title="Удаление аккаунта"
+        isOpen={isDeleteAccountModalOpen}
+        onClose={closeDeleteAccountModal}
+        panelClassName="settings-page__delete-account-modal-panel"
+        titleAccentColor="var(--color-danger)"
+      >
+        <div className="settings-page__delete-account-modal">
+          <p className="settings-page__delete-account-text">
+            Вы уверены, что хотите удалить аккаунт
+            {" "}
+            <strong>{`«${user?.display_name ?? "Пользователь"}»`}</strong>
+            ?
+          </p>
+          <p className="settings-page__delete-account-warning">Это действие нельзя отменить.</p>
+          <div className="settings-page__delete-account-block">
+            <p className="settings-page__delete-account-text">Будут безвозвратно удалены:</p>
+            <ul className="settings-page__delete-account-list">
+              <li>Профиль, резюме и портфолио</li>
+              <li>История откликов и статусы</li>
+              <li>Избранное и профессиональные контакты</li>
+              <li>Переписки и уведомления</li>
+            </ul>
+          </div>
+          <div className="settings-page__delete-account-note">
+            <p className="settings-page__delete-account-note-title">Совет:</p>
+            <p className="settings-page__delete-account-note-text">
+              Если вы хотите временно скрыть профиль, используйте настройки приватности.
+            </p>
+          </div>
+          {isDeleteAccountBlockedByEmployees ? (
+            <p className="settings-page__form-message settings-page__form-message--error">
+              Удаление невозможно, пока в компании есть сотрудники.
+            </p>
+          ) : null}
+          {deleteAccountError ? (
+            <p className="settings-page__form-message settings-page__form-message--error">
+              {deleteAccountError}
+            </p>
+          ) : null}
+          <div className="settings-page__delete-account-actions">
+            <Button
+              type="button"
+              variant={actionVariant}
+              size="md"
+              onClick={closeDeleteAccountModal}
+              disabled={deleteCurrentUserMutation.isPending}
+            >
+              Назад
+            </Button>
+            <Button
+              type="button"
+              variant="danger-ghost"
+              size="md"
+              className="settings-page__delete-account-submit"
+              loading={deleteCurrentUserMutation.isPending}
+              disabled={deleteCurrentUserMutation.isPending || isDeleteAccountBlockedByEmployees}
+              onClick={handleDeleteAccount}
+            >
+              Удалить
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Footer theme={themeRole} />
     </main>

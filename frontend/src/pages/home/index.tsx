@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -17,6 +17,11 @@ import {
   listFavoriteOpportunitiesRequest,
   removeFavoriteOpportunityRequest,
 } from "../../features/favorites";
+import {
+  hasWorkflowApplication,
+  submitWorkflowApplication,
+  subscribeOpportunityWorkflow,
+} from "../../features/opportunity-workflow";
 import {
   meRequest,
   performLogout,
@@ -87,6 +92,7 @@ export function HomePage() {
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
   const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
+  const [workflowRevision, setWorkflowRevision] = useState(0);
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
   const mapPanelLiveRef = useRef<HTMLDivElement | null>(null);
   const mapPanelProxyContentRef = useRef<HTMLDivElement | null>(null);
@@ -155,6 +161,17 @@ export function HomePage() {
     },
   });
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
+  const appliedOpportunityIds = useMemo(() => {
+    const applicantEmail = currentUserQuery.data?.data?.user?.email?.trim() ?? "";
+
+    if (!applicantEmail) {
+      return [];
+    }
+
+    return opportunities
+      .filter((item) => hasWorkflowApplication(item.id, applicantEmail))
+      .map((item) => item.id);
+  }, [currentUserQuery.data?.data?.user?.email, opportunities, workflowRevision]);
 
   const getExpandedRect = () => ({
     top: MAP_EXPANDED_TOP_OFFSET,
@@ -223,6 +240,13 @@ export function HomePage() {
       },
     });
   };
+
+  useEffect(() => {
+    return subscribeOpportunityWorkflow(() => {
+      setWorkflowRevision((current) => current + 1);
+      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+    });
+  }, [queryClient]);
 
   const finishMapTransition = (nextMode: "collapsed" | "expanded") => {
     setMapExpandMode(nextMode);
@@ -472,6 +496,35 @@ export function HomePage() {
     });
   };
 
+  const handleApplyOpportunity = (opportunityId: string) => {
+    if (!isAuthenticated) {
+      setIsFavoriteAuthModalOpen(true);
+      return;
+    }
+
+    if (roleName === "employer" || roleName === "curator" || roleName === "admin") {
+      return;
+    }
+
+    const applicantEmail = currentUserQuery.data?.data?.user?.email?.trim() ?? "";
+    const applicantName = currentUserQuery.data?.data?.user?.display_name?.trim() ?? applicantEmail ?? "Соискатель";
+
+    if (!applicantEmail || hasWorkflowApplication(opportunityId, applicantEmail)) {
+      return;
+    }
+
+    submitWorkflowApplication({
+      opportunityId,
+      applicantName,
+      applicantEmail,
+    });
+
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+    ]);
+  };
+
   return (
     <main className={homePageClassName}>
       <Header
@@ -614,6 +667,7 @@ export function HomePage() {
                         <MapView
                           opportunities={opportunities}
                           favoriteOpportunityIds={favoriteOpportunityIds}
+                          appliedOpportunityIds={appliedOpportunityIds}
                           selectedOpportunityId={selectedOpportunityId}
                           selectedCity={selectedCity}
                           selectedCityViewport={selectedCityViewport}
@@ -625,6 +679,7 @@ export function HomePage() {
                           onSelectCity={handleCityChange}
                           onCloseDetails={() => setSelectedOpportunityId(null)}
                           onToggleExpand={handleToggleMapExpand}
+                          onApply={handleApplyOpportunity}
                         />
                       </div>
                     </div>
@@ -640,8 +695,10 @@ export function HomePage() {
                     <OpportunityList
                       opportunities={opportunities}
                       favoriteOpportunityIds={favoriteOpportunityIds}
+                      appliedOpportunityIds={appliedOpportunityIds}
                       roleName={roleName}
                       onToggleFavorite={handleToggleFavorite}
+                      onApply={handleApplyOpportunity}
                     />
                   </div>
                 </div>

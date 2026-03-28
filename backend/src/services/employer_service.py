@@ -239,6 +239,25 @@ class EmployerService:
                     status_code=409,
                 )
 
+        if payload.email:
+            existing_invitation = (
+                self.db.query(EmployerStaffInvitation)
+                .filter(
+                    EmployerStaffInvitation.employer_id == employer.id,
+                    EmployerStaffInvitation.invited_email == payload.email,
+                    EmployerStaffInvitation.revoked_at.is_(None),
+                    EmployerStaffInvitation.accepted_at.is_(None),
+                    EmployerStaffInvitation.expires_at > datetime.now(UTC),
+                )
+                .one_or_none()
+            )
+            if existing_invitation is not None:
+                raise AppError(
+                    code="EMPLOYER_STAFF_INVITATION_ALREADY_SENT",
+                    message="Этому пользователю уже отправлена ссылка приглашения",
+                    status_code=409,
+                )
+
         token = secrets.token_urlsafe(24)
         invitation = EmployerStaffInvitation(
             employer_id=employer.id,

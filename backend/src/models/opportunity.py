@@ -101,6 +101,9 @@ class Tag(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         Enum(TagType, name="tag_type", values_callable=enum_values, create_type=False),
         nullable=False,
     )
+    parent_id: Mapped[str | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tags.id"), nullable=True
+    )
     moderation_status: Mapped[ModerationStatus] = mapped_column(
         Enum(
             ModerationStatus,
@@ -112,6 +115,8 @@ class Tag(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         default=ModerationStatus.APPROVED,
     )
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    parent = relationship("Tag", remote_side="Tag.id", back_populates="children")
+    children = relationship("Tag", back_populates="parent")
 
 
 class Opportunity(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):

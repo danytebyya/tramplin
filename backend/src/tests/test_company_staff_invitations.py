@@ -137,6 +137,81 @@ def test_existing_user_can_accept_company_invitation_and_switch_context(client, 
     ]
 
 
+def test_owner_cannot_send_duplicate_pending_invitation_to_same_email(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-duplicate-invite@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-duplicate-invite@example.com",
+        company_name="Duplicate Invite Corp",
+        inn="7707083891",
+    )
+
+    monkeypatch.setattr("src.services.employer_service.send_email", lambda recipient, subject, body: None)
+
+    first_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "staff-duplicate@example.com", "role": "recruiter"},
+    )
+    assert first_response.status_code == 201
+
+    second_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "staff-duplicate@example.com", "role": "recruiter"},
+    )
+    assert second_response.status_code == 409
+    assert second_response.json()["error"]["code"] == "EMPLOYER_STAFF_INVITATION_ALREADY_SENT"
+    assert second_response.json()["error"]["message"] == "Этому пользователю уже отправлена ссылка приглашения"
+
+
+def test_owner_cannot_delete_account_while_company_has_other_staff(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-delete-blocked@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-delete-blocked@example.com",
+        company_name="Delete Blocked Corp",
+        inn="7707083892",
+    )
+    applicant_token = _register_and_login(
+        client,
+        db_session,
+        email="staff-delete-blocked@example.com",
+        role="applicant",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "staff-delete-blocked@example.com", "role": "manager"},
+    )
+    assert invite_response.status_code == 201
+    invitation_url = sent_messages[0][2].split("Ссылка: ", maxsplit=1)[1].strip()
+    invite_token = parse_qs(urlparse(invitation_url).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"token": invite_token},
+    )
+    assert accept_response.status_code == 200
+
+    delete_response = client.delete(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert delete_response.status_code == 409
+    assert delete_response.json()["error"]["code"] == "USER_DELETE_HAS_EMPLOYEES"
+    assert delete_response.json()["error"]["message"] == "Удаление невозможно, пока в компании есть сотрудники."
+
+
 def test_staff_member_can_leave_company_membership(client, db_session, monkeypatch):
     owner_token = _register_and_login(client, db_session, email="owner-leave@example.com", role="employer")
     _create_company_for_owner(

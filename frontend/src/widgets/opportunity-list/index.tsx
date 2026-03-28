@@ -6,8 +6,10 @@ import "./opportunity-list.css";
 type OpportunityListProps = {
   opportunities: Opportunity[];
   favoriteOpportunityIds: string[];
+  appliedOpportunityIds?: string[];
   roleName?: string;
   onToggleFavorite: (opportunityId: string) => void;
+  onApply?: (opportunityId: string) => void;
 };
 
 function getOpportunityKindLabel(kind: Opportunity["kind"]) {
@@ -29,8 +31,10 @@ function getOpportunityKindLabel(kind: Opportunity["kind"]) {
 export function OpportunityList({
   opportunities,
   favoriteOpportunityIds,
+  appliedOpportunityIds = [],
   roleName,
   onToggleFavorite,
+  onApply,
 }: OpportunityListProps) {
   const actionLabel = roleName === "employer" ? "Подробнее" : "Откликнуться";
 
@@ -38,6 +42,7 @@ export function OpportunityList({
     <section className="opportunity-list" aria-label="Список возможностей">
       {opportunities.map((opportunity) => {
         const isFavorite = favoriteOpportunityIds.includes(opportunity.id);
+        const isApplied = appliedOpportunityIds.includes(opportunity.id);
 
         return (
           <article key={opportunity.id} className="opportunity-list__card">
@@ -95,8 +100,14 @@ export function OpportunityList({
               <div className="opportunity-list__description-block">
                 <p className="opportunity-list__text">{opportunity.description}</p>
                 <div className="opportunity-list__content-actions">
-                  <Button type="button" variant="secondary" size="sm">
-                    {actionLabel}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={roleName !== "employer" && isApplied}
+                    onClick={() => onApply?.(opportunity.id)}
+                  >
+                    {roleName !== "employer" && isApplied ? "Отклик отправлен" : actionLabel}
                   </Button>
                 </div>
               </div>

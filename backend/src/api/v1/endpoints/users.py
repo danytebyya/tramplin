@@ -109,3 +109,12 @@ def update_notification_preferences(
 ) -> dict:
     preferences = UserService(db).update_notification_preferences(current_user, payload)
     return success_response(preferences.model_dump(mode="json"))
+
+
+@router.delete("/me", status_code=status.HTTP_200_OK)
+def delete_me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    UserService(db).delete_account(current_user)
+    return success_response({"deleted": True})

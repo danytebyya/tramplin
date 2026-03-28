@@ -30,6 +30,145 @@ from src.models import (
 from src.repositories import OpportunityRepository
 
 
+TAG_CATALOG = [
+    {
+        "slug": "programming-languages",
+        "name": "Языки программирования",
+        "tag_type": TagType.LANGUAGE,
+        "items": [
+            "Python", "JavaScript", "TypeScript", "Java", "C#", "C++", "Go", "Rust", "Kotlin", "Swift",
+            "PHP", "Ruby", "Dart", "Scala", "Haskell", "Elixir", "Bash", "Shell",
+        ],
+    },
+    {
+        "slug": "backend",
+        "name": "Backend",
+        "tag_type": TagType.TECHNOLOGY,
+        "items": [
+            "FastAPI", "Django", "Flask", "Spring", "Spring Boot", "ASP.NET", "Node.js", "Express",
+            "NestJS", "Laravel", "Ruby on Rails", "GraphQL", "REST API", "gRPC", "Microservices",
+        ],
+    },
+    {
+        "slug": "frontend",
+        "name": "Frontend",
+        "tag_type": TagType.TECHNOLOGY,
+        "items": [
+            "React", "Next.js", "Vue", "Nuxt.js", "Angular", "Svelte", "HTML", "CSS", "SCSS",
+            "Tailwind", "Redux", "Zustand", "Webpack", "Vite",
+        ],
+    },
+    {
+        "slug": "databases",
+        "name": "Базы данных",
+        "tag_type": TagType.TECHNOLOGY,
+        "items": [
+            "PostgreSQL", "MySQL", "SQLite", "MongoDB", "Redis", "Elasticsearch", "Firebase",
+            "Supabase", "Oracle", "Cassandra",
+        ],
+    },
+    {
+        "slug": "devops-infra",
+        "name": "DevOps / Инфраструктура",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "Docker", "Kubernetes", "CI/CD", "GitHub Actions", "GitLab CI", "Jenkins", "Nginx",
+            "Apache", "Terraform", "Ansible", "Helm",
+        ],
+    },
+    {
+        "slug": "cloud",
+        "name": "Облака",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "AWS", "Azure", "Google Cloud", "Yandex Cloud", "Vercel", "Netlify", "DigitalOcean",
+        ],
+    },
+    {
+        "slug": "testing",
+        "name": "Тестирование",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "Unit Testing", "Integration Testing", "E2E Testing", "PyTest", "Jest", "Mocha",
+            "Cypress", "Playwright", "Selenium",
+        ],
+    },
+    {
+        "slug": "security",
+        "name": "Безопасность",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "OAuth", "JWT", "Auth", "Encryption", "HTTPS", "Web Security", "OWASP", "RBAC",
+        ],
+    },
+    {
+        "slug": "mobile",
+        "name": "Mobile",
+        "tag_type": TagType.TECHNOLOGY,
+        "items": [
+            "React Native", "Flutter", "iOS", "Android", "SwiftUI", "Kotlin Multiplatform",
+        ],
+    },
+    {
+        "slug": "data-ai",
+        "name": "Data / AI",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "Machine Learning", "Deep Learning", "Data Science", "Pandas", "NumPy", "TensorFlow",
+            "PyTorch", "OpenCV", "NLP", "LLM", "Computer Vision",
+        ],
+    },
+    {
+        "slug": "analytics",
+        "name": "Аналитика",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "Data Analysis", "Power BI", "Tableau", "Excel", "SQL Analytics", "Big Data",
+            "Hadoop", "Spark",
+        ],
+    },
+    {
+        "slug": "other-useful",
+        "name": "Другое",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "Git", "GitHub", "GitLab", "API Design", "System Design", "Agile", "Scrum", "Kanban",
+            "Clean Architecture", "OOP", "Design Patterns",
+        ],
+    },
+    {
+        "slug": "level-format",
+        "name": "Уровень / формат",
+        "tag_type": TagType.LEVEL,
+        "items": [
+            "Junior", "Middle", "Senior", "Intern", "Remote", "Office", "Hybrid",
+            "Full-time", "Part-time", "Contract",
+        ],
+    },
+    {
+        "slug": "specialization",
+        "name": "Специализация",
+        "tag_type": TagType.SPECIALIZATION,
+        "items": [
+            "Backend", "Frontend", "Fullstack", "DevOps", "QA", "Data Engineer", "ML Engineer",
+            "Product Manager", "UI/UX Designer",
+        ],
+    },
+]
+
+
+def slugify_tag(value: str) -> str:
+    return (
+        value.lower()
+        .replace(" / ", "-")
+        .replace("/", "-")
+        .replace(".", "")
+        .replace("+", "plus")
+        .replace("#", "sharp")
+        .replace(" ", "-")
+    )
+
+
 def seed_demo_opportunities(db: Session | None = None) -> None:
     session_context = nullcontext(db) if db is not None else SessionLocal()
     with session_context as db:
@@ -40,34 +179,48 @@ def seed_demo_opportunities(db: Session | None = None) -> None:
         now = datetime.now(UTC)
         randomizer = Random(42)
 
-        tag_names = [
-            "Python",
-            "FastAPI",
-            "React",
-            "TypeScript",
-            "PostgreSQL",
-            "Docker",
-            "Kubernetes",
-            "CI/CD",
-            "Data Engineering",
-            "Machine Learning",
-            "DevOps",
-            "QA Automation",
-        ]
         tags = []
-        for tag_name in tag_names:
-            slug = tag_name.lower().replace("/", "-").replace(" ", "-")
-            tag = db.execute(select(Tag).where(Tag.slug == slug)).scalar_one_or_none()
-            if tag is None:
-                tag = Tag(
-                    slug=slug,
-                    name=tag_name,
-                    tag_type=TagType.TECHNOLOGY,
+        for category_spec in TAG_CATALOG:
+            category = db.execute(select(Tag).where(Tag.slug == category_spec["slug"])).scalar_one_or_none()
+            if category is None:
+                category = Tag(
+                    slug=category_spec["slug"],
+                    name=category_spec["name"],
+                    tag_type=category_spec["tag_type"],
                     moderation_status=ModerationStatus.APPROVED,
                     is_system=True,
                 )
-                db.add(tag)
-            tags.append(tag)
+                db.add(category)
+                db.flush()
+            else:
+                category.name = category_spec["name"]
+                category.tag_type = category_spec["tag_type"]
+                category.parent_id = None
+                category.moderation_status = ModerationStatus.APPROVED
+                category.is_system = True
+
+            for tag_name in category_spec["items"]:
+                slug = f"{category_spec['slug']}-{slugify_tag(tag_name)}"
+                tag = db.execute(select(Tag).where(Tag.slug == slug)).scalar_one_or_none()
+                if tag is None:
+                    tag = Tag(
+                        slug=slug,
+                        name=tag_name,
+                        tag_type=category_spec["tag_type"],
+                        parent_id=category.id,
+                        moderation_status=ModerationStatus.APPROVED,
+                        is_system=True,
+                    )
+                    db.add(tag)
+                else:
+                    tag.name = tag_name
+                    tag.tag_type = category_spec["tag_type"]
+                    tag.parent_id = category.id
+                    tag.moderation_status = ModerationStatus.APPROVED
+                    tag.is_system = True
+                tags.append(tag)
+
+        db.flush()
 
         location_specs = [
             ("Чебоксары", Decimal("56.143800"), Decimal("47.248900")),
@@ -248,7 +401,7 @@ def seed_demo_opportunities(db: Session | None = None) -> None:
 
                 employer = employers[blueprint_index % len(employers)]
                 location = locations[blueprint_index % len(locations)]
-                selected_tags = randomizer.sample(tags, k=3)
+                selected_tags = randomizer.sample(tags, k=randomizer.randint(4, 7))
                 created_at = now - timedelta(days=repo.count() + 1)
                 title = blueprint["title"]
                 opportunity = Opportunity(

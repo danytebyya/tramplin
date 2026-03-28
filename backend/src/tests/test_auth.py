@@ -1,4 +1,5 @@
 import re
+from uuid import UUID
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -252,6 +253,47 @@ def test_register_requires_valid_verification_code(client):
     response = client.post("/api/v1/users", json=payload)
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "Код подтверждения не найден. Запросите новый."
+
+
+def test_user_can_delete_own_account(client, db_session):
+    code = _request_code(client, db_session, "delete-me@example.com")
+    register_payload = {
+        "email": "delete-me@example.com",
+        "display_name": "Delete Me",
+        "password": "StrongPass123",
+        "verification_code": code,
+        "role": "applicant",
+        "applicant_profile": {"full_name": "Delete Me"},
+    }
+    register_response = client.post("/api/v1/users", json=register_payload)
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "delete-me@example.com", "password": "StrongPass123"},
+    )
+    assert login_response.status_code == 201
+    access_token = login_response.json()["data"]["access_token"]
+
+    delete_response = client.delete(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json()["data"]["deleted"] is True
+
+    deleted_user = db_session.execute(
+        select(User).where(User.id == UUID(register_response.json()["data"]["user"]["id"]))
+    ).scalar_one()
+    assert deleted_user.status == UserStatus.ARCHIVED
+    assert deleted_user.deleted_at is not None
+    assert deleted_user.email != "delete-me@example.com"
+
+    second_login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "delete-me@example.com", "password": "StrongPass123"},
+    )
+    assert second_login_response.status_code == 401
 
 
 def test_register_rejects_invalid_verification_code_format(client):

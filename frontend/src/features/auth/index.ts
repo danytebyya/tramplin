@@ -210,6 +210,11 @@ export async function updatePreferredCityRequest(preferredCity: string) {
   return response.data;
 }
 
+export async function deleteCurrentUserRequest() {
+  const response = await apiClient.delete("/users/me");
+  return response.data;
+}
+
 export async function listActiveSessionsRequest() {
   const response = await apiClient.get<AuthSessionListResponse>("/auth/sessions");
   return response.data;
