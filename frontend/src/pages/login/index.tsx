@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
-import logoPrimary from "../../assets/icons/logo-primary.svg";
+import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
   applyAuthSession,
@@ -49,7 +49,7 @@ export function LoginPage() {
   const searchParams = new URLSearchParams(location.search);
   const returnTo = searchParams.get("returnTo") ?? readCompanyInviteReturnTo();
   const isCompanyInviteLogin = isCompanyInviteReturnTo(returnTo);
-  const brandLogo = logoPrimary;
+  const brandLogo = logoPrimaryBlack;
 
   const {
     register,
@@ -92,7 +92,11 @@ export function LoginPage() {
           <div className="auth-page__hero-content login-page__hero-content">
             <div className="auth-page__brand-stage">
               <WaveAuraBackground variant="primary" withInteractionOrb />
-              <img src={brandLogo} alt="Трамплин" className="auth-page__brand" />
+              <div className="auth-page__brand-lockup">
+                <Link to="/" aria-label="На главную">
+                  <img src={brandLogo} alt="Трамплин" className="auth-page__brand" />
+                </Link>
+              </div>
             </div>
           </div>
         </section>

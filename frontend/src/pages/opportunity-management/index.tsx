@@ -33,7 +33,7 @@ import {
   getCityViewportByName,
   popularCities,
 } from "../../features/city-selector/api";
-import { meRequest, useAuthStore } from "../../features/auth";
+import { getEmployerAccessState, meRequest, resolveEmployerFallbackRoute, useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
 import { Badge, Button, Checkbox, Container, DateInput, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
@@ -826,8 +826,14 @@ export function OpportunityManagementPage() {
     return () => window.clearTimeout(timeoutId);
   }, [createOpportunityAddress, createOpportunityCity, isCreateOpportunityModalOpen]);
 
+  const employerAccess = getEmployerAccessState(role, accessToken);
+
   if (role !== "employer") {
     return <Navigate to="/" replace />;
+  }
+
+  if (!employerAccess.canManageOpportunities) {
+    return <Navigate to={resolveEmployerFallbackRoute(employerAccess)} replace />;
   }
 
   const toggleStatusFilter = (value: OpportunityManagementStatus | "all") => {
@@ -936,7 +942,7 @@ export function OpportunityManagementPage() {
     closed: managementItems.filter((item) => item.status === "removed" || item.status === "rejected").length,
   };
 
-  const profileMenuItems = buildEmployerProfileMenuItems(navigate);
+  const profileMenuItems = buildEmployerProfileMenuItems(navigate, employerAccess);
   const tagCatalog = useMemo(() => {
     const mergedCategories = new Map<string, OpportunityTagCatalogCategory>();
 
@@ -1331,22 +1337,24 @@ export function OpportunityManagementPage() {
 
       <Container className="opportunity-management-page__container">
         <nav className="opportunity-management-page__tabs" aria-label="Разделы работодателя">
-          <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/dashboard/employer")}>
-            Профиль компании
-          </button>
+          {employerAccess.canManageCompanyProfile ? (
+            <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/dashboard/employer")}>
+              Профиль компании
+            </button>
+          ) : null}
           <button type="button" className="opportunity-management-page__tab opportunity-management-page__tab--active">
             Управление возможностями
           </button>
-          <button type="button" className="opportunity-management-page__tab">
-            Отклики
-          </button>
-          <button
-            type="button"
-            className="opportunity-management-page__tab"
-            onClick={() => navigate("/employer/chat")}
-          >
-            Чат
-          </button>
+          {employerAccess.canReviewResponses ? <button type="button" className="opportunity-management-page__tab">Отклики</button> : null}
+          {employerAccess.canAccessChat ? (
+            <button
+              type="button"
+              className="opportunity-management-page__tab"
+              onClick={() => navigate("/employer/chat")}
+            >
+              Чат
+            </button>
+          ) : null}
           <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/settings")}>
             Настройки
           </button>

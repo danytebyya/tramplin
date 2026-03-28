@@ -84,6 +84,14 @@ body:has(.auth-page)::-webkit-scrollbar {
   min-height: calc(100vh - 96px);
 }
 
+.auth-page__brand-lockup {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .auth-page__brand-stage .wave-aura__orb {
   filter: blur(18px) saturate(152%) brightness(1.06);
   opacity: 1;
@@ -102,8 +110,6 @@ body:has(.auth-page)::-webkit-scrollbar {
 }
 
 .auth-page__brand {
-  position: relative;
-  z-index: 1;
   display: block;
   width: min(340px, 84vw);
   max-width: min(340px, 84vw);

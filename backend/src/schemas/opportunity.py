@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class OpportunityPublicRead(BaseModel):
     id: str
+    employer_id: str
     title: str
     company_name: str
     company_verified: bool

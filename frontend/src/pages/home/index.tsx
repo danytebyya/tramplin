@@ -23,6 +23,7 @@ import {
   submitOpportunityApplicationRequest,
 } from "../../features/applications";
 import {
+  getEmployerAccessState,
   meRequest,
   performLogout,
   updatePreferredCityRequest,
@@ -35,6 +36,7 @@ import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, buildModerationProfileMenuItems, CuratorHeaderNavigation, Header } from "../../widgets/header";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
+import type { Opportunity } from "../../entities/opportunity";
 import "./home.css";
 
 function cloneMapSnapshot(source: HTMLElement) {
@@ -117,6 +119,7 @@ export function HomePage() {
   const isMapFloating = mapExpandMode !== "collapsed";
   const isMapTransitioning = mapExpandMode === "expanding" || mapExpandMode === "collapsing";
   const isMapCollapsing = mapExpandMode === "collapsing";
+  const employerAccess = getEmployerAccessState(role, accessToken);
   const { data: opportunities = [] } = useQuery({
     queryKey: ["opportunities", "feed"],
     queryFn: listOpportunitiesRequest,
@@ -327,12 +330,12 @@ export function HomePage() {
   const profileMenuItems = isModerationRole
     ? buildModerationProfileMenuItems()
     : roleName === "employer"
-      ? buildEmployerProfileMenuItems(navigate)
+      ? buildEmployerProfileMenuItems(navigate, employerAccess)
       : [
           { label: "Профиль", isDanger: false },
           { label: "Мои отклики", isDanger: false },
           { label: "Избранное", isDanger: false },
-          { label: "Нетворкинг", isDanger: false },
+          { label: "Нетворкинг", isDanger: false, onClick: () => navigate("/networking") },
           { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
           { label: "Выход", isDanger: true, onClick: handleLogout },
         ];
@@ -514,6 +517,10 @@ export function HomePage() {
     submitApplicationMutation.mutate(opportunityId);
   };
 
+  const handleWriteToEmployer = (opportunity: Opportunity) => {
+    navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`);
+  };
+
   return (
     <main className={homePageClassName}>
       <Header
@@ -670,6 +677,7 @@ export function HomePage() {
                       roleName={roleName}
                       onToggleFavorite={handleToggleFavorite}
                       onApply={handleApplyOpportunity}
+                      onWrite={handleWriteToEmployer}
                     />
                   </div>
                 </div>

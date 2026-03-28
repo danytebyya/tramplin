@@ -1,6 +1,6 @@
 .site-footer {
-  --site-footer-accent: var(--color-secondary);
-  --site-footer-accent-strong: var(--color-secondary-active);
+  --site-footer-accent: var(--color-primary);
+  --site-footer-accent-strong: var(--color-primary-active);
   padding: 64px 0;
   background: var(--color-bg-secondary);
 }
@@ -40,27 +40,20 @@
 
 .site-footer__logo-card {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 170px;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
   max-width: 210px;
-  padding: 24px;
-  border-radius: 8px;
-  background: var(--color-bg-primary);
-  box-shadow: var(--shadow-sm);
+  padding: 0;
+  align-self: center;
 }
 
 .site-footer__brand {
-  color: var(--color-text-primary);
-  font-size: var(--type-h3-size);
-  line-height: var(--type-h3-line);
-  font-weight: 700;
-}
-
-.site-footer__brand-text {
-  color: var(--color-text-secondary);
-  font-size: var(--type-body-small-size);
-  line-height: var(--type-body-small-line);
+  display: block;
+  width: 137px;
+  height: 56px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .site-footer__column {

@@ -679,6 +679,7 @@ export function toPublicOpportunity(record: WorkflowOpportunityRecord): Opportun
 
   return {
     id: record.id,
+    employerId: "",
     title: record.title,
     companyName: record.companyName,
     companyVerified: true,

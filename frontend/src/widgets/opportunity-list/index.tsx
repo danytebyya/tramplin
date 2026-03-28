@@ -10,6 +10,7 @@ type OpportunityListProps = {
   roleName?: string;
   onToggleFavorite: (opportunityId: string) => void;
   onApply?: (opportunityId: string) => void;
+  onWrite?: (opportunity: Opportunity) => void;
 };
 
 function getOpportunityKindLabel(kind: Opportunity["kind"]) {
@@ -35,6 +36,7 @@ export function OpportunityList({
   roleName,
   onToggleFavorite,
   onApply,
+  onWrite,
 }: OpportunityListProps) {
   const actionLabel = roleName === "employer" ? "Подробнее" : "Откликнуться";
 
@@ -142,7 +144,12 @@ export function OpportunityList({
                 <Button type="button" variant="secondary-outline" size="sm">
                   Показать контакты
                 </Button>
-                <Button type="button" variant="secondary-outline" size="sm">
+                <Button
+                  type="button"
+                  variant="secondary-outline"
+                  size="sm"
+                  onClick={() => onWrite?.(opportunity)}
+                >
                   Написать
                 </Button>
               </div>

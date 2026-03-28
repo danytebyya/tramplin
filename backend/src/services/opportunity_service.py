@@ -185,6 +185,7 @@ class OpportunityService:
 
         return {
             "id": str(opportunity.id),
+            "employer_id": str(opportunity.employer_id),
             "title": opportunity.title,
             "company_name": opportunity.employer.display_name,
             "company_verified": opportunity.employer.verified_at is not None,

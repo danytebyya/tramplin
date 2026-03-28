@@ -4,6 +4,7 @@ import type { Opportunity } from "./index";
 
 type OpportunityApiItem = {
   id: string;
+  employer_id: string;
   title: string;
   company_name: string;
   company_verified: boolean;
@@ -47,6 +48,7 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
     .filter(isPublicOpportunity)
     .map((item) => ({
       id: item.id,
+      employerId: item.employer_id,
       title: item.title,
       companyName: item.company_name,
       companyVerified: item.company_verified,

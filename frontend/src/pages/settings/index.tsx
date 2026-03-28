@@ -21,6 +21,7 @@ import {
   clearClientSession,
   clearCompanyInviteReturnTo,
   deleteCurrentUserRequest,
+  getEmployerAccessState,
   getNotificationPreferencesRequest,
   listAccountContextsRequest,
   listActiveSessionsRequest,
@@ -28,6 +29,7 @@ import {
   meRequest,
   performLogout,
   persistCompanyInviteReturnTo,
+  readAccessTokenPayload,
   readCompanyInviteReturnTo,
   revokeOtherSessionsRequest,
   revokeSessionRequest,
@@ -264,13 +266,13 @@ function resolveModerationTitle(role: string | null) {
   return role === "admin" ? "Настройки администрирования" : "Настройки модерации";
 }
 
-function resolvePublicSettingsTabs(role: string | null): SettingsTabItem[] {
+function resolvePublicSettingsTabs(role: string | null, employerAccess: ReturnType<typeof getEmployerAccessState>): SettingsTabItem[] {
   if (role === "employer") {
     return [
-      { label: "Профиль компании", to: "/dashboard/employer" },
-      { label: "Управление возможностями", to: "/employer/opportunities" },
-      { label: "Отклики" },
-      { label: "Чат", to: "/employer/chat" },
+      ...(employerAccess.canManageCompanyProfile ? [{ label: "Профиль компании", to: "/dashboard/employer" }] : []),
+      ...(employerAccess.canManageOpportunities ? [{ label: "Управление возможностями", to: "/employer/opportunities" }] : []),
+      ...(employerAccess.canReviewResponses ? [{ label: "Отклики" }] : []),
+      ...(employerAccess.canAccessChat ? [{ label: "Чат", to: "/employer/chat" }] : []),
       { label: "Настройки", to: "/settings", isCurrent: true },
     ];
   }
@@ -390,28 +392,6 @@ function resolveStaffInvitationStatusLabel(kind: "email" | "link") {
 
 function isFutureDate(value: string) {
   return new Date(value).getTime() > Date.now();
-}
-
-function readAccessTokenPayload(token: string | null) {
-  if (!token || typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const [, payload] = token.split(".");
-    if (!payload) {
-      return null;
-    }
-
-    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decodedPayload = window.atob(normalizedPayload);
-    return JSON.parse(decodedPayload) as {
-      active_membership_id?: string;
-      active_permissions?: string[];
-    };
-  } catch {
-    return null;
-  }
 }
 
 function resolveBrowserLabel(userAgent: string | null | undefined) {
@@ -541,6 +521,7 @@ export function SettingsPage() {
   const inviteMode = searchParams.get("mode");
   const hasPendingCompanyInvite = inviteMode === "accept-company-invite" && Boolean(inviteToken);
   const accessTokenPayload = useMemo(() => readAccessTokenPayload(accessToken), [accessToken]);
+  const employerAccess = useMemo(() => getEmployerAccessState(role, accessToken), [accessToken, role]);
   const activeEmployerMembershipIdFromToken = accessTokenPayload?.active_membership_id ?? null;
   const activeEmployerPermissionKeys = accessTokenPayload?.active_permissions ?? [];
 
@@ -1225,12 +1206,12 @@ export function SettingsPage() {
   const profileMenuItems = isModerationRole
     ? buildModerationProfileMenuItems()
     : role === "employer"
-      ? buildEmployerProfileMenuItems(navigate)
+      ? buildEmployerProfileMenuItems(navigate, employerAccess)
       : [
           { label: "Профиль", isDanger: false, onClick: () => navigate("/dashboard/applicant") },
           { label: "Мои отклики", isDanger: false },
           { label: "Избранное", isDanger: false },
-          { label: "Нетворкинг", isDanger: false },
+          { label: "Нетворкинг", isDanger: false, onClick: () => navigate("/networking") },
           { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
           { label: "Выход", isDanger: true, onClick: handleLogout },
         ];
@@ -1249,7 +1230,7 @@ export function SettingsPage() {
   const renderPublicTabs = () => {
     return (
       <nav className="settings-page__tabs" aria-label="Разделы настроек">
-        {resolvePublicSettingsTabs(role).map((item) => (
+        {resolvePublicSettingsTabs(role, employerAccess).map((item) => (
           <button
             key={item.label}
             type="button"

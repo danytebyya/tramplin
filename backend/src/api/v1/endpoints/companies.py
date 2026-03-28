@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_current_access_payload, get_current_user
+from src.api.serializers.user import serialize_user
 from src.db import get_db
 from src.enums import UserRole
 from src.models import User
@@ -15,7 +16,6 @@ from src.schemas.company import (
     EmployerStaffListRead,
     EmployerVerificationDraftRead,
 )
-from src.schemas.user import UserRead
 from src.services import DadataService, EmployerService
 from src.utils.errors import AppError
 from src.utils.responses import success_response
@@ -52,7 +52,7 @@ def upsert_employer_profile(
 ) -> dict:
     EmployerService(db).upsert_profile(current_user=current_user, payload=payload)
     db.refresh(current_user)
-    return success_response({"user": UserRead.model_validate(current_user).model_dump(mode="json")})
+    return success_response({"user": serialize_user(current_user)})
 
 
 @router.get("/verification-draft", status_code=status.HTTP_200_OK)

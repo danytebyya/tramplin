@@ -18,6 +18,12 @@ export {
 } from "./session";
 export { AccountActions } from "./account-actions";
 export { LogoutButton } from "./logout-button";
+export {
+  getEmployerAccessState,
+  readAccessTokenPayload,
+  resolveEmployerFallbackRoute,
+} from "./permissions";
+export type { EmployerAccessState, EmployerPermissionKey } from "./permissions";
 
 export type RegisterPayload = {
   email: string;

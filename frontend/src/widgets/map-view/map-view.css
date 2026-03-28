@@ -1087,7 +1087,7 @@
   padding: 0 14px;
   border: none;
   border-radius: 10px;
-  background: var(--color-secondary);
+  background: var(--home-accent, var(--color-secondary));
   color: var(--color-text-inverse);
   font-size: 16px;
   line-height: 20px;
@@ -1101,12 +1101,12 @@
 }
 
 .map-view__marker-cluster:hover {
-  background: var(--color-secondary-hover);
+  background: var(--home-accent, var(--color-secondary-hover));
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
 }
 
 .map-view__marker-cluster:active {
-  background: var(--color-secondary-active);
+  background: var(--home-accent-strong, var(--color-secondary-active));
   transform: translateY(0);
 }
 

@@ -189,7 +189,7 @@
 .opportunity-filters__reset {
   border: none;
   background: transparent;
-  color: var(--color-secondary);
+  color: var(--home-accent, var(--color-secondary));
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   padding: 0 16px;
@@ -202,11 +202,11 @@
 }
 
 .opportunity-filters__reset:hover {
-  color: var(--color-secondary-hover);
+  color: var(--home-accent, var(--color-secondary-hover));
 }
 
 .opportunity-filters__reset:active {
-  color: var(--color-secondary-active);
+  color: var(--home-accent-strong, var(--color-secondary-active));
 }
 
 .opportunity-filters__reset--hidden {

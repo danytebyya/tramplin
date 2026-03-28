@@ -6,6 +6,7 @@ import {
   readSelectedCityCookie,
   writeSelectedCityCookie,
 } from "../../features/city-selector";
+import { getEmployerAccessState, resolveEmployerFallbackRoute } from "../../features/auth";
 import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
@@ -15,13 +16,19 @@ import "./employer-dashboard.css";
 export function EmployerDashboardPage() {
   const navigate = useNavigate();
   const role = useAuthStore((state) => state.role);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
+  const employerAccess = getEmployerAccessState(role, accessToken);
 
   if (role !== "employer") {
     return <Navigate to="/" replace />;
   }
 
-  const profileMenuItems = buildEmployerProfileMenuItems(navigate);
+  if (!employerAccess.canManageCompanyProfile) {
+    return <Navigate to={resolveEmployerFallbackRoute(employerAccess)} replace />;
+  }
+
+  const profileMenuItems = buildEmployerProfileMenuItems(navigate, employerAccess);
 
   const handleCityChange = (nextCity: CitySelection) => {
     setSelectedCity(nextCity.name);
@@ -42,19 +49,21 @@ export function EmployerDashboardPage() {
           <button type="button" className="employer-dashboard__tab employer-dashboard__tab--active">
             Профиль компании
           </button>
-          <button
-            type="button"
-            className="employer-dashboard__tab"
-            onClick={() => navigate("/employer/opportunities")}
-          >
-            Управление возможностями
-          </button>
-          <button type="button" className="employer-dashboard__tab">
-            Отклики
-          </button>
-          <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/employer/chat")}>
-            Чат
-          </button>
+          {employerAccess.canManageOpportunities ? (
+            <button
+              type="button"
+              className="employer-dashboard__tab"
+              onClick={() => navigate("/employer/opportunities")}
+            >
+              Управление возможностями
+            </button>
+          ) : null}
+          {employerAccess.canReviewResponses ? <button type="button" className="employer-dashboard__tab">Отклики</button> : null}
+          {employerAccess.canAccessChat ? (
+            <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/employer/chat")}>
+              Чат
+            </button>
+          ) : null}
           <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/settings")}>
             Настройки
           </button>

@@ -3,8 +3,8 @@
   display: inline-flex;
   --notification-menu-primary: var(--color-primary);
   --notification-menu-light: var(--color-primary-light);
-  --notification-menu-secondary: var(--color-secondary);
-  --notification-menu-accent: var(--color-accent);
+  --notification-menu-secondary: var(--color-primary-hover);
+  --notification-menu-accent: var(--color-primary-active);
   --notification-menu-text: var(--color-text-primary);
   --notification-menu-text-muted: var(--color-text-secondary);
   --notification-menu-text-subtle: var(--color-text-tertiary);
@@ -420,20 +420,32 @@
   --notification-menu-accent: var(--color-accent-active);
 }
 
+.settings-page--curator .notification-menu__badge,
+.settings-page--admin .notification-menu__badge,
 .curator-dashboard-page .notification-menu__badge,
 .curator-management-page .notification-menu__badge,
-.content-moderation-page .notification-menu__badge {
+.content-moderation-page .notification-menu__badge,
+.employer-verification-page .notification-menu__badge {
   background: var(--notification-menu-light);
   border-color: var(--color-bg-primary);
   color: var(--notification-menu-secondary);
 }
 
+.settings-page--curator .notification-menu__button .notification-menu__badge,
+.settings-page--admin .notification-menu__button .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button .notification-menu__badge,
 .curator-management-page .notification-menu__button .notification-menu__badge,
-.content-moderation-page .notification-menu__button .notification-menu__badge {
+.content-moderation-page .notification-menu__button .notification-menu__badge,
+.employer-verification-page .notification-menu__button .notification-menu__badge {
   background: var(--notification-menu-light);
 }
 
+.settings-page--curator .notification-menu__button:hover .notification-menu__badge,
+.settings-page--curator .notification-menu__button:focus-visible .notification-menu__badge,
+.settings-page--curator .notification-menu__button:active .notification-menu__badge,
+.settings-page--admin .notification-menu__button:hover .notification-menu__badge,
+.settings-page--admin .notification-menu__button:focus-visible .notification-menu__badge,
+.settings-page--admin .notification-menu__button:active .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button:hover .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button:focus-visible .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button:active .notification-menu__badge,
@@ -442,7 +454,10 @@
 .curator-management-page .notification-menu__button:active .notification-menu__badge,
 .content-moderation-page .notification-menu__button:hover .notification-menu__badge,
 .content-moderation-page .notification-menu__button:focus-visible .notification-menu__badge,
-.content-moderation-page .notification-menu__button:active .notification-menu__badge {
+.content-moderation-page .notification-menu__button:active .notification-menu__badge,
+.employer-verification-page .notification-menu__button:hover .notification-menu__badge,
+.employer-verification-page .notification-menu__button:focus-visible .notification-menu__badge,
+.employer-verification-page .notification-menu__button:active .notification-menu__badge {
   background: var(--notification-menu-light);
 }
 

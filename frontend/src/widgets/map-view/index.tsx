@@ -147,8 +147,8 @@ const clusterPaletteByRole = {
     hoverColor: "#d97706",
   },
   default: {
-    color: "#06b6d4",
-    hoverColor: "#0891b2",
+    color: "#2563eb",
+    hoverColor: "#1d4ed8",
   },
 } as const;
 

@@ -44,7 +44,7 @@
 
 .opportunity-list__title {
   margin: 0;
-  color: var(--color-secondary);
+  color: var(--home-accent, var(--color-secondary));
   font-size: var(--type-h3-size);
   line-height: var(--type-h3-line);
   font-weight: 700;
@@ -179,11 +179,11 @@
 }
 
 .opportunity-list__favorite:hover {
-  color: var(--color-secondary);
+  color: var(--home-accent, var(--color-secondary));
 }
 
 .opportunity-list__favorite[aria-pressed="true"] {
-  color: var(--color-secondary);
+  color: var(--home-accent, var(--color-secondary));
 }
 
 .opportunity-list__favorite-icon {

@@ -31,6 +31,7 @@ type ChatWorkspaceProps = {
   subtitle?: string;
   emptyTitle: string;
   emptyText: string;
+  preferredEmployerId?: string | null;
   createConversationPayload: (contact: ChatContact) => {
     applicant_user_id?: string;
     employer_user_id?: string;
@@ -178,6 +179,7 @@ export function ChatWorkspace({
   subtitle,
   emptyTitle,
   emptyText,
+  preferredEmployerId = null,
   createConversationPayload,
 }: ChatWorkspaceProps) {
   const queryClient = useQueryClient();
@@ -361,7 +363,11 @@ export function ChatWorkspace({
       id: item.id,
       counterpart: item.counterpart,
       unreadCount: item.unreadCount,
-      previewText: item.lastMessage ? (decryptedPreviewMap[item.id] ?? "Сообщение") : "Нет сообщений",
+      previewText: item.lastMessage
+        ? (decryptedPreviewMap[item.id] ?? "Сообщение")
+        : item.unreadCount > 0
+          ? "Новое сообщение"
+          : "Нет сообщений",
       updatedAt: item.updatedAt,
       isExistingConversation: true,
       conversationId: item.id,
@@ -418,9 +424,39 @@ export function ChatWorkspace({
   const firstAvailableItemId = availableConversationIds[0] ?? availableContactIds[0] ?? null;
   const availableConversationIdsKey = availableConversationIds.join("|");
   const availableContactIdsKey = availableContactIds.join("|");
+  const preferredItemId = useMemo(() => {
+    if (!preferredEmployerId) {
+      return null;
+    }
+
+    const matchingConversation = items.find(
+      (item) => item.counterpart.companyId === preferredEmployerId && item.conversationId,
+    );
+    if (matchingConversation?.conversationId) {
+      return matchingConversation.conversationId;
+    }
+
+    const matchingContact = items.find(
+      (item) => item.counterpart.companyId === preferredEmployerId && !item.conversationId,
+    );
+    return matchingContact?.id ?? null;
+  }, [items, preferredEmployerId]);
+
+  useEffect(() => {
+    if (!preferredItemId) {
+      return;
+    }
+
+    setActiveConversationId((currentValue) => (currentValue === preferredItemId ? currentValue : preferredItemId));
+  }, [preferredItemId]);
 
   useEffect(() => {
     if (!activeConversationId) {
+      if (preferredItemId) {
+        setActiveConversationId(preferredItemId);
+        return;
+      }
+
       if (firstAvailableItemId) {
         setActiveConversationId(firstAvailableItemId);
       }
@@ -434,8 +470,9 @@ export function ChatWorkspace({
       return;
     }
 
-    if (activeConversationId !== firstAvailableItemId) {
-      setActiveConversationId(firstAvailableItemId);
+    const fallbackItemId = preferredItemId ?? firstAvailableItemId;
+    if (activeConversationId !== fallbackItemId) {
+      setActiveConversationId(fallbackItemId);
     }
   }, [
     activeConversationId,
@@ -444,6 +481,7 @@ export function ChatWorkspace({
     availableConversationIds,
     availableConversationIdsKey,
     firstAvailableItemId,
+    preferredItemId,
   ]);
 
   const activeConversation = activeConversationId ? conversationMap[activeConversationId] ?? null : null;

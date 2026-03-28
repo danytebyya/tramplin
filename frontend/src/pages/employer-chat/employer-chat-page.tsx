@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
-import { useAuthStore } from "../../features/auth";
+import { getEmployerAccessState, resolveEmployerFallbackRoute, useAuthStore } from "../../features/auth";
 import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
@@ -12,13 +12,19 @@ import "./employer-chat.css";
 export function EmployerChatPage() {
   const navigate = useNavigate();
   const role = useAuthStore((state) => state.role);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
+  const employerAccess = getEmployerAccessState(role, accessToken);
 
   if (role !== "employer") {
     return <Navigate to="/" replace />;
   }
 
-  const profileMenuItems = buildEmployerProfileMenuItems(navigate);
+  if (!employerAccess.canAccessChat) {
+    return <Navigate to={resolveEmployerFallbackRoute(employerAccess)} replace />;
+  }
+
+  const profileMenuItems = buildEmployerProfileMenuItems(navigate, employerAccess);
 
   const handleCityChange = (nextCity: CitySelection) => {
     setSelectedCity(nextCity.name);
@@ -36,19 +42,21 @@ export function EmployerChatPage() {
 
       <Container className="employer-chat-page__container">
         <nav className="employer-chat-page__tabs" aria-label="Разделы работодателя">
-          <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/dashboard/employer")}>
-            Профиль компании
-          </button>
-          <button
-            type="button"
-            className="employer-chat-page__tab"
-            onClick={() => navigate("/employer/opportunities")}
-          >
-            Управление возможностями
-          </button>
-          <button type="button" className="employer-chat-page__tab">
-            Отклики
-          </button>
+          {employerAccess.canManageCompanyProfile ? (
+            <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/dashboard/employer")}>
+              Профиль компании
+            </button>
+          ) : null}
+          {employerAccess.canManageOpportunities ? (
+            <button
+              type="button"
+              className="employer-chat-page__tab"
+              onClick={() => navigate("/employer/opportunities")}
+            >
+              Управление возможностями
+            </button>
+          ) : null}
+          {employerAccess.canReviewResponses ? <button type="button" className="employer-chat-page__tab">Отклики</button> : null}
           <button type="button" className="employer-chat-page__tab employer-chat-page__tab--active">
             Чат
           </button>

@@ -8,8 +8,8 @@ import { z } from "zod";
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import arrowIcon from "../../assets/icons/arrow.svg";
-import logoPrimary from "../../assets/icons/logo-primary.svg";
-import logoSecondary from "../../assets/icons/logo-secondary.svg";
+import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
+import logoSecondaryBlack from "../../assets/icons/logo-secondary-black.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
   applyAuthSession,
@@ -199,7 +199,7 @@ export function AuthPage() {
   const selectedRole = watch("role");
   const selectedEmail = watch("email");
   const roleTheme = isCompanyInviteRegistration ? "primary" : selectedRole === "applicant" ? "secondary" : "primary";
-  const brandLogo = roleTheme === "secondary" ? logoSecondary : logoPrimary;
+  const brandLogo = roleTheme === "secondary" ? logoSecondaryBlack : logoPrimaryBlack;
   const roleGhostVariant = roleTheme === "secondary" ? "secondary-ghost" : "ghost";
   const inputThemeClassName = roleTheme === "secondary" ? "input--secondary" : undefined;
   const checkboxTheme = roleTheme === "secondary" ? "secondary" : "primary";
@@ -570,7 +570,11 @@ export function AuthPage() {
             <div className="auth-page__hero-content">
               <div className="auth-page__brand-stage">
                 <WaveAuraBackground variant={roleTheme} withInteractionOrb />
-                <img src={brandLogo} alt="Трамплин" className="auth-page__brand" />
+                <div className="auth-page__brand-lockup">
+                  <Link to="/" aria-label="На главную">
+                    <img src={brandLogo} alt="Трамплин" className="auth-page__brand" />
+                  </Link>
+                </div>
               </div>
             </div>
           </section>
