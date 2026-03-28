@@ -270,7 +270,7 @@ function resolvePublicSettingsTabs(role: string | null): SettingsTabItem[] {
       { label: "Профиль компании", to: "/dashboard/employer" },
       { label: "Управление возможностями", to: "/employer/opportunities" },
       { label: "Отклики" },
-      { label: "Чат" },
+      { label: "Чат", to: "/employer/chat" },
       { label: "Настройки", to: "/settings", isCurrent: true },
     ];
   }
@@ -279,7 +279,7 @@ function resolvePublicSettingsTabs(role: string | null): SettingsTabItem[] {
     { label: "Профиль", to: "/dashboard/applicant" },
     { label: "Мои отклики" },
     { label: "Избранное" },
-    { label: "Нетворкинг" },
+    { label: "Нетворкинг", to: "/networking" },
     { label: "Настройки", to: "/settings", isCurrent: true },
   ];
 }

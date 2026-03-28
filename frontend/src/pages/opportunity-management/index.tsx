@@ -1344,7 +1344,11 @@ export function OpportunityManagementPage() {
           <button type="button" className="opportunity-management-page__tab">
             Отклики
           </button>
-          <button type="button" className="opportunity-management-page__tab">
+          <button
+            type="button"
+            className="opportunity-management-page__tab"
+            onClick={() => navigate("/employer/chat")}
+          >
             Чат
           </button>
           <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/settings")}>
