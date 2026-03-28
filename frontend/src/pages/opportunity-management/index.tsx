@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Navigate, NavLink, useNavigate } from "react-router-dom";
 
@@ -10,23 +10,20 @@ import editIcon from "../../assets/icons/edit.svg";
 import uploadIcon from "../../assets/icons/upload.svg";
 import {
   CitySelection,
+  readLastAddressQueryCookie,
   readSelectedCityCookie,
+  writeLastAddressQueryCookie,
   writeSelectedCityCookie,
 } from "../../features/city-selector";
 import {
+  createEmployerOpportunityRequest,
+  deleteEmployerOpportunityRequest,
+  EmployerOpportunityItem,
+  listEmployerOpportunitiesRequest,
   listOpportunityTagCatalogRequest,
   OpportunityTagCatalogCategory,
+  updateEmployerOpportunityRequest,
 } from "../../features/opportunity";
-import {
-  buildWorkflowCreatePayload,
-  createWorkflowOpportunity,
-  listWorkflowOpportunities,
-  removeWorkflowOpportunity,
-  subscribeOpportunityWorkflow,
-  toManagementOpportunityItem,
-  updateWorkflowOpportunity,
-  type WorkflowOpportunityRecord,
-} from "../../features/opportunity-workflow";
 import {
   AddressSuggestion,
   CitySuggestion,
@@ -37,6 +34,7 @@ import {
   popularCities,
 } from "../../features/city-selector/api";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import { useNotificationsRealtime } from "../../features/notifications";
 import { Badge, Button, Checkbox, Container, DateInput, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { Header } from "../../widgets/header";
@@ -79,16 +77,18 @@ type OpportunityFormMode = "create" | "edit";
 type OpportunityFormErrors = {
   title?: string;
   description?: string;
+  city?: string;
   address?: string;
   salary?: string;
   tags?: string;
   eventType?: string;
   mentorshipDirection?: string;
   mentorExperience?: string;
+  submit?: string;
 };
 
 const DEFAULT_CITY = "Чебоксары";
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 const CARD_TAGS_INITIAL_COUNT = 3;
 const MODAL_TAGS_INITIAL_COUNT = 8;
 const MODAL_TAGS_STEP = 12;
@@ -277,121 +277,12 @@ const statusFilterItems: Array<{ value: OpportunityManagementStatus | "all"; lab
   { value: "changed", label: "Изменено" },
   { value: "changes_requested", label: "Требует правок" },
   { value: "removed", label: "Снято с публикации" },
-  { value: "rejected", label: "Отклонено" },
+  { value: "rejected", label: "Отклонена" },
 ];
 
 const sortItems: Array<{ value: OpportunitySortValue; label: string }> = [
   { value: "newest", label: "По дате публикации" },
   { value: "responses", label: "По откликам" },
-];
-
-const opportunityItems: OpportunityManagementItem[] = [
-  {
-    id: "opportunity-1",
-    title: "Вакансия",
-    kind: "Вакансия",
-    salaryLabel: "Зарплата ₽",
-    locationLabel: "Город (формат работы)",
-    tags: ["Python", "FastAPI", "PostgreSQL", "Docker", "AWS", "Microservices"],
-    levelLabel: "Middle",
-    employmentLabel: "Full-time",
-    description:
-      "ОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписание",
-    status: "active",
-    responsesCount: 23,
-    publishedAtLabel: "23.03.2026",
-    activeUntilLabel: "23.04.2026",
-  },
-  {
-    id: "opportunity-2",
-    title: "Вакансия",
-    kind: "Вакансия",
-    salaryLabel: "Зарплата ₽",
-    locationLabel: "Город (формат работы)",
-    tags: ["React", "TypeScript", "Next.js", "Tailwind", "Redux"],
-    levelLabel: "Middle",
-    employmentLabel: "Full-time",
-    description:
-      "ОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписание",
-    status: "planned",
-    plannedPublishAtLabel: "23.03.2026",
-    plannedCloseAtLabel: "23.04.2026",
-  },
-  {
-    id: "opportunity-3",
-    title: "Вакансия",
-    kind: "Вакансия",
-    salaryLabel: "Зарплата ₽",
-    locationLabel: "Город (формат работы)",
-    tags: ["Go", "Kubernetes", "CI/CD", "Terraform", "Helm"],
-    levelLabel: "Middle",
-    employmentLabel: "Full-time",
-    description:
-      "ОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписание",
-    status: "removed",
-    responsesCount: 23,
-    publishedAtLabel: "23.03.2026",
-    closedAtLabel: "23.04.2026",
-  },
-  {
-    id: "opportunity-4",
-    title: "Вакансия",
-    kind: "Вакансия",
-    salaryLabel: "Зарплата ₽",
-    locationLabel: "Город (формат работы)",
-    tags: ["Product Manager", "Analytics", "SQL Analytics", "Power BI"],
-    levelLabel: "Middle",
-    employmentLabel: "Full-time",
-    description:
-      "ОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписание",
-    status: "rejected",
-    moderationComment: "Не указана зарплата",
-  },
-  {
-    id: "opportunity-5",
-    title: "Вакансия",
-    kind: "Вакансия",
-    salaryLabel: "Зарплата ₽",
-    locationLabel: "Город (формат работы)",
-    tags: ["QA", "Playwright", "Cypress", "E2E Testing"],
-    levelLabel: "Middle",
-    employmentLabel: "Full-time",
-    description:
-      "ОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписаниеОписание",
-    status: "pending_review",
-    submittedAtLabel: "23.03.2026",
-  },
-  {
-    id: "opportunity-6",
-    title: "Стажировка",
-    kind: "Стажировка",
-    salaryLabel: "Оплата по договоренности",
-    locationLabel: "Москва (гибрид)",
-    tags: ["React", "TypeScript", "Junior", "Part-time", "Frontend"],
-    levelLabel: "Junior",
-    employmentLabel: "Part-time",
-    description:
-      "Описание стажировки с понятными требованиями, наставником, гибким графиком и понятной траекторией роста.",
-    status: "active",
-    responsesCount: 12,
-    publishedAtLabel: "19.03.2026",
-    activeUntilLabel: "19.04.2026",
-  },
-  {
-    id: "opportunity-7",
-    title: "Мероприятие",
-    kind: "Мероприятие",
-    salaryLabel: "Бесплатно",
-    locationLabel: "Онлайн",
-    tags: ["Data Science", "LLM", "NLP", "Machine Learning", "Python"],
-    levelLabel: "Middle",
-    employmentLabel: "One-time",
-    description:
-      "Открытая онлайн-встреча для студентов и джунов, где команда рассказывает про реальные задачи и процессы.",
-    status: "planned",
-    plannedPublishAtLabel: "25.03.2026",
-    plannedCloseAtLabel: "30.03.2026",
-  },
 ];
 
 function resolveStatusLabel(status: OpportunityManagementStatus) {
@@ -403,7 +294,7 @@ function resolveStatusLabel(status: OpportunityManagementStatus) {
     case "removed":
       return "Снято с публикации";
     case "rejected":
-      return "Отклонено";
+      return "Отклонена";
     case "pending_review":
       return "На рассмотрении";
     case "changed":
@@ -484,9 +375,145 @@ function buildPaginationItems(currentPage: number, totalPages: number) {
   return [1, "ellipsis", currentPage, "ellipsis-right", totalPages];
 }
 
+function formatManagementDateLabel(value: string | null | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  const nextDate = new Date(value);
+  if (Number.isNaN(nextDate.getTime())) {
+    return undefined;
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(nextDate);
+}
+
+function mapEmployerOpportunityToManagementItem(item: EmployerOpportunityItem): OpportunityManagementItem {
+  return {
+    id: item.id,
+    title: item.title,
+    kind:
+      item.kind === "internship"
+        ? "Стажировка"
+        : item.kind === "event"
+          ? "Мероприятие"
+          : item.kind === "mentorship"
+            ? "Менторская программа"
+            : "Вакансия",
+    salaryLabel: item.salaryLabel,
+    locationLabel: item.locationLabel,
+    tags: item.tags,
+    levelLabel: item.levelLabel,
+    employmentLabel: item.employmentLabel,
+    description: item.description,
+    status: item.status,
+    responsesCount: item.status === "active" ? item.responsesCount : undefined,
+    publishedAtLabel: formatManagementDateLabel(item.publishedAt),
+    activeUntilLabel: formatManagementDateLabel(item.activeUntil),
+    plannedPublishAtLabel: formatManagementDateLabel(item.plannedPublishAt),
+    moderationComment: item.moderationComment ?? undefined,
+    submittedAtLabel: formatManagementDateLabel(item.submittedAt),
+  };
+}
+
 function formatPointLabel(point: OpportunityLocationPoint) {
   return `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`;
 }
+
+const tagSearchAliases: Record<string, string[]> = {
+  python: ["питон", "пайтон", "py"],
+  javascript: ["джаваскрипт", "жаваскрипт", "жс", "js"],
+  typescript: ["тайпскрипт", "тс"],
+  java: ["джава", "ява"],
+  "c#": ["си шарп", "сишарп"],
+  "c++": ["си плюс плюс"],
+  go: ["голанг", "го", "golang"],
+  postgres: ["постгрес"],
+  postgresql: ["постгрес", "постгрескьюэль"],
+  docker: ["докер", "доккер"],
+  kubernetes: ["кубер", "кубернетес", "k8s"],
+  react: ["реакт", "реактжс", "reactjs"],
+  vue: ["вью"],
+  angular: ["ангуляр"],
+  django: ["джанго"],
+  flask: ["фласк", "флэск"],
+  fastapi: ["фастапи", "фаст апи", "fast api"],
+  redis: ["редис"],
+  nginx: ["энджинкс", "нгинкс"],
+  graphql: ["графкьюэль"],
+  sql: ["скьюэль", "эс кью эль", "sequel"],
+  git: ["гит"],
+  github: ["гитхаб"],
+  gitlab: ["гитлаб"],
+};
+
+const cyrillicToLatinMap: Record<string, string> = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "y",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "h",
+  ц: "c",
+  ч: "ch",
+  ш: "sh",
+  щ: "sch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+};
+
+const latinToCyrillicMap: Record<string, string> = {
+  a: "а",
+  b: "б",
+  c: "к",
+  d: "д",
+  e: "е",
+  f: "ф",
+  g: "г",
+  h: "х",
+  i: "и",
+  j: "й",
+  k: "к",
+  l: "л",
+  m: "м",
+  n: "н",
+  o: "о",
+  p: "п",
+  q: "к",
+  r: "р",
+  s: "с",
+  t: "т",
+  u: "у",
+  v: "в",
+  w: "в",
+  x: "кс",
+  y: "й",
+  z: "з",
+};
 
 function normalizeTagSearchText(value: string) {
   return value
@@ -495,6 +522,36 @@ function normalizeTagSearchText(value: string) {
     .replace(/[^\p{L}\p{N}\s/+.-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function transliterateCyrillicToLatin(value: string) {
+  return value
+    .split("")
+    .map((char) => cyrillicToLatinMap[char] ?? char)
+    .join("");
+}
+
+function transliterateLatinToCyrillic(value: string) {
+  return value
+    .split("")
+    .map((char) => latinToCyrillicMap[char] ?? char)
+    .join("");
+}
+
+function buildTagSearchIndex(value: string) {
+  const normalizedValue = normalizeTagSearchText(value);
+  const aliases = tagSearchAliases[normalizedValue] ?? [];
+  const latinVariant = transliterateCyrillicToLatin(normalizedValue);
+  const cyrillicVariant = transliterateLatinToCyrillic(normalizedValue);
+
+  return [
+    normalizedValue,
+    latinVariant,
+    cyrillicVariant,
+    ...aliases.map((item) => normalizeTagSearchText(item)),
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function resolveVisibleTagLimit(
@@ -507,7 +564,9 @@ function resolveVisibleTagLimit(
 
 export function OpportunityManagementPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.role);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? DEFAULT_CITY);
   const [searchValue, setSearchValue] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState<Array<OpportunityManagementStatus | "all">>(["all"]);
@@ -522,8 +581,6 @@ export function OpportunityManagementPage() {
   const [isCreateOpportunityModalOpen, setIsCreateOpportunityModalOpen] = useState(false);
   const [formMode, setFormMode] = useState<OpportunityFormMode>("create");
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
-  const [editingSeedOpportunityId, setEditingSeedOpportunityId] = useState<string | null>(null);
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [createOpportunityType, setCreateOpportunityType] =
     useState<(typeof opportunityTypeOptions)[number]["value"]>("vacancy");
@@ -543,13 +600,14 @@ export function OpportunityManagementPage() {
   const [createOpportunityEmployment, setCreateOpportunityEmployment] =
     useState<(typeof employmentOptions)[number]["value"]>("full-time");
   const [createOpportunityEventType, setCreateOpportunityEventType] =
-    useState<(typeof eventTypeOptions)[number] | "">("");
+    useState<(typeof eventTypeOptions)[number]>(eventTypeOptions[0]);
   const [createOpportunityMentorshipDirection, setCreateOpportunityMentorshipDirection] =
-    useState<(typeof mentorshipDirectionOptions)[number] | "">("");
+    useState<(typeof mentorshipDirectionOptions)[number]>(mentorshipDirectionOptions[0]);
   const [createOpportunityMentorExperience, setCreateOpportunityMentorExperience] =
-    useState<(typeof mentorExperienceOptions)[number] | "">("");
+    useState<(typeof mentorExperienceOptions)[number]>(mentorExperienceOptions[0]);
   const [createOpportunityPublishDate, setCreateOpportunityPublishDate] = useState("");
   const [createOpportunityAddress, setCreateOpportunityAddress] = useState("");
+  const [lastAddressQuery, setLastAddressQuery] = useState(() => readLastAddressQueryCookie() ?? "");
   const [createOpportunityCitySuggestions, setCreateOpportunityCitySuggestions] = useState<CitySuggestion[]>([]);
   const [isCitySuggestionsOpen, setIsCitySuggestionsOpen] = useState(false);
   const [isCitySuggestionsLoading, setIsCitySuggestionsLoading] = useState(false);
@@ -560,8 +618,7 @@ export function OpportunityManagementPage() {
   const [isDraftLocationAddressLoading, setIsDraftLocationAddressLoading] = useState(false);
   const [expandedModalTagsCount, setExpandedModalTagsCount] = useState<number>(MODAL_TAGS_INITIAL_COUNT);
   const [expandedCardTags] = useState<Record<string, number>>({});
-  const [workflowRevision, setWorkflowRevision] = useState(0);
-  const [replacedSeedOpportunityIds, setReplacedSeedOpportunityIds] = useState<string[]>([]);
+  const [deleteOpportunityId, setDeleteOpportunityId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<OpportunityFormErrors>({});
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
@@ -586,12 +643,77 @@ export function OpportunityManagementPage() {
     queryFn: listOpportunityTagCatalogRequest,
     staleTime: 5 * 60 * 1000,
   });
+  const employerOpportunitiesQuery = useQuery({
+    queryKey: ["employer", "opportunities"],
+    queryFn: listEmployerOpportunitiesRequest,
+    staleTime: 30 * 1000,
+  });
+  const saveOpportunityMutation = useMutation({
+    mutationFn: async ({
+      opportunityId,
+      payload,
+    }: {
+      opportunityId?: string | null;
+      payload: Parameters<typeof createEmployerOpportunityRequest>[0];
+    }) => {
+      if (opportunityId) {
+        return updateEmployerOpportunityRequest(opportunityId, payload);
+      }
 
-  useEffect(() => {
-    return subscribeOpportunityWorkflow(() => {
-      setWorkflowRevision((current) => current + 1);
-    });
-  }, []);
+      return createEmployerOpportunityRequest(payload);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["employer", "opportunities"] }),
+        queryClient.invalidateQueries({ queryKey: ["moderation", "content-items"] }),
+        queryClient.invalidateQueries({ queryKey: ["opportunities", "feed"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+      ]);
+      closeCreateOpportunityModal();
+    },
+    onError: (error: any) => {
+      const validationDetails = Array.isArray(error?.response?.data?.detail)
+        ? error.response.data.detail
+            .map((item: { msg?: string; loc?: unknown[] }) => {
+              const fieldName = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : null;
+              return fieldName && item.msg ? `${String(fieldName)}: ${item.msg}` : item.msg;
+            })
+            .filter(Boolean)
+            .join(" ")
+        : null;
+
+      setFormErrors((current) => ({
+        ...current,
+        submit:
+          validationDetails ||
+          error?.response?.data?.error?.message ||
+          "Не удалось отправить возможность на проверку. Проверьте заполнение полей.",
+      }));
+    },
+  });
+  const deleteOpportunityMutation = useMutation({
+    mutationFn: async (opportunityId: string) => deleteEmployerOpportunityRequest(opportunityId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["employer", "opportunities"] }),
+        queryClient.invalidateQueries({ queryKey: ["moderation", "content-items"] }),
+        queryClient.invalidateQueries({ queryKey: ["opportunities", "feed"] }),
+      ]);
+      setDeleteOpportunityId(null);
+    },
+  });
+
+  useNotificationsRealtime({
+    enabled: role === "employer" && Boolean(accessToken),
+    onMessage: (payload) => {
+      if (payload?.type !== "notification_created") {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["employer", "opportunities"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+    },
+  });
 
   useEffect(() => {
     setExpandedModalTagsCount(MODAL_TAGS_INITIAL_COUNT);
@@ -751,25 +873,15 @@ export function OpportunityManagementPage() {
     setPage(1);
   };
 
-  const workflowItems = useMemo<OpportunityManagementItem[]>(
-    () => listWorkflowOpportunities().map((item) => toManagementOpportunityItem(item)),
-    [workflowRevision],
+  const serverItems = useMemo<OpportunityManagementItem[]>(
+    () => (employerOpportunitiesQuery.data ?? []).map((item) => mapEmployerOpportunityToManagementItem(item)),
+    [employerOpportunitiesQuery.data],
   );
-  const workflowOpportunityMap = useMemo(
-    () => new Map(listWorkflowOpportunities().map((item) => [item.id, item])),
-    [workflowRevision],
+  const serverOpportunityMap = useMemo(
+    () => new Map((employerOpportunitiesQuery.data ?? []).map((item) => [item.id, item])),
+    [employerOpportunitiesQuery.data],
   );
-  const managementItems = useMemo(
-    () => [
-      ...workflowItems,
-      ...opportunityItems.filter((item) => !replacedSeedOpportunityIds.includes(item.id)),
-    ],
-    [replacedSeedOpportunityIds, workflowItems],
-  );
-  const selectedOpportunity = useMemo(
-    () => managementItems.find((item) => item.id === selectedOpportunityId) ?? null,
-    [managementItems, selectedOpportunityId],
-  );
+  const managementItems = useMemo(() => serverItems, [serverItems]);
   const filteredItems = useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
 
@@ -829,22 +941,50 @@ export function OpportunityManagementPage() {
     { label: "Настройки", onClick: () => navigate("/settings") },
     { label: "Выйти", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },
   ];
-  const tagCatalog = tagCatalogQuery.data?.length ? tagCatalogQuery.data : fallbackOpportunityTagCatalog;
-  const filteredTagOptions = useMemo(() => {
-    const normalizedQuery = normalizeTagSearchText(createOpportunityTagQuery);
-    const deduplicated = new Map<string, { id: string; name: string }>();
+  const tagCatalog = useMemo(() => {
+    const mergedCategories = new Map<string, OpportunityTagCatalogCategory>();
 
-    tagCatalog.forEach((category) => {
+    [...fallbackOpportunityTagCatalog, ...(tagCatalogQuery.data ?? [])].forEach((category) => {
+      const existingCategory = mergedCategories.get(category.id);
+
+      if (!existingCategory) {
+        mergedCategories.set(category.id, {
+          ...category,
+          items: [...category.items],
+        });
+        return;
+      }
+
+      const itemIds = new Set(existingCategory.items.map((item) => item.id));
       category.items.forEach((item) => {
-        if (!normalizedQuery || normalizeTagSearchText(item.name).includes(normalizedQuery)) {
-          deduplicated.set(item.name, { id: item.id, name: item.name });
+        if (!itemIds.has(item.id)) {
+          existingCategory.items.push(item);
+          itemIds.add(item.id);
         }
       });
     });
 
-    const allItems = Array.from(deduplicated.values()).sort((left, right) => left.name.localeCompare(right.name));
+    return Array.from(mergedCategories.values());
+  }, [tagCatalogQuery.data]);
+  const isTagSearchEmpty = normalizeTagSearchText(createOpportunityTagQuery).length === 0;
+  const allTagOptions = useMemo(() => {
+    const deduplicated = new Map<string, { id: string; name: string }>();
 
-    return allItems.sort((left, right) => {
+    tagCatalog.forEach((category) => {
+      category.items.forEach((item) => {
+        deduplicated.set(item.name, { id: item.id, name: item.name });
+      });
+    });
+
+    return Array.from(deduplicated.values()).sort((left, right) => left.name.localeCompare(right.name));
+  }, [tagCatalog]);
+  const filteredTagOptions = useMemo(() => {
+    const normalizedQuery = normalizeTagSearchText(createOpportunityTagQuery);
+    const visibleItems = isTagSearchEmpty
+      ? allTagOptions
+      : allTagOptions.filter((item) => buildTagSearchIndex(item.name).includes(normalizedQuery));
+
+    return visibleItems.sort((left, right) => {
       const leftSelected = createOpportunityTags.includes(left.name);
       const rightSelected = createOpportunityTags.includes(right.name);
 
@@ -854,27 +994,7 @@ export function OpportunityManagementPage() {
 
       return left.name.localeCompare(right.name);
     });
-  }, [createOpportunityTagQuery, createOpportunityTags, tagCatalog]);
-  const filteredCreateOpportunityTags = useMemo(() => {
-    const baseTags =
-      createOpportunityType === "mentorship" && createOpportunityMentorshipDirection
-        ? [
-            createOpportunityMentorshipDirection,
-            ...createOpportunityTags.filter((tag) => tag !== createOpportunityMentorshipDirection),
-          ]
-        : createOpportunityTags;
-
-    if (createOpportunityType !== "event" || !createOpportunityEventType) {
-      return baseTags;
-    }
-
-    return [createOpportunityEventType, ...baseTags.filter((tag) => tag !== createOpportunityEventType)];
-  }, [
-    createOpportunityEventType,
-    createOpportunityMentorshipDirection,
-    createOpportunityTags,
-    createOpportunityType,
-  ]);
+  }, [allTagOptions, createOpportunityTagQuery, createOpportunityTags, isTagSearchEmpty]);
   const preferredCity =
     meQuery.data?.data?.user?.preferred_city?.trim() || selectedCity;
   const currentEmployerName =
@@ -897,7 +1017,6 @@ export function OpportunityManagementPage() {
   const resetCreateOpportunityForm = () => {
     setFormMode("create");
     setEditingOpportunityId(null);
-    setEditingSeedOpportunityId(null);
     setCreateOpportunityType("vacancy");
     setCreateOpportunityTitle("");
     setCreateOpportunityDescription("");
@@ -909,11 +1028,12 @@ export function OpportunityManagementPage() {
     setCreateOpportunityLevel("junior");
     setCreateOpportunityFormat("offline");
     setCreateOpportunityEmployment("full-time");
-    setCreateOpportunityEventType("");
-    setCreateOpportunityMentorshipDirection("");
-    setCreateOpportunityMentorExperience("");
+    setCreateOpportunityEventType(eventTypeOptions[0]);
+    setCreateOpportunityMentorshipDirection(mentorshipDirectionOptions[0]);
+    setCreateOpportunityMentorExperience(mentorExperienceOptions[0]);
     setCreateOpportunityPublishDate("");
     setCreateOpportunityAddress("");
+    setLastAddressQuery(readLastAddressQueryCookie() ?? "");
     setCreateOpportunityAddressSuggestions([]);
     setIsAddressSuggestionsOpen(false);
     setSelectedLocationPoint(null);
@@ -924,32 +1044,25 @@ export function OpportunityManagementPage() {
   };
 
   const openCreateOpportunityModal = () => {
-    setSelectedOpportunityId(null);
     resetCreateOpportunityForm();
     setIsCreateOpportunityModalOpen(true);
   };
 
-  const startEditingOpportunity = (record: WorkflowOpportunityRecord | null) => {
+  const startEditingApiOpportunity = (record: EmployerOpportunityItem | null) => {
     if (!record) {
       return;
     }
 
     setFormMode("edit");
     setEditingOpportunityId(record.id);
-    setCreateOpportunityType(record.kind);
+    setCreateOpportunityType(record.opportunityType);
     setCreateOpportunityTitle(record.title);
     setCreateOpportunityDescription(record.description);
     setCreateOpportunityCity(record.city);
     setCreateOpportunityCityPoint({ lon: record.longitude, lat: record.latitude });
     setCreateOpportunitySalary(record.salaryLabel);
     setCreateOpportunityTagQuery("");
-    setCreateOpportunityTags(
-      record.tags.filter(
-        (item) =>
-          !eventTypeOptions.includes(item as (typeof eventTypeOptions)[number]) &&
-          !mentorshipDirectionOptions.includes(item as (typeof mentorshipDirectionOptions)[number]),
-      ),
-    );
+    setCreateOpportunityTags(record.tags);
     setCreateOpportunityLevel(
       record.levelLabel === "Senior"
         ? "senior"
@@ -957,13 +1070,7 @@ export function OpportunityManagementPage() {
           ? "middle"
           : "junior",
     );
-    setCreateOpportunityFormat(
-      record.formatLabel === "Онлайн"
-        ? "online"
-        : record.formatLabel === "Гибрид"
-          ? "hybrid"
-          : "offline",
-    );
+    setCreateOpportunityFormat(record.format);
     setCreateOpportunityEmployment(
       record.employmentLabel === "Part-time"
         ? "part-time"
@@ -972,105 +1079,33 @@ export function OpportunityManagementPage() {
           : "full-time",
     );
     setCreateOpportunityEventType(
-      record.kind === "event"
-        ? eventTypeOptions.find((item) => record.tags.includes(item)) ?? ""
-        : "",
+      (record.eventType as (typeof eventTypeOptions)[number] | null) ?? eventTypeOptions[0],
     );
     setCreateOpportunityMentorshipDirection(
-      record.kind === "mentorship"
-        ? mentorshipDirectionOptions.find((item) => record.tags.includes(item)) ?? ""
-        : "",
+      (record.mentorshipDirection as (typeof mentorshipDirectionOptions)[number] | null) ?? mentorshipDirectionOptions[0],
     );
     setCreateOpportunityMentorExperience(
-      record.kind === "mentorship"
-        ? mentorExperienceOptions.find((item) => item === record.levelLabel) ?? ""
-        : "",
+      (record.mentorExperience as (typeof mentorExperienceOptions)[number] | null) ?? mentorExperienceOptions[0],
     );
     setCreateOpportunityPublishDate(record.plannedPublishAt?.slice(0, 10) ?? "");
     setCreateOpportunityAddress(record.address);
+    writeLastAddressQueryCookie(record.address);
+    setLastAddressQuery(record.address);
     setCreateOpportunityAddressSuggestions([]);
     setIsAddressSuggestionsOpen(false);
     setSelectedLocationPoint({ lon: record.longitude, lat: record.latitude });
     setIsDraftLocationAddressLoading(false);
     setIsMapExpanded(false);
     setExpandedModalTagsCount(MODAL_TAGS_INITIAL_COUNT);
-    setSelectedOpportunityId(null);
+    setFormErrors({});
     setIsCreateOpportunityModalOpen(true);
   };
 
   const startEditingManagementItem = (item: OpportunityManagementItem) => {
-    const workflowRecord = workflowOpportunityMap.get(item.id);
-
-    if (workflowRecord) {
-      startEditingOpportunity(workflowRecord);
-      return;
+    const serverRecord = serverOpportunityMap.get(item.id);
+    if (serverRecord) {
+      startEditingApiOpportunity(serverRecord);
     }
-
-    setFormMode("edit");
-    setEditingOpportunityId(null);
-    setEditingSeedOpportunityId(item.id);
-    setCreateOpportunityType(
-      item.kind === "Стажировка"
-        ? "internship"
-        : item.kind === "Мероприятие"
-          ? "event"
-          : item.kind === "Менторская программа"
-            ? "mentorship"
-            : "vacancy",
-    );
-    setCreateOpportunityTitle(item.title);
-    setCreateOpportunityDescription(item.description);
-    setCreateOpportunityCity(preferredCity);
-    setCreateOpportunityCityPoint(popularCities.find((entry) => entry.name === preferredCity)?.point ?? null);
-    setCreateOpportunitySalary(item.salaryLabel);
-    setCreateOpportunityTagQuery("");
-    setCreateOpportunityTags(
-      item.tags.filter(
-        (tag) =>
-          !eventTypeOptions.includes(tag as (typeof eventTypeOptions)[number]) &&
-          !mentorshipDirectionOptions.includes(tag as (typeof mentorshipDirectionOptions)[number]),
-      ),
-    );
-    setCreateOpportunityLevel(
-      item.levelLabel === "Senior"
-        ? "senior"
-        : item.levelLabel === "Middle"
-          ? "middle"
-          : "junior",
-    );
-    setCreateOpportunityFormat("offline");
-    setCreateOpportunityEmployment(
-      item.employmentLabel === "Part-time"
-        ? "part-time"
-        : item.employmentLabel === "Project"
-          ? "project"
-          : "full-time",
-    );
-    setCreateOpportunityEventType(
-      item.kind === "Мероприятие"
-        ? eventTypeOptions.find((option) => item.tags.includes(option)) ?? ""
-        : "",
-    );
-    setCreateOpportunityMentorshipDirection(
-      item.kind === "Менторская программа"
-        ? mentorshipDirectionOptions.find((option) => item.tags.includes(option)) ?? ""
-        : "",
-    );
-    setCreateOpportunityMentorExperience(
-      item.kind === "Менторская программа"
-        ? mentorExperienceOptions.find((option) => option === item.levelLabel) ?? ""
-        : "",
-    );
-    setCreateOpportunityPublishDate("");
-    setCreateOpportunityAddress(item.locationLabel);
-    setCreateOpportunityAddressSuggestions([]);
-    setIsAddressSuggestionsOpen(false);
-    setSelectedLocationPoint(popularCities.find((entry) => entry.name === preferredCity)?.point ?? null);
-    setIsDraftLocationAddressLoading(false);
-    setIsMapExpanded(false);
-    setExpandedModalTagsCount(MODAL_TAGS_INITIAL_COUNT);
-    setSelectedOpportunityId(null);
-    setIsCreateOpportunityModalOpen(true);
   };
 
   useEffect(() => {
@@ -1089,6 +1124,8 @@ export function OpportunityManagementPage() {
 
   const handleAddressSuggestionSelect = (item: AddressSuggestion) => {
     setCreateOpportunityAddress(item.fullAddress);
+    writeLastAddressQueryCookie(item.fullAddress);
+    setLastAddressQuery(item.fullAddress);
     setCreateOpportunityAddressSuggestions([]);
     setIsAddressSuggestionsOpen(false);
     addressInputRef.current?.blur();
@@ -1096,6 +1133,36 @@ export function OpportunityManagementPage() {
     if (item.point) {
       setSelectedLocationPoint(item.point);
     }
+  };
+
+  const handleLastAddressQuerySelect = () => {
+    const normalizedQuery = lastAddressQuery.trim();
+
+    if (!normalizedQuery) {
+      return;
+    }
+
+    setIsAddressSuggestionsLoading(true);
+
+    void getAddressSuggestions(normalizedQuery)
+      .then((items) => {
+        const nextItem = items[0];
+
+        if (nextItem) {
+          handleAddressSuggestionSelect(nextItem);
+          return;
+        }
+
+        setCreateOpportunityAddress(normalizedQuery);
+        setIsAddressSuggestionsOpen(false);
+      })
+      .catch(() => {
+        setCreateOpportunityAddress(normalizedQuery);
+        setIsAddressSuggestionsOpen(false);
+      })
+      .finally(() => {
+        setIsAddressSuggestionsLoading(false);
+      });
   };
 
   const handlePreviewLocationPointChange = (point: OpportunityLocationPoint) => {
@@ -1116,6 +1183,8 @@ export function OpportunityManagementPage() {
 
         if (nextAddress) {
           setCreateOpportunityAddress(nextAddress);
+          writeLastAddressQueryCookie(nextAddress);
+          setLastAddressQuery(nextAddress);
           setCreateOpportunityAddressSuggestions([]);
           setIsAddressSuggestionsOpen(false);
         }
@@ -1139,14 +1208,26 @@ export function OpportunityManagementPage() {
 
     if (!createOpportunityTitle.trim()) {
       nextErrors.title = "Введите название возможности.";
+    } else if (createOpportunityTitle.trim().length < 2) {
+      nextErrors.title = "Название должно содержать минимум 2 символа.";
     }
 
     if (!createOpportunityDescription.trim()) {
       nextErrors.description = "Добавьте описание с требованиями, обязанностями и условиями.";
+    } else if (createOpportunityDescription.trim().length < 10) {
+      nextErrors.description = "Описание должно содержать минимум 10 символов.";
+    }
+
+    if (!createOpportunityCity.trim()) {
+      nextErrors.city = "Укажите город.";
+    } else if (createOpportunityCity.trim().length < 2) {
+      nextErrors.city = "Название города должно содержать минимум 2 символа.";
     }
 
     if (!createOpportunityAddress.trim()) {
       nextErrors.address = "Укажите адрес.";
+    } else if (createOpportunityAddress.trim().length < 2) {
+      nextErrors.address = "Адрес должен содержать минимум 2 символа.";
     }
 
     if (!createOpportunitySalary.trim()) {
@@ -1178,6 +1259,8 @@ export function OpportunityManagementPage() {
         titleInputRef.current?.focus();
       } else if (nextErrors.description) {
         descriptionTextareaRef.current?.focus();
+      } else if (nextErrors.city) {
+        cityInputRef.current?.focus();
       } else if (nextErrors.address) {
         addressInputRef.current?.focus();
       } else if (nextErrors.salary) {
@@ -1203,36 +1286,32 @@ export function OpportunityManagementPage() {
       return;
     }
 
-    const payload = buildWorkflowCreatePayload({
+    const apiPayload = {
       title: createOpportunityTitle.trim(),
-      companyName: currentEmployerName || "Компания",
-      authorEmail: meQuery.data?.data?.user?.email?.trim() || "employer@tramplin.local",
-      kind: createOpportunityType,
-      salaryLabel: createOpportunitySalary.trim(),
-      address: createOpportunityAddress.trim(),
-      city: createOpportunityCity.trim(),
-      tags: filteredCreateOpportunityTags,
-      levelLabel: createOpportunityType === "mentorship" ? createOpportunityMentorExperience : undefined,
-      employmentLabel: createOpportunityType === "mentorship" ? "Менторство" : undefined,
-      format: createOpportunityType === "mentorship" ? "online" : createOpportunityFormat,
       description: createOpportunityDescription.trim(),
-      plannedPublishAt: createOpportunityPublishDate,
+      opportunity_type: createOpportunityType,
+      city: createOpportunityCity.trim(),
+      address: createOpportunityAddress.trim(),
+      salary_label: createOpportunitySalary.trim(),
+      tags: createOpportunityTags,
+      format: createOpportunityType === "mentorship" ? "online" : createOpportunityFormat,
+      level_label: createOpportunityType === "vacancy" || createOpportunityType === "internship" ? createOpportunityLevel : null,
+      employment_label:
+        createOpportunityType === "vacancy" || createOpportunityType === "internship"
+          ? createOpportunityEmployment
+          : null,
+      event_type: createOpportunityType === "event" ? createOpportunityEventType : null,
+      mentorship_direction: createOpportunityType === "mentorship" ? createOpportunityMentorshipDirection : null,
+      mentor_experience: createOpportunityType === "mentorship" ? createOpportunityMentorExperience : null,
+      planned_publish_at: createOpportunityPublishDate ? `${createOpportunityPublishDate}T00:00:00+03:00` : null,
       latitude: targetPoint.lat,
       longitude: targetPoint.lon,
+    } as const;
+
+    void saveOpportunityMutation.mutate({
+      opportunityId: formMode === "edit" ? editingOpportunityId : null,
+      payload: apiPayload,
     });
-
-    if (formMode === "edit" && editingOpportunityId) {
-      updateWorkflowOpportunity(editingOpportunityId, payload, { resubmit: true });
-    } else if (formMode === "edit" && editingSeedOpportunityId) {
-      createWorkflowOpportunity(payload);
-      setReplacedSeedOpportunityIds((current) =>
-        current.includes(editingSeedOpportunityId) ? current : [...current, editingSeedOpportunityId],
-      );
-    } else {
-      createWorkflowOpportunity(payload);
-    }
-
-    closeCreateOpportunityModal();
   };
 
   return (
@@ -1463,283 +1542,255 @@ export function OpportunityManagementPage() {
           </div>
         </section>
 
-        <section className="opportunity-management-page__grid" aria-label="Карточки возможностей">
-          {visibleItems.map((item) => (
-            <article
-              key={item.id}
-              className="opportunity-management-page__card"
-              onClick={() => setSelectedOpportunityId(item.id)}
-            >
-              {(() => {
-                const visibleTagLimit = resolveVisibleTagLimit(
-                  expandedCardTags[item.id],
-                  item.tags.length,
-                  CARD_TAGS_INITIAL_COUNT,
-                );
+        {visibleItems.length > 0 ? (
+          <>
+            <section className="opportunity-management-page__grid" aria-label="Карточки возможностей">
+              {visibleItems.map((item) => (
+                <article key={item.id} className="opportunity-management-page__card">
+                  {(() => {
+                    const visibleTagLimit = resolveVisibleTagLimit(
+                      expandedCardTags[item.id],
+                      item.tags.length,
+                      CARD_TAGS_INITIAL_COUNT,
+                    );
 
-                return (
-              <div className="opportunity-management-page__card-body">
-                <Status className="opportunity-management-page__status" variant={resolveStatusVariant(item.status)}>
-                  {resolveStatusLabel(item.status)}
-                </Status>
+                    return (
+                  <div className="opportunity-management-page__card-body">
+                    <Status className="opportunity-management-page__status" variant={resolveStatusVariant(item.status)}>
+                      {resolveStatusLabel(item.status)}
+                    </Status>
 
-                <div className="opportunity-management-page__title-group">
-                  <h2 className="opportunity-management-page__card-title">{item.title}</h2>
-                  <p className="opportunity-management-page__card-kind">{item.kind}</p>
-                </div>
+                    <div className="opportunity-management-page__title-group">
+                      <h2 className="opportunity-management-page__card-title">{item.title}</h2>
+                      <p className="opportunity-management-page__card-kind">{item.kind}</p>
+                    </div>
 
-                <div className="opportunity-management-page__summary">
-                  <p className="opportunity-management-page__salary">{item.salaryLabel}</p>
-                  <p className="opportunity-management-page__location">{item.locationLabel}</p>
-                </div>
+                    <div className="opportunity-management-page__summary">
+                      <p className="opportunity-management-page__salary">{item.salaryLabel}</p>
+                      <p className="opportunity-management-page__location">{item.locationLabel}</p>
+                    </div>
 
-                <div className="opportunity-management-page__tags">
-                  {item.tags
-                    .slice(0, visibleTagLimit)
-                    .map((tag, tagIndex) => (
-                    <Badge key={`${item.id}-${tag}-${tagIndex}`} variant="primary">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
+                    <div className="opportunity-management-page__tags">
+                      {item.tags
+                        .slice(0, visibleTagLimit)
+                        .map((tag, tagIndex) => (
+                        <Badge key={`${item.id}-${tag}-${tagIndex}`} variant="primary">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
 
-                <div className="opportunity-management-page__details">
-                  <p className="opportunity-management-page__detail-text">Уровень: {item.levelLabel}</p>
-                  <p className="opportunity-management-page__detail-text">Занятость: {item.employmentLabel}</p>
-                </div>
+                    <div className="opportunity-management-page__details">
+                      <p className="opportunity-management-page__detail-text">Уровень: {item.levelLabel}</p>
+                      <p className="opportunity-management-page__detail-text">Занятость: {item.employmentLabel}</p>
+                    </div>
 
-                <p className="opportunity-management-page__description">{item.description}</p>
+                    <p className="opportunity-management-page__description">{item.description}</p>
 
-                <div className="opportunity-management-page__footer">
-                  <div className="opportunity-management-page__meta">
-                    {item.responsesCount !== undefined ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Откликов:</span>
-                        <span className="opportunity-management-page__meta-value">{item.responsesCount}</span>
-                      </p>
-                    ) : null}
+                    <div className="opportunity-management-page__footer">
+                      <div className="opportunity-management-page__meta">
+                        {item.responsesCount !== undefined ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Откликов:</span>
+                            <span className="opportunity-management-page__meta-value">{item.responsesCount}</span>
+                          </p>
+                        ) : null}
 
-                    {item.publishedAtLabel ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Опубликовано:</span>
-                        <span className="opportunity-management-page__meta-value">{item.publishedAtLabel}</span>
-                      </p>
-                    ) : null}
+                        {item.publishedAtLabel ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Опубликовано:</span>
+                            <span className="opportunity-management-page__meta-value">{item.publishedAtLabel}</span>
+                          </p>
+                        ) : null}
 
-                    {item.activeUntilLabel ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Активно до:</span>
-                        <span className="opportunity-management-page__meta-value">{item.activeUntilLabel}</span>
-                      </p>
-                    ) : null}
+                        {item.activeUntilLabel ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Активно до:</span>
+                            <span className="opportunity-management-page__meta-value">{item.activeUntilLabel}</span>
+                          </p>
+                        ) : null}
 
-                    {item.plannedPublishAtLabel ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Дата публикации:</span>
-                        <span className="opportunity-management-page__meta-value">{item.plannedPublishAtLabel}</span>
-                      </p>
-                    ) : null}
+                        {item.plannedPublishAtLabel ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Дата публикации:</span>
+                            <span className="opportunity-management-page__meta-value">{item.plannedPublishAtLabel}</span>
+                          </p>
+                        ) : null}
 
-                    {item.plannedCloseAtLabel ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Дата закрытия:</span>
-                        <span className="opportunity-management-page__meta-value">{item.plannedCloseAtLabel}</span>
-                      </p>
-                    ) : null}
+                        {item.plannedCloseAtLabel ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Дата закрытия:</span>
+                            <span className="opportunity-management-page__meta-value">{item.plannedCloseAtLabel}</span>
+                          </p>
+                        ) : null}
 
-                    {item.closedAtLabel ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Закрыто:</span>
-                        <span className="opportunity-management-page__meta-value">{item.closedAtLabel}</span>
-                      </p>
-                    ) : null}
+                        {item.closedAtLabel ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Закрыто:</span>
+                            <span className="opportunity-management-page__meta-value">{item.closedAtLabel}</span>
+                          </p>
+                        ) : null}
 
-                    {item.submittedAtLabel ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Дата отправки:</span>
-                        <span className="opportunity-management-page__meta-value">{item.submittedAtLabel}</span>
-                      </p>
-                    ) : null}
+                        {item.submittedAtLabel ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Дата отправки:</span>
+                            <span className="opportunity-management-page__meta-value">{item.submittedAtLabel}</span>
+                          </p>
+                        ) : null}
 
-                    {item.moderationComment ? (
-                      <p className="opportunity-management-page__meta-row">
-                        <span className="opportunity-management-page__meta-label">Комментарий:</span>
-                        <span className="opportunity-management-page__meta-value">{item.moderationComment}</span>
-                      </p>
-                    ) : null}
+                        {item.moderationComment ? (
+                          <p className="opportunity-management-page__meta-row">
+                            <span className="opportunity-management-page__meta-label">Комментарий:</span>
+                            <span className="opportunity-management-page__meta-value">{item.moderationComment}</span>
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="opportunity-management-page__actions">
+                        {item.status === "removed" ? (
+                          <button
+                            type="button"
+                            className="opportunity-management-page__action-button"
+                            aria-label="Вернуть в публикацию"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                          >
+                            <img src={uploadIcon} alt="" aria-hidden="true" className="opportunity-management-page__action-icon" />
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="opportunity-management-page__action-button"
+                          aria-label="Редактировать"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            startEditingManagementItem(item);
+                          }}
+                        >
+                          <img src={editIcon} alt="" aria-hidden="true" className="opportunity-management-page__action-icon" />
+                        </button>
+                        <button
+                          type="button"
+                          className="opportunity-management-page__action-button"
+                          aria-label="Удалить"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeleteOpportunityId(item.id);
+                          }}
+                        >
+                          <img src={deleteIcon} alt="" aria-hidden="true" className="opportunity-management-page__action-icon" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
+                    );
+                  })()}
+                </article>
+              ))}
+            </section>
 
-                  <div className="opportunity-management-page__actions">
-                    {item.status === "removed" ? (
-                      <button
-                        type="button"
-                        className="opportunity-management-page__action-button"
-                        aria-label="Вернуть в публикацию"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                        }}
-                      >
-                        <img src={uploadIcon} alt="" aria-hidden="true" className="opportunity-management-page__action-icon" />
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="opportunity-management-page__action-button"
-                      aria-label="Редактировать"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        startEditingManagementItem(item);
-                      }}
-                    >
-                      <img src={editIcon} alt="" aria-hidden="true" className="opportunity-management-page__action-icon" />
-                    </button>
-                    <button
-                      type="button"
-                      className="opportunity-management-page__action-button"
-                      aria-label="Удалить"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (item.id.startsWith("local-opportunity-")) {
-                          removeWorkflowOpportunity(item.id);
-                          setSelectedOpportunityId((current) => (current === item.id ? null : current));
-                        }
-                      }}
-                    >
-                      <img src={deleteIcon} alt="" aria-hidden="true" className="opportunity-management-page__action-icon" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-                );
-              })()}
-            </article>
-          ))}
-        </section>
-
-        <nav className="opportunity-management-page__pagination" aria-label="Пагинация">
-          <button
-            type="button"
-            className="opportunity-management-page__pagination-arrow"
-            onClick={() => setPage((currentValue) => Math.max(1, currentValue - 1))}
-            disabled={currentPage === 1}
-            aria-label="Предыдущая страница"
-          >
-            <img
-              src={arrowIcon}
-              alt=""
-              aria-hidden="true"
-              className="opportunity-management-page__pagination-arrow-icon opportunity-management-page__pagination-arrow-icon--prev"
-            />
-          </button>
-          {paginationItems.map((item, index) =>
-            typeof item === "number" ? (
+            <nav className="opportunity-management-page__pagination" aria-label="Пагинация">
               <button
-                key={`${item}-${index}`}
                 type="button"
-                className={
-                  currentPage === item
-                    ? "opportunity-management-page__pagination-page opportunity-management-page__pagination-page--active"
-                    : "opportunity-management-page__pagination-page"
-                }
-                onClick={() => setPage(item)}
+                className="opportunity-management-page__pagination-arrow"
+                onClick={() => setPage((currentValue) => Math.max(1, currentValue - 1))}
+                disabled={currentPage === 1}
+                aria-label="Предыдущая страница"
               >
-                {item}
+                <img
+                  src={arrowIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="opportunity-management-page__pagination-arrow-icon opportunity-management-page__pagination-arrow-icon--prev"
+                />
               </button>
-            ) : (
-              <span key={`${item}-${index}`} className="opportunity-management-page__pagination-ellipsis">
-                ...
-              </span>
-            ),
-          )}
-          <button
-            type="button"
-            className="opportunity-management-page__pagination-arrow"
-            onClick={() => setPage((currentValue) => Math.min(totalPages, currentValue + 1))}
-            disabled={currentPage === totalPages}
-            aria-label="Следующая страница"
-          >
-            <img
-              src={arrowIcon}
-              alt=""
-              aria-hidden="true"
-              className="opportunity-management-page__pagination-arrow-icon"
-            />
-          </button>
-        </nav>
+              {paginationItems.map((item, index) =>
+                typeof item === "number" ? (
+                  <button
+                    key={`${item}-${index}`}
+                    type="button"
+                    className={
+                      currentPage === item
+                        ? "opportunity-management-page__pagination-page opportunity-management-page__pagination-page--active"
+                        : "opportunity-management-page__pagination-page"
+                    }
+                    onClick={() => setPage(item)}
+                  >
+                    {item}
+                  </button>
+                ) : (
+                  <span key={`${item}-${index}`} className="opportunity-management-page__pagination-ellipsis">
+                    ...
+                  </span>
+                ),
+              )}
+              <button
+                type="button"
+                className="opportunity-management-page__pagination-arrow"
+                onClick={() => setPage((currentValue) => Math.min(totalPages, currentValue + 1))}
+                disabled={currentPage === totalPages}
+                aria-label="Следующая страница"
+              >
+                <img
+                  src={arrowIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="opportunity-management-page__pagination-arrow-icon"
+                />
+              </button>
+            </nav>
+          </>
+        ) : (
+          <section className="opportunity-management-page__empty" aria-live="polite">
+            Пока нет созданных возможностей.
+          </section>
+        )}
 
       </Container>
-
       <Modal
-        isOpen={selectedOpportunity !== null}
-        onClose={() => setSelectedOpportunityId(null)}
-        title={selectedOpportunity?.title ?? "Детали возможности"}
+        isOpen={deleteOpportunityId !== null}
+        onClose={() => setDeleteOpportunityId(null)}
+        title="Удалить возможность"
         panelClassName="opportunity-management-page__modal-panel"
         titleAccentColor="var(--color-primary)"
       >
-        {selectedOpportunity ? (
-          <div className="opportunity-management-page__modal-form">
-            <div className="opportunity-management-page__title-group">
-              <h2 className="opportunity-management-page__card-title">{selectedOpportunity.title}</h2>
-              <p className="opportunity-management-page__card-kind">{selectedOpportunity.kind}</p>
-            </div>
-            <Status className="opportunity-management-page__status" variant={resolveStatusVariant(selectedOpportunity.status)}>
-              {resolveStatusLabel(selectedOpportunity.status)}
-            </Status>
-            <div className="opportunity-management-page__summary">
-              <p className="opportunity-management-page__salary">{selectedOpportunity.salaryLabel}</p>
-              <p className="opportunity-management-page__location">{selectedOpportunity.locationLabel}</p>
-            </div>
-            <div className="opportunity-management-page__tags">
-              {selectedOpportunity.tags.map((tag, index) => (
-                <Badge key={`${selectedOpportunity.id}-${tag}-${index}`} variant="primary">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-            <div className="opportunity-management-page__details">
-              <p className="opportunity-management-page__detail-text">Уровень: {selectedOpportunity.levelLabel}</p>
-              <p className="opportunity-management-page__detail-text">Занятость: {selectedOpportunity.employmentLabel}</p>
-            </div>
-            <p className="opportunity-management-page__description">{selectedOpportunity.description}</p>
-            {selectedOpportunity.moderationComment ? (
-              <p className="opportunity-management-page__meta-row">
-                <span className="opportunity-management-page__meta-label">Комментарий куратора:</span>
-                <span className="opportunity-management-page__meta-value">{selectedOpportunity.moderationComment}</span>
-              </p>
+        <div className="opportunity-management-page__modal-form">
+          <p className="opportunity-management-page__description">
+            Возможность будет удалена. Подтвердите действие.
+          </p>
+          <div className="opportunity-management-page__modal-actions">
+            {formErrors.submit ? (
+              <p className="opportunity-management-page__modal-error">{formErrors.submit}</p>
             ) : null}
-            <div className="opportunity-management-page__modal-actions">
-              <Button
-                type="button"
-                variant="primary-outline"
-                size="md"
-                className="opportunity-management-page__modal-cancel"
-                onClick={() => setSelectedOpportunityId(null)}
-              >
-                Закрыть
-              </Button>
-              {selectedOpportunity.id.startsWith("local-opportunity-") ? (
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="md"
-                  className="opportunity-management-page__modal-submit"
-                  onClick={() => {
-                    setSelectedOpportunityId(null);
-                    startEditingManagementItem(selectedOpportunity);
-                  }}
-                >
-                  {selectedOpportunity.status === "changes_requested" ||
-                  selectedOpportunity.status === "rejected" ||
-                  selectedOpportunity.status === "changed"
-                    ? "Исправить и отправить снова"
-                    : "Редактировать"}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </Modal>
+            <Button
+              type="button"
+              variant="primary-outline"
+              size="md"
+              className="opportunity-management-page__modal-cancel"
+              onClick={() => setDeleteOpportunityId(null)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="md"
+              className="opportunity-management-page__modal-submit"
+              onClick={() => {
+                if (!deleteOpportunityId) {
+                  return;
+                }
 
+                void deleteOpportunityMutation.mutate(deleteOpportunityId);
+              }}
+              loading={deleteOpportunityMutation.isPending}
+            >
+              Удалить
+            </Button>
+          </div>
+        </div>
+      </Modal>
       <Modal
         isOpen={isCreateOpportunityModalOpen}
         onClose={closeCreateOpportunityModal}
@@ -1760,21 +1811,15 @@ export function OpportunityManagementPage() {
                     checked={createOpportunityType === item.value}
                     onChange={() => {
                       setCreateOpportunityType(item.value);
-
-                      if (item.value !== "event") {
-                        setCreateOpportunityEventType("");
-                        setFormErrors((current) => ({ ...current, eventType: undefined }));
-                      }
-
-                      if (item.value !== "mentorship") {
-                        setCreateOpportunityMentorshipDirection("");
-                        setCreateOpportunityMentorExperience("");
-                        setFormErrors((current) => ({
-                          ...current,
-                          mentorshipDirection: undefined,
-                          mentorExperience: undefined,
-                        }));
-                      }
+                      setCreateOpportunityEventType(eventTypeOptions[0]);
+                      setCreateOpportunityMentorshipDirection(mentorshipDirectionOptions[0]);
+                      setCreateOpportunityMentorExperience(mentorExperienceOptions[0]);
+                      setFormErrors((current) => ({
+                        ...current,
+                        eventType: undefined,
+                        mentorshipDirection: undefined,
+                        mentorExperience: undefined,
+                      }));
                     }}
                     variant="primary"
                   />
@@ -1855,7 +1900,11 @@ export function OpportunityManagementPage() {
                   }
                 }}
                 onChange={(event) => {
-                  setCreateOpportunityAddress(event.target.value);
+                  const nextValue = event.target.value;
+
+                  setCreateOpportunityAddress(nextValue);
+                  writeLastAddressQueryCookie(nextValue);
+                  setLastAddressQuery(nextValue);
                   setIsAddressSuggestionsOpen(true);
                   setFormErrors((current) => ({ ...current, address: undefined }));
                 }}
@@ -1870,6 +1919,17 @@ export function OpportunityManagementPage() {
               <div className="opportunity-management-page__modal-address-dropdown">
                 {isAddressSuggestionsLoading ? (
                   <div className="opportunity-management-page__modal-address-empty">Загружаем адреса...</div>
+                ) : !createOpportunityAddress.trim() && lastAddressQuery.trim() ? (
+                  <button
+                    type="button"
+                    className="opportunity-management-page__modal-address-option"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={handleLastAddressQuerySelect}
+                  >
+                    <span className="opportunity-management-page__modal-address-option-title">
+                      {lastAddressQuery}
+                    </span>
+                  </button>
                 ) : createOpportunityAddressSuggestions.length > 0 ? (
                   createOpportunityAddressSuggestions.map((item) => (
                     <button
@@ -1976,7 +2036,10 @@ export function OpportunityManagementPage() {
                 {filteredTagOptions.length > 0 ? (
                   <div className="opportunity-management-page__modal-tag-suggestions">
                     {filteredTagOptions
-                      .slice(0, Math.min(expandedModalTagsCount, filteredTagOptions.length))
+                      .slice(
+                        0,
+                        Math.min(expandedModalTagsCount, filteredTagOptions.length),
+                      )
                       .map((item) => (
                         <button
                           key={item.id}
@@ -1999,30 +2062,23 @@ export function OpportunityManagementPage() {
                           {item.name}
                         </button>
                       ))}
-                    {expandedModalTagsCount > MODAL_TAGS_INITIAL_COUNT ? (
-                      <button
-                        type="button"
-                        className="opportunity-management-page__modal-tag-chip opportunity-management-page__modal-tag-chip--more"
-                        onClick={() =>
-                          setExpandedModalTagsCount((current) => Math.max(MODAL_TAGS_INITIAL_COUNT, current - MODAL_TAGS_STEP))
-                        }
-                      >
-                        Назад
-                      </button>
-                    ) : null}
                     {expandedModalTagsCount < filteredTagOptions.length ? (
                       <button
                         type="button"
                         className="opportunity-management-page__modal-tag-chip opportunity-management-page__modal-tag-chip--more"
                         onClick={() => setExpandedModalTagsCount((current) => current + MODAL_TAGS_STEP)}
                       >
-                        Еще
+                        ...
                       </button>
                     ) : null}
                   </div>
                 ) : (
                   <div className="opportunity-management-page__modal-tag-empty">
-                    {tagCatalogQuery.isLoading ? "Загружаем каталог тегов..." : "По запросу теги не найдены."}
+                    {tagCatalogQuery.isLoading
+                      ? "Загружаем каталог тегов..."
+                      : isTagSearchEmpty
+                        ? "Теги пока недоступны."
+                        : "По запросу теги не найдены."}
                   </div>
                 )}
               </div>

@@ -15,7 +15,13 @@ from src.schemas.auth import (
 )
 from src.schemas.company import EmployerOnboardingRequest
 from src.schemas.notification import NotificationFeedResponse, NotificationRead, NotificationUnreadCountResponse
-from src.schemas.opportunity import OpportunityFeedResponse, OpportunityPublicRead
+from src.schemas.opportunity import (
+    EmployerOpportunityListResponse,
+    EmployerOpportunityRead,
+    EmployerOpportunityUpsertRequest,
+    OpportunityFeedResponse,
+    OpportunityPublicRead,
+)
 from src.schemas.tag import TagCatalogCategoryRead, TagCatalogItemRead, TagCatalogResponse
 from src.schemas.user import (
     ModerationSettingsRead,
@@ -54,6 +60,9 @@ __all__ = [
     "ModerationSettingsUpdateRequest",
     "OpportunityPublicRead",
     "OpportunityFeedResponse",
+    "EmployerOpportunityUpsertRequest",
+    "EmployerOpportunityRead",
+    "EmployerOpportunityListResponse",
     "TagCatalogItemRead",
     "TagCatalogCategoryRead",
     "TagCatalogResponse",

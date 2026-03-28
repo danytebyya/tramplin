@@ -64,13 +64,11 @@ export function Modal({
     const previousHtmlOverscrollBehavior = document.documentElement.style.overscrollBehavior;
     const previousOverflow = document.body.style.overflow;
     const previousBodyOverscrollBehavior = document.body.style.overscrollBehavior;
-    const previousBodyHeight = document.body.style.height;
 
     document.documentElement.style.overflow = "hidden";
     document.documentElement.style.overscrollBehavior = "none";
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "none";
-    document.body.style.height = "100vh";
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -85,7 +83,6 @@ export function Modal({
       document.documentElement.style.overscrollBehavior = previousHtmlOverscrollBehavior;
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousBodyOverscrollBehavior;
-      document.body.style.height = previousBodyHeight;
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen, onClose]);

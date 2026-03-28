@@ -424,10 +424,6 @@
   background-color: #0f172a;
 }
 
-.map-view__filter-category-icon--collapsed::before {
-  transform: rotate(180deg);
-}
-
 .map-view__filter-title--lg {
   font-size: 18px;
   line-height: 24px;

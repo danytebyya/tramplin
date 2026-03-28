@@ -551,10 +551,14 @@
 
 .content-moderation-page__row-company {
   grid-column: 2;
-  display: flex;
-  align-items: center;
+  display: block;
   justify-self: start;
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: left;
 }
 

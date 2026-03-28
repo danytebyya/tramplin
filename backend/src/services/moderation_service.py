@@ -49,7 +49,8 @@ class ModerationService:
         "Требуется дополнить заявку: проверьте полноту заполнения данных, контактную информацию и приложенные документы."
     )
     DEFAULT_REJECTION_COMMENT = (
-        "Верификация отклонена. При необходимости вы можете отправить заявку повторно."
+        "Ваша заявка была отклонена, так как не соответствует требованиям нашей политики размещения. "
+        "Пожалуйста, ознакомьтесь с правилами и при необходимости внесите изменения перед повторной отправкой."
     )
     SIDE_EFFECT_ACTION_APPROVE = "approve"
     SIDE_EFFECT_ACTION_REJECT = "reject"
@@ -545,13 +546,36 @@ class ModerationService:
         self._ensure_moderation_access(current_user)
         opportunity = self._get_opportunity_or_raise(opportunity_id)
         opportunity.moderation_status = ModerationStatus.APPROVED
-        opportunity.business_status = OpportunityStatus.ACTIVE
+        starts_at = (
+            self._normalize_datetime(opportunity.starts_at)
+            if opportunity.starts_at is not None
+            else None
+        )
+        now = datetime.now(UTC)
+        opportunity.business_status = (
+            OpportunityStatus.SCHEDULED
+            if starts_at is not None and starts_at > now
+            else OpportunityStatus.ACTIVE
+        )
         opportunity.moderated_by_user_id = current_user.id
-        opportunity.moderated_at = datetime.now(UTC)
+        opportunity.moderated_at = now
         opportunity.moderation_reason = payload.moderator_comment
+        opportunity.published_at = None if opportunity.business_status == OpportunityStatus.SCHEDULED else now
         self.repo.db.add(opportunity)
         self.repo.db.commit()
         self.repo.db.refresh(opportunity)
+        self._publish_content_item_updated(opportunity)
+        self._create_opportunity_status_notification(
+            opportunity=opportunity,
+            title="Публикация одобрена" if opportunity.business_status == OpportunityStatus.ACTIVE else "Публикация запланирована",
+            message=(
+                "Возможность прошла модерацию и опубликована."
+                if opportunity.business_status == OpportunityStatus.ACTIVE
+                else "Возможность прошла модерацию и будет опубликована по запланированной дате."
+            ),
+            severity=NotificationSeverity.SUCCESS,
+        )
+        self.repo.db.commit()
         return self._serialize_content_moderation_item(opportunity)
 
     def reject_content_item(
@@ -569,6 +593,14 @@ class ModerationService:
         self.repo.db.add(opportunity)
         self.repo.db.commit()
         self.repo.db.refresh(opportunity)
+        self._publish_content_item_updated(opportunity)
+        self._create_opportunity_status_notification(
+            opportunity=opportunity,
+            title="Публикация отклонена",
+            message=opportunity.moderation_reason or "Публикация была отклонена модератором.",
+            severity=NotificationSeverity.WARNING,
+        )
+        self.repo.db.commit()
         return self._serialize_content_moderation_item(opportunity)
 
     def request_content_changes(
@@ -586,6 +618,14 @@ class ModerationService:
         self.repo.db.add(opportunity)
         self.repo.db.commit()
         self.repo.db.refresh(opportunity)
+        self._publish_content_item_updated(opportunity)
+        self._create_opportunity_status_notification(
+            opportunity=opportunity,
+            title="Нужны правки по публикации",
+            message=opportunity.moderation_reason or "В публикации нужно внести изменения.",
+            severity=NotificationSeverity.WARNING,
+        )
+        self.repo.db.commit()
         return self._serialize_content_moderation_item(opportunity)
 
     def approve_employer_verification_request(
@@ -692,6 +732,20 @@ class ModerationService:
                 "type": "moderation_employer_verification_updated",
                 "verification_request_id": str(verification_request.id),
                 "status": verification_request.status.value,
+            },
+        )
+
+    def _publish_content_item_updated(self, opportunity) -> None:
+        moderator_user_ids = [str(user.id) for user in self.repo.list_curators()]
+        if not moderator_user_ids:
+            return
+
+        notification_hub.publish_to_users_sync(
+            moderator_user_ids,
+            {
+                "type": "content_moderation_updated",
+                "opportunity_id": str(opportunity.id),
+                "status": opportunity.moderation_status.value,
             },
         )
 
@@ -872,6 +926,30 @@ class ModerationService:
                 "inn": verification_request.inn,
                 "status": EmployerVerificationRequestStatus.SUSPENDED.value,
             },
+            created_at=datetime.now(UTC),
+            profile_scope={"profile_role": UserRole.EMPLOYER.value},
+        )
+
+    def _create_opportunity_status_notification(
+        self,
+        *,
+        opportunity,
+        title: str,
+        message: str,
+        severity: NotificationSeverity,
+    ) -> None:
+        if opportunity.created_by_user_id is None:
+            return
+
+        NotificationService(self.repo.db).create_notification(
+            user_id=opportunity.created_by_user_id,
+            kind=NotificationKind.OPPORTUNITY,
+            severity=severity,
+            title=title,
+            message=message,
+            action_label="Открыть возможности",
+            action_url="/employer/opportunities",
+            payload={"opportunity_id": str(opportunity.id), "status": opportunity.moderation_status.value},
             created_at=datetime.now(UTC),
             profile_scope={"profile_role": UserRole.EMPLOYER.value},
         )

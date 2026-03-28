@@ -69,8 +69,7 @@
   color: var(--color-text-primary);
 }
 
-.opportunity-management-page__tab--active::after,
-.opportunity-management-page__tab:active::after {
+.opportunity-management-page__tab--active::after {
   content: "";
   position: absolute;
   right: 0;
@@ -338,6 +337,20 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
+}
+
+.opportunity-management-page__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  padding: 32px;
+  border-radius: 24px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
+  text-align: center;
 }
 
 .opportunity-management-page__card {
@@ -720,16 +733,13 @@
 }
 
 .opportunity-management-page__modal-radio-group--event-type {
-  gap: 24px 32px;
-}
-
-.opportunity-management-page__modal-radio-group--event-type .opportunity-management-page__modal-radio-option {
-  min-width: 220px;
+  gap: 0px 16px;
 }
 
 .opportunity-management-page__modal-radio-option {
   display: inline-flex;
   align-items: center;
+  padding: 10px 10px 10px 0;
   gap: 10px;
   color: var(--color-text-primary);
   cursor: pointer;
@@ -982,6 +992,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .opportunity-management-page__modal-tag-chip {
@@ -1043,6 +1056,11 @@
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr);
   gap: 16px;
+}
+
+.opportunity-management-page__modal-actions .opportunity-management-page__modal-error {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 .opportunity-management-page__modal-cancel.button,

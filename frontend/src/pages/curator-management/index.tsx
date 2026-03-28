@@ -22,7 +22,7 @@ type CuratorPresence = "online" | "offline";
 type CuratorSortField = "alphabet" | "activity";
 type CuratorSortDirection = "asc" | "desc";
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 const roleOptions: Array<{ value: CuratorRole; label: string }> = [
   { value: "admin", label: "Senior" },

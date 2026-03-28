@@ -66,6 +66,18 @@ function resolveAccountContextSubtitle(
   return "профиль пользователя";
 }
 
+function resolveProfileAccentColor(role: string | undefined) {
+  if (role === "employer") {
+    return "var(--color-primary)";
+  }
+
+  if (role === "curator" || role === "junior" || role === "admin") {
+    return "var(--color-accent)";
+  }
+
+  return "var(--color-secondary)";
+}
+
 export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -105,6 +117,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
 
   const hasAccountContextCards = accountContextItems.length > 0;
   const hasMultipleAccountContexts = accountContextItems.length > 1;
+  const activeContextRole = accountContextItems.find((item) => item.is_active)?.role;
 
   const clearProfileMenuCloseTimeout = () => {
     if (profileMenuCloseTimeoutRef.current !== null) {
@@ -253,7 +266,12 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
             {hasMultipleAccountContexts ? (
               <p className="header__profile-contexts-title">
                 <span className="header__profile-contexts-title-text">Выбор </span>
-                <span className="header__profile-contexts-title-accent">аккаунта</span>
+                <span
+                  className="header__profile-contexts-title-accent"
+                  style={{ color: resolveProfileAccentColor(activeContextRole) }}
+                >
+                  аккаунта
+                </span>
               </p>
             ) : null}
             <div className="header__profile-contexts-list">

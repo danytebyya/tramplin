@@ -771,7 +771,10 @@ def test_reject_employer_verification_request_uses_default_comment_when_empty(cl
         .order_by(Notification.created_at.desc())
     ).scalars().first()
 
-    expected_message = "Верификация отклонена. При необходимости вы можете отправить заявку повторно."
+    expected_message = (
+        "Ваша заявка была отклонена, так как не соответствует требованиям нашей политики размещения. "
+        "Пожалуйста, ознакомьтесь с правилами и при необходимости внесите изменения перед повторной отправкой."
+    )
     assert employer_profile.moderator_comment == expected_message
     assert verification_request.rejection_reason == expected_message
     assert verification_request.moderator_comment == expected_message

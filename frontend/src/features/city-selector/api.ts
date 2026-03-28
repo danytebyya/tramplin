@@ -56,6 +56,113 @@ export const popularCities: CitySuggestion[] = [
   { id: "cheboksary", name: "Чебоксары", point: { lon: 47.2512, lat: 56.1287 } },
 ];
 
+const addressSubtypeLabels: Record<string, string | null> = {
+  place: null,
+  street: "Улица",
+  building: "Здание",
+  house: "Дом",
+  housing: "Корпус",
+  entrance: "Подъезд",
+  district: "Район",
+  microdistrict: "Микрорайон",
+  residential_area: "Жилой район",
+  settlement: "Населенный пункт",
+  village: "Деревня",
+  city: "Город",
+  region: "Регион",
+  station: "Станция",
+  metro: "Метро",
+};
+
+const allowedAddressSubtypes = new Set([
+  "street",
+  "building",
+  "house",
+  "housing",
+  "district",
+  "microdistrict",
+  "residential_area",
+]);
+
+function isAddressLikeSuggestion(item: TwoGisSuggestItem, cityName?: string) {
+  const normalizedSubtype = item.subtype?.trim().toLowerCase();
+  const fullAddress = item.full_address_name?.trim() || item.full_name?.trim() || item.name?.trim() || "";
+  const normalizedFullAddress = fullAddress.toLowerCase();
+  const normalizedCityName = cityName?.trim().toLowerCase();
+
+  if (normalizedCityName && normalizedFullAddress === normalizedCityName) {
+    return false;
+  }
+
+  if (!normalizedSubtype) {
+    return Boolean(fullAddress) && /[\d,/.-]/.test(fullAddress);
+  }
+
+  return allowedAddressSubtypes.has(normalizedSubtype);
+}
+
+function normalizeAddressSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .trim();
+}
+
+function matchesAddressQuery(item: TwoGisSuggestItem, query: string) {
+  const normalizedQuery = normalizeAddressSearchText(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const candidates = [
+    item.name,
+    item.address_name,
+    item.full_name,
+    item.full_address_name,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => normalizeAddressSearchText(value));
+
+  return candidates.some((candidate) => candidate.includes(normalizedQuery));
+}
+
+function buildAddressQueryVariants(query: string, cityName?: string) {
+  const normalizedQuery = query.trim();
+  const normalizedCityName = cityName?.trim();
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const variants = [
+    normalizedCityName ? `${normalizedCityName}, ${normalizedQuery}` : normalizedQuery,
+    normalizedCityName ? `${normalizedCityName}, улица ${normalizedQuery}` : `улица ${normalizedQuery}`,
+    normalizedCityName ? `${normalizedCityName}, ул ${normalizedQuery}` : `ул ${normalizedQuery}`,
+    normalizedQuery,
+    `улица ${normalizedQuery}`,
+    `ул ${normalizedQuery}`,
+  ].filter(Boolean);
+
+  return Array.from(new Set(variants));
+}
+
+function resolveAddressSubtitle(subtype?: string) {
+  const trimmedSubtype = subtype?.trim();
+  const normalizedSubtype = trimmedSubtype?.toLowerCase();
+
+  if (!normalizedSubtype) {
+    return undefined;
+  }
+
+  if (normalizedSubtype in addressSubtypeLabels) {
+    return addressSubtypeLabels[normalizedSubtype] ?? undefined;
+  }
+
+  return trimmedSubtype;
+}
+
 function resolveCityDisplayName(item: TwoGisSuggestItem) {
   const explicitName = item.name?.trim();
 
@@ -146,24 +253,41 @@ export async function getAddressSuggestions(
     return [];
   }
 
-  const searchParams = new URLSearchParams({
-    key: env.map2gisKey,
-    q: cityName?.trim() ? `${cityName.trim()}, ${normalizedQuery}` : normalizedQuery,
-    locale: "ru_RU",
-    page_size: "6",
-    fields: "items.point",
-  });
+  const queryVariants = buildAddressQueryVariants(normalizedQuery, cityName);
+  const collectedItems: TwoGisSuggestItem[] = [];
+  const seenItemKeys = new Set<string>();
 
-  const response = await fetch(`https://catalog.api.2gis.com/3.0/suggests?${searchParams.toString()}`);
+  for (const variant of queryVariants) {
+    const searchParams = new URLSearchParams({
+      key: env.map2gisKey,
+      q: variant,
+      locale: "ru_RU",
+      page_size: "20",
+      fields: "items.point",
+    });
 
-  if (!response.ok) {
-    throw new Error("Failed to load address suggestions");
+    const response = await fetch(`https://catalog.api.2gis.com/3.0/suggests?${searchParams.toString()}`);
+
+    if (!response.ok) {
+      throw new Error("Failed to load address suggestions");
+    }
+
+    const data = (await response.json()) as TwoGisSuggestResponse;
+    const nextItems = data.result?.items ?? [];
+
+    nextItems.forEach((item, index) => {
+      const itemKey = item.id ?? item.full_address_name ?? item.full_name ?? item.name ?? `${variant}-${index}`;
+      if (seenItemKeys.has(itemKey)) {
+        return;
+      }
+
+      seenItemKeys.add(itemKey);
+      collectedItems.push(item);
+    });
   }
 
-  const data = (await response.json()) as TwoGisSuggestResponse;
-  const items = data.result?.items ?? [];
-
-  return items
+  return collectedItems
+    .filter((item) => isAddressLikeSuggestion(item, cityName) && matchesAddressQuery(item, normalizedQuery))
     .map((item, index): AddressSuggestion | null => {
       const fullAddress = item.full_address_name?.trim() || item.full_name?.trim() || item.name?.trim();
 
@@ -174,7 +298,7 @@ export async function getAddressSuggestions(
       return {
         id: item.id ?? `${fullAddress}-${index}`,
         name: item.name?.trim() || fullAddress,
-        subtitle: item.subtype?.trim(),
+        subtitle: resolveAddressSubtitle(item.subtype),
         fullAddress,
         point:
           typeof item.point?.lon === "number" && typeof item.point?.lat === "number"

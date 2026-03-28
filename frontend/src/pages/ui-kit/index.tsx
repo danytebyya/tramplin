@@ -53,7 +53,7 @@ const statusItems = [
   { label: "Активно", variant: "active" as const },
   { label: "Одобрено", variant: "approved" as const },
   { label: "На рассмотрении", variant: "pending-review" as const },
-  { label: "Отклонено", variant: "rejected" as const },
+  { label: "Отклонена", variant: "rejected" as const },
   { label: "Запрос информации", variant: "info-request" as const },
   { label: "Снято с публикации", variant: "unpublished" as const },
   { label: "Верифицировано", variant: "verified" as const },

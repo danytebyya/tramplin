@@ -34,12 +34,12 @@ type VerificationPeriodFilter = "all" | "today" | "week" | "month";
 type VerificationSortField = "date" | "alphabet";
 type VerificationSortDirection = "asc" | "desc";
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 const SKELETON_ROW_COUNT = 5;
 const statusOptions: Array<{ value: EmployerVerificationRequestStatus; label: string }> = [
   { value: "pending", label: "На рассмотрении" },
   { value: "approved", label: "Одобрено" },
-  { value: "rejected", label: "Отклонено" },
+  { value: "rejected", label: "Отклонена" },
   { value: "suspended", label: "Запрос информации" },
 ];
 
@@ -63,7 +63,7 @@ function resolveStatusMeta(status: EmployerVerificationRequestStatus) {
   }
 
   if (status === "rejected") {
-    return { label: "Отклонено", variant: "rejected" as const };
+    return { label: "Отклонена", variant: "rejected" as const };
   }
 
   if (status === "suspended") {

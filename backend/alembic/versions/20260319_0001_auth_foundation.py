@@ -21,6 +21,7 @@ user_role = postgresql.ENUM(
     "guest",
     "applicant",
     "employer",
+    "junior",
     "curator",
     "admin",
     name="user_role",

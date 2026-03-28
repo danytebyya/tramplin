@@ -6,6 +6,7 @@ import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 import arrowIcon from "../../assets/icons/arrow.svg";
 import editIcon from "../../assets/icons/edit.svg";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import { useNotificationsRealtime } from "../../features/notifications";
 import {
   approveContentModerationItemRequest,
   ContentModerationItem,
@@ -16,13 +17,6 @@ import {
   rejectContentModerationItemRequest,
   requestContentModerationChangesRequest,
 } from "../../features/moderation";
-import {
-  isWorkflowOpportunityId,
-  listWorkflowOpportunities,
-  reviewWorkflowOpportunity,
-  subscribeOpportunityWorkflow,
-  toModerationOpportunityItem,
-} from "../../features/opportunity-workflow";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { Header } from "../../widgets/header";
@@ -32,7 +26,7 @@ type ContentTab = "all" | ContentModerationKind;
 type ContentSortField = "date" | "alphabet";
 type ContentSortDirection = "asc" | "desc";
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10;
 const SKELETON_ROW_COUNT = 5;
 
 const tabDefinitions: Array<{ value: ContentTab; label: string; countKey: "all" | "vacancies" | "internships" | "events" | "mentorships" }> = [
@@ -47,7 +41,7 @@ const statusOptions: Array<{ value: ContentModerationStatus; label: string }> = 
   { value: "pending_review", label: "На проверке" },
   { value: "changes_requested", label: "Требует правок" },
   { value: "approved", label: "Активно" },
-  { value: "rejected", label: "Отклонено" },
+  { value: "rejected", label: "Отклонена" },
   { value: "unpublished", label: "Снят с публикации" },
 ];
 
@@ -78,7 +72,7 @@ function resolveStatusMeta(status: ContentModerationStatus) {
   }
 
   if (status === "rejected") {
-    return { label: "Отклонено", variant: "rejected" as const };
+    return { label: "Отклонена", variant: "rejected" as const };
   }
 
   if (status === "changes_requested") {
@@ -171,7 +165,6 @@ export function ContentModerationPage() {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [moderatorComment, setModeratorComment] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
-  const [workflowRevision, setWorkflowRevision] = useState(0);
 
   useQuery({
     queryKey: ["auth", "me"],
@@ -198,11 +191,16 @@ export function ContentModerationPage() {
     staleTime: 30 * 1000,
   });
 
-  useEffect(() => {
-    return subscribeOpportunityWorkflow(() => {
-      setWorkflowRevision((current) => current + 1);
-    });
-  }, []);
+  useNotificationsRealtime({
+    enabled: isAuthenticated && isModerationRole,
+    onMessage: (payload) => {
+      if (payload?.type !== "content_moderation_updated") {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["moderation", "content-items"] });
+    },
+  });
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -321,11 +319,6 @@ export function ContentModerationPage() {
 
   const approveMutation = useMutation({
     mutationFn: async ({ itemId, comment }: { itemId: string; comment: string }) => {
-      if (isWorkflowOpportunityId(itemId)) {
-        reviewWorkflowOpportunity(itemId, "approve", comment || null);
-        return;
-      }
-
       await approveContentModerationItemRequest(itemId, { moderator_comment: comment || null });
     },
     ...createReviewMutationHandlers("approved"),
@@ -333,11 +326,6 @@ export function ContentModerationPage() {
 
   const rejectMutation = useMutation({
     mutationFn: async ({ itemId, comment }: { itemId: string; comment: string }) => {
-      if (isWorkflowOpportunityId(itemId)) {
-        reviewWorkflowOpportunity(itemId, "reject", comment || null);
-        return;
-      }
-
       await rejectContentModerationItemRequest(itemId, { moderator_comment: comment || null });
     },
     ...createReviewMutationHandlers("rejected"),
@@ -345,11 +333,6 @@ export function ContentModerationPage() {
 
   const requestChangesMutation = useMutation({
     mutationFn: async ({ itemId, comment }: { itemId: string; comment: string }) => {
-      if (isWorkflowOpportunityId(itemId)) {
-        reviewWorkflowOpportunity(itemId, "request_changes", comment || null);
-        return;
-      }
-
       await requestContentModerationChangesRequest(itemId, { moderator_comment: comment || null });
     },
     ...createReviewMutationHandlers("changes_requested"),
@@ -365,26 +348,20 @@ export function ContentModerationPage() {
     }) => {
       if (action === "request-changes") {
         await Promise.all(itemIds.map((itemId) =>
-          isWorkflowOpportunityId(itemId)
-            ? Promise.resolve(reviewWorkflowOpportunity(itemId, "request_changes", null))
-            : requestContentModerationChangesRequest(itemId, { moderator_comment: null }),
+          requestContentModerationChangesRequest(itemId, { moderator_comment: null }),
         ));
         return;
       }
 
       if (action === "reject") {
         await Promise.all(itemIds.map((itemId) =>
-          isWorkflowOpportunityId(itemId)
-            ? Promise.resolve(reviewWorkflowOpportunity(itemId, "reject", null))
-            : rejectContentModerationItemRequest(itemId, { moderator_comment: null }),
+          rejectContentModerationItemRequest(itemId, { moderator_comment: null }),
         ));
         return;
       }
 
       await Promise.all(itemIds.map((itemId) =>
-        isWorkflowOpportunityId(itemId)
-          ? Promise.resolve(reviewWorkflowOpportunity(itemId, "approve", null))
-          : approveContentModerationItemRequest(itemId, { moderator_comment: null }),
+        approveContentModerationItemRequest(itemId, { moderator_comment: null }),
       ));
     },
     onMutate: async ({
@@ -423,34 +400,7 @@ export function ContentModerationPage() {
     },
   });
 
-  const workflowItems = useMemo(
-    () =>
-      listWorkflowOpportunities()
-        .map((item) => toModerationOpportunityItem(item))
-        .filter((item) => {
-          const matchesSearch = !appliedSearch.trim()
-            || [
-              item.title,
-              item.company_name,
-              item.author_email ?? "",
-              item.salary_label,
-              item.description,
-              ...item.tags,
-            ]
-              .join(" ")
-              .toLowerCase()
-              .includes(appliedSearch.trim().toLowerCase());
-          const matchesKind = selectedTab === "all" || item.kind === selectedTab;
-          const matchesStatus = appliedStatuses.includes("all") || appliedStatuses.includes(item.status);
-
-          return matchesSearch && matchesKind && matchesStatus;
-        }),
-    [appliedSearch, appliedStatuses, selectedTab, workflowRevision],
-  );
-  const items = useMemo(
-    () => [...workflowItems, ...(contentQuery.data?.data?.items ?? [])],
-    [contentQuery.data?.data?.items, workflowItems],
-  );
+  const items = contentQuery.data?.data?.items ?? [];
   const sortedItems = useMemo(() => {
     return [...items].sort((left, right) => {
       if (appliedSortField === "alphabet") {
@@ -464,7 +414,7 @@ export function ContentModerationPage() {
     });
   }, [appliedSortDirection, appliedSortField, items]);
 
-  const total = items.length;
+  const total = contentQuery.data?.data?.total ?? 0;
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
   const pageNumbers = buildPageNumbers(page, totalPages);
   const allRowsSelected = sortedItems.length > 0 && selectedIds.length === sortedItems.length;
@@ -476,36 +426,22 @@ export function ContentModerationPage() {
     bulkActionMutation.isPending;
   const isTableLoading = contentQuery.isPending;
   const counts = useMemo(() => {
-    const serverCounts = contentQuery.data?.data?.counts;
-    const localCounts = {
-      all: workflowItems.length,
-      vacancies: workflowItems.filter((item) => item.kind === "vacancy").length,
-      internships: workflowItems.filter((item) => item.kind === "internship").length,
-      events: workflowItems.filter((item) => item.kind === "event").length,
-      mentorships: workflowItems.filter((item) => item.kind === "mentorship").length,
-    };
-
     return {
-      all: (serverCounts?.all ?? 0) + localCounts.all,
-      vacancies: (serverCounts?.vacancies ?? 0) + localCounts.vacancies,
-      internships: (serverCounts?.internships ?? 0) + localCounts.internships,
-      events: (serverCounts?.events ?? 0) + localCounts.events,
-      mentorships: (serverCounts?.mentorships ?? 0) + localCounts.mentorships,
+      all: contentQuery.data?.data?.counts?.all ?? 0,
+      vacancies: contentQuery.data?.data?.counts?.vacancies ?? 0,
+      internships: contentQuery.data?.data?.counts?.internships ?? 0,
+      events: contentQuery.data?.data?.counts?.events ?? 0,
+      mentorships: contentQuery.data?.data?.counts?.mentorships ?? 0,
     };
-  }, [contentQuery.data?.data?.counts, workflowItems]);
+  }, [contentQuery.data?.data?.counts]);
   const metrics = useMemo(() => {
-    const serverMetrics = contentQuery.data?.data?.metrics;
     return {
-      total_on_moderation: (serverMetrics?.total_on_moderation ?? 0) + workflowItems.length,
-      in_queue:
-        (serverMetrics?.in_queue ?? 0) +
-        workflowItems.filter((item) => item.status === "pending_review").length,
-      reviewed_today:
-        (serverMetrics?.reviewed_today ?? 0) +
-        workflowItems.filter((item) => item.status === "approved" || item.status === "rejected").length,
-      overdue: serverMetrics?.overdue ?? 0,
+      total_on_moderation: contentQuery.data?.data?.metrics?.total_on_moderation ?? 0,
+      in_queue: contentQuery.data?.data?.metrics?.in_queue ?? 0,
+      reviewed_today: contentQuery.data?.data?.metrics?.reviewed_today ?? 0,
+      overdue: contentQuery.data?.data?.metrics?.overdue ?? 0,
     };
-  }, [contentQuery.data?.data?.metrics, workflowItems]);
+  }, [contentQuery.data?.data?.metrics]);
 
   if (!isModerationRole) {
     return <Navigate to="/" replace />;
@@ -922,7 +858,7 @@ export function ContentModerationPage() {
               : sortedItems.map((item) => {
                   const statusMeta = resolveStatusMeta(item.status);
                   const isExpanded = expandedItemId === item.id;
-                  const isApproved = item.status === "approved";
+                  const canReview = item.status === "pending_review";
 
                   return (
                     <article
@@ -932,7 +868,7 @@ export function ContentModerationPage() {
                     >
                       <div className={isExpanded
                         ? "content-moderation-page__row-summary content-moderation-page__row-summary--expanded"
-                        : isApproved
+                        : !canReview
                           ? "content-moderation-page__row-summary content-moderation-page__row-summary--centered"
                           : "content-moderation-page__row-summary"}>
                         <div className="content-moderation-page__row-leading">
@@ -942,7 +878,7 @@ export function ContentModerationPage() {
                         <div className="content-moderation-page__row-main">
                           <div className="content-moderation-page__row-title-wrap">
                             <strong className="content-moderation-page__row-title">{item.title}</strong>
-                            {!isExpanded && !isApproved ? (
+                            {!isExpanded && canReview ? (
                               <div className="content-moderation-page__row-actions-inline">
                                 <Button
                                   type="button"
@@ -1066,7 +1002,7 @@ export function ContentModerationPage() {
                                   />
                                 </label>
 
-                                {!isApproved ? (
+                                {canReview ? (
                                   <div className="content-moderation-page__detail-actions content-moderation-page__detail-actions--stacked">
                                     <Button type="button" variant="accent-outline" size="sm" className="content-moderation-page__detail-action-request" onClick={() => handleRequestChanges(item.id)} loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id} disabled={anyMutationPending}>
                                       Запросить дополнительную информацию
@@ -1095,27 +1031,55 @@ export function ContentModerationPage() {
             ) : null}
           </div>
 
-          {totalPages > 1 ? (
+          {!isTableLoading && sortedItems.length > 0 ? (
             <nav className="content-moderation-page__pagination" aria-label="Пагинация">
-              <button type="button" className="content-moderation-page__pagination-arrow" onClick={() => setPage((current) => Math.max(current - 1, 1))} disabled={page <= 1}>
-                <img src={arrowIcon} alt="" aria-hidden="true" className="content-moderation-page__pagination-arrow-icon content-moderation-page__pagination-arrow-icon--prev" />
+              <button
+                type="button"
+                className="content-moderation-page__pagination-arrow"
+                onClick={() => setPage((current) => Math.max(current - 1, 1))}
+                disabled={page === 1}
+                aria-label="Предыдущая страница"
+              >
+                <img
+                  src={arrowIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="content-moderation-page__pagination-arrow-icon content-moderation-page__pagination-arrow-icon--prev"
+                />
               </button>
               {pageNumbers.map((pageNumber, index) =>
                 pageNumber === "ellipsis" ? (
-                  <span key={`ellipsis-${index}`} className="content-moderation-page__pagination-ellipsis">...</span>
+                  <span key={`ellipsis-${index}`} className="content-moderation-page__pagination-ellipsis">
+                    ...
+                  </span>
                 ) : (
                   <button
                     key={pageNumber}
                     type="button"
-                    className={page === pageNumber ? "content-moderation-page__pagination-page content-moderation-page__pagination-page--active" : "content-moderation-page__pagination-page"}
+                    className={
+                      page === pageNumber
+                        ? "content-moderation-page__pagination-page content-moderation-page__pagination-page--active"
+                        : "content-moderation-page__pagination-page"
+                    }
                     onClick={() => setPage(pageNumber)}
                   >
                     {pageNumber}
                   </button>
                 ),
               )}
-              <button type="button" className="content-moderation-page__pagination-arrow" onClick={() => setPage((current) => Math.min(current + 1, totalPages))} disabled={page >= totalPages}>
-                <img src={arrowIcon} alt="" aria-hidden="true" className="content-moderation-page__pagination-arrow-icon" />
+              <button
+                type="button"
+                className="content-moderation-page__pagination-arrow"
+                onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
+                disabled={page === totalPages}
+                aria-label="Следующая страница"
+              >
+                <img
+                  src={arrowIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="content-moderation-page__pagination-arrow-icon"
+                />
               </button>
             </nav>
           ) : null}

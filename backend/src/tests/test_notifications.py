@@ -9,6 +9,7 @@ from src.models import Notification
 from src.realtime.notification_hub import notification_hub
 from src.tests.test_auth import _request_code
 from src.tests.test_employer_verification_moderation import _create_verification_request, _register_curator
+from src.tests.test_opportunity_management import _create_employer_user
 from src.models import Employer, EmployerMembership, EmployerProfile, User
 
 
@@ -404,3 +405,57 @@ def test_notifications_websocket_receives_employer_verification_status_update_fo
         )
         assert moderation_event["verification_request_id"] == request_id
         assert moderation_event["status"] == "approved"
+
+
+def test_notifications_websocket_receives_content_moderation_update_for_curator(client, db_session):
+    employer = _create_employer_user(
+        db_session,
+        email="notifications-opportunity-employer@example.com",
+        inn="7707083899",
+    )
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="notifications-opportunity-curator@example.com",
+    )
+    employer_access_token = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": employer.email, "password": "EmployerPass123"},
+    ).json()["data"]["access_token"]
+
+    with client.websocket_connect(f"/api/v1/notifications/stream?token={curator_token}") as websocket:
+        response = client.post(
+            "/api/v1/opportunities",
+            headers={"Authorization": f"Bearer {employer_access_token}"},
+            json={
+                "title": "Realtime moderation vacancy",
+                "description": "Достаточно подробное описание вакансии для моментального появления в модерации.",
+                "opportunity_type": "vacancy",
+                "city": "Чебоксары",
+                "address": "ул. Калинина, 15",
+                "salary_label": "100 000 ₽",
+                "tags": ["Python", "FastAPI"],
+                "format": "offline",
+                "level_label": "junior",
+                "employment_label": "full-time",
+                "latitude": 56.1282,
+                "longitude": 47.2519,
+            },
+        )
+        assert response.status_code == 201
+        opportunity_id = response.json()["data"]["id"]
+
+        received_types: list[str] = []
+        received_payloads: list[dict] = []
+        while "content_moderation_updated" not in received_types:
+            event = websocket.receive_json()
+            received_types.append(event["type"])
+            received_payloads.append(event)
+
+        moderation_event = next(
+            payload
+            for payload in received_payloads
+            if payload["type"] == "content_moderation_updated"
+        )
+        assert moderation_event["opportunity_id"] == opportunity_id
+        assert moderation_event["status"] == "pending_review"

@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS citext;
 
-CREATE TYPE user_role AS ENUM ('guest', 'applicant', 'employer', 'curator', 'admin');
+CREATE TYPE user_role AS ENUM ('guest', 'applicant', 'employer', 'junior', 'curator', 'admin');
 CREATE TYPE user_status AS ENUM ('pending', 'active', 'blocked', 'archived', 'deleted');
 CREATE TYPE email_verification_purpose AS ENUM ('registration', 'login', 'password_reset', 'email_change');
 CREATE TYPE email_verification_status AS ENUM ('pending', 'verified', 'expired', 'consumed', 'canceled');

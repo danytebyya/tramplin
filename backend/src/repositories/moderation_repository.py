@@ -57,6 +57,7 @@ class ModerationRepository:
     def list_opportunities(self) -> list[Opportunity]:
         stmt = (
             select(Opportunity)
+            .where(Opportunity.deleted_at.is_(None))
             .options(
                 selectinload(Opportunity.employer),
                 selectinload(Opportunity.location),
@@ -76,7 +77,10 @@ class ModerationRepository:
                 selectinload(Opportunity.compensation),
                 selectinload(Opportunity.tag_links).selectinload(OpportunityTag.tag),
             )
-            .where(Opportunity.id == UUID(opportunity_id))
+            .where(
+                Opportunity.id == UUID(opportunity_id),
+                Opportunity.deleted_at.is_(None),
+            )
         )
         return self.db.execute(stmt).scalar_one_or_none()
 

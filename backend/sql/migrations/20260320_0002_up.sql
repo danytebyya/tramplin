@@ -6,6 +6,15 @@ BEGIN
         SELECT 1
         FROM pg_enum e
         JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'user_role' AND e.enumlabel = 'junior'
+    ) THEN
+        ALTER TYPE user_role ADD VALUE 'junior';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_enum e
+        JOIN pg_type t ON t.oid = e.enumtypid
         WHERE t.typname = 'user_status' AND e.enumlabel = 'deleted'
     ) THEN
         ALTER TYPE user_status ADD VALUE 'deleted';

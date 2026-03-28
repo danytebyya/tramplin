@@ -150,7 +150,6 @@
   color: var(--color-text-primary);
 }
 
-.settings-page__tab:active::after,
 .settings-page__tab--active::after {
   content: "";
   position: absolute;
