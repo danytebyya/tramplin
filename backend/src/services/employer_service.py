@@ -988,6 +988,9 @@ class EmployerService:
 
         employer_profile.verification_status = EmployerVerificationStatus.PENDING_REVIEW
         employer_profile.moderator_comment = None
+        self.db.commit()
+        self.db.refresh(verification_request)
+
         NotificationService(self.db).create_notification(
             user_id=current_user.id,
             kind=NotificationKind.EMPLOYER_VERIFICATION,
@@ -1006,8 +1009,8 @@ class EmployerService:
             )
         elif previous_status is None:
             self._notify_moderators_about_new_verification_request(verification_request=verification_request)
+
         self.db.commit()
-        self.db.refresh(verification_request)
         self._publish_verification_request_updated(verification_request)
 
         return {

@@ -100,7 +100,7 @@
 }
 
 .opportunity-list__content-actions .button {
-  min-width: 180px;
+  width: 100%;
 }
 
 .opportunity-list__kind {
@@ -117,7 +117,6 @@
   justify-content: space-between;
   gap: 24px;
   width: 280px;
-  padding: 10px 10px 0;
   box-sizing: border-box;
 }
 
