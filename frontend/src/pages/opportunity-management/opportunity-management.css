@@ -407,29 +407,6 @@
   gap: 6px;
 }
 
-.opportunity-management-page__tags-more {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  min-height: 26px;
-  padding: 0 10px;
-  border: 1px dashed rgba(30, 64, 175, 0.24);
-  border-radius: 999px;
-  background: rgba(219, 234, 254, 0.55);
-  color: var(--color-primary);
-  font-size: var(--type-caption-size);
-  line-height: 1;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.opportunity-management-page__tags-more:hover,
-.opportunity-management-page__tags-more:focus-visible {
-  border-color: rgba(30, 64, 175, 0.4);
-  background: rgba(219, 234, 254, 0.9);
-}
-
 .opportunity-management-page__details {
   display: flex;
   flex-direction: column;
@@ -713,11 +690,27 @@
   border-color: var(--color-primary);
 }
 
+.opportunity-management-page__modal-textarea--error {
+  border-color: var(--color-danger);
+}
+
+.opportunity-management-page__modal-textarea--error:focus,
+.opportunity-management-page__modal-textarea--error:focus-visible {
+  border-color: var(--color-danger);
+}
+
 .opportunity-management-page__modal-textarea:disabled {
   background: var(--color-bg-tertiary);
   border-color: var(--color-border);
   color: var(--color-text-tertiary);
   cursor: not-allowed;
+}
+
+.opportunity-management-page__modal-error {
+  margin: 4px 0 0 15px;
+  color: var(--color-danger);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
 }
 
 .opportunity-management-page__modal-radio-group {

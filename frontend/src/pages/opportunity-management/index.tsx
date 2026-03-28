@@ -49,7 +49,8 @@ type OpportunityManagementStatus =
   | "removed"
   | "rejected"
   | "pending_review"
-  | "changes_requested";
+  | "changes_requested"
+  | "changed";
 type OpportunitySortValue = "newest" | "oldest" | "responses";
 type OpportunitySortDirection = "asc" | "desc";
 
@@ -75,11 +76,17 @@ type OpportunityManagementItem = {
 };
 
 type OpportunityFormMode = "create" | "edit";
+type OpportunityFormErrors = {
+  title?: string;
+  description?: string;
+  address?: string;
+  salary?: string;
+  tags?: string;
+};
 
 const DEFAULT_CITY = "Чебоксары";
 const PAGE_SIZE = 5;
-const CARD_TAGS_INITIAL_COUNT = 4;
-const CARD_TAGS_STEP = 6;
+const CARD_TAGS_INITIAL_COUNT = 3;
 const MODAL_TAGS_INITIAL_COUNT = 8;
 const MODAL_TAGS_STEP = 12;
 const opportunityTypeOptions = [
@@ -247,6 +254,7 @@ const statusFilterItems: Array<{ value: OpportunityManagementStatus | "all"; lab
   { value: "active", label: "Активно" },
   { value: "planned", label: "Запланировано" },
   { value: "pending_review", label: "На рассмотрении" },
+  { value: "changed", label: "Изменено" },
   { value: "changes_requested", label: "Требует правок" },
   { value: "removed", label: "Снято с публикации" },
   { value: "rejected", label: "Отклонено" },
@@ -378,6 +386,8 @@ function resolveStatusLabel(status: OpportunityManagementStatus) {
       return "Отклонено";
     case "pending_review":
       return "На рассмотрении";
+    case "changed":
+      return "Изменено";
     case "changes_requested":
       return "Требует правок";
     default:
@@ -396,6 +406,10 @@ function resolveStatusVariant(status: OpportunityManagementStatus) {
 
   if (status === "pending_review") {
     return "pending-review" as const;
+  }
+
+  if (status === "changed") {
+    return "info-request" as const;
   }
 
   if (status === "rejected") {
@@ -479,6 +493,7 @@ export function OpportunityManagementPage() {
   const [isCreateOpportunityModalOpen, setIsCreateOpportunityModalOpen] = useState(false);
   const [formMode, setFormMode] = useState<OpportunityFormMode>("create");
   const [editingOpportunityId, setEditingOpportunityId] = useState<string | null>(null);
+  const [editingSeedOpportunityId, setEditingSeedOpportunityId] = useState<string | null>(null);
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [createOpportunityType, setCreateOpportunityType] =
@@ -508,13 +523,18 @@ export function OpportunityManagementPage() {
   const [isAddressSuggestionsLoading, setIsAddressSuggestionsLoading] = useState(false);
   const [selectedLocationPoint, setSelectedLocationPoint] = useState<OpportunityLocationPoint | null>(null);
   const [isDraftLocationAddressLoading, setIsDraftLocationAddressLoading] = useState(false);
-  const [expandedCardTags, setExpandedCardTags] = useState<Record<string, number>>({});
   const [expandedModalTagsCount, setExpandedModalTagsCount] = useState<number>(MODAL_TAGS_INITIAL_COUNT);
   const [workflowRevision, setWorkflowRevision] = useState(0);
+  const [replacedSeedOpportunityIds, setReplacedSeedOpportunityIds] = useState<string[]>([]);
+  const [formErrors, setFormErrors] = useState<OpportunityFormErrors>({});
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const cityInputRef = useRef<HTMLInputElement | null>(null);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const salaryInputRef = useRef<HTMLInputElement | null>(null);
+  const tagQueryInputRef = useRef<HTMLInputElement | null>(null);
   const cityFieldRef = useRef<HTMLDivElement | null>(null);
   const addressFieldRef = useRef<HTMLDivElement | null>(null);
   const reverseGeocodeRequestIdRef = useRef(0);
@@ -700,8 +720,11 @@ export function OpportunityManagementPage() {
     [workflowRevision],
   );
   const managementItems = useMemo(
-    () => [...workflowItems, ...opportunityItems],
-    [workflowItems],
+    () => [
+      ...workflowItems,
+      ...opportunityItems.filter((item) => !replacedSeedOpportunityIds.includes(item.id)),
+    ],
+    [replacedSeedOpportunityIds, workflowItems],
   );
   const selectedOpportunity = useMemo(
     () => managementItems.find((item) => item.id === selectedOpportunityId) ?? null,
@@ -755,7 +778,9 @@ export function OpportunityManagementPage() {
   const metrics = {
     total: managementItems.length,
     active: managementItems.filter((item) => item.status === "active").length,
-    planned: managementItems.filter((item) => item.status === "planned" || item.status === "pending_review").length,
+    planned: managementItems.filter(
+      (item) => item.status === "planned" || item.status === "pending_review" || item.status === "changed",
+    ).length,
     closed: managementItems.filter((item) => item.status === "removed" || item.status === "rejected").length,
   };
 
@@ -812,6 +837,7 @@ export function OpportunityManagementPage() {
   const resetCreateOpportunityForm = () => {
     setFormMode("create");
     setEditingOpportunityId(null);
+    setEditingSeedOpportunityId(null);
     setCreateOpportunityType("vacancy");
     setCreateOpportunityTitle("");
     setCreateOpportunityDescription("");
@@ -831,6 +857,7 @@ export function OpportunityManagementPage() {
     setIsDraftLocationAddressLoading(false);
     setIsMapExpanded(false);
     setExpandedModalTagsCount(MODAL_TAGS_INITIAL_COUNT);
+    setFormErrors({});
   };
 
   const openCreateOpportunityModal = () => {
@@ -880,6 +907,60 @@ export function OpportunityManagementPage() {
     setCreateOpportunityAddressSuggestions([]);
     setIsAddressSuggestionsOpen(false);
     setSelectedLocationPoint({ lon: record.longitude, lat: record.latitude });
+    setIsDraftLocationAddressLoading(false);
+    setIsMapExpanded(false);
+    setExpandedModalTagsCount(MODAL_TAGS_INITIAL_COUNT);
+    setSelectedOpportunityId(null);
+    setIsCreateOpportunityModalOpen(true);
+  };
+
+  const startEditingManagementItem = (item: OpportunityManagementItem) => {
+    const workflowRecord = workflowOpportunityMap.get(item.id);
+
+    if (workflowRecord) {
+      startEditingOpportunity(workflowRecord);
+      return;
+    }
+
+    setFormMode("edit");
+    setEditingOpportunityId(null);
+    setEditingSeedOpportunityId(item.id);
+    setCreateOpportunityType(
+      item.kind === "Стажировка"
+        ? "internship"
+        : item.kind === "Мероприятие"
+          ? "event"
+          : item.kind === "Менторская программа"
+            ? "mentorship"
+            : "vacancy",
+    );
+    setCreateOpportunityTitle(item.title);
+    setCreateOpportunityDescription(item.description);
+    setCreateOpportunityCity(preferredCity);
+    setCreateOpportunityCityPoint(popularCities.find((entry) => entry.name === preferredCity)?.point ?? null);
+    setCreateOpportunitySalary(item.salaryLabel);
+    setCreateOpportunityTagQuery("");
+    setCreateOpportunityTags(item.tags);
+    setCreateOpportunityLevel(
+      item.levelLabel === "Senior"
+        ? "senior"
+        : item.levelLabel === "Middle"
+          ? "middle"
+          : "junior",
+    );
+    setCreateOpportunityFormat("offline");
+    setCreateOpportunityEmployment(
+      item.employmentLabel === "Part-time"
+        ? "part-time"
+        : item.employmentLabel === "Project"
+          ? "project"
+          : "full-time",
+    );
+    setCreateOpportunityPublishDate("");
+    setCreateOpportunityAddress(item.locationLabel);
+    setCreateOpportunityAddressSuggestions([]);
+    setIsAddressSuggestionsOpen(false);
+    setSelectedLocationPoint(popularCities.find((entry) => entry.name === preferredCity)?.point ?? null);
     setIsDraftLocationAddressLoading(false);
     setIsMapExpanded(false);
     setExpandedModalTagsCount(MODAL_TAGS_INITIAL_COUNT);
@@ -949,9 +1030,47 @@ export function OpportunityManagementPage() {
   };
 
   const handleCreateOpportunitySubmit = () => {
-    if (!isCreateOpportunityReady) {
+    const nextErrors: OpportunityFormErrors = {};
+
+    if (!createOpportunityTitle.trim()) {
+      nextErrors.title = "Введите название возможности.";
+    }
+
+    if (!createOpportunityDescription.trim()) {
+      nextErrors.description = "Добавьте описание с требованиями, обязанностями и условиями.";
+    }
+
+    if (!createOpportunityAddress.trim()) {
+      nextErrors.address = "Укажите адрес.";
+    }
+
+    if (!createOpportunitySalary.trim()) {
+      nextErrors.salary = "Укажите зарплату или формат оплаты.";
+    }
+
+    if (createOpportunityTags.length === 0) {
+      nextErrors.tags = "Выберите хотя бы один тег.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFormErrors(nextErrors);
+
+      if (nextErrors.title) {
+        titleInputRef.current?.focus();
+      } else if (nextErrors.description) {
+        descriptionTextareaRef.current?.focus();
+      } else if (nextErrors.address) {
+        addressInputRef.current?.focus();
+      } else if (nextErrors.salary) {
+        salaryInputRef.current?.focus();
+      } else if (nextErrors.tags) {
+        tagQueryInputRef.current?.focus();
+      }
+
       return;
     }
+
+    setFormErrors({});
 
     const targetPoint = selectedLocationPoint ?? createOpportunityCityPoint;
 
@@ -977,6 +1096,11 @@ export function OpportunityManagementPage() {
 
     if (formMode === "edit" && editingOpportunityId) {
       updateWorkflowOpportunity(editingOpportunityId, payload, { resubmit: true });
+    } else if (formMode === "edit" && editingSeedOpportunityId) {
+      createWorkflowOpportunity(payload);
+      setReplacedSeedOpportunityIds((current) =>
+        current.includes(editingSeedOpportunityId) ? current : [...current, editingSeedOpportunityId],
+      );
     } else {
       createWorkflowOpportunity(payload);
     }
@@ -1236,45 +1360,12 @@ export function OpportunityManagementPage() {
 
                 <div className="opportunity-management-page__tags">
                   {item.tags
-                    .slice(0, resolveVisibleTagLimit(expandedCardTags[item.id], item.tags.length, CARD_TAGS_INITIAL_COUNT))
+                    .slice(0, CARD_TAGS_INITIAL_COUNT)
                     .map((tag, tagIndex) => (
                     <Badge key={`${item.id}-${tag}-${tagIndex}`} variant="primary">
                       {tag}
                     </Badge>
                   ))}
-                  {resolveVisibleTagLimit(expandedCardTags[item.id], item.tags.length, CARD_TAGS_INITIAL_COUNT) < item.tags.length ? (
-                    <button
-                      type="button"
-                      className="opportunity-management-page__tags-more"
-                      aria-label="Показать больше тегов"
-                      onClick={() =>
-                        setExpandedCardTags((current) => ({
-                          ...current,
-                          [item.id]: resolveVisibleTagLimit(
-                            current[item.id],
-                            item.tags.length,
-                            CARD_TAGS_INITIAL_COUNT,
-                          ) + CARD_TAGS_STEP,
-                        }))
-                      }
-                    >
-                      ...
-                    </button>
-                  ) : item.tags.length > CARD_TAGS_INITIAL_COUNT ? (
-                    <button
-                      type="button"
-                      className="opportunity-management-page__tags-more"
-                      aria-label="Скрыть теги"
-                      onClick={() =>
-                        setExpandedCardTags((current) => ({
-                          ...current,
-                          [item.id]: CARD_TAGS_INITIAL_COUNT,
-                        }))
-                      }
-                    >
-                      Скрыть
-                    </button>
-                  ) : null}
                 </div>
 
                 <div className="opportunity-management-page__details">
@@ -1362,7 +1453,7 @@ export function OpportunityManagementPage() {
                       aria-label="Редактировать"
                       onClick={(event) => {
                         event.stopPropagation();
-                        startEditingOpportunity(workflowOpportunityMap.get(item.id) ?? null);
+                        startEditingManagementItem(item);
                       }}
                     >
                       <img src={editIcon} alt="" aria-hidden="true" className="opportunity-management-page__action-icon" />
@@ -1497,10 +1588,12 @@ export function OpportunityManagementPage() {
                   className="opportunity-management-page__modal-submit"
                   onClick={() => {
                     setSelectedOpportunityId(null);
-                    startEditingOpportunity(workflowOpportunityMap.get(selectedOpportunity.id) ?? null);
+                    startEditingManagementItem(selectedOpportunity);
                   }}
                 >
-                  {selectedOpportunity.status === "changes_requested" || selectedOpportunity.status === "rejected"
+                  {selectedOpportunity.status === "changes_requested" ||
+                  selectedOpportunity.status === "rejected" ||
+                  selectedOpportunity.status === "changed"
                     ? "Исправить и отправить снова"
                     : "Редактировать"}
                 </Button>
@@ -1542,11 +1635,17 @@ export function OpportunityManagementPage() {
               Название <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <Input
+              ref={titleInputRef}
               value={createOpportunityTitle}
-              onChange={(event) => setCreateOpportunityTitle(event.target.value)}
+              onChange={(event) => {
+                setCreateOpportunityTitle(event.target.value);
+                setFormErrors((current) => ({ ...current, title: undefined }));
+              }}
               placeholder="Junior Backend-разработчик (Python, FastAPI)"
               className="input--sm opportunity-management-page__modal-input"
+              error={formErrors.title}
             />
+            {formErrors.title ? <p className="opportunity-management-page__modal-error">{formErrors.title}</p> : null}
           </label>
 
           <label className="opportunity-management-page__modal-field">
@@ -1556,12 +1655,23 @@ export function OpportunityManagementPage() {
               <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <textarea
+              ref={descriptionTextareaRef}
               value={createOpportunityDescription}
-              onChange={(event) => setCreateOpportunityDescription(event.target.value)}
+              onChange={(event) => {
+                setCreateOpportunityDescription(event.target.value);
+                setFormErrors((current) => ({ ...current, description: undefined }));
+              }}
               placeholder="Разработка и поддержка backend-сервиса на Python (FastAPI), работа с API и базой данных"
-              className="opportunity-management-page__modal-textarea"
+              className={
+                formErrors.description
+                  ? "opportunity-management-page__modal-textarea opportunity-management-page__modal-textarea--error"
+                  : "opportunity-management-page__modal-textarea"
+              }
               rows={4}
             />
+            {formErrors.description ? (
+              <p className="opportunity-management-page__modal-error">{formErrors.description}</p>
+            ) : null}
           </label>
 
           <label className="opportunity-management-page__modal-field">
@@ -1593,11 +1703,14 @@ export function OpportunityManagementPage() {
                 onChange={(event) => {
                   setCreateOpportunityAddress(event.target.value);
                   setIsAddressSuggestionsOpen(true);
+                  setFormErrors((current) => ({ ...current, address: undefined }));
                 }}
                 placeholder="Начните вводить полный адрес"
                 className="input--sm opportunity-management-page__modal-input"
+                error={formErrors.address}
               />
             </div>
+            {formErrors.address ? <p className="opportunity-management-page__modal-error">{formErrors.address}</p> : null}
 
             {isAddressSuggestionsOpen ? (
               <div className="opportunity-management-page__modal-address-dropdown">
@@ -1678,11 +1791,17 @@ export function OpportunityManagementPage() {
               Зарплата <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <Input
+              ref={salaryInputRef}
               value={createOpportunitySalary}
-              onChange={(event) => setCreateOpportunitySalary(event.target.value)}
+              onChange={(event) => {
+                setCreateOpportunitySalary(event.target.value);
+                setFormErrors((current) => ({ ...current, salary: undefined }));
+              }}
               placeholder="Input"
               className="input--sm opportunity-management-page__modal-input"
+              error={formErrors.salary}
             />
+            {formErrors.salary ? <p className="opportunity-management-page__modal-error">{formErrors.salary}</p> : null}
           </label>
 
           <div className="opportunity-management-page__modal-field">
@@ -1691,6 +1810,7 @@ export function OpportunityManagementPage() {
             </span>
             <div className="opportunity-management-page__modal-tag-panel">
               <Input
+                ref={tagQueryInputRef}
                 value={createOpportunityTagQuery}
                 onChange={(event) => setCreateOpportunityTagQuery(event.target.value)}
                 placeholder="Поиск"
@@ -1717,6 +1837,7 @@ export function OpportunityManagementPage() {
                                 ? current.filter((tag) => tag !== item.name)
                                 : [...current, item.name],
                             );
+                            setFormErrors((current) => ({ ...current, tags: undefined }));
                             setCreateOpportunityTagQuery("");
                           }}
                         >
@@ -1751,6 +1872,7 @@ export function OpportunityManagementPage() {
                 )}
               </div>
             </div>
+            {formErrors.tags ? <p className="opportunity-management-page__modal-error">{formErrors.tags}</p> : null}
           </div>
 
           {createOpportunityType === "vacancy" ? (
@@ -1862,7 +1984,6 @@ export function OpportunityManagementPage() {
               variant="primary"
               size="md"
               className="opportunity-management-page__modal-submit"
-              disabled={!isCreateOpportunityReady}
               onClick={handleCreateOpportunitySubmit}
             >
               {formMode === "edit" ? "Отправить снова" : "Отправить"}

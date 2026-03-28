@@ -30,7 +30,9 @@ export type WorkflowApplication = {
 export type WorkflowOpportunityStatus =
   | "pending_review"
   | "changes_requested"
+  | "changed"
   | "rejected"
+  | "planned"
   | "active"
   | "removed";
 
@@ -93,7 +95,9 @@ function getDefaultStorage(): WorkflowStorage {
   };
 }
 
-function safeReadStorage() {
+let workflowActivationTimeoutId: number | null = null;
+
+function readRawStorage() {
   if (typeof window === "undefined") {
     return getDefaultStorage();
   }
@@ -115,6 +119,89 @@ function safeReadStorage() {
   }
 }
 
+function scheduleWorkflowActivation() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (workflowActivationTimeoutId !== null) {
+    window.clearTimeout(workflowActivationTimeoutId);
+    workflowActivationTimeoutId = null;
+  }
+
+  const current = readRawStorage();
+  const nextTimestamp = current.opportunities
+    .filter((item) => item.status === "planned" && item.plannedPublishAt)
+    .map((item) => new Date(item.plannedPublishAt as string).getTime())
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right)[0];
+
+  if (!nextTimestamp) {
+    return;
+  }
+
+  const timeoutMs = Math.max(nextTimestamp - Date.now(), 0);
+
+  workflowActivationTimeoutId = window.setTimeout(() => {
+    workflowActivationTimeoutId = null;
+    normalizeWorkflowStorage({ persist: true });
+  }, timeoutMs + 50);
+}
+
+function normalizeWorkflowStorage(options?: { persist?: boolean }) {
+  const current = readRawStorage();
+  const now = Date.now();
+  let hasChanged = false;
+  const nextNotifications = [...current.notifications];
+
+  const opportunities = current.opportunities.map((item) => {
+    if (item.status !== "planned" || !item.plannedPublishAt) {
+      return item;
+    }
+
+    const publishAt = new Date(item.plannedPublishAt).getTime();
+
+    if (!Number.isFinite(publishAt) || publishAt > now) {
+      return item;
+    }
+
+    hasChanged = true;
+    nextNotifications.unshift(
+      buildNotification(
+        "Возможность опубликована",
+        `Публикация «${item.title}» автоматически стала активной по запланированной дате.`,
+        "success",
+        ["employer"],
+      ),
+    );
+
+    return {
+      ...item,
+      status: "active" as const,
+      publishedAt: item.plannedPublishAt,
+      activeUntil: addDays(item.plannedPublishAt, 30),
+    };
+  });
+
+  const normalized = {
+    applications: current.applications,
+    notifications: nextNotifications,
+    opportunities,
+  };
+
+  if (options?.persist && hasChanged) {
+    writeStorage(normalized);
+  } else {
+    scheduleWorkflowActivation();
+  }
+
+  return normalized;
+}
+
+function safeReadStorage() {
+  return normalizeWorkflowStorage();
+}
+
 function broadcastUpdate() {
   if (typeof window === "undefined") {
     return;
@@ -129,6 +216,7 @@ function writeStorage(nextValue: WorkflowStorage) {
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextValue));
+  scheduleWorkflowActivation();
   broadcastUpdate();
 }
 
@@ -379,7 +467,7 @@ export function updateWorkflowOpportunity(
             plannedPublishAt: payload.plannedPublishAt ?? null,
             latitude: payload.latitude,
             longitude: payload.longitude,
-            status: options?.resubmit ? "pending_review" : item.status,
+            status: options?.resubmit ? "changed" : item.status,
             moderationComment: options?.resubmit ? null : item.moderationComment,
             submittedAt: options?.resubmit ? submittedAt : item.submittedAt,
           }
@@ -409,9 +497,15 @@ export function reviewWorkflowOpportunity(
       return current;
     }
 
+    const shouldSchedule =
+      action === "approve" &&
+      Boolean(target.plannedPublishAt) &&
+      new Date(target.plannedPublishAt as string).getTime() > Date.now();
     const nextStatus: WorkflowOpportunityStatus =
       action === "approve"
-        ? "active"
+        ? shouldSchedule
+          ? "planned"
+          : "active"
         : action === "reject"
           ? "rejected"
           : "changes_requested";
@@ -421,9 +515,12 @@ export function reviewWorkflowOpportunity(
     if (action === "approve") {
       nextNotifications.unshift(
         buildNotification(
-          "Возможность одобрена",
-          `Публикация «${target.title}» прошла модерацию и появилась на карте.`,
+          shouldSchedule ? "Возможность запланирована" : "Возможность одобрена",
+          shouldSchedule
+            ? `Публикация «${target.title}» прошла модерацию и будет опубликована ${formatDateLabel(target.plannedPublishAt as string)}.`
+            : `Публикация «${target.title}» прошла модерацию и появилась на карте.`,
           "success",
+          ["employer"],
         ),
       );
     } else if (action === "request_changes") {
@@ -456,8 +553,8 @@ export function reviewWorkflowOpportunity(
               ...item,
               status: nextStatus,
               moderationComment: moderatorComment?.trim() || null,
-              publishedAt: action === "approve" ? reviewedAt : null,
-              activeUntil: action === "approve" ? addDays(reviewedAt, 30) : null,
+              publishedAt: action === "approve" && !shouldSchedule ? reviewedAt : null,
+              activeUntil: action === "approve" && !shouldSchedule ? addDays(reviewedAt, 30) : null,
             }
           : item,
       ),
@@ -536,9 +633,11 @@ export function toModerationOpportunityItem(record: WorkflowOpportunityRecord): 
   const moderationStatus: ContentModerationStatus =
     record.status === "changes_requested"
       ? "changes_requested"
+      : record.status === "changed"
+        ? "pending_review"
       : record.status === "rejected"
         ? "rejected"
-        : record.status === "active"
+        : record.status === "active" || record.status === "planned"
           ? "approved"
           : "pending_review";
 
@@ -555,7 +654,7 @@ export function toModerationOpportunityItem(record: WorkflowOpportunityRecord): 
         ? "approved"
         : moderationStatus === "rejected"
           ? "rejected"
-          : moderationStatus === "changes_requested"
+          : moderationStatus === "changes_requested" || record.status === "changed"
             ? "changes"
             : "new",
     salary_label: record.salaryLabel,

@@ -355,7 +355,7 @@
   gap: 24px;
   width: 100%;
   padding: 16px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 14px;
   background: var(--color-bg-primary);
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
@@ -387,6 +387,28 @@
   border-color: rgba(226, 232, 240, 0.96);
   background: var(--color-bg-primary);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.header__profile-context-card--static.header__profile-context-card--active:hover,
+.header__profile-context-card--static.header__profile-context-card--active:focus-visible,
+.header__profile-context-card--static.header__profile-context-card--active:disabled {
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
+}
+
+.header__profile-context-card--static.header__profile-context-card--active-employer:hover,
+.header__profile-context-card--static.header__profile-context-card--active-employer:focus-visible,
+.header__profile-context-card--static.header__profile-context-card--active-employer:disabled {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.12);
+}
+
+.header__profile-context-card--static.header__profile-context-card--active-applicant:hover,
+.header__profile-context-card--static.header__profile-context-card--active-applicant:focus-visible,
+.header__profile-context-card--static.header__profile-context-card--active-applicant:disabled {
+  border-color: var(--color-secondary);
+  background: var(--color-secondary-light);
+  box-shadow: inset 0 0 0 1px rgba(6, 182, 212, 0.12);
 }
 
 .header__profile-context-card--active {

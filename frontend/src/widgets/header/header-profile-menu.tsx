@@ -259,20 +259,24 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
             <div className="header__profile-contexts-list">
               {accountContextItems.map((item) => {
                 const isActive = Boolean(item.is_active);
+                const activeRoleClass =
+                  item.role === "applicant"
+                    ? "header__profile-context-card--active-applicant"
+                    : "header__profile-context-card--active-employer";
+                const cardClassName = [
+                  "header__profile-context-card",
+                  isActive ? "header__profile-context-card--active" : "",
+                  isActive ? activeRoleClass : "",
+                  !hasMultipleAccountContexts ? "header__profile-context-card--static" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
 
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    className={
-                      hasMultipleAccountContexts
-                        ? isActive
-                          ? item.role === "applicant"
-                            ? "header__profile-context-card header__profile-context-card--active header__profile-context-card--active-applicant"
-                            : "header__profile-context-card header__profile-context-card--active header__profile-context-card--active-employer"
-                          : "header__profile-context-card"
-                        : "header__profile-context-card header__profile-context-card--static"
-                    }
+                    className={cardClassName}
                     disabled={!hasMultipleAccountContexts || isActive || switchAccountContextMutation.isPending}
                     onClick={() => {
                       if (!hasMultipleAccountContexts || isActive) {
