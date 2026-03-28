@@ -719,6 +719,14 @@
   gap: 16px;
 }
 
+.opportunity-management-page__modal-radio-group--event-type {
+  gap: 24px 32px;
+}
+
+.opportunity-management-page__modal-radio-group--event-type .opportunity-management-page__modal-radio-option {
+  min-width: 220px;
+}
+
 .opportunity-management-page__modal-radio-option {
   display: inline-flex;
   align-items: center;

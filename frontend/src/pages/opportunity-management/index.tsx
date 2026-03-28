@@ -82,6 +82,9 @@ type OpportunityFormErrors = {
   address?: string;
   salary?: string;
   tags?: string;
+  eventType?: string;
+  mentorshipDirection?: string;
+  mentorExperience?: string;
 };
 
 const DEFAULT_CITY = "Чебоксары";
@@ -110,6 +113,23 @@ const employmentOptions = [
   { value: "part-time", label: "Part-time" },
   { value: "project", label: "Проектная работа" },
 ] as const;
+const eventTypeOptions = [
+  "День открытых дверей",
+  "Хакатон",
+  "Лекция/воркшоп",
+  "Конференция",
+  "Карьерный день",
+  "Другое",
+] as const;
+const mentorshipDirectionOptions = [
+  "Карьерный рост",
+  "Технические навыки",
+  "Подготовка к собеседованиям",
+  "Soft skills",
+  "Code review",
+  "Другое",
+] as const;
+const mentorExperienceOptions = ["Junior+", "Middle+", "Senior+"] as const;
 const fallbackOpportunityTagCatalog: OpportunityTagCatalogCategory[] = [
   {
     id: "programming-languages",
@@ -468,6 +488,15 @@ function formatPointLabel(point: OpportunityLocationPoint) {
   return `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`;
 }
 
+function normalizeTagSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}\s/+.-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function resolveVisibleTagLimit(
   expandedCount: number | undefined,
   totalCount: number,
@@ -513,6 +542,12 @@ export function OpportunityManagementPage() {
     useState<(typeof workFormatOptions)[number]["value"]>("offline");
   const [createOpportunityEmployment, setCreateOpportunityEmployment] =
     useState<(typeof employmentOptions)[number]["value"]>("full-time");
+  const [createOpportunityEventType, setCreateOpportunityEventType] =
+    useState<(typeof eventTypeOptions)[number] | "">("");
+  const [createOpportunityMentorshipDirection, setCreateOpportunityMentorshipDirection] =
+    useState<(typeof mentorshipDirectionOptions)[number] | "">("");
+  const [createOpportunityMentorExperience, setCreateOpportunityMentorExperience] =
+    useState<(typeof mentorExperienceOptions)[number] | "">("");
   const [createOpportunityPublishDate, setCreateOpportunityPublishDate] = useState("");
   const [createOpportunityAddress, setCreateOpportunityAddress] = useState("");
   const [createOpportunityCitySuggestions, setCreateOpportunityCitySuggestions] = useState<CitySuggestion[]>([]);
@@ -556,6 +591,10 @@ export function OpportunityManagementPage() {
       setWorkflowRevision((current) => current + 1);
     });
   }, []);
+
+  useEffect(() => {
+    setExpandedModalTagsCount(MODAL_TAGS_INITIAL_COUNT);
+  }, [createOpportunityTagQuery]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -791,12 +830,12 @@ export function OpportunityManagementPage() {
   ];
   const tagCatalog = tagCatalogQuery.data?.length ? tagCatalogQuery.data : fallbackOpportunityTagCatalog;
   const filteredTagOptions = useMemo(() => {
-    const normalizedQuery = createOpportunityTagQuery.trim().toLowerCase();
+    const normalizedQuery = normalizeTagSearchText(createOpportunityTagQuery);
     const deduplicated = new Map<string, { id: string; name: string }>();
 
     tagCatalog.forEach((category) => {
       category.items.forEach((item) => {
-        if (!normalizedQuery || item.name.toLowerCase().includes(normalizedQuery)) {
+        if (!normalizedQuery || normalizeTagSearchText(item.name).includes(normalizedQuery)) {
           deduplicated.set(item.name, { id: item.id, name: item.name });
         }
       });
@@ -815,6 +854,26 @@ export function OpportunityManagementPage() {
       return left.name.localeCompare(right.name);
     });
   }, [createOpportunityTagQuery, createOpportunityTags, tagCatalog]);
+  const filteredCreateOpportunityTags = useMemo(() => {
+    const baseTags =
+      createOpportunityType === "mentorship" && createOpportunityMentorshipDirection
+        ? [
+            createOpportunityMentorshipDirection,
+            ...createOpportunityTags.filter((tag) => tag !== createOpportunityMentorshipDirection),
+          ]
+        : createOpportunityTags;
+
+    if (createOpportunityType !== "event" || !createOpportunityEventType) {
+      return baseTags;
+    }
+
+    return [createOpportunityEventType, ...baseTags.filter((tag) => tag !== createOpportunityEventType)];
+  }, [
+    createOpportunityEventType,
+    createOpportunityMentorshipDirection,
+    createOpportunityTags,
+    createOpportunityType,
+  ]);
   const preferredCity =
     meQuery.data?.data?.user?.preferred_city?.trim() || selectedCity;
   const currentEmployerName =
@@ -849,6 +908,9 @@ export function OpportunityManagementPage() {
     setCreateOpportunityLevel("junior");
     setCreateOpportunityFormat("offline");
     setCreateOpportunityEmployment("full-time");
+    setCreateOpportunityEventType("");
+    setCreateOpportunityMentorshipDirection("");
+    setCreateOpportunityMentorExperience("");
     setCreateOpportunityPublishDate("");
     setCreateOpportunityAddress("");
     setCreateOpportunityAddressSuggestions([]);
@@ -880,7 +942,13 @@ export function OpportunityManagementPage() {
     setCreateOpportunityCityPoint({ lon: record.longitude, lat: record.latitude });
     setCreateOpportunitySalary(record.salaryLabel);
     setCreateOpportunityTagQuery("");
-    setCreateOpportunityTags(record.tags);
+    setCreateOpportunityTags(
+      record.tags.filter(
+        (item) =>
+          !eventTypeOptions.includes(item as (typeof eventTypeOptions)[number]) &&
+          !mentorshipDirectionOptions.includes(item as (typeof mentorshipDirectionOptions)[number]),
+      ),
+    );
     setCreateOpportunityLevel(
       record.levelLabel === "Senior"
         ? "senior"
@@ -901,6 +969,21 @@ export function OpportunityManagementPage() {
         : record.employmentLabel === "Project"
           ? "project"
           : "full-time",
+    );
+    setCreateOpportunityEventType(
+      record.kind === "event"
+        ? eventTypeOptions.find((item) => record.tags.includes(item)) ?? ""
+        : "",
+    );
+    setCreateOpportunityMentorshipDirection(
+      record.kind === "mentorship"
+        ? mentorshipDirectionOptions.find((item) => record.tags.includes(item)) ?? ""
+        : "",
+    );
+    setCreateOpportunityMentorExperience(
+      record.kind === "mentorship"
+        ? mentorExperienceOptions.find((item) => item === record.levelLabel) ?? ""
+        : "",
     );
     setCreateOpportunityPublishDate(record.plannedPublishAt?.slice(0, 10) ?? "");
     setCreateOpportunityAddress(record.address);
@@ -940,7 +1023,13 @@ export function OpportunityManagementPage() {
     setCreateOpportunityCityPoint(popularCities.find((entry) => entry.name === preferredCity)?.point ?? null);
     setCreateOpportunitySalary(item.salaryLabel);
     setCreateOpportunityTagQuery("");
-    setCreateOpportunityTags(item.tags);
+    setCreateOpportunityTags(
+      item.tags.filter(
+        (tag) =>
+          !eventTypeOptions.includes(tag as (typeof eventTypeOptions)[number]) &&
+          !mentorshipDirectionOptions.includes(tag as (typeof mentorshipDirectionOptions)[number]),
+      ),
+    );
     setCreateOpportunityLevel(
       item.levelLabel === "Senior"
         ? "senior"
@@ -955,6 +1044,21 @@ export function OpportunityManagementPage() {
         : item.employmentLabel === "Project"
           ? "project"
           : "full-time",
+    );
+    setCreateOpportunityEventType(
+      item.kind === "Мероприятие"
+        ? eventTypeOptions.find((option) => item.tags.includes(option)) ?? ""
+        : "",
+    );
+    setCreateOpportunityMentorshipDirection(
+      item.kind === "Менторская программа"
+        ? mentorshipDirectionOptions.find((option) => item.tags.includes(option)) ?? ""
+        : "",
+    );
+    setCreateOpportunityMentorExperience(
+      item.kind === "Менторская программа"
+        ? mentorExperienceOptions.find((option) => option === item.levelLabel) ?? ""
+        : "",
     );
     setCreateOpportunityPublishDate("");
     setCreateOpportunityAddress(item.locationLabel);
@@ -1045,11 +1149,25 @@ export function OpportunityManagementPage() {
     }
 
     if (!createOpportunitySalary.trim()) {
-      nextErrors.salary = "Укажите зарплату или формат оплаты.";
+      nextErrors.salary = createOpportunityType === "event"
+        ? "Укажите стоимость мероприятия."
+        : "Укажите зарплату или формат оплаты.";
     }
 
     if (createOpportunityTags.length === 0) {
       nextErrors.tags = "Выберите хотя бы один тег.";
+    }
+
+    if (createOpportunityType === "event" && !createOpportunityEventType) {
+      nextErrors.eventType = "Выберите тип мероприятия.";
+    }
+
+    if (createOpportunityType === "mentorship" && !createOpportunityMentorshipDirection) {
+      nextErrors.mentorshipDirection = "Выберите направление менторства.";
+    }
+
+    if (createOpportunityType === "mentorship" && !createOpportunityMentorExperience) {
+      nextErrors.mentorExperience = "Выберите опыт ментора.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -1063,6 +1181,12 @@ export function OpportunityManagementPage() {
         addressInputRef.current?.focus();
       } else if (nextErrors.salary) {
         salaryInputRef.current?.focus();
+      } else if (nextErrors.eventType) {
+        tagQueryInputRef.current?.focus();
+      } else if (nextErrors.mentorshipDirection) {
+        tagQueryInputRef.current?.focus();
+      } else if (nextErrors.mentorExperience) {
+        tagQueryInputRef.current?.focus();
       } else if (nextErrors.tags) {
         tagQueryInputRef.current?.focus();
       }
@@ -1086,8 +1210,10 @@ export function OpportunityManagementPage() {
       salaryLabel: createOpportunitySalary.trim(),
       address: createOpportunityAddress.trim(),
       city: createOpportunityCity.trim(),
-      tags: createOpportunityTags,
-      format: createOpportunityFormat,
+      tags: filteredCreateOpportunityTags,
+      levelLabel: createOpportunityType === "mentorship" ? createOpportunityMentorExperience : undefined,
+      employmentLabel: createOpportunityType === "mentorship" ? "Менторство" : undefined,
+      format: createOpportunityType === "mentorship" ? "online" : createOpportunityFormat,
       description: createOpportunityDescription.trim(),
       plannedPublishAt: createOpportunityPublishDate,
       latitude: targetPoint.lat,
@@ -1621,7 +1747,24 @@ export function OpportunityManagementPage() {
                 <label key={item.value} className="opportunity-management-page__modal-radio-option">
                   <Radio
                     checked={createOpportunityType === item.value}
-                    onChange={() => setCreateOpportunityType(item.value)}
+                    onChange={() => {
+                      setCreateOpportunityType(item.value);
+
+                      if (item.value !== "event") {
+                        setCreateOpportunityEventType("");
+                        setFormErrors((current) => ({ ...current, eventType: undefined }));
+                      }
+
+                      if (item.value !== "mentorship") {
+                        setCreateOpportunityMentorshipDirection("");
+                        setCreateOpportunityMentorExperience("");
+                        setFormErrors((current) => ({
+                          ...current,
+                          mentorshipDirection: undefined,
+                          mentorExperience: undefined,
+                        }));
+                      }
+                    }}
                     variant="primary"
                   />
                   <span>{item.label}</span>
@@ -1788,7 +1931,9 @@ export function OpportunityManagementPage() {
 
           <label className="opportunity-management-page__modal-field">
             <span className="opportunity-management-page__modal-label">
-              Зарплата <span className="opportunity-management-page__modal-required">*</span>
+              {createOpportunityType === "event" ? "Стоимость" : "Зарплата"}
+              {" "}
+              <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <Input
               ref={salaryInputRef}
@@ -1797,7 +1942,7 @@ export function OpportunityManagementPage() {
                 setCreateOpportunitySalary(event.target.value);
                 setFormErrors((current) => ({ ...current, salary: undefined }));
               }}
-              placeholder="Input"
+              placeholder={createOpportunityType === "event" ? "Например: Бесплатно / 1 500 ₽" : "Input"}
               className="input--sm opportunity-management-page__modal-input"
               error={formErrors.salary}
             />
@@ -1814,7 +1959,6 @@ export function OpportunityManagementPage() {
                 value={createOpportunityTagQuery}
                 onChange={(event) => setCreateOpportunityTagQuery(event.target.value)}
                 placeholder="Поиск"
-                type="search"
                 className="input--sm opportunity-management-page__modal-input opportunity-management-page__modal-input--search"
               />
               <div className="opportunity-management-page__modal-tag-catalog">
@@ -1875,6 +2019,84 @@ export function OpportunityManagementPage() {
             {formErrors.tags ? <p className="opportunity-management-page__modal-error">{formErrors.tags}</p> : null}
           </div>
 
+          {createOpportunityType === "event" ? (
+            <div className="opportunity-management-page__modal-field">
+              <span className="opportunity-management-page__modal-label">
+                Тип мероприятия <span className="opportunity-management-page__modal-required">*</span>
+              </span>
+              <div className="opportunity-management-page__modal-radio-group opportunity-management-page__modal-radio-group--event-type">
+                {eventTypeOptions.map((item) => (
+                  <label key={item} className="opportunity-management-page__modal-radio-option">
+                    <Radio
+                      checked={createOpportunityEventType === item}
+                      onChange={() => {
+                        setCreateOpportunityEventType(item);
+                        setFormErrors((current) => ({ ...current, eventType: undefined }));
+                      }}
+                      variant="primary"
+                    />
+                    <span>{item}</span>
+                  </label>
+                ))}
+              </div>
+              {formErrors.eventType ? (
+                <p className="opportunity-management-page__modal-error">{formErrors.eventType}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {createOpportunityType === "mentorship" ? (
+            <>
+              <div className="opportunity-management-page__modal-field">
+                <span className="opportunity-management-page__modal-label">
+                  Направление менторства <span className="opportunity-management-page__modal-required">*</span>
+                </span>
+                <div className="opportunity-management-page__modal-radio-group opportunity-management-page__modal-radio-group--event-type">
+                  {mentorshipDirectionOptions.map((item) => (
+                    <label key={item} className="opportunity-management-page__modal-radio-option">
+                      <Radio
+                        checked={createOpportunityMentorshipDirection === item}
+                        onChange={() => {
+                          setCreateOpportunityMentorshipDirection(item);
+                          setFormErrors((current) => ({ ...current, mentorshipDirection: undefined }));
+                        }}
+                        variant="primary"
+                      />
+                      <span>{item}</span>
+                    </label>
+                  ))}
+                </div>
+                {formErrors.mentorshipDirection ? (
+                  <p className="opportunity-management-page__modal-error">{formErrors.mentorshipDirection}</p>
+                ) : null}
+              </div>
+
+              <div className="opportunity-management-page__modal-field">
+                <span className="opportunity-management-page__modal-label">
+                  Опыт ментора <span className="opportunity-management-page__modal-required">*</span>
+                </span>
+                <div className="opportunity-management-page__modal-radio-group">
+                  {mentorExperienceOptions.map((item) => (
+                    <label key={item} className="opportunity-management-page__modal-radio-option">
+                      <Radio
+                        checked={createOpportunityMentorExperience === item}
+                        onChange={() => {
+                          setCreateOpportunityMentorExperience(item);
+                          setFormErrors((current) => ({ ...current, mentorExperience: undefined }));
+                        }}
+                        variant="primary"
+                      />
+                      <span>{item}</span>
+                    </label>
+                  ))}
+                </div>
+                {formErrors.mentorExperience ? (
+                  <p className="opportunity-management-page__modal-error">{formErrors.mentorExperience}</p>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+
           {createOpportunityType === "vacancy" ? (
             <>
               <div className="opportunity-management-page__modal-field">
@@ -1931,7 +2153,7 @@ export function OpportunityManagementPage() {
                 </div>
               </div>
             </>
-          ) : (
+          ) : createOpportunityType !== "event" && createOpportunityType !== "mentorship" ? (
             <div className="opportunity-management-page__modal-field">
               <span className="opportunity-management-page__modal-label">
                 Формат работы <span className="opportunity-management-page__modal-required">*</span>
@@ -1949,7 +2171,7 @@ export function OpportunityManagementPage() {
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
 
           <label className="opportunity-management-page__modal-field">
             <span className="opportunity-management-page__modal-label">Дата (для запланированной публикации)</span>

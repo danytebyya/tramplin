@@ -1075,13 +1075,14 @@ a {
 }
 
 .date-input__calendar-day--selected {
-  background: #17b8d9;
-  color: #fff;
+  background: var(--date-input-accent);
+  color: var(--color-text-inverse);
 }
 
 .date-input__calendar-day--selected:hover,
 .date-input__calendar-day--selected:focus-visible {
-  background: #13a5c3;
+  background: var(--date-input-accent-light);
+  color: var(--date-input-accent);
 }
 
 .date-input__calendar-day--disabled {

@@ -748,6 +748,7 @@ export function SettingsPage() {
       membershipId: string;
       isCurrentUser: boolean;
     }) => {
+      await syncActiveEmployerSession();
       await deleteEmployerStaffMembership(membershipId);
       return { isCurrentUser };
     },
@@ -787,7 +788,10 @@ export function SettingsPage() {
     },
   });
   const deleteEmployerStaffInvitationMutation = useMutation({
-    mutationFn: deleteEmployerStaffInvitation,
+    mutationFn: async (invitationId: string) => {
+      await syncActiveEmployerSession();
+      return deleteEmployerStaffInvitation(invitationId);
+    },
     onSuccess: (_response, invitationId) => {
       setExpandedInvitationId((current) => (current === invitationId ? null : current));
       setPendingDeleteItem((current) => (current?.kind === "invitation" && current.id === invitationId ? null : current));
@@ -1063,6 +1067,13 @@ export function SettingsPage() {
       )?.membership_id ?? null,
     [accountContextsQuery.data?.data?.items],
   );
+  const activeEmployerContextId = useMemo(
+    () =>
+      accountContextsQuery.data?.data?.items?.find(
+        (item) => item.role === "employer" && item.is_active,
+      )?.id ?? null,
+    [accountContextsQuery.data?.data?.items],
+  );
   const activeEmployerMembershipId = activeEmployerMembershipIdFromToken ?? activeEmployerMembershipIdFromContext;
   const currentEmployerMembership = useMemo(
     () =>
@@ -1101,6 +1112,27 @@ export function SettingsPage() {
       ? "Введите корректный email"
       : null;
   const resolvedInviteEmailError = inviteEmailError ?? inviteEmailServerError;
+
+  const syncActiveEmployerSession = async () => {
+    if (!activeEmployerContextId) {
+      return;
+    }
+
+    const switchResponse = await switchAccountContextRequest(activeEmployerContextId);
+    const nextAccessToken = switchResponse?.data?.access_token;
+    const nextExpiresIn = switchResponse?.data?.expires_in;
+    const currentRefreshToken = useAuthStore.getState().refreshToken;
+    const nextRole = (switchResponse?.data?.active_context?.role ?? switchResponse?.data?.user?.role ?? "applicant") as
+      | "applicant"
+      | "employer"
+      | "junior"
+      | "curator"
+      | "admin";
+
+    if (nextAccessToken && nextExpiresIn && currentRefreshToken) {
+      useAuthStore.getState().setSession(nextAccessToken, currentRefreshToken, nextRole, nextExpiresIn);
+    }
+  };
 
   const handleCreateStaffInvitation = () => {
     if (resolvedInviteEmailError || invitePermissionKeys.length === 0) {
