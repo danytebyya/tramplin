@@ -1,5 +1,9 @@
 from src.models import (
     ApplicantProfile,
+    ChatConversation,
+    ChatConversationReadState,
+    ChatMessage,
+    ChatUserKey,
     CuratorProfile,
     Employer,
     EmployerMembership,
@@ -19,6 +23,10 @@ from src.models import (
 
 __all__ = [
     "User",
+    "ChatUserKey",
+    "ChatConversation",
+    "ChatMessage",
+    "ChatConversationReadState",
     "ApplicantProfile",
     "EmployerProfile",
     "CuratorProfile",

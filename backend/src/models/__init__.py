@@ -1,4 +1,5 @@
 from src.models.auth_login_event import AuthLoginEvent
+from src.models.chat import ChatConversation, ChatConversationReadState, ChatMessage, ChatUserKey
 from src.models.employer_verification import (
     Employer,
     EmployerMembership,
@@ -33,6 +34,10 @@ from src.models.user_notification_preference import UserNotificationPreference
 __all__ = [
     "User",
     "AuthLoginEvent",
+    "ChatUserKey",
+    "ChatConversation",
+    "ChatMessage",
+    "ChatConversationReadState",
     "ApplicantProfile",
     "EmployerProfile",
     "CuratorProfile",

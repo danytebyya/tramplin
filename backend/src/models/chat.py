@@ -45,7 +45,9 @@ class ChatConversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
     )
     last_message_id: Mapped[str | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True
+        Uuid(as_uuid=True),
+        ForeignKey("chat_messages.id", ondelete="SET NULL", use_alter=True),
+        nullable=True,
     )
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

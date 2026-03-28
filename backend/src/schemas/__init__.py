@@ -13,6 +13,21 @@ from src.schemas.auth import (
     VerificationCodeRequest,
     VerificationCodeVerifyRequest,
 )
+from src.schemas.chat import (
+    ChatContactListResponse,
+    ChatContactRead,
+    ChatConversationCreateRequest,
+    ChatConversationCreateResponse,
+    ChatConversationListResponse,
+    ChatConversationRead,
+    ChatMessageCreateRequest,
+    ChatMessageListResponse,
+    ChatMessageRead,
+    ChatParticipantRead,
+    ChatReadReceiptResponse,
+    ChatUserKeyRead,
+    ChatUserKeyUpsertRequest,
+)
 from src.schemas.company import EmployerOnboardingRequest
 from src.schemas.notification import NotificationFeedResponse, NotificationRead, NotificationUnreadCountResponse
 from src.schemas.opportunity import (
@@ -47,6 +62,19 @@ __all__ = [
     "EmailCheckResponse",
     "VerificationCodeRequest",
     "VerificationCodeVerifyRequest",
+    "ChatUserKeyUpsertRequest",
+    "ChatUserKeyRead",
+    "ChatParticipantRead",
+    "ChatMessageCreateRequest",
+    "ChatMessageRead",
+    "ChatMessageListResponse",
+    "ChatConversationCreateRequest",
+    "ChatConversationRead",
+    "ChatConversationListResponse",
+    "ChatConversationCreateResponse",
+    "ChatContactRead",
+    "ChatContactListResponse",
+    "ChatReadReceiptResponse",
     "EmployerOnboardingRequest",
     "NotificationRead",
     "NotificationFeedResponse",
