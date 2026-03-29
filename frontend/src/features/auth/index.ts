@@ -94,6 +94,30 @@ export type MeResponse = {
         is_online?: boolean;
         last_seen_at?: string | null;
       };
+      applicant_profile?: {
+        full_name?: string | null;
+        university?: string | null;
+        about?: string | null;
+        study_course?: number | null;
+        graduation_year?: number | null;
+        resume_url?: string | null;
+        portfolio_url?: string | null;
+        level?: string | null;
+        desired_salary_from?: number | null;
+        preferred_location?: string | null;
+        employment_types?: string[] | null;
+        work_formats?: string[] | null;
+        hard_skills?: string[] | null;
+        soft_skills?: string[] | null;
+        languages?: string[] | null;
+        github_url?: string | null;
+        gitlab_url?: string | null;
+        bitbucket_url?: string | null;
+        linkedin_url?: string | null;
+        habr_url?: string | null;
+        profile_views_count?: number | null;
+        recommendations_count?: number | null;
+      } | null;
       employer_profile?: {
         employer_type?: "company" | "sole_proprietor";
         company_name?: string;
@@ -120,6 +144,68 @@ export type MeResponse = {
         moderator_comment?: string | null;
       } | null;
     };
+  };
+};
+
+export type ApplicantProfilePayload =
+  NonNullable<NonNullable<NonNullable<MeResponse["data"]>["user"]>["applicant_profile"]>;
+
+export type ApplicantDashboardProject = {
+  id: string;
+  title: string;
+  description?: string | null;
+  technologies?: string | null;
+  period_label?: string | null;
+  role_name?: string | null;
+  repository_url?: string | null;
+};
+
+export type ApplicantDashboardAchievement = {
+  id: string;
+  title: string;
+  event_name?: string | null;
+  project_name?: string | null;
+  award?: string | null;
+};
+
+export type ApplicantDashboardCertificate = {
+  id: string;
+  title: string;
+  organization_name?: string | null;
+  issued_at?: string | null;
+  credential_url?: string | null;
+};
+
+export type ApplicantDashboardResponse = {
+  data?: {
+    profile?: ApplicantProfilePayload;
+    preferred_city?: string | null;
+    stats?: {
+      profile_views_count?: number;
+      applications_count?: number;
+      responses_count?: number;
+      invitations_count?: number;
+      recommendations_count?: number;
+    };
+    links?: {
+      github_url?: string | null;
+      gitlab_url?: string | null;
+      bitbucket_url?: string | null;
+      linkedin_url?: string | null;
+      portfolio_url?: string | null;
+      habr_url?: string | null;
+      resume_url?: string | null;
+    };
+    career_interests?: {
+      desired_salary_from?: number | null;
+      preferred_city?: string | null;
+      preferred_location?: string | null;
+      employment_types?: string[];
+      work_formats?: string[];
+    };
+    projects?: ApplicantDashboardProject[];
+    achievements?: ApplicantDashboardAchievement[];
+    certificates?: ApplicantDashboardCertificate[];
   };
 };
 
@@ -229,6 +315,65 @@ export async function updatePreferredCityRequest(preferredCity: string) {
   const response = await apiClient.put<MeResponse>("/users/me/preferred-city", {
     preferred_city: preferredCity,
   });
+  return response.data;
+}
+
+export async function applicantDashboardRequest() {
+  const response = await apiClient.get<ApplicantDashboardResponse>("/users/me/applicant-dashboard");
+  return response.data;
+}
+
+export async function updateApplicantDashboardRequest(payload: {
+  full_name?: string | null;
+  university?: string | null;
+  about?: string | null;
+  study_course?: number | null;
+  graduation_year?: number | null;
+  level?: string | null;
+  hard_skills?: string[];
+  soft_skills?: string[];
+  languages?: string[];
+  links?: {
+    github_url?: string | null;
+    gitlab_url?: string | null;
+    bitbucket_url?: string | null;
+    linkedin_url?: string | null;
+    portfolio_url?: string | null;
+    habr_url?: string | null;
+    resume_url?: string | null;
+  };
+  career_interests?: {
+    desired_salary_from?: number | null;
+    preferred_city?: string | null;
+    preferred_location?: string | null;
+    employment_types?: string[];
+    work_formats?: string[];
+  };
+  projects?: Array<{
+    id?: string | null;
+    title: string;
+    description?: string | null;
+    technologies?: string | null;
+    period_label?: string | null;
+    role_name?: string | null;
+    repository_url?: string | null;
+  }>;
+  achievements?: Array<{
+    id?: string | null;
+    title: string;
+    event_name?: string | null;
+    project_name?: string | null;
+    award?: string | null;
+  }>;
+  certificates?: Array<{
+    id?: string | null;
+    title: string;
+    organization_name?: string | null;
+    issued_at?: string | null;
+    credential_url?: string | null;
+  }>;
+}) {
+  const response = await apiClient.put<ApplicantDashboardResponse>("/users/me/applicant-dashboard", payload);
   return response.data;
 }
 

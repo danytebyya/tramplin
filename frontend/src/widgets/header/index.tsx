@@ -25,6 +25,22 @@ type HeaderProps = {
   notificationOnRealtimeMessage?: () => void;
 };
 
+function resolveHeaderBrandSubtitle(theme: "applicant" | "employer" | "curator", isAuthenticated: boolean) {
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  if (theme === "employer") {
+    return "Для работодателя";
+  }
+
+  if (theme === "curator") {
+    return "Для куратора";
+  }
+
+  return "Для соискателя";
+}
+
 export function Header({
   containerClassName,
   profileMenuItems,
@@ -66,6 +82,7 @@ export function Header({
     !isAuthenticated || resolvedTheme === "employer" || resolvedTheme === "curator"
       ? logoPrimary
       : logoSecondary;
+  const brandSubtitle = resolveHeaderBrandSubtitle(resolvedTheme, isAuthenticated);
 
   return (
     <header className={cn("header", headerRoleClassName)}>
@@ -74,6 +91,7 @@ export function Header({
           <div className="header__brand">
             <Link to="/" className="header__brand-name" aria-label="Трамплин">
               <img src={logoSource} alt="" aria-hidden="true" className="header__logo-badge" />
+              {brandSubtitle ? <span className="header__brand-subtitle">{brandSubtitle}</span> : null}
             </Link>
           </div>
 
@@ -141,4 +159,5 @@ export function Header({
 
 export { buildEmployerProfileMenuItems } from "./profile-menu-items";
 export { buildModerationProfileMenuItems } from "./profile-menu-items";
+export { buildApplicantProfileMenuItems } from "./profile-menu-items";
 export { CuratorHeaderNavigation } from "./header-navigation";

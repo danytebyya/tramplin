@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
-import { performLogout, useAuthStore } from "../../features/auth";
+import { useAuthStore } from "../../features/auth";
 import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { Header } from "../../widgets/header";
+import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import { ChatWorkspace } from "../../widgets/chat-workspace";
 import "../settings/settings.css";
 import "./networking.css";
@@ -21,11 +21,7 @@ export function NetworkingPage() {
     return <Navigate to="/" replace />;
   }
 
-  const profileMenuItems = [
-    { label: "Нетворкинг", onClick: () => navigate("/networking") },
-    { label: "Настройки", onClick: () => navigate("/settings") },
-    { label: "Выйти", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },
-  ];
+  const profileMenuItems = buildApplicantProfileMenuItems(navigate);
 
   const handleCityChange = (nextCity: CitySelection) => {
     setSelectedCity(nextCity.name);

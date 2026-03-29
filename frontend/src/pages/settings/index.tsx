@@ -27,7 +27,6 @@ import {
   listActiveSessionsRequest,
   listLoginHistoryRequest,
   meRequest,
-  performLogout,
   persistCompanyInviteReturnTo,
   readAccessTokenPayload,
   readCompanyInviteReturnTo,
@@ -55,7 +54,13 @@ import {
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Modal, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
-import { buildEmployerProfileMenuItems, buildModerationProfileMenuItems, CuratorHeaderNavigation, Header } from "../../widgets/header";
+import {
+  buildApplicantProfileMenuItems,
+  buildEmployerProfileMenuItems,
+  buildModerationProfileMenuItems,
+  CuratorHeaderNavigation,
+  Header,
+} from "../../widgets/header";
 import "../../widgets/header/header.css";
 import "./settings.css";
 
@@ -846,14 +851,6 @@ export function SettingsPage() {
     }
   };
 
-  const handleLogout = () => {
-    void performLogout({
-      beforeRedirect: () => {
-        setIsProfileMenuPinned(false);
-      },
-    });
-  };
-
   useEffect(() => {
     setFullName(user?.display_name ?? "");
     setEmail(user?.email ?? "");
@@ -1207,14 +1204,7 @@ export function SettingsPage() {
     ? buildModerationProfileMenuItems()
     : role === "employer"
       ? buildEmployerProfileMenuItems(navigate, employerAccess)
-      : [
-          { label: "Профиль", isDanger: false, onClick: () => navigate("/dashboard/applicant") },
-          { label: "Мои отклики", isDanger: false },
-          { label: "Избранное", isDanger: false },
-          { label: "Нетворкинг", isDanger: false, onClick: () => navigate("/networking") },
-          { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
-          { label: "Выход", isDanger: true, onClick: handleLogout },
-        ];
+      : buildApplicantProfileMenuItems(navigate);
   const handleCityChange = (city: string | CitySelection) => {
     const nextCity = typeof city === "string" ? city : city.name;
     setSelectedCity(nextCity);

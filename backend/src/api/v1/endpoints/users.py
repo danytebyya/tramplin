@@ -9,6 +9,7 @@ from src.db import get_db
 from src.models import User
 from src.schemas.auth import RegisterRequest
 from src.schemas.user import (
+    ApplicantDashboardUpdateRequest,
     UserNotificationPreferencesUpdateRequest,
     UserPreferredCityUpdateRequest,
     UserUpdateRequest,
@@ -60,6 +61,25 @@ def update_preferred_city(
 ) -> dict:
     user = UserService(db).update_preferred_city(current_user, payload.preferred_city)
     return success_response({"user": serialize_user(user)})
+
+
+@router.get("/me/applicant-dashboard", status_code=status.HTTP_200_OK)
+def read_applicant_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = UserService(db).get_applicant_dashboard(current_user)
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.put("/me/applicant-dashboard", status_code=status.HTTP_200_OK)
+def update_applicant_dashboard(
+    payload: ApplicantDashboardUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = UserService(db).update_applicant_dashboard(current_user, payload)
+    return success_response(response.model_dump(mode="json"))
 
 
 @router.get("/me/notification-preferences", status_code=status.HTTP_200_OK)

@@ -22,18 +22,18 @@ import {
   listMyAppliedOpportunityIdsRequest,
   submitOpportunityApplicationRequest,
 } from "../../features/applications";
-import {
-  getEmployerAccessState,
-  meRequest,
-  performLogout,
-  updatePreferredCityRequest,
-  useAuthStore,
-} from "../../features/auth";
+import { getEmployerAccessState, meRequest, updatePreferredCityRequest, useAuthStore } from "../../features/auth";
 import { ModerationDashboardContent } from "../curator-dashboard";
 import { Button, Container, Input } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
-import { buildEmployerProfileMenuItems, buildModerationProfileMenuItems, CuratorHeaderNavigation, Header } from "../../widgets/header";
+import {
+  buildApplicantProfileMenuItems,
+  buildEmployerProfileMenuItems,
+  buildModerationProfileMenuItems,
+  CuratorHeaderNavigation,
+  Header,
+} from "../../widgets/header";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import type { Opportunity } from "../../entities/opportunity";
@@ -243,15 +243,6 @@ export function HomePage() {
     }, 40);
   };
 
-  const handleLogout = () => {
-    void performLogout({
-      beforeRedirect: () => {
-        setIsProfileMenuPinned(false);
-        setIsProfileMenuOpen(false);
-      },
-    });
-  };
-
   useEffect(() => {
     return subscribeOpportunityWorkflow(() => {
       void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
@@ -331,14 +322,7 @@ export function HomePage() {
     ? buildModerationProfileMenuItems()
     : roleName === "employer"
       ? buildEmployerProfileMenuItems(navigate, employerAccess)
-      : [
-          { label: "Профиль", isDanger: false },
-          { label: "Мои отклики", isDanger: false },
-          { label: "Избранное", isDanger: false },
-          { label: "Нетворкинг", isDanger: false, onClick: () => navigate("/networking") },
-          { label: "Настройки", isDanger: false, onClick: () => navigate("/settings") },
-          { label: "Выход", isDanger: true, onClick: handleLogout },
-        ];
+      : buildApplicantProfileMenuItems(navigate);
   const homePageClassName = [
     "home-page",
     roleName === "applicant" ? "home-page--applicant" : "",

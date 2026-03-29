@@ -888,6 +888,100 @@ def test_update_me_profile(client, db_session):
     assert me_response.json()["data"]["user"]["display_name"] == "Updated Name"
 
 
+def test_update_applicant_dashboard(client, db_session):
+    code = _request_code(client, db_session, "dashboard@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "dashboard@example.com",
+            "display_name": "Dashboard User",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Dashboard User"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "dashboard@example.com", "password": "StrongPass123"},
+    )
+    assert login_response.status_code == 201
+    access_token = login_response.json()["data"]["access_token"]
+
+    update_response = client.put(
+        "/api/v1/users/me/applicant-dashboard",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "full_name": "Иванов Иван",
+            "university": "ЧГУ",
+            "about": "Backend developer",
+            "study_course": 3,
+            "graduation_year": 2027,
+            "level": "Junior",
+            "hard_skills": ["Python", "Django"],
+            "soft_skills": ["Коммуникация"],
+            "languages": ["Русский", "English B2"],
+            "links": {
+                "github_url": "https://github.com/ivanov",
+                "portfolio_url": "https://ivanov.dev",
+            },
+            "career_interests": {
+                "desired_salary_from": 80000,
+                "preferred_city": "Чебоксары",
+                "employment_types": ["Full-time"],
+                "work_formats": ["Удаленно"],
+            },
+            "projects": [
+                {
+                    "title": "Task manager",
+                    "description": "Team project",
+                    "technologies": "Python, React",
+                    "period_label": "2025",
+                    "role_name": "Backend",
+                    "repository_url": "https://github.com/ivanov/task-manager",
+                }
+            ],
+            "achievements": [
+                {
+                    "title": "Hackathon Winner",
+                    "event_name": "Hack Day",
+                    "project_name": "AI helper",
+                    "award": "1 место",
+                }
+            ],
+            "certificates": [
+                {
+                    "title": "Python Certificate",
+                    "organization_name": "Coursera",
+                    "issued_at": "2025-03-01",
+                    "credential_url": "https://example.com/cert",
+                }
+            ],
+        },
+    )
+    assert update_response.status_code == 200
+    payload = update_response.json()["data"]
+    assert payload["profile"]["full_name"] == "Иванов Иван"
+    assert payload["profile"]["about"] == "Backend developer"
+    assert payload["profile"]["study_course"] == 3
+    assert payload["career_interests"]["preferred_city"] == "Чебоксары"
+    assert payload["projects"][0]["title"] == "Task manager"
+    assert payload["achievements"][0]["title"] == "Hackathon Winner"
+    assert payload["certificates"][0]["title"] == "Python Certificate"
+
+    dashboard_response = client.get(
+        "/api/v1/users/me/applicant-dashboard",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert dashboard_response.status_code == 200
+    body = dashboard_response.json()["data"]
+    assert body["profile"]["github_url"] == "https://github.com/ivanov"
+    assert body["preferred_city"] == "Чебоксары"
+    assert len(body["projects"]) == 1
+
+
 def test_login_rate_limit(client, db_session):
     code = _request_code(client, db_session, "limited-login@example.com")
     register_payload = {

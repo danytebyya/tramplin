@@ -35,6 +35,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
     applicant_profile = relationship("ApplicantProfile", back_populates="user", uselist=False)
+    applicant_projects = relationship("ApplicantProject", back_populates="applicant")
+    applicant_achievements = relationship("ApplicantAchievement", back_populates="applicant")
+    applicant_certificates = relationship("ApplicantCertificate", back_populates="applicant")
     employer_profile = relationship("EmployerProfile", back_populates="user", uselist=False)
     curator_profile = relationship("CuratorProfile", back_populates="user", uselist=False)
     favorite_opportunities = relationship("FavoriteOpportunity", back_populates="user")

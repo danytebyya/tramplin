@@ -20,14 +20,14 @@
   --color-secondary-active: #1391A6;
   --color-accent: #F7995F;
   --color-accent-light: #FDE3D3;
-  --color-accent-hover: #E9960B;
-  --color-accent-active: #D6911C;
+  --color-accent-hover: #F58642;
+  --color-accent-active: #E46A1E;
   --color-danger: #F65F5F;
   --color-danger-hover: #DC2626;
-  --color-danger-active: #B91C1C;
+  --color-danger-active: #DE2828;
   --color-success: #22CB93;
   --color-success-hover: #059669;
-  --color-success-active: #047857;
+  --color-success-active: #149973;
   --color-white-hover: rgba(255, 255, 255, 0.1);
   --color-white-active: rgba(255, 255, 255, 0.2);
 

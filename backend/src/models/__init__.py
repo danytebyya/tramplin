@@ -27,7 +27,14 @@ from src.models.opportunity import (
     TagType,
     WorkFormat,
 )
-from src.models.profile import ApplicantProfile, CuratorProfile, EmployerProfile
+from src.models.profile import (
+    ApplicantAchievement,
+    ApplicantCertificate,
+    ApplicantProfile,
+    ApplicantProject,
+    CuratorProfile,
+    EmployerProfile,
+)
 from src.models.refresh_session import RefreshSession
 from src.models.user import User
 from src.models.user_notification_preference import UserNotificationPreference
@@ -42,6 +49,9 @@ __all__ = [
     "ChatMessage",
     "ChatConversationReadState",
     "ApplicantProfile",
+    "ApplicantProject",
+    "ApplicantAchievement",
+    "ApplicantCertificate",
     "EmployerProfile",
     "CuratorProfile",
     "Employer",

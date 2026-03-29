@@ -1,6 +1,9 @@
 from src.models import (
     Application,
+    ApplicantAchievement,
+    ApplicantCertificate,
     ApplicantProfile,
+    ApplicantProject,
     ChatConversation,
     ChatConversationReadState,
     ChatMessage,
@@ -25,6 +28,9 @@ from src.models import (
 __all__ = [
     "User",
     "Application",
+    "ApplicantProject",
+    "ApplicantAchievement",
+    "ApplicantCertificate",
     "ChatUserKey",
     "ChatConversation",
     "ChatMessage",

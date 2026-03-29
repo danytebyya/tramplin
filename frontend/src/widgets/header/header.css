@@ -14,7 +14,7 @@
 
 .home-page--applicant .header__top,
 .header--applicant .header__top {
-  background:
+  --header-top-gradient:
     linear-gradient(
       90deg,
       var(--color-bg-primary) 0%,
@@ -29,7 +29,7 @@
 
 .home-page--employer .header__top,
 .header--employer .header__top {
-  background:
+  --header-top-gradient:
     linear-gradient(
       90deg,
       var(--color-bg-primary) 0%,
@@ -54,7 +54,7 @@
 .header__top-container {
   align-items: center;
   gap: 24px;
-  min-height: 106px;
+  min-height: 100px;
 }
 
 .header__brand {
@@ -76,6 +76,9 @@
 }
 
 .header__brand-name {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
   color: var(--color-text-inverse);
   font-size: var(--type-h2-size);
   line-height: var(--type-h2-line);
@@ -90,6 +93,14 @@
   height: 56px;
   object-fit: contain;
   flex-shrink: 0;
+}
+
+.header__brand-subtitle {
+  color: var(--color-text-inverse);
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .header__nav {
@@ -321,9 +332,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 0 24px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--color-border-primary);
+  padding: 16px 24px 8px;
 }
 
 .header__profile-contexts--single {

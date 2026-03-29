@@ -1,10 +1,17 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from src.utils.errors import AppError
 from src.models import User
 from src.models import (
+    ApplicantAchievement,
+    ApplicantCertificate,
+    ApplicantProfile,
+    ApplicantProject,
+    Application,
+    ApplicationStatus,
     AuthLoginEvent,
     Employer,
     EmployerMembership,
@@ -17,6 +24,9 @@ from src.models import (
 )
 from src.repositories.user_repository import UserRepository
 from src.schemas.user import (
+    ApplicantDashboardRead,
+    ApplicantDashboardStatsRead,
+    ApplicantDashboardUpdateRequest,
     UserNotificationPreferencesRead,
     UserNotificationPreferencesUpdateRequest,
     UserUpdateRequest,
@@ -56,6 +66,168 @@ class UserService:
         self.db.commit()
         self.db.refresh(updated_user)
         return updated_user
+
+    def get_applicant_dashboard(self, current_user: User) -> ApplicantDashboardRead:
+        if current_user.role != UserRole.APPLICANT:
+            raise AppError(
+                code="USER_ROLE_FORBIDDEN",
+                message="Профиль соискателя доступен только соискателю.",
+                status_code=403,
+            )
+
+        user = self.user_repo.get_by_id(current_user.id, with_profiles=True)
+        if user is None:
+            raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
+
+        profile = user.applicant_profile or ApplicantProfile()
+        applications_count, responses_count, invitations_count = self._get_applicant_stats(user.id)
+
+        return ApplicantDashboardRead.model_validate(
+            {
+                "profile": {
+                    "full_name": profile.full_name,
+                    "university": profile.university,
+                    "about": profile.about,
+                    "study_course": profile.study_course,
+                    "graduation_year": profile.graduation_year,
+                    "resume_url": profile.resume_url,
+                    "portfolio_url": profile.portfolio_url,
+                    "level": profile.level,
+                    "desired_salary_from": profile.desired_salary_from,
+                    "preferred_location": profile.preferred_location,
+                    "employment_types": profile.employment_types or [],
+                    "work_formats": profile.work_formats or [],
+                    "hard_skills": profile.hard_skills or [],
+                    "soft_skills": profile.soft_skills or [],
+                    "languages": profile.languages or [],
+                    "github_url": profile.github_url,
+                    "gitlab_url": profile.gitlab_url,
+                    "bitbucket_url": profile.bitbucket_url,
+                    "linkedin_url": profile.linkedin_url,
+                    "habr_url": profile.habr_url,
+                    "profile_views_count": profile.profile_views_count or 0,
+                    "recommendations_count": profile.recommendations_count or 0,
+                },
+                "preferred_city": user.preferred_city,
+                "stats": ApplicantDashboardStatsRead(
+                    profile_views_count=profile.profile_views_count or 0,
+                    applications_count=applications_count,
+                    responses_count=responses_count,
+                    invitations_count=invitations_count,
+                    recommendations_count=profile.recommendations_count or 0,
+                ),
+                "links": {
+                    "github_url": profile.github_url,
+                    "gitlab_url": profile.gitlab_url,
+                    "bitbucket_url": profile.bitbucket_url,
+                    "linkedin_url": profile.linkedin_url,
+                    "portfolio_url": profile.portfolio_url,
+                    "habr_url": profile.habr_url,
+                    "resume_url": profile.resume_url,
+                },
+                "career_interests": {
+                    "desired_salary_from": profile.desired_salary_from,
+                    "preferred_city": user.preferred_city,
+                    "preferred_location": profile.preferred_location,
+                    "employment_types": profile.employment_types or [],
+                    "work_formats": profile.work_formats or [],
+                },
+                "projects": [
+                    {
+                        "id": project.id,
+                        "title": project.title,
+                        "description": project.description,
+                        "technologies": project.technologies,
+                        "period_label": project.period_label,
+                        "role_name": project.role_name,
+                        "repository_url": project.repository_url,
+                    }
+                    for project in user.applicant_projects
+                ],
+                "achievements": [
+                    {
+                        "id": achievement.id,
+                        "title": achievement.title,
+                        "event_name": achievement.event_name,
+                        "project_name": achievement.project_name,
+                        "award": achievement.award,
+                    }
+                    for achievement in user.applicant_achievements
+                ],
+                "certificates": [
+                    {
+                        "id": certificate.id,
+                        "title": certificate.title,
+                        "organization_name": certificate.organization_name,
+                        "issued_at": certificate.issued_at.isoformat() if certificate.issued_at else None,
+                        "credential_url": certificate.credential_url,
+                    }
+                    for certificate in user.applicant_certificates
+                ],
+            }
+        )
+
+    def update_applicant_dashboard(
+        self,
+        current_user: User,
+        payload: ApplicantDashboardUpdateRequest,
+    ) -> ApplicantDashboardRead:
+        if current_user.role != UserRole.APPLICANT:
+            raise AppError(
+                code="USER_ROLE_FORBIDDEN",
+                message="Профиль соискателя доступен только соискателю.",
+                status_code=403,
+            )
+
+        user = self.user_repo.get_by_id(current_user.id, with_profiles=True)
+        if user is None:
+            raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
+
+        profile = user.applicant_profile
+        if profile is None:
+            profile = ApplicantProfile(user_id=user.id)
+            user.applicant_profile = profile
+            self.db.add(profile)
+
+        profile.full_name = payload.full_name
+        profile.university = payload.university
+        profile.about = payload.about
+        profile.study_course = payload.study_course
+        profile.graduation_year = payload.graduation_year
+        profile.level = payload.level
+        profile.hard_skills = payload.hard_skills
+        profile.soft_skills = payload.soft_skills
+        profile.languages = payload.languages
+        profile.github_url = payload.links.github_url
+        profile.gitlab_url = payload.links.gitlab_url
+        profile.bitbucket_url = payload.links.bitbucket_url
+        profile.linkedin_url = payload.links.linkedin_url
+        profile.portfolio_url = payload.links.portfolio_url
+        profile.habr_url = payload.links.habr_url
+        profile.resume_url = payload.links.resume_url
+        profile.desired_salary_from = payload.career_interests.desired_salary_from
+        profile.preferred_location = self._normalize_optional_string(
+            payload.career_interests.preferred_location
+        )
+        profile.employment_types = payload.career_interests.employment_types
+        profile.work_formats = payload.career_interests.work_formats
+
+        normalized_city = (payload.career_interests.preferred_city or "").strip()
+        user.preferred_city = normalized_city or None
+
+        normalized_name = (payload.full_name or "").strip()
+        if normalized_name:
+            user.display_name = normalized_name
+
+        self._replace_projects(user, payload)
+        self._replace_achievements(user, payload)
+        self._replace_certificates(user, payload)
+
+        self.db.add(user)
+        self.db.add(profile)
+        self.db.commit()
+        self.db.refresh(user)
+        return self.get_applicant_dashboard(user)
 
     def delete_account(self, current_user: User) -> None:
         now = datetime.now(UTC)
@@ -152,6 +324,136 @@ class UserService:
         self.db.add(current_user_with_profiles)
 
         self.db.commit()
+
+    def _get_applicant_stats(self, user_id) -> tuple[int, int, int]:
+        applications_count = (
+            self.db.execute(
+                select(func.count(Application.id)).where(
+                    Application.applicant_user_id == user_id,
+                    Application.deleted_at.is_(None),
+                )
+            ).scalar_one()
+            or 0
+        )
+        responses_count = (
+            self.db.execute(
+                select(func.count(Application.id)).where(
+                    Application.applicant_user_id == user_id,
+                    Application.deleted_at.is_(None),
+                    Application.status.notin_(
+                        [ApplicationStatus.SUBMITTED, ApplicationStatus.WITHDRAWN, ApplicationStatus.CANCELED]
+                    ),
+                )
+            ).scalar_one()
+            or 0
+        )
+        invitations_count = (
+            self.db.execute(
+                select(func.count(Application.id)).where(
+                    Application.applicant_user_id == user_id,
+                    Application.deleted_at.is_(None),
+                    Application.status.in_(
+                        [
+                            ApplicationStatus.SHORTLISTED,
+                            ApplicationStatus.INTERVIEW,
+                            ApplicationStatus.OFFER,
+                            ApplicationStatus.ACCEPTED,
+                        ]
+                    ),
+                )
+            ).scalar_one()
+            or 0
+        )
+        return applications_count, responses_count, invitations_count
+
+    def _replace_projects(self, user: User, payload: ApplicantDashboardUpdateRequest) -> None:
+        existing_by_id = {str(item.id): item for item in user.applicant_projects}
+        keep_projects: list[ApplicantProject] = []
+
+        for item in payload.projects:
+            project = existing_by_id.get(str(item.id)) if item.id else None
+            if project is None:
+                project = ApplicantProject(applicant_user_id=user.id)
+                self.db.add(project)
+
+            project.title = item.title.strip()
+            project.description = self._normalize_optional_string(item.description)
+            project.technologies = self._normalize_optional_string(item.technologies)
+            project.period_label = self._normalize_optional_string(item.period_label)
+            project.role_name = self._normalize_optional_string(item.role_name)
+            project.repository_url = self._normalize_optional_string(item.repository_url)
+            project.applicant = user
+            self.db.add(project)
+            keep_projects.append(project)
+
+        for project in list(user.applicant_projects):
+            if project not in keep_projects:
+                self.db.delete(project)
+
+    def _replace_achievements(self, user: User, payload: ApplicantDashboardUpdateRequest) -> None:
+        existing_by_id = {str(item.id): item for item in user.applicant_achievements}
+        keep_achievements: list[ApplicantAchievement] = []
+
+        for item in payload.achievements:
+            achievement = existing_by_id.get(str(item.id)) if item.id else None
+            if achievement is None:
+                achievement = ApplicantAchievement(applicant_user_id=user.id)
+                self.db.add(achievement)
+
+            achievement.title = item.title.strip()
+            achievement.event_name = self._normalize_optional_string(item.event_name)
+            achievement.project_name = self._normalize_optional_string(item.project_name)
+            achievement.award = self._normalize_optional_string(item.award)
+            achievement.applicant = user
+            self.db.add(achievement)
+            keep_achievements.append(achievement)
+
+        for achievement in list(user.applicant_achievements):
+            if achievement not in keep_achievements:
+                self.db.delete(achievement)
+
+    def _replace_certificates(self, user: User, payload: ApplicantDashboardUpdateRequest) -> None:
+        existing_by_id = {str(item.id): item for item in user.applicant_certificates}
+        keep_certificates: list[ApplicantCertificate] = []
+
+        for item in payload.certificates:
+            certificate = existing_by_id.get(str(item.id)) if item.id else None
+            if certificate is None:
+                certificate = ApplicantCertificate(applicant_user_id=user.id)
+                self.db.add(certificate)
+
+            certificate.title = item.title.strip()
+            certificate.organization_name = self._normalize_optional_string(item.organization_name)
+            certificate.issued_at = self._parse_optional_date(item.issued_at)
+            certificate.credential_url = self._normalize_optional_string(item.credential_url)
+            certificate.applicant = user
+            self.db.add(certificate)
+            keep_certificates.append(certificate)
+
+        for certificate in list(user.applicant_certificates):
+            if certificate not in keep_certificates:
+                self.db.delete(certificate)
+
+    @staticmethod
+    def _normalize_optional_string(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @staticmethod
+    def _parse_optional_date(value: str | None) -> date | None:
+        normalized = (value or "").strip()
+        if not normalized:
+            return None
+        try:
+            return date.fromisoformat(normalized)
+        except ValueError as exc:
+            raise AppError(
+                code="USER_INVALID_DATE",
+                message="Некорректная дата сертификата.",
+                status_code=422,
+            ) from exc
 
     def get_notification_preferences(self, current_user: User) -> UserNotificationPreferencesRead:
         preferences = self.user_repo.get_notification_preferences(current_user.id)

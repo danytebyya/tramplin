@@ -6,10 +6,11 @@
     linear-gradient(
       90deg,
       var(--color-bg-primary) 0%,
-      var(--color-secondary) 9%,
-      var(--color-primary) 21%,
-      #2EB7DD 49%,
-      #07B3D5 68%,
+      var(--color-secondary) 5%,
+      var(--color-primary) 14%,
+      var(--color-primary-hover) 36%,
+      #2EB7DD 62%,
+      #07B3D5 78%,
       #A4BDF3 100%
     );
   min-height: 100vh;

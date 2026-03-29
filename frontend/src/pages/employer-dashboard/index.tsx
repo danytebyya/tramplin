@@ -413,7 +413,7 @@ export function EmployerDashboardPage() {
     saveEmployerProfileMutation.isPending ||
     !formState.companyName.trim() ||
     !formState.inn.trim() ||
-    currentFormSeed === profileSeed;
+    !hasUnsavedChanges;
 
   const handleInputChange =
     (field: keyof EmployerProfileFormState) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -751,10 +751,7 @@ export function EmployerDashboardPage() {
                 </div>
                 <div className="employer-dashboard__avatar-action-wrap">
                   <Button type="button" variant="ghost" size="md" className="employer-dashboard__avatar-action" onClick={handlePickAvatar}>
-                    <span className="employer-dashboard__avatar-action-content">
-                      <span>Изменить аватар</span>
-                      <span aria-hidden="true" className="employer-dashboard__avatar-action-icon" />
-                    </span>
+                    <span className="employer-dashboard__avatar-action-content">Изменить аватар</span>
                   </Button>
                 </div>
               </div>

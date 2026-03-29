@@ -21,6 +21,12 @@ export type AddressSuggestion = {
   };
 };
 
+export type UniversitySuggestion = {
+  id: string;
+  name: string;
+  subtitle?: string;
+};
+
 export type ReverseGeocodedAddress = {
   fullAddress: string;
   point?: {
@@ -182,6 +188,168 @@ function resolveCityDisplayName(item: TwoGisSuggestItem) {
     .filter(Boolean);
 
   return parts[parts.length - 1] ?? fallbackName;
+}
+
+function normalizeUniversityDisplayName(value: string) {
+  return value
+    .trim()
+    .replace(
+      /\s*,?\s*(?:учебн(?:ый|ого)\s+)?корпус(?:\s*[№#]?\s*[\p{L}\p{N}-]+)?(?:\s*\/\s*[\p{L}\p{N}-]+)?(?:\s*,.*)?$/iu,
+      "",
+    )
+    .replace(/\s*,?\s*к(?:орпус)?\.\s*[№#]?\s*[\p{L}\p{N}-]+(?:\s*,.*)?$/iu, "")
+    .replace(
+      /\s*,\s*(?:медицинский|лечебный|юридический|экономический|исторический|филологический|технический|инженерный|педагогический)?\s*(?:факультет|институт|колледж|техникум|училище|лицей|филиал)(?:\s*,.*)?$/iu,
+      "",
+    )
+    .replace(/\s*,\s*(?:факультет|кафедра|отделение|филиал|колледж)(?:\s*,.*)?$/iu, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*,\s*$/g, "")
+    .trim();
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .trim();
+}
+
+function matchesPreferredCity(item: TwoGisSuggestItem, cityName?: string) {
+  const normalizedCityName = cityName?.trim();
+
+  if (!normalizedCityName) {
+    return false;
+  }
+
+  const haystack = [item.address_name, item.full_name, item.full_address_name, item.name]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => normalizeSearchText(value))
+    .join(" ");
+
+  return haystack.includes(normalizeSearchText(normalizedCityName));
+}
+
+const universityKeywords = [
+  "университет",
+  "институт",
+  "академия",
+  "консерватория",
+  "вуз",
+  "university",
+  "institute",
+  "academy",
+  "conservatory",
+];
+
+const excludedUniversityKeywords = [
+  "факультет",
+  "кафедра",
+  "отделение",
+  "театр",
+  "музей",
+  "школа",
+  "гимназ",
+  "лицей",
+];
+
+function isUniversityLikeSuggestion(item: TwoGisSuggestItem) {
+  const haystack = normalizeSearchText(
+    [
+      item.name,
+      item.address_name,
+      item.full_name,
+      item.full_address_name,
+      item.subtype,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(" "),
+  );
+  const normalizedDisplayName = normalizeSearchText(
+    normalizeUniversityDisplayName(item.name?.trim() || item.full_name?.trim() || item.full_address_name?.trim() || ""),
+  );
+
+  if (!haystack || !normalizedDisplayName) {
+    return false;
+  }
+
+  if (excludedUniversityKeywords.some((keyword) => haystack.includes(keyword))) {
+    return false;
+  }
+
+  return universityKeywords.some(
+    (keyword) => normalizedDisplayName.includes(keyword) || haystack.includes(keyword),
+  );
+}
+
+export async function getUniversitySuggestions(
+  query: string,
+  cityName?: string,
+): Promise<UniversitySuggestion[]> {
+  const normalizedQuery = query.trim();
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  if (!env.map2gisKey) {
+    return [];
+  }
+
+  const searchParams = new URLSearchParams({
+    key: env.map2gisKey,
+    q: normalizedQuery,
+    locale: "ru_RU",
+    page_size: "8",
+  });
+
+  const response = await fetch(`https://catalog.api.2gis.com/3.0/suggests?${searchParams.toString()}`);
+
+  if (!response.ok) {
+    throw new Error("Failed to load university suggestions");
+  }
+
+  const data = (await response.json()) as TwoGisSuggestResponse;
+  const items = data.result?.items ?? [];
+
+  const suggestions = items
+    .filter((item) => isUniversityLikeSuggestion(item))
+    .map((item, index): UniversitySuggestion | null => {
+      const rawName = item.name?.trim() || item.full_name?.trim() || item.full_address_name?.trim();
+      const name = rawName ? normalizeUniversityDisplayName(rawName) : "";
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        id: item.id ?? `${name}-${index}`,
+        name,
+        subtitle: item.full_name?.trim() || item.full_address_name?.trim(),
+      } satisfies UniversitySuggestion;
+    })
+    .filter((item): item is UniversitySuggestion => item !== null);
+
+  const deduplicatedSuggestions = Array.from(new Map(suggestions.map((item) => [item.name, item])).values());
+
+  if (!cityName?.trim()) {
+    return deduplicatedSuggestions;
+  }
+
+  const itemsById = new Map(items.map((item) => [item.id, item] as const));
+
+  return deduplicatedSuggestions.sort((left, right) => {
+    const leftItem = itemsById.get(left.id);
+    const rightItem = itemsById.get(right.id);
+    const leftMatchesCity = leftItem ? matchesPreferredCity(leftItem, cityName) : false;
+    const rightMatchesCity = rightItem ? matchesPreferredCity(rightItem, cityName) : false;
+
+    if (leftMatchesCity === rightMatchesCity) {
+      return 0;
+    }
+
+    return leftMatchesCity ? -1 : 1;
+  });
 }
 
 export async function getCitySuggestions(query: string): Promise<CitySuggestion[]> {

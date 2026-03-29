@@ -92,6 +92,9 @@ class UserRepository:
     def _with_profiles(stmt):
         return stmt.options(
             selectinload(User.applicant_profile),
+            selectinload(User.applicant_projects),
+            selectinload(User.applicant_achievements),
+            selectinload(User.applicant_certificates),
             selectinload(User.employer_profile),
             selectinload(User.curator_profile),
         )
