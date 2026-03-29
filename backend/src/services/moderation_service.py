@@ -815,7 +815,10 @@ class ModerationService:
             kind=NotificationKind.EMPLOYER_VERIFICATION,
             severity=NotificationSeverity.SUCCESS,
             title="Верификация одобрена",
-            message="Компания успешно прошла проверку.",
+            message=(
+                "Компания успешно прошла проверку 🎉\n"
+                "Теперь вам доступен полный функционал платформы: публикация возможностей, работа с кандидатами, чат и управление профилем компании."
+            ),
             action_label="Открыть дашборд",
             action_url="/dashboard/employer",
             payload={

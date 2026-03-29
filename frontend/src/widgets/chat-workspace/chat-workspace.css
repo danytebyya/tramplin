@@ -122,8 +122,9 @@
   height: 0;
   min-height: 0;
   overflow-y: auto;
-  margin: -8px;
-  padding: 8px;
+  overflow-x: visible;
+  margin: 0;
+  padding: 8px 10px 10px;
   -webkit-overflow-scrolling: touch;
 }
 

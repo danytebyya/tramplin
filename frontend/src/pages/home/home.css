@@ -122,7 +122,7 @@ body.home-page--map-floating {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   transition:
     inset 360ms ease,
     padding 320ms ease,

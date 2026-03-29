@@ -29,7 +29,7 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
         className={
           isListControlsVisible
             ? "opportunity-filters__controls opportunity-filters__controls--list"
-            : "opportunity-filters__controls"
+            : "opportunity-filters__controls opportunity-filters__controls--compact"
         }
       >
         <div className="opportunity-filters__search-group">

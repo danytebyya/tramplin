@@ -38,6 +38,80 @@
   padding: 24px;
 }
 
+.employer-dashboard__opportunities {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.employer-dashboard__opportunities-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line);
+  font-weight: 400;
+}
+
+.employer-dashboard__opportunities-title-accent {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.employer-dashboard__opportunities-shell {
+  --color-secondary: var(--color-primary);
+  --color-secondary-light: var(--color-primary-light);
+  --color-secondary-hover: var(--color-primary-hover);
+  --color-secondary-active: var(--color-primary-active);
+  --home-accent: var(--color-primary);
+  --home-accent-soft: var(--color-primary-light);
+  --home-accent-strong: var(--color-primary-active);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.employer-dashboard__opportunities-content {
+  position: relative;
+  min-height: 420px;
+  min-width: 0;
+}
+
+.employer-dashboard__opportunities-panel {
+  width: 100%;
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition:
+    opacity 240ms ease,
+    transform 320ms ease;
+}
+
+.employer-dashboard__opportunities-panel--active {
+  position: relative;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.employer-dashboard__opportunities-panel--hidden {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 16px, 0);
+}
+
+.employer-dashboard__opportunities-map {
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.employer-dashboard__opportunities-shell .opportunity-list {
+  margin: 0;
+  padding: 0;
+}
+
 .employer-dashboard__tabs {
   display: flex;
   flex-wrap: wrap;
@@ -154,7 +228,7 @@
 
 .employer-dashboard__profile-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 0.62fr;
+  grid-template-columns: minmax(0, 600px) minmax(0, 1fr);
   gap: 24px;
   align-items: stretch;
 }
@@ -170,6 +244,8 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  width: 100%;
+  max-width: 600px;
   min-height: 100%;
   padding: 32px 24px;
 }
@@ -517,10 +593,6 @@
   color: #ca8a04;
 }
 
-.employer-dashboard__summary-value--verified {
-  color: #1e40af;
-}
-
 .employer-dashboard__summary-value--rejected {
   color: #991b1b;
 }
@@ -606,7 +678,8 @@
 
 .employer-dashboard__verification-tooltip-panel.info-tooltip__panel {
   top: 50%;
-  left: calc(100% + 16px);
+  right: calc(100% + 16px);
+  left: auto;
   width: 360px;
   padding: 20px 24px;
   border-radius: 24px;

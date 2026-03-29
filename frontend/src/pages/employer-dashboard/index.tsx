@@ -1,4 +1,4 @@
-import { ChangeEvent, FocusEvent, useContext, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FocusEvent, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, UNSAFE_NavigationContext, useNavigate } from "react-router-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,10 +21,14 @@ import {
   useAuthStore,
 } from "../../features/auth";
 import { listEmployerOpportunitiesRequest } from "../../features/opportunity";
+import type { Opportunity } from "../../entities/opportunity";
 import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
 import { Button, Container, InfoTooltip, Input, Modal } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
+import { OpportunityFilters } from "../../widgets/filters";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
+import { MapView } from "../../widgets/map-view";
+import { OpportunityList } from "../../widgets/opportunity-list";
 import "./employer-dashboard.css";
 
 type EmployerProfileFormState = {
@@ -142,6 +146,50 @@ function isSuggestionFromCity(item: AddressSuggestion, cityName?: string) {
   return normalizeSearchText(item.fullAddress).includes(normalizedCityName);
 }
 
+function mapEmployerOpportunityToFeedOpportunity(
+  item: import("../../features/opportunity").EmployerOpportunityItem,
+  options: {
+    employerId: string;
+    companyVerified: boolean;
+  },
+): Opportunity {
+  return {
+    id: item.id,
+    employerId: options.employerId,
+    title: item.title,
+    companyName: item.companyName,
+    companyVerified: options.companyVerified,
+    companyRating: null,
+    companyReviewsCount: 0,
+    salaryLabel: item.salaryLabel,
+    locationLabel: item.locationLabel,
+    format: item.format === "offline" ? "office" : item.format === "online" ? "remote" : "hybrid",
+    kind: item.kind,
+    levelLabel: item.levelLabel,
+    employmentLabel: item.employmentLabel,
+    description: item.description,
+    tags: item.tags,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    accent:
+      item.kind === "internship"
+        ? "cyan"
+        : item.kind === "event"
+          ? "amber"
+          : item.kind === "mentorship"
+            ? "slate"
+            : "blue",
+    businessStatus:
+      item.status === "active" ? "active" : item.status === "planned" ? "scheduled" : item.status === "removed" ? "archived" : "draft",
+    moderationStatus:
+      item.status === "pending_review"
+        ? "pending_review"
+        : item.status === "rejected"
+          ? "rejected"
+          : "approved",
+  };
+}
+
 export function EmployerDashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -168,6 +216,8 @@ export function EmployerDashboardPage() {
   const [editingSummaryField, setEditingSummaryField] = useState<"organizationSize" | "foundationYear" | null>(null);
   const [displayedProfileCompletion, setDisplayedProfileCompletion] = useState(0);
   const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
+  const [opportunityViewMode, setOpportunityViewMode] = useState<"map" | "list">("map");
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const pendingNavigationTxRef = useRef<{ retry: () => void } | null>(null);
   const employerAccess = getEmployerAccessState(role, accessToken);
 
@@ -231,8 +281,24 @@ export function EmployerDashboardPage() {
   const isVerified = verificationStatus === "verified";
   const preferredCity = meQuery.data?.data?.user?.preferred_city?.trim() || selectedCity;
   const opportunities = employerOpportunitiesQuery.data ?? [];
+  const employerId = employerProfile?.inn?.trim() || meQuery.data?.data?.user?.id || "current-employer";
   const activeOpportunitiesCount = opportunities.filter((item) => item.status === "active").length;
   const responsesCount = opportunities.reduce((total, item) => total + item.responsesCount, 0);
+  const visibleEmployerOpportunities = useMemo(
+    () => opportunities.filter((item) => item.status === "active" || item.status === "planned"),
+    [opportunities],
+  );
+  const mappedEmployerFeedOpportunities = useMemo(
+    () =>
+      visibleEmployerOpportunities.map((item) =>
+        mapEmployerOpportunityToFeedOpportunity(item, {
+          employerId,
+          companyVerified: isVerified,
+        }),
+      ),
+    [employerId, isVerified, visibleEmployerOpportunities],
+  );
+  const filteredEmployerFeedOpportunities = mappedEmployerFeedOpportunities;
   const profileCompletionFields = [
     formState.companyName,
     formState.inn,
@@ -257,6 +323,15 @@ export function EmployerDashboardPage() {
   const profileSeed = JSON.stringify(initialFormState);
   const currentFormSeed = JSON.stringify(formState);
   const hasUnsavedChanges = isFormInitialized && currentFormSeed !== profileSeed;
+
+  useEffect(() => {
+    if (
+      selectedOpportunityId &&
+      !filteredEmployerFeedOpportunities.some((item) => item.id === selectedOpportunityId)
+    ) {
+      setSelectedOpportunityId(null);
+    }
+  }, [filteredEmployerFeedOpportunities, selectedOpportunityId]);
 
   useEffect(() => {
     if (!employerProfile || isFormInitialized) {
@@ -1080,6 +1155,66 @@ export function EmployerDashboardPage() {
               <strong className="employer-dashboard__summary-value">0</strong>
             </article>
           </aside>
+        </section>
+
+        <section className="employer-dashboard__opportunities">
+          <h2 className="employer-dashboard__opportunities-title">
+            <span className="employer-dashboard__opportunities-title-accent">Возможности</span> от организации
+          </h2>
+
+          <div className="employer-dashboard__opportunities-shell">
+            <OpportunityFilters
+              viewMode={opportunityViewMode}
+              isMapExpanded={false}
+              onViewModeChange={setOpportunityViewMode}
+            />
+
+            <div className="employer-dashboard__opportunities-content">
+              <div
+                className={
+                  opportunityViewMode === "map"
+                    ? "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--active"
+                    : "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--hidden"
+                }
+                aria-hidden={opportunityViewMode !== "map"}
+              >
+                <div className="employer-dashboard__opportunities-map">
+                  <MapView
+                    opportunities={filteredEmployerFeedOpportunities}
+                    favoriteOpportunityIds={[]}
+                    selectedOpportunityId={selectedOpportunityId}
+                    selectedCity={selectedCity}
+                    selectedCityViewport={null}
+                    isExpanded={false}
+                    isTransitioning={false}
+                    roleName="employer"
+                    onSelectOpportunity={setSelectedOpportunityId}
+                    onToggleFavorite={() => undefined}
+                    onSelectCity={() => undefined}
+                    onCloseDetails={() => setSelectedOpportunityId(null)}
+                    onToggleExpand={() => undefined}
+                    onApply={(opportunityId) => navigate(`/employer/opportunities?highlight=${encodeURIComponent(opportunityId)}`)}
+                  />
+                </div>
+              </div>
+              <div
+                className={
+                  opportunityViewMode === "list"
+                    ? "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--active"
+                    : "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--hidden"
+                }
+                aria-hidden={opportunityViewMode !== "list"}
+              >
+                <OpportunityList
+                  opportunities={filteredEmployerFeedOpportunities}
+                  favoriteOpportunityIds={[]}
+                  roleName="employer"
+                  onToggleFavorite={() => undefined}
+                  onApply={(opportunityId) => navigate(`/employer/opportunities?highlight=${encodeURIComponent(opportunityId)}`)}
+                />
+              </div>
+            </div>
+          </div>
         </section>
       </Container>
 
