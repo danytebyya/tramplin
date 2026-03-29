@@ -953,6 +953,59 @@ export function ChatWorkspace({
         salt: encryptedMessage.salt,
       });
 
+      queryClient.setQueryData<ChatMessageView[] | undefined>(
+        ["chat", "messages", sentMessage.conversationId],
+        (currentValue) => {
+          const nextItems = (currentValue ?? []).filter((item) => item.id !== optimisticMessageId);
+          const existingIndex = nextItems.findIndex((item) => item.id === sentMessage.id);
+          const nextMessage: ChatMessageView = {
+            ...sentMessage,
+            clientText: trimmedMessage,
+          };
+
+          if (existingIndex >= 0) {
+            nextItems[existingIndex] = {
+              ...nextItems[existingIndex],
+              ...nextMessage,
+            };
+            return nextItems;
+          }
+
+          return [...nextItems, nextMessage].sort(
+            (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+          );
+        },
+      );
+      queryClient.setQueryData<ChatConversation[] | undefined>(
+        ["chat", "conversations"],
+        (currentValue) => {
+          const conversationList = currentValue ?? [];
+          const nextConversation: ChatConversation = {
+            ...(activeConversation ?? targetConversation),
+            id: targetConversation.id,
+            updatedAt: sentMessage.createdAt,
+            unreadCount: 0,
+            counterpart: (activeConversation ?? targetConversation).counterpart,
+            lastMessage: sentMessage,
+          };
+          const existingIndex = conversationList.findIndex((item) => item.id === targetConversation.id);
+
+          if (existingIndex >= 0) {
+            const nextItems = [...conversationList];
+            nextItems[existingIndex] = {
+              ...nextItems[existingIndex],
+              ...nextConversation,
+            };
+            return nextItems.sort(
+              (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+            );
+          }
+
+          return [nextConversation, ...conversationList].sort(
+            (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+          );
+        },
+      );
       setOptimisticMessages((currentValue) => currentValue.filter((item) => item.id !== optimisticMessageId));
       setActiveDraftContact(null);
       setActiveConversationId(sentMessage.conversationId);
