@@ -239,6 +239,14 @@
   border-radius: 50%;
 }
 
+.chat-workspace__avatar-image--brand {
+  width: 78%;
+  height: 78%;
+  padding: 4px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
 .chat-workspace__avatar-image--uploaded {
   object-fit: cover;
 }
@@ -874,8 +882,28 @@
 }
 
 .chat-workspace__list--search {
+  flex: 0 0 auto;
+  height: auto;
+  max-height: 220px;
+  min-height: 0;
+  gap: 6px;
+  padding: 6px 8px 10px;
   margin-bottom: 12px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.chat-workspace__list--search .chat-workspace__list-item {
+  gap: 12px;
+  padding: 6px 12px;
+}
+
+.chat-workspace__list--search .chat-workspace__avatar {
+  width: 40px;
+  height: 40px;
 }
 
 .chat-workspace__placeholder {

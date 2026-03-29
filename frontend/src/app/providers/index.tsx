@@ -12,7 +12,7 @@ import {
   switchAccountContextRequest,
   useAuthStore,
 } from "../../features/auth";
-import { ensureChatKeyPair, getMyChatKeyRequest, getStoredChatKeyPair, storeChatKeyPair, upsertMyChatKeyRequest } from "../../features/chat";
+import { canUseChatCrypto, ensureChatKeyPair, getMyChatKeyRequest, getStoredChatKeyPair, storeChatKeyPair, upsertMyChatKeyRequest } from "../../features/chat";
 import { useNotificationsRealtime } from "../../features/notifications";
 import { usePresenceRealtime } from "../../features/presence";
 
@@ -243,6 +243,10 @@ function ChatKeyBootstrap() {
     let isCancelled = false;
 
     void (async () => {
+      if (!canUseChatCrypto()) {
+        return;
+      }
+
       const storedPair = getStoredChatKeyPair();
       const remotePair = await getMyChatKeyRequest();
       if (!storedPair && remotePair?.publicKeyJwk && !remotePair.privateKeyJwk) {

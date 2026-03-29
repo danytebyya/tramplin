@@ -10,6 +10,10 @@ type StoredKeyPair = {
   privateKeyJwk: JsonWebKey;
 };
 
+export function canUseChatCrypto() {
+  return typeof window !== "undefined" && Boolean(window.crypto?.subtle);
+}
+
 function encodeText(value: string) {
   return new TextEncoder().encode(value);
 }
@@ -116,6 +120,10 @@ export async function ensureChatKeyPair() {
     return stored;
   }
 
+  if (!canUseChatCrypto()) {
+    throw new Error("Web Crypto API is unavailable in the current context");
+  }
+
   const keyPair = await window.crypto.subtle.generateKey(
     {
       name: "ECDH",
@@ -138,11 +146,11 @@ export async function ensureChatKeyPair() {
 
 export async function encryptChatMessage(params: {
   plaintext: string;
-  ownPrivateKeyJwk: JsonWebKey;
+  ownPrivateKeyJwk?: JsonWebKey | null;
   counterpartPublicKeyJwk?: JsonWebKey | null;
   conversationId: string;
 }) {
-  if (!params.counterpartPublicKeyJwk) {
+  if (!canUseChatCrypto() || !params.counterpartPublicKeyJwk || !params.ownPrivateKeyJwk) {
     return {
       ciphertext: `${CHAT_PLAINTEXT_PREFIX}${encodeBase64(encodeText(params.plaintext))}`,
       iv: CHAT_PLAINTEXT_IV,
@@ -183,6 +191,10 @@ export async function decryptChatMessage(params: {
 }) {
   if (params.ciphertext.startsWith(CHAT_PLAINTEXT_PREFIX)) {
     return new TextDecoder().decode(decodeBase64(params.ciphertext.slice(CHAT_PLAINTEXT_PREFIX.length)));
+  }
+
+  if (!canUseChatCrypto()) {
+    throw new Error("Web Crypto API is unavailable in the current context");
   }
 
   if (!params.counterpartPublicKeyJwk) {

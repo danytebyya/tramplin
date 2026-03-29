@@ -4,9 +4,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import clipIcon from "../../assets/icons/clip.svg";
-import logoPrimary from "../../assets/icons/logo-primary.svg";
+import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
 import { useAuthStore } from "../../features/auth";
 import {
+  canUseChatCrypto,
   ChatContact,
   ChatConversation,
   ChatMessage,
@@ -62,6 +63,7 @@ const SYSTEM_CHAT_ID = "tramplin-notes";
 const SYSTEM_WELCOME_MESSAGE_ID = "tramplin-welcome";
 const SYSTEM_PARTICIPANT_ID = "tramplin-system";
 const SYSTEM_NOTES_STORAGE_KEY_PREFIX = "tramplin.chat.notes";
+const SYSTEM_WELCOME_AT_STORAGE_KEY_PREFIX = "tramplin.chat.welcome-at";
 
 type LocalNoteRecord = {
   id: string;
@@ -90,6 +92,10 @@ function readAccessTokenSubject(token: string | null) {
 
 function getNotesStorageKey(subject: string | null, role: string | null) {
   return `${SYSTEM_NOTES_STORAGE_KEY_PREFIX}:${subject ?? "guest"}:${role ?? "unknown"}`;
+}
+
+function getWelcomeAtStorageKey(subject: string | null, role: string | null) {
+  return `${SYSTEM_WELCOME_AT_STORAGE_KEY_PREFIX}:${subject ?? "guest"}:${role ?? "unknown"}`;
 }
 
 function readStoredNotes(subject: string | null, role: string | null): LocalNoteRecord[] {
@@ -123,6 +129,22 @@ function writeStoredNotes(subject: string | null, role: string | null, notes: Lo
   }
 
   window.localStorage.setItem(getNotesStorageKey(subject, role), JSON.stringify(notes));
+}
+
+function readOrCreateWelcomeAt(subject: string | null, role: string | null) {
+  if (typeof window === "undefined") {
+    return new Date().toISOString();
+  }
+
+  const storageKey = getWelcomeAtStorageKey(subject, role);
+  const existingValue = window.localStorage.getItem(storageKey);
+  if (existingValue) {
+    return existingValue;
+  }
+
+  const nextValue = new Date().toISOString();
+  window.localStorage.setItem(storageKey, nextValue);
+  return nextValue;
 }
 
 function formatTime(value: string) {
@@ -201,6 +223,7 @@ function ChatAvatar({
   unreadCount?: number;
 }) {
   const imageSource = resolveAvatarUrl(avatarUrl) || resolveAvatarIcon(role);
+  const isBrandAvatar = avatarUrl === logoPrimaryBlack;
 
   return (
     <span className="chat-workspace__avatar">
@@ -209,7 +232,9 @@ function ChatAvatar({
         alt={displayName}
         className={
           avatarUrl
-            ? "chat-workspace__avatar-image chat-workspace__avatar-image--uploaded"
+            ? isBrandAvatar
+              ? "chat-workspace__avatar-image chat-workspace__avatar-image--brand"
+              : "chat-workspace__avatar-image chat-workspace__avatar-image--uploaded"
             : "chat-workspace__avatar-image"
         }
       />
@@ -247,11 +272,16 @@ export function ChatWorkspace({
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
   const [localNotes, setLocalNotes] = useState<LocalNoteRecord[]>([]);
+  const [systemWelcomeAt, setSystemWelcomeAt] = useState(() => new Date().toISOString());
   const deferredSearchValue = useDeferredValue(searchValue);
   const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
 
   useEffect(() => {
     setLocalNotes(readStoredNotes(currentUserId, currentRole ?? null));
+  }, [currentRole, currentUserId]);
+
+  useEffect(() => {
+    setSystemWelcomeAt(readOrCreateWelcomeAt(currentUserId, currentRole ?? null));
   }, [currentRole, currentUserId]);
 
   const persistLocalNotes = (nextNotes: LocalNoteRecord[]) => {
@@ -371,13 +401,13 @@ export function ChatWorkspace({
       ciphertext: "",
       iv: "",
       salt: "",
-      createdAt: "2026-01-01T09:00:00.000Z",
+      createdAt: systemWelcomeAt,
       isOwn: false,
       isReadByPeer: true,
       clientText:
-        "Привет! Это чат Трамплина. Используйте его как личные заметки: фиксируйте идеи, задачи, важные вакансии и всё, к чему хотите вернуться позже.",
+        "👋 Привет! Это чат Трамплина.\n\nИспользуйте его как личные заметки: фиксируйте идеи, задачи, важные вакансии и всё, к чему хотите вернуться позже.",
     }),
-    [],
+    [systemWelcomeAt],
   );
 
   const systemMessages = useMemo<ChatMessageView[]>(
@@ -406,7 +436,7 @@ export function ChatWorkspace({
       publicId: null,
       displayName: "Трамплин",
       role: "admin",
-      avatarUrl: logoPrimary,
+      avatarUrl: logoPrimaryBlack,
       companyName: null,
       companyId: null,
       publicKeyJwk: null,
@@ -791,7 +821,7 @@ export function ChatWorkspace({
     }
 
     let activeKeyPair = keyPair;
-    if (!activeKeyPair) {
+    if (canUseChatCrypto() && !activeKeyPair) {
       try {
         activeKeyPair = await ensureChatKeyPair();
         storeChatKeyPair(activeKeyPair);
@@ -813,7 +843,7 @@ export function ChatWorkspace({
       try {
         const encryptedMessage = await encryptChatMessage({
           plaintext: trimmedMessage,
-          ownPrivateKeyJwk: activeKeyPair.privateKeyJwk,
+          ownPrivateKeyJwk: activeKeyPair?.privateKeyJwk ?? null,
           counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
           conversationId: activeConversation.id,
         });
@@ -884,7 +914,7 @@ export function ChatWorkspace({
 
       const encryptedMessage = await encryptChatMessage({
         plaintext: trimmedMessage,
-        ownPrivateKeyJwk: activeKeyPair.privateKeyJwk,
+        ownPrivateKeyJwk: activeKeyPair?.privateKeyJwk ?? null,
         counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
         conversationId: targetConversation.id,
       });
@@ -976,7 +1006,7 @@ export function ChatWorkspace({
                   ))
                 : null}
               {!isSearchLoading && searchResults.length === 0 ? (
-                <div className="chat-workspace__hint">Ничего не найдено</div>
+                <div className="chat-workspace__hint">Ничего не нашлось</div>
               ) : null}
               {searchResults.map((item) => {
                 const isActive =
