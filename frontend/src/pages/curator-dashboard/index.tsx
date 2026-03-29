@@ -398,6 +398,7 @@ export function CuratorDashboardPage() {
       <Header
         containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
+        theme="curator"
         isAuthenticated={isAuthenticated}
         topNavigation={null}
         bottomContent={<CuratorHeaderNavigation isAdmin={isAdmin} currentPage="dashboard" />}

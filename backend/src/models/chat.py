@@ -19,6 +19,7 @@ class ChatUserKey(TimestampMixin, Base):
     )
     algorithm: Mapped[str] = mapped_column(String(50), nullable=False, default="ECDH_P256")
     public_key_jwk: Mapped[dict] = mapped_column(JSON, nullable=False)
+    private_key_jwk: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ChatConversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):

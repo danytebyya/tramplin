@@ -24,14 +24,27 @@ class ChatRepository:
     def get_user_key(self, user_id: str) -> ChatUserKey | None:
         return self.db.get(ChatUserKey, UUID(str(user_id)))
 
-    def upsert_user_key(self, user_id: str, *, algorithm: str, public_key_jwk: dict) -> ChatUserKey:
+    def upsert_user_key(
+        self,
+        user_id: str,
+        *,
+        algorithm: str,
+        public_key_jwk: dict,
+        private_key_jwk: dict | None,
+    ) -> ChatUserKey:
         item = self.get_user_key(user_id)
         if item is None:
-            item = ChatUserKey(user_id=UUID(str(user_id)), algorithm=algorithm, public_key_jwk=public_key_jwk)
+            item = ChatUserKey(
+                user_id=UUID(str(user_id)),
+                algorithm=algorithm,
+                public_key_jwk=public_key_jwk,
+                private_key_jwk=private_key_jwk,
+            )
             self.db.add(item)
         else:
             item.algorithm = algorithm
             item.public_key_jwk = public_key_jwk
+            item.private_key_jwk = private_key_jwk
         self.db.flush()
         return item
 

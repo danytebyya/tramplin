@@ -575,6 +575,7 @@ export function ContentModerationPage() {
       <Header
         containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
+        theme="curator"
         topNavigation={null}
         bottomContent={<CuratorHeaderNavigation isAdmin={isAdmin} currentPage="content" />}
       />

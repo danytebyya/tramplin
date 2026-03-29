@@ -48,16 +48,25 @@ class ChatService:
         item = self.repo.get_user_key(str(current_user.id))
         if item is None:
             return None
-        return ChatUserKeyRead(algorithm=item.algorithm, public_key_jwk=item.public_key_jwk)
+        return ChatUserKeyRead(
+            algorithm=item.algorithm,
+            public_key_jwk=item.public_key_jwk,
+            private_key_jwk=item.private_key_jwk,
+        )
 
     def upsert_my_key(self, current_user: User, payload: ChatUserKeyUpsertRequest) -> ChatUserKeyRead:
         item = self.repo.upsert_user_key(
             str(current_user.id),
             algorithm=payload.algorithm,
             public_key_jwk=payload.public_key_jwk,
+            private_key_jwk=payload.private_key_jwk,
         )
         self.db.commit()
-        return ChatUserKeyRead(algorithm=item.algorithm, public_key_jwk=item.public_key_jwk)
+        return ChatUserKeyRead(
+            algorithm=item.algorithm,
+            public_key_jwk=item.public_key_jwk,
+            private_key_jwk=item.private_key_jwk,
+        )
 
     def list_contacts(self, current_user: User, *, access_payload: dict | None = None) -> ChatContactListResponse:
         self._resolve_scope(current_user=current_user, access_payload=access_payload)

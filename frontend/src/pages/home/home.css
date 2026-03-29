@@ -100,19 +100,6 @@ body.home-page--map-floating {
   --home-accent-strong: var(--color-accent-active);
 }
 
-.home-page--curator .header__top,
-.home-page--admin .header__top {
-  background:
-    linear-gradient(
-      90deg,
-      var(--color-bg-primary) 0%,
-      #F59E0B 13%,
-      #EF4444 37%,
-      #F59E0B 74%,
-      #FBDCA8 100%
-    );
-}
-
 .home-page--admin {
   --home-header-start: var(--color-accent);
   --home-header-mid: var(--color-accent-hover);

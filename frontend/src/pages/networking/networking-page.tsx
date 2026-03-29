@@ -61,7 +61,7 @@ export function NetworkingPage() {
         </nav>
 
         <ChatWorkspace
-          title="Нетворкинг"
+          title="Чат"
           emptyTitle="Пока нет активного чата"
           emptyText="Используйте поиск сверху, чтобы найти пользователя, или откройте существующий диалог слева."
           preferredEmployerId={preferredEmployerId}

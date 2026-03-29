@@ -12,7 +12,7 @@ import {
   switchAccountContextRequest,
   useAuthStore,
 } from "../../features/auth";
-import { ensureChatKeyPair, upsertMyChatKeyRequest } from "../../features/chat";
+import { ensureChatKeyPair, getMyChatKeyRequest, getStoredChatKeyPair, storeChatKeyPair, upsertMyChatKeyRequest } from "../../features/chat";
 import { useNotificationsRealtime } from "../../features/notifications";
 import { usePresenceRealtime } from "../../features/presence";
 
@@ -243,14 +243,32 @@ function ChatKeyBootstrap() {
     let isCancelled = false;
 
     void (async () => {
-      const pair = await ensureChatKeyPair();
+      const storedPair = getStoredChatKeyPair();
+      const remotePair = await getMyChatKeyRequest();
+      if (!storedPair && remotePair?.publicKeyJwk && !remotePair.privateKeyJwk) {
+        return;
+      }
+
+      const pair =
+        storedPair ??
+        (remotePair?.privateKeyJwk
+          ? {
+              algorithm: remotePair.algorithm,
+              publicKeyJwk: remotePair.publicKeyJwk,
+              privateKeyJwk: remotePair.privateKeyJwk,
+            }
+          : await ensureChatKeyPair());
+
       if (isCancelled) {
         return;
       }
 
+      storeChatKeyPair(pair);
+
       await upsertMyChatKeyRequest({
         algorithm: pair.algorithm,
         public_key_jwk: pair.publicKeyJwk,
+        private_key_jwk: pair.privateKeyJwk,
       });
     })().catch(() => {
       // Silent bootstrap: chat key provisioning should not break app startup.

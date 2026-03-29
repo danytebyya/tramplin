@@ -53,6 +53,14 @@ function writeStoredKeyPair(value: StoredKeyPair) {
   window.localStorage.setItem(CHAT_CRYPTO_STORAGE_KEY, JSON.stringify(value));
 }
 
+export function getStoredChatKeyPair() {
+  return readStoredKeyPair();
+}
+
+export function storeChatKeyPair(value: StoredKeyPair) {
+  writeStoredKeyPair(value);
+}
+
 async function importPrivateKey(privateKeyJwk: JsonWebKey) {
   return window.crypto.subtle.importKey(
     "jwk",

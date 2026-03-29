@@ -12,5 +12,5 @@ export {
   upsertMyChatKeyRequest,
 } from "./api";
 export type { ChatContact, ChatConversation, ChatKey, ChatMessage, ChatParticipant } from "./api";
-export { decryptChatMessage, encryptChatMessage, ensureChatKeyPair } from "./crypto";
+export { decryptChatMessage, encryptChatMessage, ensureChatKeyPair, getStoredChatKeyPair, storeChatKeyPair } from "./crypto";
 export { useChatRealtime } from "./realtime";

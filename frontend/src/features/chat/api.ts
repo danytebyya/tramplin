@@ -4,11 +4,13 @@ import { env } from "../../shared/config/env";
 export type ChatKey = {
   algorithm: string;
   publicKeyJwk: JsonWebKey;
+  privateKeyJwk: JsonWebKey | null;
 };
 
 type ChatKeyApi = {
   algorithm: string;
   public_key_jwk: JsonWebKey;
+  private_key_jwk?: JsonWebKey | null;
 };
 
 export type ChatParticipant = {
@@ -117,6 +119,7 @@ function mapKey(item?: ChatKeyApi | null): ChatKey | null {
   return {
     algorithm: item.algorithm,
     publicKeyJwk: item.public_key_jwk,
+    privateKeyJwk: item.private_key_jwk ?? null,
   };
 }
 
@@ -188,7 +191,11 @@ export async function getMyChatKeyRequest() {
   return mapKey(response.data?.data);
 }
 
-export async function upsertMyChatKeyRequest(payload: { algorithm: string; public_key_jwk: JsonWebKey }) {
+export async function upsertMyChatKeyRequest(payload: {
+  algorithm: string;
+  public_key_jwk: JsonWebKey;
+  private_key_jwk?: JsonWebKey | null;
+}) {
   const response = await apiClient.put<{ data?: ChatKeyApi }>("/chat/keys/me", payload);
   return mapKey(response.data?.data);
 }

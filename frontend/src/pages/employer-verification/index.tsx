@@ -1060,6 +1060,7 @@ export function EmployerVerificationPage() {
       <Header
         containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
+        theme="curator"
         topNavigation={null}
         notificationOnRealtimeMessage={() => {
           void queryClient.invalidateQueries({

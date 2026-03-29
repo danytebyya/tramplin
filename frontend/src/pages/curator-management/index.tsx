@@ -549,6 +549,7 @@ export function CuratorManagementPage() {
       <Header
         containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
+        theme="curator"
         topNavigation={null}
         bottomContent={<CuratorHeaderNavigation isAdmin currentPage="curators" />}
       />

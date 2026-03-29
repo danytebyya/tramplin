@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class ChatUserKeyUpsertRequest(BaseModel):
     algorithm: str = Field(default="ECDH_P256", min_length=3, max_length=50)
     public_key_jwk: dict
+    private_key_jwk: dict | None = None
 
 
 class ChatParticipantRead(BaseModel):
@@ -127,6 +128,7 @@ class ChatContactListResponse(BaseModel):
 class ChatUserKeyRead(BaseModel):
     algorithm: str
     public_key_jwk: dict
+    private_key_jwk: dict | None = None
 
 
 class ChatReadReceiptResponse(BaseModel):

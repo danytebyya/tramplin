@@ -8,6 +8,7 @@ export type EmployerPermissionKey =
   | "access_chat";
 
 type AccessTokenPayload = {
+  active_role?: AuthRole;
   active_membership_id?: string;
   active_permissions?: string[];
 };

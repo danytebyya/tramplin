@@ -399,6 +399,27 @@
   --notification-menu-accent: var(--color-accent-active);
 }
 
+.notification-menu--applicant {
+  --notification-menu-primary: var(--color-secondary);
+  --notification-menu-light: var(--color-secondary-light);
+  --notification-menu-secondary: var(--color-secondary-hover);
+  --notification-menu-accent: var(--color-secondary-active);
+}
+
+.notification-menu--employer {
+  --notification-menu-primary: var(--color-primary);
+  --notification-menu-light: var(--color-primary-light);
+  --notification-menu-secondary: var(--color-primary-hover);
+  --notification-menu-accent: var(--color-primary-active);
+}
+
+.notification-menu--curator {
+  --notification-menu-primary: var(--color-accent);
+  --notification-menu-light: var(--color-accent-light);
+  --notification-menu-secondary: var(--color-accent-hover);
+  --notification-menu-accent: var(--color-accent-active);
+}
+
 .settings-page--curator .notification-menu,
 .settings-page--admin .notification-menu,
 .curator-dashboard-page .notification-menu,

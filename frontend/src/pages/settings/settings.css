@@ -2,25 +2,7 @@
   --settings-accent: var(--color-secondary);
   --settings-accent-soft: var(--color-secondary-light);
   --settings-accent-strong: var(--color-secondary-active);
-  min-height: 100vh;
-  background: var(--color-bg-primary);
-}
-
-.settings-page--employer {
-  --settings-accent: var(--color-primary);
-  --settings-accent-soft: var(--color-primary-light);
-  --settings-accent-strong: var(--color-primary-active);
-}
-
-.settings-page--curator,
-.settings-page--admin {
-  --settings-accent: var(--color-accent);
-  --settings-accent-soft: rgba(245, 158, 11, 0.18);
-  --settings-accent-strong: var(--color-accent-active);
-}
-
-.settings-page .header__top {
-  background:
+  --header-top-gradient:
     linear-gradient(
       90deg,
       var(--color-bg-primary) 0%,
@@ -30,10 +12,15 @@
       #07B3D5 68%,
       #A4BDF3 100%
     );
+  min-height: 100vh;
+  background: var(--color-bg-primary);
 }
 
-.settings-page--employer .header__top {
-  background:
+.settings-page--employer {
+  --settings-accent: var(--color-primary);
+  --settings-accent-soft: var(--color-primary-light);
+  --settings-accent-strong: var(--color-primary-active);
+  --header-top-gradient:
     linear-gradient(
       90deg,
       var(--color-bg-primary) 0%,
@@ -44,16 +31,17 @@
     );
 }
 
-.settings-page--curator .header__top,
-.settings-page--admin .header__top {
-  background:
+.settings-page--curator,
+.settings-page--admin {
+  --settings-accent: var(--color-accent);
+  --settings-accent-soft: rgba(245, 158, 11, 0.18);
+  --settings-accent-strong: var(--color-accent-active);
+  --header-top-gradient:
     linear-gradient(
       90deg,
-      var(--color-bg-primary) 0%,
-      #F59E0B 13%,
-      #EF4444 37%,
-      #F59E0B 74%,
-      #FBDCA8 100%
+      #F8995E 0%,
+      #0D6EFF 80%,
+      #9BE6F8 99%
     );
 }
 

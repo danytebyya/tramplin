@@ -10,15 +10,19 @@ import {
   ChatConversation,
   ChatMessage,
   ChatParticipant,
+  createChatConversationRequest,
   deleteChatMessageRequest,
   decryptChatMessage,
   encryptChatMessage,
   ensureChatKeyPair,
+  getMyChatKeyRequest,
+  getStoredChatKeyPair,
   listChatConversationsRequest,
   listChatMessagesRequest,
   markChatConversationReadRequest,
   searchChatContactsRequest,
   sendChatMessageRequest,
+  storeChatKeyPair,
   updateChatMessageRequest,
   upsertMyChatKeyRequest,
   useChatRealtime,
@@ -202,14 +206,30 @@ export function ChatWorkspace({
     let isMounted = true;
 
     void (async () => {
-      const pair = await ensureChatKeyPair();
+      const storedPair = getStoredChatKeyPair();
+      const remotePair = await getMyChatKeyRequest();
+      if (!storedPair && remotePair?.publicKeyJwk && !remotePair.privateKeyJwk) {
+        return;
+      }
+
+      const pair =
+        storedPair ??
+        (remotePair?.privateKeyJwk
+          ? {
+              algorithm: remotePair.algorithm,
+              publicKeyJwk: remotePair.publicKeyJwk,
+              privateKeyJwk: remotePair.privateKeyJwk,
+            }
+          : await ensureChatKeyPair());
       if (!isMounted) {
         return;
       }
+      storeChatKeyPair(pair);
       setKeyPair(pair);
       await upsertMyChatKeyRequest({
         algorithm: pair.algorithm,
         public_key_jwk: pair.publicKeyJwk,
+        private_key_jwk: pair.privateKeyJwk,
       });
     })().catch(() => undefined);
 
@@ -614,17 +634,22 @@ export function ChatWorkspace({
     setMessageDraft("");
 
     try {
+      const targetConversation =
+        activeConversation ??
+        (await createChatConversationRequest({
+          recipient_user_id: activeCounterpart.userId,
+          employer_id: activeCounterpart.companyId ?? undefined,
+        }));
+
       const encryptedMessage = await encryptChatMessage({
         plaintext: trimmedMessage,
         ownPrivateKeyJwk: keyPair.privateKeyJwk,
         counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
-        conversationId: activeConversation?.id ?? `draft-${activeCounterpart.userId}`,
+        conversationId: targetConversation.id,
       });
 
       const sentMessage = await sendChatMessageRequest({
-        conversation_id: activeConversation?.id ?? undefined,
-        recipient_user_id: activeConversation ? undefined : activeCounterpart.userId,
-        employer_id: activeConversation ? undefined : activeCounterpart.companyId ?? undefined,
+        conversation_id: targetConversation.id,
         ciphertext: encryptedMessage.ciphertext,
         iv: encryptedMessage.iv,
         salt: encryptedMessage.salt,

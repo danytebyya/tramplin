@@ -78,7 +78,17 @@ export function NotificationMenu({
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
   const isAuthenticated = Boolean(accessToken || refreshToken);
+  const notificationsQueryKey = ["notifications", "feed", role ?? "guest"] as const;
+  const roleClassName =
+    role === "applicant"
+      ? "notification-menu--applicant"
+      : role === "curator" || role === "junior" || role === "admin"
+        ? "notification-menu--curator"
+        : role === "employer"
+          ? "notification-menu--employer"
+          : undefined;
   const menuRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const previousTopNotificationIdRef = useRef<string | null>(null);
@@ -86,9 +96,9 @@ export function NotificationMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", "feed"],
+    queryKey: notificationsQueryKey,
     queryFn: listNotificationsRequest,
-    enabled: isAuthenticated,
+    enabled: isHydrated && isAuthenticated && Boolean(role),
     staleTime: 5_000,
     refetchInterval: () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") {
@@ -193,10 +203,10 @@ export function NotificationMenu({
   }, [items]);
 
   useNotificationsRealtime({
-    enabled: Boolean(accessToken),
+    enabled: isHydrated && Boolean(accessToken) && Boolean(role),
     onMessage: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
-      void queryClient.refetchQueries({ queryKey: ["notifications", "feed"], type: "active" });
+      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+      void queryClient.refetchQueries({ queryKey: notificationsQueryKey, type: "active" });
       onRealtimeMessage?.();
     },
   });
@@ -204,11 +214,11 @@ export function NotificationMenu({
   const markAsReadMutation = useMutation({
     mutationFn: markNotificationAsReadRequest,
     onMutate: async (notificationId: string) => {
-      await queryClient.cancelQueries({ queryKey: ["notifications", "feed"] });
-      const previousFeed = queryClient.getQueryData<NotificationsResponse>(["notifications", "feed"]);
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previousFeed = queryClient.getQueryData<NotificationsResponse>(notificationsQueryKey);
 
       queryClient.setQueryData<NotificationsResponse>(
-        ["notifications", "feed"],
+        notificationsQueryKey,
         updateNotificationsCache(previousFeed, notificationId),
       );
 
@@ -216,21 +226,21 @@ export function NotificationMenu({
     },
     onError: (_error, _notificationId, context) => {
       if (context?.previousFeed) {
-        queryClient.setQueryData(["notifications", "feed"], context.previousFeed);
+        queryClient.setQueryData(notificationsQueryKey, context.previousFeed);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
     },
   });
 
   const clearNotificationsMutation = useMutation({
     mutationFn: clearNotificationsRequest,
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ["notifications", "feed"] });
-      const previousFeed = queryClient.getQueryData<NotificationsResponse>(["notifications", "feed"]);
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previousFeed = queryClient.getQueryData<NotificationsResponse>(notificationsQueryKey);
 
-      queryClient.setQueryData<NotificationsResponse>(["notifications", "feed"], {
+      queryClient.setQueryData<NotificationsResponse>(notificationsQueryKey, {
         data: {
           items: [],
           unread_count: 0,
@@ -241,21 +251,21 @@ export function NotificationMenu({
     },
     onError: (_error, _variables, context) => {
       if (context?.previousFeed) {
-        queryClient.setQueryData(["notifications", "feed"], context.previousFeed);
+        queryClient.setQueryData(notificationsQueryKey, context.previousFeed);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
     },
   });
 
   const hideNotificationMutation = useMutation({
     mutationFn: hideNotificationRequest,
     onMutate: async (notificationId: string) => {
-      await queryClient.cancelQueries({ queryKey: ["notifications", "feed"] });
-      const previousFeed = queryClient.getQueryData<NotificationsResponse>(["notifications", "feed"]);
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previousFeed = queryClient.getQueryData<NotificationsResponse>(notificationsQueryKey);
 
-      queryClient.setQueryData<NotificationsResponse>(["notifications", "feed"], {
+      queryClient.setQueryData<NotificationsResponse>(notificationsQueryKey, {
         data: {
           items: (previousFeed?.data?.items ?? []).filter((item) => item.id !== notificationId),
           unread_count: Math.max(
@@ -269,11 +279,11 @@ export function NotificationMenu({
     },
     onError: (_error, _notificationId, context) => {
       if (context?.previousFeed) {
-        queryClient.setQueryData(["notifications", "feed"], context.previousFeed);
+        queryClient.setQueryData(notificationsQueryKey, context.previousFeed);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+      void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
     },
   });
 
@@ -330,7 +340,7 @@ export function NotificationMenu({
   }
 
   return (
-    <div ref={menuRef} className={cn("notification-menu", className)}>
+    <div ref={menuRef} className={cn("notification-menu", roleClassName, className)}>
       <button
         type="button"
         className={cn("notification-menu__button", buttonClassName)}

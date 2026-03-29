@@ -43,5 +43,10 @@ export function formatPresenceStatus({ isOnline, lastSeenAt }: PresenceStatus): 
   }
 
   const diffHours = Math.floor(diffMinutes / 60);
-  return `Был(а) в сети ${diffHours} ${formatCount(diffHours, "час", "часа", "часов")} назад`;
+  if (diffHours < 24) {
+    return `Был(а) в сети ${diffHours} ${formatCount(diffHours, "час", "часа", "часов")} назад`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `Был(а) в сети ${diffDays} ${formatCount(diffDays, "день", "дня", "дней")} назад`;
 }

@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { CitySelection, CitySelector } from "../../features/city-selector";
-import { useAuthStore } from "../../features/auth";
+import { readAccessTokenPayload, useAuthStore } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
 import { cn } from "../../shared/lib";
 import { Container, Input } from "../../shared/ui";
@@ -14,6 +14,7 @@ import "./header.css";
 type HeaderProps = {
   containerClassName?: string;
   profileMenuItems: HeaderProfileMenuItem[];
+  theme?: "applicant" | "employer" | "curator";
   city?: string;
   onCityChange?: (city: CitySelection) => void;
   bottomContent?: ReactNode;
@@ -27,6 +28,7 @@ type HeaderProps = {
 export function Header({
   containerClassName,
   profileMenuItems,
+  theme,
   city,
   onCityChange,
   bottomContent,
@@ -36,7 +38,24 @@ export function Header({
   showSearch = true,
   notificationOnRealtimeMessage,
 }: HeaderProps) {
+  const accessToken = useAuthStore((state) => state.accessToken);
   const role = useAuthStore((state) => state.role);
+  const activeRole = readAccessTokenPayload(accessToken)?.active_role ?? role;
+  const resolvedTheme =
+    theme ??
+    (activeRole === "curator" || activeRole === "junior" || activeRole === "admin"
+      ? "curator"
+      : activeRole === "employer"
+        ? "employer"
+        : "applicant");
+  const headerRoleClassName =
+    resolvedTheme === "applicant"
+      ? "header--applicant"
+      : resolvedTheme === "curator"
+        ? "header--curator"
+        : resolvedTheme === "employer"
+          ? "header--employer"
+          : undefined;
   const resolvedTopNavigation = topNavigation === undefined ? (
     <nav className="header__nav" aria-label="Основная навигация">
       <a href="/" className="header__nav-link">Главная</a>
@@ -44,12 +63,12 @@ export function Header({
     </nav>
   ) : topNavigation;
   const logoSource =
-    !isAuthenticated || role === "employer" || role === "curator" || role === "junior" || role === "admin"
+    !isAuthenticated || resolvedTheme === "employer" || resolvedTheme === "curator"
       ? logoPrimary
       : logoSecondary;
 
   return (
-    <header className="header">
+    <header className={cn("header", headerRoleClassName)}>
       <div className="header__top">
         <Container className={cn(containerClassName, "header__top-container")}>
           <div className="header__brand">

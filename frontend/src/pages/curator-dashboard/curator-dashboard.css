@@ -1,20 +1,15 @@
 .curator-dashboard-page {
+  --header-top-gradient:
+    linear-gradient(
+      90deg,
+      #F8995E 0%,
+      #0D6EFF 80%,
+      #9BE6F8 99%
+    );
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   background: var(--color-bg-primary);
-}
-
-.curator-dashboard-page .header__top {
-  background:
-    linear-gradient(
-      90deg,
-      var(--color-bg-primary) 0%,
-      #F59E0B 13%,
-      #EF4444 37%,
-      #F59E0B 74%,
-      #FBDCA8 100%
-    );
 }
 
 .curator-dashboard-page .header__top-container.container,

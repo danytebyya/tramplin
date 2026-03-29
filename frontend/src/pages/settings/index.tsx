@@ -2360,6 +2360,7 @@ export function SettingsPage() {
       <Header
         containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
+        theme={isModerationRole ? "curator" : role === "employer" ? "employer" : "applicant"}
         city={selectedCity}
         onCityChange={handleCityChange}
         topNavigation={isModerationRole ? null : undefined}
