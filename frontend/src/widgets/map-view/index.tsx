@@ -5,8 +5,6 @@ import { load } from "@2gis/mapgl";
 import { Clusterer } from "@2gis/mapgl-clusterer";
 import type { ClusterStyle, InputMarker } from "@2gis/mapgl-clusterer";
 import type { Map as DGisMap } from "@2gis/mapgl/types";
-import { Link } from "react-router-dom";
-
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
 import {
@@ -409,7 +407,9 @@ function matchesNumericRange(value: string, from: string, to: string) {
   return true;
 }
 
-const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved" }> = [
+type FormatChipValue = Opportunity["format"] | "saved";
+
+const formatLabels: Array<{ label: string; value: FormatChipValue }> = [
   { label: "Офлайн", value: "office" },
   { label: "Гибрид", value: "hybrid" },
   { label: "Удаленно", value: "remote" },
@@ -417,20 +417,12 @@ const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved
 ];
 
 const baseFormatValue: Opportunity["format"][] = ["office", "hybrid", "remote"];
-const initialFormatValue: Array<Opportunity["format"] | "saved"> = [...baseFormatValue];
+const initialFormatValue: Opportunity["format"][] = [...baseFormatValue];
 
 function toggleFormatSelection(
-  current: Array<Opportunity["format"] | "saved">,
-  nextValue: Opportunity["format"] | "saved",
-): Array<Opportunity["format"] | "saved"> {
-  if (nextValue === "saved") {
-    return current.length === 1 && current[0] === "saved" ? [...baseFormatValue] : ["saved"];
-  }
-
-  if (current.length === 1 && current[0] === "saved") {
-    return [nextValue];
-  }
-
+  current: Opportunity["format"][],
+  nextValue: Opportunity["format"],
+): Opportunity["format"][] {
   if (current.includes(nextValue)) {
     const remainingValues = current.filter((value) => value !== nextValue);
     return remainingValues.length > 0 ? remainingValues : [...baseFormatValue];
@@ -590,7 +582,7 @@ export function MapView({
   const [isEventsOpen, setIsEventsOpen] = useState(false);
   const [isMentorshipOpen, setIsMentorshipOpen] = useState(false);
   const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
-  const [selectedFormat, setSelectedFormat] = useState<Array<Opportunity["format"] | "saved">>(initialFormatValue);
+  const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"][]>(initialFormatValue);
   const [selectedVacancyCity, setSelectedVacancyCity] = useState("");
   const [vacancyCityQuery, setVacancyCityQuery] = useState("");
   const [selectedEventCity, setSelectedEventCity] = useState("");
@@ -683,12 +675,7 @@ export function MapView({
     const oneDayMs = 24 * 60 * 60 * 1000;
 
     return opportunities.filter((opportunity) => {
-      const isFavorite = favoriteOpportunityIds.includes(opportunity.id);
-      const isSavedOnlyMode = selectedFormat.length === 1 && selectedFormat[0] === "saved";
-      const isFormatVisible = isSavedOnlyMode ? true : selectedFormat.includes(opportunity.format);
-      const isFavoriteVisible = isSavedOnlyMode ? isFavorite : true;
-
-      if (!isFormatVisible || !isFavoriteVisible) {
+      if (!selectedFormat.includes(opportunity.format)) {
         return false;
       }
 
@@ -2429,12 +2416,6 @@ export function MapView({
               >
                 {roleName !== "employer" && isSelectedOpportunityApplied ? "Отозвать отклик" : "Откликнуться"}
               </Button>
-              <Link
-                to={`/opportunities/${selectedOpportunity.id}`}
-                className="map-view__details-link button button--secondary-outline button--sm"
-              >
-                Подробнее
-              </Link>
               <button
                 type="button"
                 className="map-view__details-favorite"
@@ -2532,11 +2513,24 @@ export function MapView({
               key={item.value}
               type="button"
               className={
-                selectedFormat.includes(item.value)
-                  ? `map-view__format-chip map-view__format-chip--${item.value} map-view__format-chip--active`
-                  : `map-view__format-chip map-view__format-chip--${item.value}`
+                (() => {
+                  const isActive = item.value === "saved"
+                    ? favoriteOpportunityIds.length > 0
+                    : selectedFormat.includes(item.value as Opportunity["format"]);
+
+                  return isActive
+                    ? `map-view__format-chip map-view__format-chip--${item.value} map-view__format-chip--active`
+                    : `map-view__format-chip map-view__format-chip--${item.value}`;
+                })()
               }
-              onClick={() => setSelectedFormat((current) => toggleFormatSelection(current, item.value))}
+              title={item.value === "saved" ? "Избранные возможности отмечаются отдельным цветом" : undefined}
+              onClick={() => {
+                if (item.value === "saved") {
+                  return;
+                }
+
+                setSelectedFormat((current) => toggleFormatSelection(current, item.value as Opportunity["format"]));
+              }}
             >
               {item.label}
             </button>

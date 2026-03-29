@@ -240,9 +240,19 @@ export function OpportunityDetailsPage() {
 
   const profileMenuItems = role === "employer"
     ? buildEmployerProfileMenuItems(navigate, {
+        isEmployer: true,
+        isStaffContext: false,
+        hasFullAccess: true,
+        permissionKeys: [
+          "view_responses",
+          "manage_opportunities",
+          "manage_company_profile",
+          "manage_staff",
+          "access_chat",
+        ],
+        canReviewResponses: true,
         canManageCompanyProfile: true,
         canManageOpportunities: true,
-        canViewResponses: true,
         canManageStaff: true,
         canAccessChat: true,
       })
