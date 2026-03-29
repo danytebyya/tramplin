@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from src.models import EmployerProfile, User, UserNotificationPreference
+from src.enums import UserRole, UserStatus
 
 
 class UserRepository:
@@ -22,6 +23,27 @@ class UserRepository:
         if with_profiles:
             stmt = self._with_profiles(stmt)
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def list_applicant_recommendation_candidates(
+        self,
+        *,
+        exclude_user_id: str | UUID | None = None,
+        limit: int = 100,
+    ) -> list[User]:
+        stmt = (
+            select(User)
+            .where(
+                User.deleted_at.is_(None),
+                User.role == UserRole.APPLICANT,
+                User.status == UserStatus.ACTIVE,
+            )
+            .options(selectinload(User.applicant_profile))
+            .order_by(User.created_at.desc())
+            .limit(limit)
+        )
+        if exclude_user_id is not None:
+            stmt = stmt.where(User.id != UUID(str(exclude_user_id)))
+        return list(self.db.execute(stmt).scalars().all())
 
     def add(self, user: User) -> User:
         self.db.add(user)

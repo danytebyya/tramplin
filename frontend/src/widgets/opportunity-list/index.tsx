@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { KeyboardEvent } from "react";
+import { useNavigate } from "react-router-dom";
 
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
@@ -40,7 +41,21 @@ export function OpportunityList({
   onApply,
   onWrite,
 }: OpportunityListProps) {
+  const navigate = useNavigate();
   const actionLabel = roleName === "employer" ? "Подробнее" : "Откликнуться";
+
+  const openOpportunity = (opportunityId: string) => {
+    navigate(`/opportunities/${opportunityId}`);
+  };
+
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>, opportunityId: string) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    openOpportunity(opportunityId);
+  };
 
   return (
     <section className="opportunity-list" aria-label="Список возможностей">
@@ -49,21 +64,29 @@ export function OpportunityList({
         const isApplied = appliedOpportunityIds.includes(opportunity.id);
 
         return (
-          <article key={opportunity.id} className="opportunity-list__card">
+          <article
+            key={opportunity.id}
+            className="opportunity-list__card"
+            role="link"
+            tabIndex={0}
+            onClick={() => openOpportunity(opportunity.id)}
+            onKeyDown={(event) => handleCardKeyDown(event, opportunity.id)}
+          >
             <div className="opportunity-list__content">
               <div className="opportunity-list__title-block">
                 <div className="opportunity-list__title-row">
                   <h3 className="opportunity-list__title">
-                    <Link to={`/opportunities/${opportunity.id}`} className="opportunity-list__title-link">
-                      {opportunity.title}
-                    </Link>
+                    <span className="opportunity-list__title-link">{opportunity.title}</span>
                   </h3>
                   <button
                     type="button"
                     className="opportunity-list__favorite"
                     aria-label={isFavorite ? "Убрать из избранного" : "Добавить в избранное"}
                     aria-pressed={isFavorite}
-                    onClick={() => onToggleFavorite(opportunity.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleFavorite(opportunity.id);
+                    }}
                   >
                     <svg
                       aria-hidden="true"
@@ -112,7 +135,10 @@ export function OpportunityList({
                     type="button"
                     variant={roleName !== "employer" && isApplied ? "danger-outline" : "secondary"}
                     size="sm"
-                    onClick={() => onApply?.(opportunity.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onApply?.(opportunity.id);
+                    }}
                   >
                     {roleName !== "employer" && isApplied ? "Отозвать отклик" : actionLabel}
                   </Button>
@@ -153,7 +179,10 @@ export function OpportunityList({
                   type="button"
                   variant="secondary-outline"
                   size="sm"
-                  onClick={() => onWrite?.(opportunity)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onWrite?.(opportunity);
+                  }}
                 >
                   Написать
                 </Button>

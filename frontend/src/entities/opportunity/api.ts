@@ -42,6 +42,40 @@ type OpportunityFeedResponse = {
   };
 };
 
+type OpportunityRecommendationCandidateApi = {
+  user_id: string;
+  public_id?: string | null;
+  display_name: string;
+  subtitle: string;
+  is_online?: boolean;
+  city: string;
+  salary_label: string;
+  format_label: string;
+  employment_label: string;
+  tags: string[];
+  recommendations_count?: number;
+};
+
+type OpportunityRecommendationCandidatesResponse = {
+  data?: {
+    items?: OpportunityRecommendationCandidateApi[];
+  };
+};
+
+export type OpportunityRecommendationCandidate = {
+  userId: string;
+  publicId: string | null;
+  displayName: string;
+  subtitle: string;
+  isOnline: boolean;
+  city: string;
+  salaryLabel: string;
+  formatLabel: string;
+  employmentLabel: string;
+  tags: string[];
+  recommendationsCount: number;
+};
+
 function normalizePublicOpportunityFormat(format: string): Opportunity["format"] {
   if (format === "offline" || format === "office") {
     return "office";
@@ -123,6 +157,37 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
       mentorExperience: item.mentor_experience ?? null,
     })),
   ];
+}
+
+export async function listOpportunityRecommendationCandidatesRequest(
+  opportunityId: string,
+): Promise<OpportunityRecommendationCandidate[]> {
+  const response = await apiClient.get<OpportunityRecommendationCandidatesResponse>(
+    `/opportunities/${opportunityId}/recommendation-candidates`,
+  );
+  const items = response.data?.data?.items ?? [];
+
+  return items.map((item) => ({
+    userId: item.user_id,
+    publicId: item.public_id ?? null,
+    displayName: item.display_name,
+    subtitle: item.subtitle,
+    isOnline: Boolean(item.is_online),
+    city: item.city,
+    salaryLabel: item.salary_label,
+    formatLabel: item.format_label,
+    employmentLabel: item.employment_label,
+    tags: item.tags,
+    recommendationsCount: item.recommendations_count ?? 0,
+  }));
+}
+
+export async function recommendOpportunityRequest(opportunityId: string, targetUserId: string) {
+  const response = await apiClient.post<{ data?: { recommended?: boolean } }>(
+    `/opportunities/${opportunityId}/recommend`,
+    { target_user_id: targetUserId },
+  );
+  return response.data;
 }
 
 export async function getPlatformStatsRequest(): Promise<PlatformStats> {

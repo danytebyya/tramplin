@@ -1,44 +1,61 @@
 .opportunity-details-page {
+  --opportunity-details-accent: var(--color-secondary);
+  --opportunity-details-accent-strong: var(--color-secondary-active);
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.08), transparent 28%),
-    linear-gradient(180deg, #f8fcff 0%, #f5f7fb 36%, #f8fafc 100%);
+  background: var(--color-bg-primary);
+}
+
+.opportunity-details-page--employer {
+  --opportunity-details-accent: var(--color-primary);
+  --opportunity-details-accent-strong: var(--color-primary-active);
+}
+
+.opportunity-details-page--curator,
+.opportunity-details-page--admin {
+  --opportunity-details-accent: var(--color-accent);
+  --opportunity-details-accent-strong: var(--color-accent-active);
 }
 
 .opportunity-details-page__container.container {
-  padding-top: 32px;
-  padding-bottom: 64px;
+  width: min(1080px, 100%);
+  max-width: 100%;
+  padding: 24px;
 }
 
 .opportunity-details-page__layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 284px;
+  grid-template-columns: minmax(0, 1fr) 248px;
   gap: 24px;
   align-items: start;
 }
 
-.opportunity-details-page__main,
-.opportunity-details-page__company-card,
-.opportunity-details-page__contact-card,
-.opportunity-details-page__state {
-  border-radius: 20px;
-  background: var(--color-bg-primary);
-  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.08);
-}
-
 .opportunity-details-page__main {
-  padding: 32px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .opportunity-details-page__hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 264px;
-  gap: 24px;
-  padding-bottom: 28px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  position: relative;
+  min-height: 120px;
 }
 
-.opportunity-details-page__eyebrow,
+.opportunity-details-page__hero-copy {
+  min-width: 0;
+  width: 100%;
+}
+
+.opportunity-details-page__hero-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.opportunity-details-page__hero-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .opportunity-details-page__published,
 .opportunity-details-page__company-reviews,
 .opportunity-details-page__contact-subtitle,
@@ -48,60 +65,53 @@
   color: var(--color-text-secondary);
 }
 
-.opportunity-details-page__eyebrow {
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 700;
-}
-
 .opportunity-details-page__title {
-  margin: 4px 0 0;
+  margin: 0;
+  max-width: 480px;
   color: var(--color-text-primary);
-  font-size: clamp(32px, 4vw, 44px);
-  line-height: 1.05;
-  font-weight: 700;
-}
-
-.opportunity-details-page__salary {
-  margin: 16px 0 0;
-  color: var(--color-text-primary);
-  font-size: 24px;
-  line-height: 30px;
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line);
   font-weight: 500;
 }
 
+.opportunity-details-page__salary {
+  color: var(--color-text-primary);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line);
+  font-weight: 400;
+}
+
 .opportunity-details-page__published {
-  margin-top: 8px;
-  font-size: 18px;
-  line-height: 24px;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
 }
 
 .opportunity-details-page__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 20px;
+  gap: 4px 12px;
 }
 
 .opportunity-details-page__meta-item {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(226, 232, 240, 0.56);
+  gap: 10px;
+  padding: 10px 10px 10px 0;
   color: var(--color-text-primary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
+.opportunity-details-page__meta-icon {
+  width: 19px;
+  height: 19px;
 }
 
 .opportunity-details-page__tags,
 .opportunity-details-page__contact-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.opportunity-details-page__tags {
-  margin-top: 20px;
+  gap: 8px;
 }
 
 .opportunity-details-page__tag,
@@ -111,61 +121,89 @@
   justify-content: center;
   min-height: 36px;
   padding: 8px 16px;
-  border-radius: 8px;
-  background: var(--color-secondary);
-  color: var(--color-text-inverse);
+  border-radius: 6px;
+  background: #18b3d0;
+  color: #ffffff;
+  font-size: 16px;
+  line-height: 20px;
   font-weight: 500;
 }
 
 .opportunity-details-page__hero-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 265px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  align-items: stretch;
+  gap: 12px;
 }
 
-.opportunity-details-page__apply.button {
-  min-height: 48px;
+.opportunity-details-page__apply--withdraw.button {
+  min-height: 56px;
+  font-size: 18px;
+  line-height: 24px;
 }
 
 .opportunity-details-page__favorite {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  justify-content: center;
+  width: 100%;
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 22px;
-  line-height: 28px;
+  color: #475569;
+  font-size: 16px;
+  line-height: 22px;
   cursor: pointer;
 }
 
 .opportunity-details-page__favorite--active,
 .opportunity-details-page__favorite:hover {
-  color: var(--color-secondary);
+  color: var(--opportunity-details-accent);
 }
 
-.opportunity-details-page__favorite-star {
-  font-size: 30px;
-  line-height: 1;
+.opportunity-details-page__favorite-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  background-color: currentColor;
+  -webkit-mask: center / contain no-repeat url("../../assets/icons/favorites.svg");
+  mask: center / contain no-repeat url("../../assets/icons/favorites.svg");
 }
 
-.opportunity-details-page__section {
-  margin-top: 36px;
+.opportunity-details-page__favorite--active .opportunity-details-page__favorite-icon {
+  -webkit-mask-image: url("../../assets/icons/favorites-fill.svg");
+  mask-image: url("../../assets/icons/favorites-fill.svg");
+}
+
+.opportunity-details-page__content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
 .opportunity-details-page__section-title {
-  margin: 0 0 20px;
-  color: var(--color-text-primary);
+  margin: 0;
+  color: #1e293b;
   font-size: 24px;
   line-height: 30px;
   font-weight: 700;
 }
 
+.opportunity-details-page__section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .opportunity-details-page__description {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 26px;
 }
 
 .opportunity-details-page__description-section {
@@ -176,17 +214,17 @@
 
 .opportunity-details-page__description-title {
   margin: 0;
-  color: var(--color-text-primary);
-  font-size: 20px;
+  color: #1e293b;
+  font-size: 18px;
   line-height: 26px;
   font-weight: 600;
 }
 
 .opportunity-details-page__description-text {
   margin: 0;
-  color: var(--color-text-primary);
+  color: #1e293b;
   font-size: 18px;
-  line-height: 1.6;
+  line-height: 1.55;
   white-space: pre-line;
 }
 
@@ -198,9 +236,7 @@
 .opportunity-details-page__company-card {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px;
+  gap: 18px;
   text-align: center;
 }
 
@@ -208,7 +244,7 @@
 .opportunity-details-page__company-name,
 .opportunity-details-page__company-rating {
   margin: 0;
-  color: var(--color-text-primary);
+  color: #1e293b;
 }
 
 .opportunity-details-page__company-heading {
@@ -218,21 +254,22 @@
 }
 
 .opportunity-details-page__company-logo-placeholder {
-  width: 176px;
+  width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 16px;
+  border-radius: 12px;
   background:
-    linear-gradient(45deg, rgba(226, 232, 240, 0.9) 25%, transparent 25%, transparent 75%, rgba(226, 232, 240, 0.9) 75%),
-    linear-gradient(45deg, rgba(226, 232, 240, 0.9) 25%, transparent 25%, transparent 75%, rgba(226, 232, 240, 0.9) 75%);
-  background-position: 0 0, 12px 12px;
-  background-size: 24px 24px;
-  background-color: rgba(248, 250, 252, 0.96);
+    linear-gradient(45deg, rgba(226, 232, 240, 0.88) 25%, transparent 25%, transparent 75%, rgba(226, 232, 240, 0.88) 75%),
+    linear-gradient(45deg, rgba(226, 232, 240, 0.88) 25%, transparent 25%, transparent 75%, rgba(226, 232, 240, 0.88) 75%);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+  background-color: #f8fafc;
 }
 
 .opportunity-details-page__company-name {
-  font-size: 28px;
-  line-height: 34px;
-  font-weight: 700;
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 500;
 }
 
 .opportunity-details-page__company-badge {
@@ -240,13 +277,14 @@
   align-items: center;
   gap: 8px;
   min-height: 32px;
+  margin: 0 auto;
   padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(34, 211, 238, 0.12);
-  color: var(--color-secondary);
+  border-radius: 10px;
+  background: #dff8fd;
+  color: #18b3d0;
   font-size: 14px;
   line-height: 18px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .opportunity-details-page__company-badge img {
@@ -255,27 +293,53 @@
 }
 
 .opportunity-details-page__company-rating {
+  margin: 0;
   font-size: 18px;
   line-height: 24px;
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.opportunity-details-page__company-reviews {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
 }
 
 .opportunity-details-page__company-contacts {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  margin-top: 8px;
+  text-align: left;
 }
 
 .opportunity-details-page__company-contact,
-.opportunity-details-page__map-link {
-  color: var(--color-text-primary);
+.opportunity-details-page__map-link,
+.opportunity-details-page__company-address {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #1e293b;
   text-decoration: none;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.opportunity-details-page__company-contact-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-top: 2px;
+  opacity: 0.8;
 }
 
 .opportunity-details-page__map-link {
-  color: var(--color-secondary);
+  color: #18b3d0;
+}
+
+.opportunity-details-page__company-card .button {
+  margin-top: 0;
+  border-radius: 12px;
 }
 
 .opportunity-details-page__contacts-grid {
@@ -285,23 +349,20 @@
 }
 
 .opportunity-details-page__contact-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px;
+  border-radius: 14px;
+  padding: 24px 24px 20px;
   text-align: center;
 }
 
 .opportunity-details-page__contact-id,
 .opportunity-details-page__contact-name {
   margin: 0;
-  color: var(--color-text-primary);
+  color: #1e293b;
 }
 
 .opportunity-details-page__contact-id {
-  font-size: 20px;
-  line-height: 26px;
+  font-size: 18px;
+  line-height: 24px;
   font-weight: 700;
 }
 
@@ -309,10 +370,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 112px;
-  height: 112px;
+  width: 102px;
+  height: 102px;
+  margin-top: 8px;
   border-radius: 999px;
-  background: rgba(226, 232, 240, 0.72);
+  background: #d4d4d8;
   overflow: hidden;
 }
 
@@ -323,15 +385,24 @@
 }
 
 .opportunity-details-page__contact-name {
+  margin-top: 6px;
   font-size: 24px;
   line-height: 30px;
   font-weight: 700;
 }
 
+.opportunity-details-page__contact-subtitle {
+  font-size: 16px;
+  line-height: 22px;
+}
+
 .opportunity-details-page__contact-status {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  font-size: 16px;
+  line-height: 22px;
 }
 
 .opportunity-details-page__contact-dot {
@@ -345,20 +416,50 @@
   background: #34d399;
 }
 
+.opportunity-details-page__contact-tags {
+  justify-content: center;
+  margin-top: 6px;
+}
+
 .opportunity-details-page__contact-tag {
-  background: rgba(34, 211, 238, 0.12);
-  color: var(--color-secondary);
   min-height: 32px;
   padding: 6px 12px;
+  border-radius: 6px;
+  background: #dff8fd;
+  color: #18b3d0;
+  font-size: 14px;
+  line-height: 18px;
 }
 
 .opportunity-details-page__contact-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
+  gap: 12px 20px;
   width: 100%;
-  color: var(--color-text-primary);
+  margin-top: 10px;
+  padding-top: 6px;
+  color: #1e293b;
   text-align: left;
+}
+
+.opportunity-details-page__contact-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.opportunity-details-page__contact-meta-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  opacity: 0.8;
+}
+
+.opportunity-details-page__contact-card .button {
+  margin-top: 14px;
+  border-radius: 12px;
 }
 
 .opportunity-details-page__state {
@@ -371,28 +472,63 @@
 
 .opportunity-details-page__state-title {
   margin: 0;
-  color: var(--color-text-primary);
+  color: #1e293b;
   font-size: 28px;
   line-height: 34px;
   font-weight: 700;
 }
 
 @media (max-width: 1279px) {
-  .opportunity-details-page__layout,
-  .opportunity-details-page__hero {
+  .opportunity-details-page__layout {
     grid-template-columns: 1fr;
+  }
+
+  .opportunity-details-page__hero-copy {
+    padding-right: 294px;
   }
 
   .opportunity-details-page__sidebar {
     position: static;
   }
+
+  .opportunity-details-page__company-card {
+    max-width: 360px;
+  }
 }
 
 @media (max-width: 767px) {
-  .opportunity-details-page__main,
+  .opportunity-details-page__container.container {
+    padding-top: 20px;
+    padding-bottom: 40px;
+  }
+
+  .opportunity-details-page__hero,
+  .opportunity-details-page__section,
   .opportunity-details-page__company-card,
-  .opportunity-details-page__contact-card {
-    padding: 20px;
+  .opportunity-details-page__contact-card,
+  .opportunity-details-page__state {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .opportunity-details-page__hero {
+    padding-top: 24px;
+    padding-bottom: 20px;
+    min-height: 0;
+  }
+
+  .opportunity-details-page__hero-copy {
+    padding-right: 0;
+  }
+
+  .opportunity-details-page__hero-actions {
+    position: static;
+    width: 100%;
+    margin-top: 20px;
+  }
+
+  .opportunity-details-page__section {
+    padding-bottom: 24px;
   }
 
   .opportunity-details-page__contacts-grid,
@@ -402,5 +538,10 @@
 
   .opportunity-details-page__title {
     font-size: 30px;
+  }
+
+  .opportunity-details-page__salary {
+    font-size: 22px;
+    line-height: 28px;
   }
 }

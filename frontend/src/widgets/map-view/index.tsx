@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { load } from "@2gis/mapgl";
 import { Clusterer } from "@2gis/mapgl-clusterer";
 import type { ClusterStyle, InputMarker } from "@2gis/mapgl-clusterer";
 import type { Map as DGisMap } from "@2gis/mapgl/types";
+import { useNavigate } from "react-router-dom";
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
 import {
@@ -567,6 +568,7 @@ export function MapView({
   onToggleExpand,
   onApply,
 }: MapViewProps) {
+  const navigate = useNavigate();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<DGisMap | null>(null);
   const clustererRef = useRef<Clusterer | null>(null);
@@ -649,6 +651,17 @@ export function MapView({
   const [isVacancyAddressLoading, setIsVacancyAddressLoading] = useState(false);
   const [isEventAddressLoading, setIsEventAddressLoading] = useState(false);
   const [isMentorAddressLoading, setIsMentorAddressLoading] = useState(false);
+  const openOpportunityDetails = (opportunityId: string) => {
+    navigate(`/opportunities/${opportunityId}`);
+  };
+  const handleDetailsKeyDown = (event: KeyboardEvent<HTMLDivElement>, opportunityId: string) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    openOpportunityDetails(opportunityId);
+  };
   const tagCatalogQuery = useQuery({
     queryKey: ["opportunity-tag-catalog"],
     queryFn: listOpportunityTagCatalogRequest,
@@ -2339,7 +2352,13 @@ export function MapView({
       </div>
 
       {selectedOpportunity ? (
-        <div className="map-view__details">
+        <div
+          className="map-view__details"
+          role="link"
+          tabIndex={0}
+          onClick={() => openOpportunityDetails(selectedOpportunity.id)}
+          onKeyDown={(event) => handleDetailsKeyDown(event, selectedOpportunity.id)}
+        >
           <div className="map-view__details-content">
             <div className="map-view__details-header">
               <div className="map-view__details-title-group">
@@ -2355,7 +2374,10 @@ export function MapView({
                 className="map-view__details-close"
                 aria-label="Закрыть карточку"
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={onCloseDetails}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCloseDetails();
+                }}
               >
                 <svg
                   aria-hidden="true"
@@ -2412,7 +2434,10 @@ export function MapView({
                 variant={roleName !== "employer" && isSelectedOpportunityApplied ? "danger-outline" : "secondary"}
                 size="sm"
                 className="map-view__details-apply"
-                onClick={() => onApply?.(selectedOpportunity.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onApply?.(selectedOpportunity.id);
+                }}
               >
                 {roleName !== "employer" && isSelectedOpportunityApplied ? "Отозвать отклик" : "Откликнуться"}
               </Button>
@@ -2426,7 +2451,10 @@ export function MapView({
                   isSelectedOpportunityFavorite ? "Убрать из избранного" : "Добавить в избранное"
                 }
                 aria-pressed={isSelectedOpportunityFavorite}
-                onClick={() => onToggleFavorite(selectedOpportunity.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleFavorite(selectedOpportunity.id);
+                }}
               >
                 <svg
                   aria-hidden="true"

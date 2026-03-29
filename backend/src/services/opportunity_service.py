@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from src.enums import MembershipRole, NotificationKind, NotificationSeverity, UserRole, UserStatus
 from src.models import (
+    ApplicantProfile,
     Employer,
     EmployerMembership,
     Location,
@@ -22,8 +23,14 @@ from src.models import (
     WorkFormat,
 )
 from src.models.opportunity import EmploymentType, ModerationStatus
+from src.realtime import presence_hub
 from src.repositories import OpportunityRepository
-from src.schemas.opportunity import EmployerOpportunityRead, EmployerOpportunityUpsertRequest
+from src.repositories.user_repository import UserRepository
+from src.schemas.opportunity import (
+    EmployerOpportunityRead,
+    EmployerOpportunityUpsertRequest,
+    OpportunityRecommendationCandidateRead,
+)
 from src.services.notification_service import NotificationService
 from src.realtime.notification_hub import notification_hub
 from src.utils.errors import AppError
@@ -210,6 +217,79 @@ class OpportunityService:
         self.repo.db.commit()
         self._publish_content_moderation_updated(opportunity, status="deleted")
 
+    def list_recommendation_candidates(
+        self,
+        current_user: User,
+        opportunity_id: str,
+    ) -> list[OpportunityRecommendationCandidateRead]:
+        opportunity = self._get_public_opportunity_or_404(opportunity_id)
+        candidates = UserRepository(self.repo.db).list_applicant_recommendation_candidates(
+            exclude_user_id=current_user.id
+        )
+        ranked_candidates = sorted(
+            candidates,
+            key=lambda item: self._candidate_sort_key(item, opportunity),
+        )
+        return [
+            self._serialize_recommendation_candidate(item, opportunity)
+            for item in ranked_candidates[:6]
+        ]
+
+    def recommend_opportunity(
+        self,
+        current_user: User,
+        opportunity_id: str,
+        *,
+        target_user_id: str,
+    ) -> None:
+        opportunity = self._get_public_opportunity_or_404(opportunity_id)
+        user_repo = UserRepository(self.repo.db)
+        target_user = user_repo.get_by_id(target_user_id, with_profiles=True)
+        if target_user is None or target_user.deleted_at is not None or target_user.role != UserRole.APPLICANT:
+            raise AppError(
+                code="RECOMMENDATION_TARGET_NOT_FOUND",
+                message="Пользователь для рекомендации не найден",
+                status_code=404,
+            )
+        if target_user.status != UserStatus.ACTIVE:
+            raise AppError(
+                code="RECOMMENDATION_TARGET_NOT_AVAILABLE",
+                message="Пользователь недоступен для рекомендации",
+                status_code=400,
+            )
+        if str(target_user.id) == str(current_user.id):
+            raise AppError(
+                code="RECOMMENDATION_SELF_FORBIDDEN",
+                message="Нельзя рекомендовать вакансию самому себе",
+                status_code=400,
+            )
+
+        profile = target_user.applicant_profile
+        if profile is None:
+            profile = ApplicantProfile(user_id=target_user.id)
+            target_user.applicant_profile = profile
+            self.repo.db.add(profile)
+
+        profile.recommendations_count = (profile.recommendations_count or 0) + 1
+        self.repo.db.add(profile)
+
+        NotificationService(self.repo.db).create_notification(
+            user_id=target_user.id,
+            kind=NotificationKind.OPPORTUNITY,
+            severity=NotificationSeverity.INFO,
+            title="Вам порекомендовали вакансию",
+            message=f"{current_user.display_name} порекомендовал вам вакансию «{opportunity.title}».",
+            action_label="Перейти",
+            action_url=f"/opportunities/{opportunity.id}",
+            payload={
+                "notification_type": "opportunity_recommendation",
+                "opportunity_id": str(opportunity.id),
+                "recommended_by_user_id": str(current_user.id),
+                "recommended_by_name": current_user.display_name,
+            },
+        )
+        self.repo.db.commit()
+
     def _serialize_public_opportunity(self, opportunity: Opportunity, index: int) -> dict:
         tags = [link.tag.name for link in opportunity.tag_links if link.tag is not None]
         location = opportunity.location
@@ -312,6 +392,151 @@ class OpportunityService:
             mentorship_direction=mentorship_direction,
             mentor_experience=opportunity.mentor_experience,
         )
+
+    def _get_public_opportunity_or_404(self, opportunity_id: str) -> Opportunity:
+        opportunity = self.repo.get_by_id(opportunity_id)
+        if (
+            opportunity is None
+            or opportunity.deleted_at is not None
+            or opportunity.moderation_status != ModerationStatus.APPROVED
+            or self._resolve_public_business_status(opportunity) != OpportunityStatus.ACTIVE
+        ):
+            raise AppError(
+                code="OPPORTUNITY_NOT_FOUND",
+                message="Возможность не найдена",
+                status_code=404,
+            )
+        return opportunity
+
+    def _candidate_sort_key(self, user: User, opportunity: Opportunity) -> tuple[int, int, int, str]:
+        profile = user.applicant_profile
+        score = 0
+        if profile is not None:
+            candidate_city = self._normalize_match_token(user.preferred_city or profile.preferred_location)
+            opportunity_city = self._normalize_match_token(opportunity.location.city if opportunity.location else None)
+            if candidate_city and opportunity_city and candidate_city == opportunity_city:
+                score += 4
+
+            candidate_formats = {self._normalize_work_format_token(item) for item in (profile.work_formats or [])}
+            candidate_formats.discard(None)
+            if self._normalize_format(opportunity.work_format) in candidate_formats:
+                score += 3
+
+            candidate_employment_types = {
+                self._normalize_match_token(item) for item in (profile.employment_types or [])
+            }
+            candidate_employment_types.discard(None)
+            opportunity_employment = self._normalize_match_token(
+                self._employment_label(opportunity.employment_type, opportunity_type=opportunity.opportunity_type)
+            )
+            if opportunity_employment and opportunity_employment in candidate_employment_types:
+                score += 2
+
+            candidate_level = self._normalize_match_token(profile.level)
+            opportunity_level = self._normalize_match_token(self._level_label(opportunity.level))
+            if candidate_level and opportunity_level and candidate_level == opportunity_level:
+                score += 1
+
+            opportunity_tags = {self._normalize_match_token(item) for item in self._opportunity_tag_names(opportunity)}
+            candidate_skills = {self._normalize_match_token(item) for item in (profile.hard_skills or [])}
+            opportunity_tags.discard(None)
+            candidate_skills.discard(None)
+            score += min(len(opportunity_tags.intersection(candidate_skills)), 4) * 2
+
+        is_online = 1 if presence_hub.is_user_online(user.id) else 0
+        recommendations_count = profile.recommendations_count if profile is not None else 0
+        return (-score, -is_online, -recommendations_count, user.display_name.lower())
+
+    def _serialize_recommendation_candidate(
+        self,
+        user: User,
+        opportunity: Opportunity,
+    ) -> OpportunityRecommendationCandidateRead:
+        profile = user.applicant_profile
+        recommended_tags: list[str] = []
+        if profile is not None and profile.level:
+            recommended_tags.append(profile.level.capitalize())
+        recommended_tags.extend((profile.hard_skills or [])[:4] if profile is not None else [])
+
+        city = (
+            user.preferred_city
+            or (profile.preferred_location if profile is not None else None)
+            or (opportunity.location.city if opportunity.location is not None else None)
+            or "Город не указан"
+        )
+        work_format_label = self._format_label(
+            next(
+                (
+                    self._normalize_work_format_token(item)
+                    for item in (profile.work_formats or [])
+                    if self._normalize_work_format_token(item) is not None
+                ),
+                self._normalize_format(opportunity.work_format),
+            )
+            or self._normalize_format(opportunity.work_format)
+        )
+        employment_label = (
+            (profile.employment_types or [])[0]
+            if profile is not None and profile.employment_types
+            else self._employment_label(opportunity.employment_type, opportunity_type=opportunity.opportunity_type)
+        )
+        recommendations_count = profile.recommendations_count if profile is not None else 0
+
+        return OpportunityRecommendationCandidateRead(
+            user_id=str(user.id),
+            public_id=user.public_id,
+            display_name=user.display_name,
+            subtitle=self._build_candidate_subtitle(profile),
+            is_online=presence_hub.is_user_online(user.id),
+            city=city,
+            salary_label=self._build_candidate_salary_label(profile),
+            format_label=work_format_label,
+            employment_label=employment_label,
+            tags=recommended_tags[:5],
+            recommendations_count=recommendations_count,
+        )
+
+    @staticmethod
+    def _build_candidate_subtitle(profile: ApplicantProfile | None) -> str:
+        if profile is None:
+            return "Соискатель платформы"
+        if profile.university and profile.graduation_year:
+            return f"{profile.university}, выпуск {profile.graduation_year}"
+        if profile.university:
+            return profile.university
+        if profile.about:
+            return profile.about[:120]
+        return "Соискатель платформы"
+
+    @staticmethod
+    def _build_candidate_salary_label(profile: ApplicantProfile | None) -> str:
+        if profile is None or profile.desired_salary_from is None:
+            return "Зарплата не указана"
+        formatted_salary = f"{profile.desired_salary_from:,}".replace(",", " ")
+        return f"от {formatted_salary} ₽"
+
+    @staticmethod
+    def _normalize_match_token(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower().replace("ё", "е")
+        return normalized or None
+
+    def _normalize_work_format_token(self, value: str | None) -> str | None:
+        normalized = self._normalize_match_token(value)
+        if normalized is None:
+            return None
+        if normalized in {"offline", "office", "офлайн", "офис", "в офисе"}:
+            return "offline"
+        if normalized in {"hybrid", "гибрид"}:
+            return "hybrid"
+        if normalized in {"remote", "online", "удаленно", "удалённо", "онлайн"}:
+            return "online"
+        return None
+
+    @staticmethod
+    def _opportunity_tag_names(opportunity: Opportunity) -> list[str]:
+        return [link.tag.name for link in opportunity.tag_links if link.tag is not None]
 
     def _build_management_location_label(self, opportunity: Opportunity) -> str:
         location = opportunity.location

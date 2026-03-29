@@ -569,7 +569,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 50px;
-  color: var(--color-text-primary);
+  color: var(--color-text-tertiary);
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
   text-decoration: none;

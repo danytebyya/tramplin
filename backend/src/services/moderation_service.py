@@ -1464,7 +1464,47 @@ class ModerationService:
             .options(selectinload(User.notification_preferences))
             .where(User.id == user_id)
         )
-        return self.repo.db.execute(stmt).scalar_one_or_none()
+        user = self.repo.db.execute(stmt).scalar_one_or_none()
+        if user is None:
+            return None
+
+        self._upgrade_legacy_employer_notification_preferences(user)
+        return user
+
+    def _upgrade_legacy_employer_notification_preferences(self, user: User) -> None:
+        preferences = user.notification_preferences
+        if user.role != UserRole.EMPLOYER or preferences is None:
+            return
+
+        if not self._matches_legacy_employer_notification_preferences(preferences):
+            return
+
+        preferences.email_company_profile_changes = True
+        preferences.email_chat_reminders = True
+        preferences.push_company_profile_changes = True
+        preferences.push_chat_reminders = True
+        self.repo.db.add(preferences)
+
+    @staticmethod
+    def _matches_legacy_employer_notification_preferences(preferences: UserNotificationPreference) -> bool:
+        return (
+            preferences.email_new_verification_requests is True
+            and preferences.email_content_complaints is False
+            and preferences.email_overdue_reviews is False
+            and preferences.email_company_profile_changes is False
+            and preferences.email_publication_changes is False
+            and preferences.email_chat_reminders is False
+            and preferences.email_daily_digest is False
+            and preferences.email_weekly_report is False
+            and preferences.push_new_verification_requests is True
+            and preferences.push_content_complaints is False
+            and preferences.push_overdue_reviews is False
+            and preferences.push_company_profile_changes is False
+            and preferences.push_publication_changes is False
+            and preferences.push_chat_reminders is False
+            and preferences.push_daily_digest is False
+            and preferences.push_weekly_report is False
+        )
 
     @staticmethod
     def _is_notification_enabled(user: User, preference_key: str) -> bool:

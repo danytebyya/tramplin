@@ -8,7 +8,7 @@ from src.enums import (
     EmployerVerificationStatus,
     UserRole,
 )
-from src.models import EmployerProfile, EmployerVerificationRequest, Notification, User
+from src.models import EmployerProfile, EmployerVerificationRequest, Notification, User, UserNotificationPreference
 from src.tests.test_company_verification import _register_and_login_employer
 
 
@@ -141,6 +141,7 @@ def test_new_verification_request_creates_curator_notification(client, db_sessio
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -150,6 +151,7 @@ def test_new_verification_request_creates_curator_notification(client, db_sessio
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -193,6 +195,7 @@ def test_new_verification_request_sends_curator_email_when_enabled(client, db_se
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -202,6 +205,7 @@ def test_new_verification_request_sends_curator_email_when_enabled(client, db_se
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -248,6 +252,7 @@ def test_new_verification_request_does_not_notify_curator_when_pref_disabled(cli
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -257,6 +262,7 @@ def test_new_verification_request_does_not_notify_curator_when_pref_disabled(cli
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -395,6 +401,7 @@ def test_approve_employer_verification_request_skips_email_when_disabled(client,
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": True,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -404,6 +411,7 @@ def test_approve_employer_verification_request_skips_email_when_disabled(client,
                 "overdue_reviews": False,
                 "company_profile_changes": True,
                 "publication_changes": False,
+                "chat_reminders": True,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -426,6 +434,79 @@ def test_approve_employer_verification_request_skips_email_when_disabled(client,
 
     assert response.status_code == 200
     assert sent_messages == []
+
+
+def test_approve_employer_verification_request_upgrades_legacy_employer_preferences(client, db_session, monkeypatch):
+    curator_token = _register_curator(
+        client,
+        db_session,
+        email="curator-verification-approve-legacy@example.com",
+    )
+    employer_email = "employer-verification-approve-legacy@example.com"
+    request_id = _create_verification_request(
+        client,
+        db_session,
+        email=employer_email,
+        company_name="Approve Legacy Corp",
+        inn="7707083825",
+    )
+
+    employer = db_session.execute(select(User).where(User.email == employer_email)).scalar_one()
+    db_session.add(
+        UserNotificationPreference(
+            user_id=employer.id,
+            email_new_verification_requests=True,
+            email_content_complaints=False,
+            email_overdue_reviews=False,
+            email_company_profile_changes=False,
+            email_publication_changes=False,
+            email_chat_reminders=False,
+            email_daily_digest=False,
+            email_weekly_report=False,
+            push_new_verification_requests=True,
+            push_content_complaints=False,
+            push_overdue_reviews=False,
+            push_company_profile_changes=False,
+            push_publication_changes=False,
+            push_chat_reminders=False,
+            push_daily_digest=False,
+            push_weekly_report=False,
+        )
+    )
+    db_session.commit()
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.moderation_service.send_email", fake_send_email)
+
+    response = client.post(
+        f"/api/v1/moderation/employer-verification-requests/{request_id}/approve",
+        headers={"Authorization": f"Bearer {curator_token}"},
+        json={"moderator_comment": "Проверка завершена"},
+    )
+
+    assert response.status_code == 200
+    assert len(sent_messages) == 1
+    assert sent_messages[0][0] == employer_email
+
+    notification = db_session.execute(
+        select(Notification)
+        .where(
+            Notification.user_id == employer.id,
+            Notification.title == "Верификация одобрена",
+        )
+        .order_by(Notification.created_at.desc())
+    ).scalars().first()
+    assert notification is not None
+
+    preferences = db_session.execute(
+        select(UserNotificationPreference).where(UserNotificationPreference.user_id == employer.id)
+    ).scalar_one()
+    assert preferences.email_company_profile_changes is True
+    assert preferences.push_company_profile_changes is True
 
 
 def test_request_employer_verification_changes_marks_profile(client, db_session):
@@ -588,6 +669,7 @@ def test_reject_employer_verification_request_skips_email_when_disabled(
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": True,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -597,6 +679,7 @@ def test_reject_employer_verification_request_skips_email_when_disabled(
                 "overdue_reviews": False,
                 "company_profile_changes": True,
                 "publication_changes": False,
+                "chat_reminders": True,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -653,6 +736,7 @@ def test_request_employer_verification_changes_skips_push_notification_when_disa
                 "overdue_reviews": False,
                 "company_profile_changes": True,
                 "publication_changes": False,
+                "chat_reminders": True,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -662,6 +746,7 @@ def test_request_employer_verification_changes_skips_push_notification_when_disa
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": True,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -859,6 +944,7 @@ def test_resubmitting_changed_employer_verification_returns_request_to_pending(c
                 "overdue_reviews": False,
                 "company_profile_changes": False,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },
@@ -868,6 +954,7 @@ def test_resubmitting_changed_employer_verification_returns_request_to_pending(c
                 "overdue_reviews": False,
                 "company_profile_changes": True,
                 "publication_changes": False,
+                "chat_reminders": False,
                 "daily_digest": False,
                 "weekly_report": False,
             },

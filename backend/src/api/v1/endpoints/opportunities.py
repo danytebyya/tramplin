@@ -5,7 +5,7 @@ from src.api.deps.auth import get_current_access_payload, get_current_user
 from src.db import get_db
 from src.models import User
 from src.repositories import OpportunityRepository
-from src.schemas.opportunity import EmployerOpportunityUpsertRequest
+from src.schemas.opportunity import EmployerOpportunityUpsertRequest, OpportunityRecommendationRequest
 from src.services import OpportunityService
 from src.utils.responses import success_response
 
@@ -63,3 +63,26 @@ def delete_opportunity(
     service = OpportunityService(OpportunityRepository(db))
     service.delete_employer_item(current_user, opportunity_id, access_payload=access_payload)
     return success_response({"id": opportunity_id})
+
+
+@router.get("/{opportunity_id}/recommendation-candidates", status_code=status.HTTP_200_OK)
+def list_opportunity_recommendation_candidates(
+    opportunity_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    service = OpportunityService(OpportunityRepository(db))
+    items = service.list_recommendation_candidates(current_user, opportunity_id)
+    return success_response({"items": [item.model_dump(mode="json") for item in items]})
+
+
+@router.post("/{opportunity_id}/recommend", status_code=status.HTTP_200_OK)
+def recommend_opportunity_to_user(
+    opportunity_id: str,
+    payload: OpportunityRecommendationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    service = OpportunityService(OpportunityRepository(db))
+    service.recommend_opportunity(current_user, opportunity_id, target_user_id=payload.target_user_id)
+    return success_response({"recommended": True, "target_user_id": payload.target_user_id, "opportunity_id": opportunity_id})

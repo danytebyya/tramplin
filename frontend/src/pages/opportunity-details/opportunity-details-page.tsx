@@ -3,7 +3,16 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
-import { listOpportunitiesRequest } from "../../entities/opportunity/api";
+import locationIcon from "../../assets/icons/location.svg";
+import jobIcon from "../../assets/icons/job.svg";
+import levelIcon from "../../assets/icons/level.svg";
+import timeIcon from "../../assets/icons/time.svg";
+import {
+  listOpportunitiesRequest,
+  listOpportunityRecommendationCandidatesRequest,
+  recommendOpportunityRequest,
+  type OpportunityRecommendationCandidate,
+} from "../../entities/opportunity/api";
 import type { Opportunity } from "../../entities/opportunity";
 import {
   addFavoriteOpportunityRequest,
@@ -32,6 +41,7 @@ import "./opportunity-details.css";
 
 type SuggestedContact = {
   id: string;
+  userId: string;
   name: string;
   subtitle: string;
   isOnline: boolean;
@@ -55,25 +65,9 @@ function resolveThemeRole(role: string | null) {
   return "applicant";
 }
 
-function formatOpportunityKindLabel(kind: Opportunity["kind"]) {
-  if (kind === "internship") {
-    return "Стажировка";
-  }
-
-  if (kind === "event") {
-    return "Мероприятие";
-  }
-
-  if (kind === "mentorship") {
-    return "Менторская программа";
-  }
-
-  return "Вакансия";
-}
-
 function formatOpportunityFormatLabel(format: Opportunity["format"]) {
   if (format === "office") {
-    return "Оффлайн";
+    return "Офлайн";
   }
 
   if (format === "hybrid") {
@@ -123,37 +117,20 @@ function buildDescriptionSections(description: string) {
     });
 }
 
-function buildSuggestedContacts(opportunity: Opportunity): SuggestedContact[] {
-  const sharedTags = opportunity.tags.slice(0, 4);
-  const city = opportunity.city || "Чебоксары";
-  const avatarSrc = resolveAvatarIcon("applicant");
-
-  return [
-    {
-      id: `${opportunity.id}-contact-1`,
-      name: "Мария Петрова",
-      subtitle: "ЧГУ, выпуск 2024",
-      isOnline: true,
-      tags: ["Junior", ...sharedTags],
-      city,
-      salaryLabel: "от 80 000 ₽",
-      formatLabel: formatOpportunityFormatLabel(opportunity.format),
-      employmentLabel: opportunity.employmentLabel,
-      avatarSrc,
-    },
-    {
-      id: `${opportunity.id}-contact-2`,
-      name: "Илья Смирнов",
-      subtitle: "МГУ, выпуск 2025",
-      isOnline: false,
-      tags: ["Junior", ...sharedTags.slice(0, 3), "C++"],
-      city,
-      salaryLabel: "от 70 000 ₽",
-      formatLabel: formatOpportunityFormatLabel(opportunity.format),
-      employmentLabel: opportunity.employmentLabel,
-      avatarSrc,
-    },
-  ];
+function mapSuggestedContact(candidate: OpportunityRecommendationCandidate): SuggestedContact {
+  return {
+    id: candidate.publicId || candidate.userId,
+    userId: candidate.userId,
+    name: candidate.displayName,
+    subtitle: candidate.subtitle,
+    isOnline: candidate.isOnline,
+    tags: candidate.tags,
+    city: candidate.city,
+    salaryLabel: candidate.salaryLabel,
+    formatLabel: candidate.formatLabel,
+    employmentLabel: candidate.employmentLabel,
+    avatarSrc: resolveAvatarIcon("applicant"),
+  };
 }
 
 export function OpportunityDetailsPage() {
@@ -167,6 +144,7 @@ export function OpportunityDetailsPage() {
   const themeRole = resolveThemeRole(role);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
+  const [recommendedUserIds, setRecommendedUserIds] = useState<string[]>([]);
 
   const opportunitiesQuery = useQuery({
     queryKey: ["opportunities", "feed"],
@@ -183,6 +161,17 @@ export function OpportunityDetailsPage() {
     queryKey: ["applications", "mine", "opportunity-ids"],
     queryFn: listMyAppliedOpportunityIdsRequest,
     enabled: isAuthenticated && role === "applicant",
+    staleTime: 60 * 1000,
+  });
+  const recommendationCandidatesQuery = useQuery({
+    queryKey: ["opportunities", opportunityId, "recommendation-candidates"],
+    queryFn: async () => {
+      if (!opportunityId) {
+        return [];
+      }
+      return listOpportunityRecommendationCandidatesRequest(opportunityId);
+    },
+    enabled: isAuthenticated && Boolean(opportunityId),
     staleTime: 60 * 1000,
   });
 
@@ -219,6 +208,20 @@ export function OpportunityDetailsPage() {
       await queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] });
     },
   });
+  const recommendOpportunityMutation = useMutation({
+    mutationFn: async (targetUserId: string) => {
+      if (!opportunity) {
+        throw new Error("Возможность не найдена");
+      }
+
+      return recommendOpportunityRequest(opportunity.id, targetUserId);
+    },
+    onSuccess: (_response, targetUserId) => {
+      setRecommendedUserIds((current) => (
+        current.includes(targetUserId) ? current : [...current, targetUserId]
+      ));
+    },
+  });
 
   const opportunity = useMemo(
     () => (opportunitiesQuery.data ?? []).find((item) => item.id === opportunityId) ?? null,
@@ -234,9 +237,11 @@ export function OpportunityDetailsPage() {
     [opportunity],
   );
   const suggestedContacts = useMemo(
-    () => (opportunity ? buildSuggestedContacts(opportunity) : []),
-    [opportunity],
+    () => (recommendationCandidatesQuery.data ?? []).map(mapSuggestedContact),
+    [recommendationCandidatesQuery.data],
   );
+  const shouldShowRecommendationsSection =
+    isAuthenticated && (recommendationCandidatesQuery.isPending || suggestedContacts.length > 0);
 
   const profileMenuItems = role === "employer"
     ? buildEmployerProfileMenuItems(navigate, {
@@ -297,6 +302,15 @@ export function OpportunityDetailsPage() {
     });
   };
 
+  const handleRecommend = (targetUserId: string) => {
+    if (!isAuthenticated) {
+      setIsFavoriteAuthModalOpen(true);
+      return;
+    }
+
+    recommendOpportunityMutation.mutate(targetUserId);
+  };
+
   if (!opportunityId) {
     return <Navigate to="/" replace />;
   }
@@ -343,26 +357,130 @@ export function OpportunityDetailsPage() {
             <div className="opportunity-details-page__main">
               <div className="opportunity-details-page__hero">
                 <div className="opportunity-details-page__hero-copy">
-                  <p className="opportunity-details-page__eyebrow">{formatOpportunityKindLabel(opportunity.kind)}</p>
-                  <h1 className="opportunity-details-page__title">{opportunity.title}</h1>
-                  <p className="opportunity-details-page__salary">{opportunity.salaryLabel} в месяц</p>
-                  <p className="opportunity-details-page__published">
-                    Дата публикации: {formatPublishedAt(opportunity.publishedAt)}
-                  </p>
+                  <div className="opportunity-details-page__content">
+                    <div className="opportunity-details-page__hero-summary">
+                      <div className="opportunity-details-page__hero-header">
+                        <h1 className="opportunity-details-page__title">{opportunity.title}</h1>
+                        <p className="opportunity-details-page__salary">{opportunity.salaryLabel} в месяц</p>
+                        <p className="opportunity-details-page__published">
+                          Дата публикации: {formatPublishedAt(opportunity.publishedAt)}
+                        </p>
 
-                  <div className="opportunity-details-page__meta">
-                    <span className="opportunity-details-page__meta-item">{opportunity.city || "Россия"}</span>
-                    <span className="opportunity-details-page__meta-item">{formatOpportunityFormatLabel(opportunity.format)}</span>
-                    <span className="opportunity-details-page__meta-item">{opportunity.employmentLabel}</span>
-                    <span className="opportunity-details-page__meta-item">{opportunity.levelLabel}</span>
-                  </div>
+                        <div className="opportunity-details-page__meta">
+                          <span className="opportunity-details-page__meta-item">
+                            <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
+                            {opportunity.city || "Россия"}
+                          </span>
+                          <span className="opportunity-details-page__meta-item">
+                            <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
+                            {formatOpportunityFormatLabel(opportunity.format)}
+                          </span>
+                          <span className="opportunity-details-page__meta-item">
+                            <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
+                            {opportunity.employmentLabel}
+                          </span>
+                          <span className="opportunity-details-page__meta-item">
+                            <img src={levelIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
+                            {opportunity.levelLabel}
+                          </span>
+                        </div>
+                      </div>
 
-                  <div className="opportunity-details-page__tags">
-                    {opportunity.tags.map((tag) => (
-                      <span key={tag} className="opportunity-details-page__tag">
-                        {tag}
-                      </span>
-                    ))}
+                      <div className="opportunity-details-page__tags">
+                        {opportunity.tags.map((tag) => (
+                          <span key={tag} className="opportunity-details-page__tag">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <section className="opportunity-details-page__section">
+                      <h2 className="opportunity-details-page__section-title">Описание</h2>
+                      <div className="opportunity-details-page__description">
+                        {descriptionSections.length > 0 ? descriptionSections.map((section) => (
+                          <article key={section.id} className="opportunity-details-page__description-section">
+                            {section.title ? (
+                              <h3 className="opportunity-details-page__description-title">{section.title}</h3>
+                            ) : null}
+                            <p className="opportunity-details-page__description-text">{section.body}</p>
+                          </article>
+                        )) : (
+                          <p className="opportunity-details-page__description-text">{opportunity.description}</p>
+                        )}
+                      </div>
+                    </section>
+
+                    {shouldShowRecommendationsSection ? (
+                      <section className="opportunity-details-page__section">
+                        <h2 className="opportunity-details-page__section-title">Контакты, подходящие под эту возможность</h2>
+                        {recommendationCandidatesQuery.isPending ? (
+                          <p className="opportunity-details-page__description-text">Подбираем подходящих кандидатов...</p>
+                        ) : null}
+
+                        <div className="opportunity-details-page__contacts-grid">
+                          {suggestedContacts.map((contact) => {
+                            const isRecommended = recommendedUserIds.includes(contact.userId);
+                            const isCurrentTargetLoading =
+                              recommendOpportunityMutation.isPending && recommendOpportunityMutation.variables === contact.userId;
+
+                            return (
+                              <article key={contact.id} className="opportunity-details-page__contact-card">
+                                <span className="opportunity-details-page__contact-id">id: {contact.id.slice(-6)}</span>
+                                <div className="opportunity-details-page__contact-avatar-shell">
+                                  <img src={contact.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar" />
+                                </div>
+                                <h3 className="opportunity-details-page__contact-name">{contact.name}</h3>
+                                <p className="opportunity-details-page__contact-subtitle">{contact.subtitle}</p>
+                                <p className="opportunity-details-page__contact-status">
+                                  <span className={`opportunity-details-page__contact-dot${contact.isOnline ? " opportunity-details-page__contact-dot--online" : ""}`} />
+                                  {contact.isOnline ? "Online" : "Недавно в сети"}
+                                </p>
+
+                                <div className="opportunity-details-page__contact-tags">
+                                  {contact.tags.map((tag) => (
+                                    <span key={`${contact.id}-${tag}`} className="opportunity-details-page__contact-tag">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+
+                                <div className="opportunity-details-page__contact-meta">
+                                  <span className="opportunity-details-page__contact-meta-item">
+                                    <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                    {contact.city}
+                                  </span>
+                                  <span className="opportunity-details-page__contact-meta-item">
+                                    <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                    {contact.salaryLabel}
+                                  </span>
+                                  <span className="opportunity-details-page__contact-meta-item">
+                                    <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                    {contact.formatLabel}
+                                  </span>
+                                  <span className="opportunity-details-page__contact-meta-item">
+                                    <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                    {contact.employmentLabel}
+                                  </span>
+                                </div>
+
+                                <Button
+                                  type="button"
+                                  variant={isRecommended ? "secondary-outline" : "secondary"}
+                                  size="md"
+                                  fullWidth
+                                  onClick={() => handleRecommend(contact.userId)}
+                                  loading={isCurrentTargetLoading}
+                                  disabled={isRecommended}
+                                >
+                                  {isRecommended ? "Рекомендовано" : "Рекомендовать"}
+                                </Button>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ) : null}
                   </div>
                 </div>
 
@@ -372,7 +490,7 @@ export function OpportunityDetailsPage() {
                       type="button"
                       variant={isApplied ? "danger-outline" : "secondary"}
                       size="md"
-                      className="opportunity-details-page__apply"
+                      className={isApplied ? "opportunity-details-page__apply opportunity-details-page__apply--withdraw" : "opportunity-details-page__apply"}
                       onClick={handleApply}
                       loading={submitApplicationMutation.isPending}
                     >
@@ -389,66 +507,12 @@ export function OpportunityDetailsPage() {
                     }
                     onClick={handleToggleFavorite}
                   >
-                    <span className="opportunity-details-page__favorite-star" aria-hidden="true">☆</span>
+                    <span className="opportunity-details-page__favorite-icon" aria-hidden="true" />
                     <span>{isFavorite ? "В избранном" : "Добавить в избранное"}</span>
                   </button>
                 </div>
               </div>
 
-              <section className="opportunity-details-page__section">
-                <h2 className="opportunity-details-page__section-title">Описание</h2>
-                <div className="opportunity-details-page__description">
-                  {descriptionSections.length > 0 ? descriptionSections.map((section) => (
-                    <article key={section.id} className="opportunity-details-page__description-section">
-                      {section.title ? (
-                        <h3 className="opportunity-details-page__description-title">{section.title}</h3>
-                      ) : null}
-                      <p className="opportunity-details-page__description-text">{section.body}</p>
-                    </article>
-                  )) : (
-                    <p className="opportunity-details-page__description-text">{opportunity.description}</p>
-                  )}
-                </div>
-              </section>
-
-              <section className="opportunity-details-page__section">
-                <h2 className="opportunity-details-page__section-title">Контакты, подходящие под эту возможность</h2>
-                <div className="opportunity-details-page__contacts-grid">
-                  {suggestedContacts.map((contact) => (
-                    <article key={contact.id} className="opportunity-details-page__contact-card">
-                      <span className="opportunity-details-page__contact-id">id: {contact.id.slice(-6)}</span>
-                      <div className="opportunity-details-page__contact-avatar-shell">
-                        <img src={contact.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar" />
-                      </div>
-                      <h3 className="opportunity-details-page__contact-name">{contact.name}</h3>
-                      <p className="opportunity-details-page__contact-subtitle">{contact.subtitle}</p>
-                      <p className="opportunity-details-page__contact-status">
-                        <span className={`opportunity-details-page__contact-dot${contact.isOnline ? " opportunity-details-page__contact-dot--online" : ""}`} />
-                        {contact.isOnline ? "Online" : "Недавно в сети"}
-                      </p>
-
-                      <div className="opportunity-details-page__contact-tags">
-                        {contact.tags.map((tag) => (
-                          <span key={`${contact.id}-${tag}`} className="opportunity-details-page__contact-tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="opportunity-details-page__contact-meta">
-                        <span>{contact.city}</span>
-                        <span>{contact.salaryLabel}</span>
-                        <span>{contact.formatLabel}</span>
-                        <span>{contact.employmentLabel}</span>
-                      </div>
-
-                      <Button type="button" variant="secondary" size="md" fullWidth>
-                        Рекомендовать
-                      </Button>
-                    </article>
-                  ))}
-                </div>
-              </section>
             </div>
 
             <aside className="opportunity-details-page__sidebar">
@@ -474,20 +538,26 @@ export function OpportunityDetailsPage() {
                 <div className="opportunity-details-page__company-contacts">
                   {opportunity.contactEmail ? (
                     <a href={`mailto:${opportunity.contactEmail}`} className="opportunity-details-page__company-contact">
+                      <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
                       {opportunity.contactEmail}
                     </a>
                   ) : null}
                   {opportunity.companyWebsite ? (
                     <a href={opportunity.companyWebsite} target="_blank" rel="noreferrer" className="opportunity-details-page__company-contact">
+                      <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
                       {opportunity.companyWebsite.replace(/^https?:\/\//, "")}
                     </a>
                   ) : null}
                   {opportunity.companyPhone ? (
                     <a href={`tel:${opportunity.companyPhone}`} className="opportunity-details-page__company-contact">
+                      <img src={levelIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
                       {opportunity.companyPhone}
                     </a>
                   ) : null}
-                  <p className="opportunity-details-page__company-address">{opportunity.address || opportunity.locationLabel}</p>
+                  <p className="opportunity-details-page__company-address">
+                    <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
+                    {opportunity.address || opportunity.locationLabel}
+                  </p>
                   <Link
                     to={{
                       pathname: "/",

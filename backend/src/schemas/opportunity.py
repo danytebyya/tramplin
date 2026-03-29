@@ -42,6 +42,28 @@ class OpportunityFeedResponse(BaseModel):
     items: list[OpportunityPublicRead]
 
 
+class OpportunityRecommendationCandidateRead(BaseModel):
+    user_id: str
+    public_id: str | None = None
+    display_name: str
+    subtitle: str
+    is_online: bool = False
+    city: str
+    salary_label: str
+    format_label: str
+    employment_label: str
+    tags: list[str]
+    recommendations_count: int = 0
+
+
+class OpportunityRecommendationCandidateListResponse(BaseModel):
+    items: list[OpportunityRecommendationCandidateRead]
+
+
+class OpportunityRecommendationRequest(BaseModel):
+    target_user_id: str
+
+
 class EmployerOpportunityUpsertRequest(BaseModel):
     title: str = Field(min_length=2, max_length=255)
     description: str = Field(min_length=10, max_length=10000)
