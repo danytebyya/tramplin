@@ -75,6 +75,24 @@ def _upsert_tag(connection, *, slug: str, name: str, tag_type: str, parent_id=No
         {"slug": slug},
     ).scalar_one_or_none()
 
+    if existing is None:
+        existing = connection.execute(
+            sa.text(
+                """
+                select id
+                from tags
+                where deleted_at is null
+                  and tag_type = cast(:tag_type as tag_type)
+                  and lower(name) = lower(:name)
+                limit 1
+                """
+            ),
+            {
+                "name": name,
+                "tag_type": tag_type,
+            },
+        ).scalar_one_or_none()
+
     if existing is not None:
         connection.execute(
             sa.text(
