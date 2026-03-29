@@ -19,6 +19,7 @@ import {
   ensureChatKeyPair,
   getMyChatKeyRequest,
   getStoredChatKeyPair,
+  isPlaintextChatMessage,
   listChatConversationsRequest,
   listChatMessagesRequest,
   markChatConversationReadRequest,
@@ -591,10 +592,6 @@ export function ChatWorkspace({
   }, [activeConversation, activeDraftContact, activeSystemConversation, systemCounterpart]);
 
   useEffect(() => {
-    if (!keyPair) {
-      return;
-    }
-
     let isMounted = true;
 
     void (async () => {
@@ -605,6 +602,21 @@ export function ChatWorkspace({
         }
 
         try {
+          if (isPlaintextChatMessage(item.lastMessage.ciphertext)) {
+            nextPreviewMap[item.id] = await decryptChatMessage({
+              ciphertext: item.lastMessage.ciphertext,
+              iv: item.lastMessage.iv,
+              salt: item.lastMessage.salt,
+              conversationId: item.id,
+            });
+            continue;
+          }
+
+          if (!keyPair) {
+            nextPreviewMap[item.id] = "Сообщение";
+            continue;
+          }
+
           nextPreviewMap[item.id] = await decryptChatMessage({
             ciphertext: item.lastMessage.ciphertext,
             iv: item.lastMessage.iv,
@@ -633,7 +645,7 @@ export function ChatWorkspace({
       return;
     }
 
-    if (!keyPair || !activeConversation || !activeCounterpart) {
+    if (!activeConversation || !activeCounterpart) {
       return;
     }
 
@@ -648,6 +660,21 @@ export function ChatWorkspace({
         }
 
         try {
+          if (isPlaintextChatMessage(item.ciphertext)) {
+            nextMessageMap[item.id] = await decryptChatMessage({
+              ciphertext: item.ciphertext,
+              iv: item.iv,
+              salt: item.salt,
+              conversationId: item.conversationId,
+            });
+            continue;
+          }
+
+          if (!keyPair) {
+            nextMessageMap[item.id] = "Сообщение";
+            continue;
+          }
+
           nextMessageMap[item.id] = await decryptChatMessage({
             ciphertext: item.ciphertext,
             iv: item.iv,

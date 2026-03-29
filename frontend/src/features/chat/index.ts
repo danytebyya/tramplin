@@ -18,6 +18,7 @@ export {
   encryptChatMessage,
   ensureChatKeyPair,
   getStoredChatKeyPair,
+  isPlaintextChatMessage,
   storeChatKeyPair,
 } from "./crypto";
 export { useChatRealtime } from "./realtime";

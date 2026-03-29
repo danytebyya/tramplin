@@ -14,6 +14,10 @@ export function canUseChatCrypto() {
   return typeof window !== "undefined" && Boolean(window.crypto?.subtle);
 }
 
+export function isPlaintextChatMessage(ciphertext: string) {
+  return ciphertext.startsWith(CHAT_PLAINTEXT_PREFIX);
+}
+
 function encodeText(value: string) {
   return new TextEncoder().encode(value);
 }
@@ -185,7 +189,7 @@ export async function decryptChatMessage(params: {
   ciphertext: string;
   iv: string;
   salt: string;
-  ownPrivateKeyJwk: JsonWebKey;
+  ownPrivateKeyJwk?: JsonWebKey | null;
   counterpartPublicKeyJwk?: JsonWebKey | null;
   conversationId: string;
 }) {
@@ -199,6 +203,10 @@ export async function decryptChatMessage(params: {
 
   if (!params.counterpartPublicKeyJwk) {
     throw new Error("Missing counterpart key");
+  }
+
+  if (!params.ownPrivateKeyJwk) {
+    throw new Error("Missing own private key");
   }
 
   const key = await deriveEncryptionKey(
