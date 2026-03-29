@@ -1,6 +1,8 @@
+import adminAvatar from "../../assets/icons/admin.png";
+import applicantAvatar from "../../assets/icons/applicant.png";
+import employerAvatar from "../../assets/icons/employer.png";
+import profileAvatar from "../../assets/icons/profile.png";
 import { env } from "../config/env";
-
-const AVATAR_PUBLIC_PREFIX = "/storage/company-avatars";
 
 function resolveApiOrigin() {
   try {
@@ -8,11 +10,6 @@ function resolveApiOrigin() {
   } catch {
     return "";
   }
-}
-
-function buildAvatarStorageUrl(fileName: string) {
-  const apiOrigin = resolveApiOrigin();
-  return `${apiOrigin}${AVATAR_PUBLIC_PREFIX}/${fileName}`;
 }
 
 export function resolveAvatarUrl(avatarUrl: string | null | undefined) {
@@ -39,16 +36,16 @@ export function resolveAvatarUrl(avatarUrl: string | null | undefined) {
 
 export function resolveAvatarIcon(role: string | null | undefined) {
   if (role === "employer") {
-    return buildAvatarStorageUrl("employer.png");
+    return employerAvatar;
   }
 
   if (role === "applicant") {
-    return buildAvatarStorageUrl("applicant.png");
+    return applicantAvatar;
   }
 
   if (role === "admin") {
-    return buildAvatarStorageUrl("admin.png");
+    return adminAvatar;
   }
 
-  return buildAvatarStorageUrl("profile.png");
+  return profileAvatar;
 }

@@ -1,4 +1,5 @@
 import { apiClient } from "../../shared/api/client";
+import { getWebSocketOrigin } from "../../shared/config/env";
 import { env } from "../../shared/config/env";
 
 export type ChatKey = {
@@ -181,8 +182,7 @@ function mapContact(item: ChatContactApi): ChatContact {
 }
 
 export function getChatWebSocketUrl(accessToken: string) {
-  const apiOrigin = env.apiBaseUrl.replace(/\/api\/v1$/, "");
-  const wsOrigin = apiOrigin.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+  const wsOrigin = getWebSocketOrigin();
   return `${wsOrigin}/api/v1/chat/stream?token=${encodeURIComponent(accessToken)}`;
 }
 

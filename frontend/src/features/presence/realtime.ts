@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { env } from "../../shared/config/env";
+import { getWebSocketOrigin } from "../../shared/config/env";
 import { useAuthStore } from "../auth";
 
 type PresenceRealtimeEvent = {
@@ -29,8 +29,7 @@ const socketManager: SocketManager = {
 };
 
 function getPresenceWebSocketUrl(accessToken: string) {
-  const apiOrigin = env.apiBaseUrl.replace(/\/api\/v1$/, "");
-  const wsOrigin = apiOrigin.replace(/^http:/, "ws:").replace(/^https:/, "wss:");
+  const wsOrigin = getWebSocketOrigin();
   return `${wsOrigin}/api/v1/presence/stream?token=${encodeURIComponent(accessToken)}`;
 }
 
