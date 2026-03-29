@@ -24,6 +24,7 @@ jobs:
             set -e
 
             cd /var/www/tramplin
+            rm -f frontend/tsconfig.tsbuildinfo
             git pull origin dev
 
             cd /var/www/tramplin/backend

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import clipIcon from "../../assets/icons/clip.svg";
+import logoPrimary from "../../assets/icons/logo-primary.svg";
 import { useAuthStore } from "../../features/auth";
 import {
   ChatContact,
@@ -57,6 +58,72 @@ const EMPTY_CONTACTS: ChatContact[] = [];
 const EMPTY_MESSAGES: ChatMessageView[] = [];
 const CHAT_LIST_SKELETON_COUNT = 5;
 const CHAT_MESSAGE_SKELETON_COUNT = 4;
+const SYSTEM_CHAT_ID = "tramplin-notes";
+const SYSTEM_WELCOME_MESSAGE_ID = "tramplin-welcome";
+const SYSTEM_PARTICIPANT_ID = "tramplin-system";
+const SYSTEM_NOTES_STORAGE_KEY_PREFIX = "tramplin.chat.notes";
+
+type LocalNoteRecord = {
+  id: string;
+  text: string;
+  createdAt: string;
+};
+
+function readAccessTokenSubject(token: string | null) {
+  if (!token || typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decodedPayload = window.atob(normalizedPayload);
+    return (JSON.parse(decodedPayload) as { sub?: string }).sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getNotesStorageKey(subject: string | null, role: string | null) {
+  return `${SYSTEM_NOTES_STORAGE_KEY_PREFIX}:${subject ?? "guest"}:${role ?? "unknown"}`;
+}
+
+function readStoredNotes(subject: string | null, role: string | null): LocalNoteRecord[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(getNotesStorageKey(subject, role));
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsedValue = JSON.parse(rawValue) as LocalNoteRecord[];
+    if (!Array.isArray(parsedValue)) {
+      return [];
+    }
+
+    return parsedValue.filter(
+      (item): item is LocalNoteRecord =>
+        typeof item?.id === "string" && typeof item?.text === "string" && typeof item?.createdAt === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredNotes(subject: string | null, role: string | null, notes: LocalNoteRecord[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(getNotesStorageKey(subject, role), JSON.stringify(notes));
+}
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -179,7 +246,18 @@ export function ChatWorkspace({
   const [optimisticMessages, setOptimisticMessages] = useState<ChatMessageView[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
+  const [localNotes, setLocalNotes] = useState<LocalNoteRecord[]>([]);
   const deferredSearchValue = useDeferredValue(searchValue);
+  const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
+
+  useEffect(() => {
+    setLocalNotes(readStoredNotes(currentUserId, currentRole ?? null));
+  }, [currentRole, currentUserId]);
+
+  const persistLocalNotes = (nextNotes: LocalNoteRecord[]) => {
+    setLocalNotes(nextNotes);
+    writeStoredNotes(currentUserId, currentRole ?? null, nextNotes);
+  };
 
   const conversationsQuery = useQuery({
     queryKey: ["chat", "conversations"],
@@ -263,7 +341,9 @@ export function ChatWorkspace({
   const messagesQuery = useQuery({
     queryKey: ["chat", "messages", activeConversationId],
     queryFn: () => listChatMessagesRequest(activeConversationId as string),
-    enabled: isHydrated && Boolean(accessToken && activeConversationId && conversationMap[activeConversationId]),
+    enabled:
+      isHydrated &&
+      Boolean(accessToken && activeConversationId && activeConversationId !== SYSTEM_CHAT_ID && conversationMap[activeConversationId]),
     staleTime: 5_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -282,16 +362,84 @@ export function ChatWorkspace({
     );
   }, [activeThreadKey, optimisticMessages, serverMessages]);
 
+  const systemWelcomeMessage = useMemo<ChatMessageView>(
+    () => ({
+      id: SYSTEM_WELCOME_MESSAGE_ID,
+      conversationId: SYSTEM_CHAT_ID,
+      senderUserId: SYSTEM_PARTICIPANT_ID,
+      senderRole: "admin",
+      ciphertext: "",
+      iv: "",
+      salt: "",
+      createdAt: "2026-01-01T09:00:00.000Z",
+      isOwn: false,
+      isReadByPeer: true,
+      clientText:
+        "Привет! Это чат Трамплина. Используйте его как личные заметки: фиксируйте идеи, задачи, важные вакансии и всё, к чему хотите вернуться позже.",
+    }),
+    [],
+  );
+
+  const systemMessages = useMemo<ChatMessageView[]>(
+    () => [
+      systemWelcomeMessage,
+      ...localNotes.map((note) => ({
+        id: note.id,
+        conversationId: SYSTEM_CHAT_ID,
+        senderUserId: currentUserId ?? "local-user",
+        senderRole: currentRole ?? "applicant",
+        ciphertext: "",
+        iv: "",
+        salt: "",
+        createdAt: note.createdAt,
+        isOwn: true,
+        isReadByPeer: true,
+        clientText: note.text,
+      })),
+    ],
+    [currentRole, currentUserId, localNotes, systemWelcomeMessage],
+  );
+
+  const systemCounterpart = useMemo<ChatParticipant>(
+    () => ({
+      userId: SYSTEM_PARTICIPANT_ID,
+      publicId: null,
+      displayName: "Трамплин",
+      role: "admin",
+      avatarUrl: logoPrimary,
+      companyName: null,
+      companyId: null,
+      publicKeyJwk: null,
+      isOnline: true,
+      lastSeenAt: null,
+    }),
+    [],
+  );
+
+  const systemConversationItem = useMemo<ConversationListItem>(() => {
+    const lastSystemMessage = systemMessages[systemMessages.length - 1] ?? systemWelcomeMessage;
+
+    return {
+      id: SYSTEM_CHAT_ID,
+      counterpart: systemCounterpart,
+      unreadCount: 0,
+      previewText: lastSystemMessage.clientText ?? "Ваши заметки",
+      updatedAt: lastSystemMessage.createdAt,
+    };
+  }, [systemCounterpart, systemMessages, systemWelcomeMessage]);
+
   const conversationItems = useMemo<ConversationListItem[]>(
-    () =>
-      conversations.map((item) => ({
+    () => [
+      systemConversationItem,
+      ...conversations.map((item) => ({
         id: item.id,
         counterpart: item.counterpart,
         unreadCount: item.unreadCount,
         previewText: item.lastMessage ? (decryptedPreviewMap[item.id] ?? "Сообщение") : "Нет сообщений",
         updatedAt: item.updatedAt,
       })),
-    [conversations, decryptedPreviewMap],
+    ],
+    [conversations, decryptedPreviewMap, systemConversationItem],
   );
 
   const resolveExistingConversationId = (contact: Pick<ChatContact, "conversationId" | "userId" | "publicId" | "employerId" | "role">) => {
@@ -322,11 +470,22 @@ export function ChatWorkspace({
     if (!activeConversationId) {
       return;
     }
+    if (activeConversationId === SYSTEM_CHAT_ID) {
+      return;
+    }
     if (conversationMap[activeConversationId]) {
       return;
     }
     setActiveConversationId(null);
   }, [activeConversationId, conversationMap]);
+
+  useEffect(() => {
+    if (activeConversationId || activeDraftContact || normalizedSearchValue) {
+      return;
+    }
+
+    setActiveConversationId(SYSTEM_CHAT_ID);
+  }, [activeConversationId, activeDraftContact, normalizedSearchValue]);
 
   useEffect(() => {
     if (!preferredEmployerId || normalizedSearchValue || activeConversationId || activeDraftContact) {
@@ -375,8 +534,12 @@ export function ChatWorkspace({
     };
   }, [messageMenu]);
 
-  const activeConversation = activeConversationId ? conversationMap[activeConversationId] ?? null : null;
+  const activeSystemConversation = activeConversationId === SYSTEM_CHAT_ID;
+  const activeConversation = activeConversationId && !activeSystemConversation ? conversationMap[activeConversationId] ?? null : null;
   const activeCounterpart: ChatParticipant | null = useMemo(() => {
+    if (activeSystemConversation) {
+      return systemCounterpart;
+    }
     if (activeConversation) {
       return activeConversation.counterpart;
     }
@@ -395,7 +558,7 @@ export function ChatWorkspace({
       isOnline: activeDraftContact.isOnline,
       lastSeenAt: activeDraftContact.lastSeenAt,
     };
-  }, [activeConversation, activeDraftContact]);
+  }, [activeConversation, activeDraftContact, activeSystemConversation, systemCounterpart]);
 
   useEffect(() => {
     if (!keyPair) {
@@ -436,6 +599,10 @@ export function ChatWorkspace({
   }, [conversations, keyPair]);
 
   useEffect(() => {
+    if (activeSystemConversation) {
+      return;
+    }
+
     if (!keyPair || !activeConversation || !activeCounterpart) {
       return;
     }
@@ -472,7 +639,7 @@ export function ChatWorkspace({
     return () => {
       isMounted = false;
     };
-  }, [activeConversation, activeCounterpart, activeMessages, keyPair]);
+  }, [activeConversation, activeCounterpart, activeMessages, activeSystemConversation, keyPair]);
 
   useEffect(() => {
     if (!activeConversationId || !activeConversation || activeConversation.unreadCount <= 0) {
@@ -486,13 +653,14 @@ export function ChatWorkspace({
   }, [activeConversation, activeConversationId, queryClient]);
 
   const messageDayGroups = useMemo(() => {
+    const sourceMessages = activeSystemConversation ? systemMessages : activeMessages;
     const groups: Array<{
       dayKey: string;
       dateLabel: string;
       messages: ChatMessageView[];
     }> = [];
 
-    activeMessages.forEach((message) => {
+    sourceMessages.forEach((message) => {
       const dayKey = startOfDay(new Date(message.createdAt)).toISOString();
       const lastGroup = groups[groups.length - 1];
       if (!lastGroup || lastGroup.dayKey !== dayKey) {
@@ -507,7 +675,7 @@ export function ChatWorkspace({
     });
 
     return groups;
-  }, [activeMessages]);
+  }, [activeMessages, activeSystemConversation, systemMessages]);
 
   useLayoutEffect(() => {
     const container = messagesContainerRef.current;
@@ -515,7 +683,7 @@ export function ChatWorkspace({
       return;
     }
     container.scrollTop = container.scrollHeight;
-  }, [activeConversationId, messageDayGroups.length, activeMessages.length]);
+  }, [activeConversationId, messageDayGroups.length, activeMessages.length, systemMessages.length]);
 
   const handleSelectConversation = (conversationId: string) => {
     setEditingMessageId(null);
@@ -553,6 +721,21 @@ export function ChatWorkspace({
 
   const handleDeleteMessage = async (message: ChatMessageView) => {
     setMessageMenu(null);
+    if (activeSystemConversation) {
+      const nextNotes = localNotes.filter((item) => item.id !== message.id);
+      persistLocalNotes(nextNotes);
+      setDecryptedMessageMap((currentValue) => {
+        const nextValue = { ...currentValue };
+        delete nextValue[message.id];
+        return nextValue;
+      });
+
+      if (editingMessageId === message.id) {
+        handleCancelEditing();
+      }
+      return;
+    }
+
     if (!activeConversation) {
       return;
     }
@@ -583,6 +766,29 @@ export function ChatWorkspace({
     }
 
     setComposerError(null);
+
+    if (activeSystemConversation) {
+      if (editingMessageId) {
+        const nextNotes = localNotes.map((item) => (item.id === editingMessageId ? { ...item, text: trimmedMessage } : item));
+        persistLocalNotes(nextNotes);
+        setDecryptedMessageMap((currentValue) => ({
+          ...currentValue,
+          [editingMessageId]: trimmedMessage,
+        }));
+        handleCancelEditing();
+        return;
+      }
+
+      const noteId = `tramplin-note:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+      const createdAt = new Date().toISOString();
+      persistLocalNotes([...localNotes, { id: noteId, text: trimmedMessage, createdAt }]);
+      setDecryptedMessageMap((currentValue) => ({
+        ...currentValue,
+        [noteId]: trimmedMessage,
+      }));
+      setMessageDraft("");
+      return;
+    }
 
     let activeKeyPair = keyPair;
     if (!activeKeyPair) {
@@ -723,6 +929,7 @@ export function ChatWorkspace({
 
   const showSearchResults = Boolean(normalizedSearchValue);
   const activeCounterpartTitle = activeCounterpart ? resolveParticipantTitle(activeCounterpart) : null;
+  const visibleMessages = activeSystemConversation ? systemMessages : activeMessages;
 
   return (
     <section
@@ -856,10 +1063,12 @@ export function ChatWorkspace({
                             className={`chat-workspace__status${item.counterpart.isOnline ? " chat-workspace__status--online" : ""}`}
                           />
                           <span className="chat-workspace__presence-text">
-                            {formatPresenceStatus({
-                              isOnline: item.counterpart.isOnline,
-                              lastSeenAt: item.counterpart.lastSeenAt,
-                            })}
+                            {item.id === SYSTEM_CHAT_ID
+                              ? "Личные заметки"
+                              : formatPresenceStatus({
+                                  isOnline: item.counterpart.isOnline,
+                                  lastSeenAt: item.counterpart.lastSeenAt,
+                                })}
                           </span>
                         </span>
                       </span>
@@ -890,10 +1099,12 @@ export function ChatWorkspace({
                     <p className="chat-workspace__thread-meta">
                       <span className={`chat-workspace__status${activeCounterpart.isOnline ? " chat-workspace__status--online" : ""}`} />
                       <span>
-                        {formatPresenceStatus({
-                          isOnline: activeCounterpart.isOnline,
-                          lastSeenAt: activeCounterpart.lastSeenAt,
-                        })}
+                        {activeSystemConversation
+                          ? "Чат-помощник и заметки"
+                          : formatPresenceStatus({
+                              isOnline: activeCounterpart.isOnline,
+                              lastSeenAt: activeCounterpart.lastSeenAt,
+                            })}
                       </span>
                     </p>
                   </div>
@@ -924,7 +1135,7 @@ export function ChatWorkspace({
                         );
                       })}
                     </div>
-                  ) : activeConversation || activeMessages.length > 0 ? (
+                  ) : activeSystemConversation || activeConversation || activeMessages.length > 0 ? (
                     messageDayGroups.map((group) => (
                       <div key={group.dayKey} className="chat-workspace__day-group">
                         <div className="chat-workspace__date-divider">
@@ -955,7 +1166,7 @@ export function ChatWorkspace({
                               ) : null}
                               <div className="chat-workspace__message-body">
                                 <p className="chat-workspace__message-text">
-                                  {decryptedMessageMap[item.id] ?? "Расшифровка сообщения..."}
+                                  {decryptedMessageMap[item.id] ?? item.clientText ?? "Расшифровка сообщения..."}
                                 </p>
                                 <div className="chat-workspace__message-meta">
                                   <span>{formatTime(item.createdAt)}</span>
@@ -993,7 +1204,7 @@ export function ChatWorkspace({
                     <div className="chat-workspace__composer-editing-copy">
                       <span className="chat-workspace__composer-editing-label">Редактирование сообщения</span>
                       <span className="chat-workspace__composer-editing-text">
-                        {decryptedMessageMap[editingMessageId] ?? activeMessages.find((item) => item.id === editingMessageId)?.clientText ?? ""}
+                        {decryptedMessageMap[editingMessageId] ?? visibleMessages.find((item) => item.id === editingMessageId)?.clientText ?? ""}
                       </span>
                     </div>
                     <button type="button" className="chat-workspace__composer-editing-cancel" onClick={handleCancelEditing}>
@@ -1055,7 +1266,7 @@ export function ChatWorkspace({
             type="button"
             className="chat-workspace__message-menu-item"
             onClick={() => {
-              const targetMessage = activeMessages.find((item) => item.id === messageMenu.messageId);
+              const targetMessage = visibleMessages.find((item) => item.id === messageMenu.messageId);
               if (targetMessage) {
                 handleStartEditMessage(targetMessage);
               }
@@ -1067,7 +1278,7 @@ export function ChatWorkspace({
             type="button"
             className="chat-workspace__message-menu-item chat-workspace__message-menu-item--danger"
             onClick={() => {
-              const targetMessage = activeMessages.find((item) => item.id === messageMenu.messageId);
+              const targetMessage = visibleMessages.find((item) => item.id === messageMenu.messageId);
               if (targetMessage) {
                 void handleDeleteMessage(targetMessage);
               }
