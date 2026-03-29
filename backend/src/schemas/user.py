@@ -19,8 +19,19 @@ class EmployerProfileRead(BaseModel):
     employer_type: EmployerType
     company_name: str
     inn: str
-    corporate_email: EmailStr
+    corporate_email: EmailStr | None = None
     website: str | None = None
+    phone: str | None = None
+    social_link: str | None = None
+    max_link: str | None = None
+    rutube_link: str | None = None
+    avatar_url: str | None = None
+    short_description: str | None = None
+    office_addresses: list[str] | None = None
+    activity_areas: list[str] | None = None
+    organization_size: str | None = None
+    foundation_year: int | None = None
+    profile_views_count: int = 0
     verification_status: EmployerVerificationStatus
     moderator_comment: str | None = None
     model_config = {"from_attributes": True}
@@ -38,6 +49,7 @@ class UserPresenceRead(BaseModel):
 
 class UserRead(BaseModel):
     id: UUID
+    public_id: str | None = None
     email: EmailStr
     display_name: str
     preferred_city: str | None = None

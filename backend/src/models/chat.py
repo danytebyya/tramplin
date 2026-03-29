@@ -39,7 +39,7 @@ class ChatConversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     employer_id: Mapped[str] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("employers.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True), ForeignKey("employers.id", ondelete="CASCADE"), nullable=True
     )
     created_by_user_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False

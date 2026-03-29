@@ -15,10 +15,17 @@ class EmployerOnboardingRequest(BaseModel):
     employer_type: EmployerType
     company_name: str = Field(min_length=2, max_length=255)
     inn: str = Field(min_length=10, max_length=12)
-    corporate_email: EmailStr
+    corporate_email: EmailStr | None = None
     website: str | None = Field(default=None, max_length=500)
     phone: str | None = Field(default=None, max_length=32)
     social_link: str | None = Field(default=None, max_length=500)
+    max_link: str | None = Field(default=None, max_length=500)
+    rutube_link: str | None = Field(default=None, max_length=500)
+    short_description: str | None = Field(default=None, max_length=500)
+    office_addresses: list[str] | None = None
+    activity_areas: list[str] | None = None
+    organization_size: str | None = Field(default=None, max_length=120)
+    foundation_year: int | None = Field(default=None, ge=1800, le=2100)
 
     @field_validator("company_name")
     @classmethod
@@ -35,6 +42,15 @@ class EmployerOnboardingRequest(BaseModel):
         if not normalized_value.isdigit() or len(normalized_value) not in {10, 12}:
             raise ValueError("ИНН должен содержать 10 или 12 цифр")
         return normalized_value
+
+    @field_validator("corporate_email")
+    @classmethod
+    def validate_corporate_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+        return normalized_value or None
 
     @field_validator("website")
     @classmethod
@@ -62,6 +78,32 @@ class EmployerOnboardingRequest(BaseModel):
 
         normalized_value = value.strip()
         return normalized_value or None
+
+    @field_validator("max_link", "rutube_link", "short_description", "organization_size")
+    @classmethod
+    def validate_optional_trimmed_string(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+        return normalized_value or None
+
+    @field_validator("office_addresses", "activity_areas")
+    @classmethod
+    def validate_string_list(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+
+        normalized_items: list[str] = []
+        seen_items: set[str] = set()
+        for item in value:
+            normalized_item = item.strip()
+            if not normalized_item or normalized_item in seen_items:
+                continue
+            seen_items.add(normalized_item)
+            normalized_items.append(normalized_item)
+
+        return normalized_items or None
 
     @model_validator(mode="after")
     def validate_inn_length_by_employer_type(self) -> "EmployerOnboardingRequest":

@@ -67,11 +67,8 @@ export function EmployerChatPage() {
 
         <ChatWorkspace
           title="Чат"
-          emptyTitle="Выберите диалог"
-          emptyText="Откройте существующую переписку или начните новый диалог с кандидатом из списка слева."
-          createConversationPayload={(contact) => ({
-            applicant_user_id: contact.userId,
-          })}
+          emptyTitle="Пока нет активного чата"
+          emptyText="Выберите существующий диалог слева или найдите соискателя через поиск сверху."
         />
       </Container>
 

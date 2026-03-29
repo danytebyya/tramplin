@@ -7,10 +7,17 @@ export type EmployerOnboardingPayload = {
   employer_type: "company" | "sole_proprietor";
   company_name: string;
   inn: string;
-  corporate_email: string;
+  corporate_email?: string;
   website?: string;
   phone?: string;
   social_link?: string;
+  max_link?: string;
+  rutube_link?: string;
+  short_description?: string;
+  office_addresses?: string[];
+  activity_areas?: string[];
+  organization_size?: string;
+  foundation_year?: number;
 };
 
 export type EmployerInnVerificationPayload = {
@@ -118,6 +125,16 @@ function dispatchEmployerDocumentUploadProgress(file: File, progress: number) {
 
 export async function upsertEmployerProfile(payload: EmployerOnboardingPayload) {
   const response = await apiClient.put("/companies/profile", payload, {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
+export async function uploadEmployerAvatar(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await apiClient.post<{ data?: { avatar_url?: string | null } }>("/companies/avatar", formData, {
     headers: getAuthorizedHeaders(),
   });
   return response.data;

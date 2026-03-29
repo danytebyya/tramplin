@@ -13,6 +13,7 @@ type ChatKeyApi = {
 
 export type ChatParticipant = {
   userId: string;
+  publicId: string | null;
   displayName: string;
   role: string;
   avatarUrl: string | null;
@@ -25,6 +26,7 @@ export type ChatParticipant = {
 
 type ChatParticipantApi = {
   user_id: string;
+  public_id?: string | null;
   display_name: string;
   role: string;
   avatar_url?: string | null;
@@ -79,6 +81,7 @@ type ChatConversationApi = {
 
 export type ChatContact = {
   userId: string;
+  publicId: string | null;
   role: string;
   displayName: string;
   avatarUrl: string | null;
@@ -93,6 +96,7 @@ export type ChatContact = {
 
 type ChatContactApi = {
   user_id: string;
+  public_id?: string | null;
   role: string;
   display_name: string;
   avatar_url?: string | null;
@@ -119,6 +123,7 @@ function mapKey(item?: ChatKeyApi | null): ChatKey | null {
 function mapParticipant(item: ChatParticipantApi): ChatParticipant {
   return {
     userId: item.user_id,
+    publicId: item.public_id ?? null,
     displayName: item.display_name,
     role: item.role,
     avatarUrl: item.avatar_url ?? null,
@@ -158,6 +163,7 @@ function mapConversation(item: ChatConversationApi): ChatConversation {
 function mapContact(item: ChatContactApi): ChatContact {
   return {
     userId: item.user_id,
+    publicId: item.public_id ?? null,
     role: item.role,
     displayName: item.display_name,
     avatarUrl: item.avatar_url ?? null,
@@ -192,14 +198,23 @@ export async function listChatContactsRequest() {
   return (response.data?.data?.items ?? []).map(mapContact);
 }
 
+export async function searchChatContactsRequest(payload: { query?: string; employerId?: string | null }) {
+  const response = await apiClient.get<{ data?: { items?: ChatContactApi[] } }>("/chat/search", {
+    params: {
+      q: payload.query?.trim() || undefined,
+      employer_id: payload.employerId || undefined,
+    },
+  });
+  return (response.data?.data?.items ?? []).map(mapContact);
+}
+
 export async function listChatConversationsRequest() {
   const response = await apiClient.get<{ data?: { items?: ChatConversationApi[] } }>("/chat/conversations");
   return (response.data?.data?.items ?? []).map(mapConversation);
 }
 
 export async function createChatConversationRequest(payload: {
-  applicant_user_id?: string;
-  employer_user_id?: string;
+  recipient_user_id?: string;
   employer_id?: string;
 }) {
   const response = await apiClient.post<{ data?: { conversation?: ChatConversationApi } }>("/chat/conversations", payload);
@@ -216,7 +231,9 @@ export async function listChatMessagesRequest(conversationId: string) {
 }
 
 export async function sendChatMessageRequest(payload: {
-  conversation_id: string;
+  conversation_id?: string;
+  recipient_user_id?: string;
+  employer_id?: string;
   ciphertext: string;
   iv: string;
   salt: string;
@@ -228,6 +245,30 @@ export async function sendChatMessageRequest(payload: {
     throw new Error("Не удалось отправить сообщение");
   }
   return mapMessage(response.data.data);
+}
+
+export async function updateChatMessageRequest(
+  messageId: string,
+  payload: {
+    ciphertext: string;
+    iv: string;
+    salt: string;
+  },
+) {
+  const response = await apiClient.put<{ data?: ChatMessageApi }>(`/chat/messages/${messageId}`, payload, {
+    timeout: 2500,
+  });
+  if (!response.data?.data) {
+    throw new Error("Не удалось обновить сообщение");
+  }
+  return mapMessage(response.data.data);
+}
+
+export async function deleteChatMessageRequest(messageId: string) {
+  const response = await apiClient.delete<{ data?: { id?: string; conversation_id?: string } }>(`/chat/messages/${messageId}`, {
+    timeout: 2500,
+  });
+  return response.data?.data ?? null;
 }
 
 export async function markChatConversationReadRequest(conversationId: string) {

@@ -1,6 +1,7 @@
+import secrets
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Index, String, func
+from sqlalchemy import DateTime, Enum, Index, String, event, func, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -14,6 +15,7 @@ def enum_values(enum_cls: type) -> list[str]:
 class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "users"
 
+    public_id: Mapped[str | None] = mapped_column(String(8), unique=True, index=True, nullable=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -44,3 +46,25 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         back_populates="user",
         uselist=False,
     )
+
+
+def _generate_public_id(connection) -> str:
+    while True:
+        candidate = f"{secrets.randbelow(90_000_000) + 10_000_000}"
+        exists = connection.execute(
+            select(User.public_id).where(User.public_id == candidate)
+        ).scalar_one_or_none()
+        if exists is None:
+            return candidate
+
+
+@event.listens_for(User, "before_insert")
+def assign_public_id_before_insert(mapper, connection, target: User) -> None:
+    if target.role == UserRole.CURATOR:
+        target.public_id = None
+        return
+
+    if target.public_id:
+        return
+
+    target.public_id = _generate_public_id(connection)

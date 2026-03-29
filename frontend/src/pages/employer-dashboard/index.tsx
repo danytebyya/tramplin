@@ -1,24 +1,213 @@
-import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { ChangeEvent, FocusEvent, useContext, useEffect, useRef, useState } from "react";
+import { Navigate, UNSAFE_NavigationContext, useNavigate } from "react-router-dom";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import verifiedIcon from "../../assets/icons/verified.svg";
 import {
   CitySelection,
+  readRecentAddressQueriesCookie,
   readSelectedCityCookie,
+  writeLastAddressQueryCookie,
   writeSelectedCityCookie,
 } from "../../features/city-selector";
-import { getEmployerAccessState, resolveEmployerFallbackRoute } from "../../features/auth";
-import { Container } from "../../shared/ui";
+import { AddressSuggestion, getAddressSuggestions } from "../../features/city-selector/api";
+import { getEmployerVerificationDraft, uploadEmployerAvatar, upsertEmployerProfile } from "../../features/company-verification";
+import {
+  getEmployerAccessState,
+  MeResponse,
+  meRequest,
+  resolveEmployerFallbackRoute,
+  useAuthStore,
+} from "../../features/auth";
+import { listEmployerOpportunitiesRequest } from "../../features/opportunity";
+import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import { Button, Container, InfoTooltip, Input, Modal } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
-import { useAuthStore } from "../../features/auth";
 import "./employer-dashboard.css";
+
+type EmployerProfileFormState = {
+  companyName: string;
+  inn: string;
+  corporateEmail: string;
+  shortDescription: string;
+  officeAddresses: string[];
+  activityAreas: string[];
+  organizationSize: string;
+  foundationYear: string;
+  website: string;
+  phone: string;
+  socialLink: string;
+  maxLink: string;
+  rutubeLink: string;
+};
+
+const EMPTY_FORM_STATE: EmployerProfileFormState = {
+  companyName: "",
+  inn: "",
+  corporateEmail: "",
+  shortDescription: "",
+  officeAddresses: [],
+  activityAreas: [],
+  organizationSize: "",
+  foundationYear: "",
+  website: "",
+  phone: "",
+  socialLink: "",
+  maxLink: "",
+  rutubeLink: "",
+};
+
+function formatVerificationLabel(
+  value: "unverified" | "pending_review" | "verified" | "rejected" | "changes_requested" | undefined,
+) {
+  switch (value) {
+    case "verified":
+      return "Верифицировано";
+    case "pending_review":
+      return "На проверке";
+    case "changes_requested":
+      return "Нужны правки";
+    case "rejected":
+      return "Отклонено";
+    default:
+      return "Не верифицировано";
+  }
+}
+
+function formatVerificationClassName(
+  value: "unverified" | "pending_review" | "verified" | "rejected" | "changes_requested" | undefined,
+) {
+  switch (value) {
+    case "pending_review":
+      return "employer-dashboard__summary-value employer-dashboard__summary-value--pending-review";
+    case "verified":
+      return "employer-dashboard__summary-value employer-dashboard__summary-value--verified";
+    case "rejected":
+      return "employer-dashboard__summary-value employer-dashboard__summary-value--rejected";
+    case "changes_requested":
+      return "employer-dashboard__summary-value employer-dashboard__summary-value--info-request";
+    case "unverified":
+    default:
+      return "employer-dashboard__summary-value employer-dashboard__summary-value--unpublished";
+  }
+}
+
+function buildEmployerFormState(
+  employerProfile: NonNullable<NonNullable<MeResponse["data"]>["user"]>["employer_profile"] | null | undefined,
+  verificationDraft?: {
+    website?: string | null;
+    phone?: string | null;
+    social_link?: string | null;
+  },
+): EmployerProfileFormState {
+  return {
+    companyName: employerProfile?.company_name?.trim() ?? "",
+    inn: employerProfile?.inn?.trim() ?? "",
+    corporateEmail: "",
+    shortDescription: employerProfile?.short_description?.trim() ?? "",
+    officeAddresses: employerProfile?.office_addresses ?? [],
+    activityAreas: employerProfile?.activity_areas ?? [],
+    organizationSize: employerProfile?.organization_size?.trim() ?? "",
+    foundationYear: employerProfile?.foundation_year ? String(employerProfile.foundation_year) : "",
+    website: verificationDraft?.website?.trim() ?? employerProfile?.website?.trim() ?? "",
+    phone: verificationDraft?.phone?.trim() ?? "",
+    socialLink: verificationDraft?.social_link?.trim() ?? employerProfile?.social_link?.trim() ?? "",
+    maxLink: employerProfile?.max_link?.trim() ?? "",
+    rutubeLink: employerProfile?.rutube_link?.trim() ?? "",
+  };
+}
+
+function normalizeOptionalValue(value: string) {
+  const trimmedValue = value.trim();
+  return trimmedValue.length > 0 ? trimmedValue : undefined;
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^\p{L}\p{N}]+/gu, "")
+    .trim();
+}
+
+function isSuggestionFromCity(item: AddressSuggestion, cityName?: string) {
+  const normalizedCityName = normalizeSearchText(cityName ?? "");
+
+  if (!normalizedCityName) {
+    return false;
+  }
+
+  return normalizeSearchText(item.fullAddress).includes(normalizedCityName);
+}
 
 export function EmployerDashboardPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
+  const navigationContext = useContext(UNSAFE_NavigationContext);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
+  const [formState, setFormState] = useState<EmployerProfileFormState>(EMPTY_FORM_STATE);
+  const [isFormInitialized, setIsFormInitialized] = useState(false);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const organizationSizeInputRef = useRef<HTMLInputElement | null>(null);
+  const foundationYearInputRef = useRef<HTMLInputElement | null>(null);
+  const officeFieldRef = useRef<HTMLDivElement | null>(null);
+  const officeAddressInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const activityAreaInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const [activeOfficeAddressIndex, setActiveOfficeAddressIndex] = useState<number | null>(null);
+  const [officeAddressSuggestions, setOfficeAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isOfficeAddressSuggestionsOpen, setIsOfficeAddressSuggestionsOpen] = useState(false);
+  const [isOfficeAddressSuggestionsLoading, setIsOfficeAddressSuggestionsLoading] = useState(false);
+  const [recentAddressQueries, setRecentAddressQueries] = useState<string[]>(() => readRecentAddressQueriesCookie());
+  const [pendingOfficeAddressFocusIndex, setPendingOfficeAddressFocusIndex] = useState<number | null>(null);
+  const [pendingActivityAreaFocusIndex, setPendingActivityAreaFocusIndex] = useState<number | null>(null);
+  const [editingSummaryField, setEditingSummaryField] = useState<"organizationSize" | "foundationYear" | null>(null);
+  const [displayedProfileCompletion, setDisplayedProfileCompletion] = useState(0);
+  const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
+  const pendingNavigationTxRef = useRef<{ retry: () => void } | null>(null);
   const employerAccess = getEmployerAccessState(role, accessToken);
+
+  const meQuery = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: meRequest,
+    enabled: Boolean(accessToken),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const verificationDraftQuery = useQuery({
+    queryKey: ["companies", "verification-draft"],
+    queryFn: getEmployerVerificationDraft,
+    enabled: Boolean(accessToken),
+    staleTime: 30_000,
+  });
+  const employerOpportunitiesQuery = useQuery({
+    queryKey: ["employer", "opportunities"],
+    queryFn: listEmployerOpportunitiesRequest,
+    enabled: Boolean(accessToken),
+    staleTime: 60_000,
+  });
+
+  const saveEmployerProfileMutation = useMutation({
+    mutationFn: upsertEmployerProfile,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.invalidateQueries({ queryKey: ["companies", "verification-draft"] });
+      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
+      await queryClient.refetchQueries({ queryKey: ["companies", "verification-draft"], type: "active" });
+    },
+  });
+  const uploadEmployerAvatarMutation = useMutation({
+    mutationFn: uploadEmployerAvatar,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
+      setAvatarPreviewUrl(null);
+    },
+  });
 
   if (role !== "employer") {
     return <Navigate to="/" replace />;
@@ -33,6 +222,399 @@ export function EmployerDashboardPage() {
   const handleCityChange = (nextCity: CitySelection) => {
     setSelectedCity(nextCity.name);
     writeSelectedCityCookie(nextCity.name);
+  };
+
+  const employerProfile = meQuery.data?.data?.user?.employer_profile;
+  const employerPublicId = meQuery.data?.data?.user?.public_id?.trim() || meQuery.data?.data?.user?.id;
+  const verificationDraft = verificationDraftQuery.data?.data;
+  const verificationStatus = employerProfile?.verification_status;
+  const isVerified = verificationStatus === "verified";
+  const preferredCity = meQuery.data?.data?.user?.preferred_city?.trim() || selectedCity;
+  const opportunities = employerOpportunitiesQuery.data ?? [];
+  const activeOpportunitiesCount = opportunities.filter((item) => item.status === "active").length;
+  const responsesCount = opportunities.reduce((total, item) => total + item.responsesCount, 0);
+  const profileCompletionFields = [
+    formState.companyName,
+    formState.inn,
+    formState.corporateEmail.trim() || employerProfile?.corporate_email,
+    formState.shortDescription,
+    formState.organizationSize,
+    formState.foundationYear,
+    formState.website,
+    formState.socialLink,
+    formState.officeAddresses.some((item) => item.trim()),
+    formState.activityAreas.some((item) => item.trim()),
+  ];
+  const profileCompletion = Math.round(
+    (
+      profileCompletionFields.filter((item) =>
+        typeof item === "string" ? Boolean(item.trim()) : Boolean(item),
+      ).length /
+      profileCompletionFields.length
+    ) * 100,
+  );
+  const initialFormState = buildEmployerFormState(employerProfile ?? null, verificationDraft);
+  const profileSeed = JSON.stringify(initialFormState);
+  const currentFormSeed = JSON.stringify(formState);
+  const hasUnsavedChanges = isFormInitialized && currentFormSeed !== profileSeed;
+
+  useEffect(() => {
+    if (!employerProfile || isFormInitialized) {
+      return;
+    }
+
+    setFormState(initialFormState);
+    setIsFormInitialized(true);
+  }, [employerProfile, initialFormState, isFormInitialized, verificationDraft, profileSeed]);
+
+  useEffect(() => {
+    const startValue = displayedProfileCompletion;
+    const targetValue = profileCompletion;
+
+    if (startValue === targetValue) {
+      return;
+    }
+
+    const animationDuration = 520;
+    const animationStart = performance.now();
+    let frameId = 0;
+
+    const animate = (timestamp: number) => {
+      const progress = Math.min((timestamp - animationStart) / animationDuration, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      const nextValue = Math.round(startValue + (targetValue - startValue) * easedProgress);
+
+      setDisplayedProfileCompletion(nextValue);
+
+      if (progress < 1) {
+        frameId = window.requestAnimationFrame(animate);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(animate);
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [profileCompletion]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      return;
+    }
+
+    const navigator = navigationContext.navigator as { block?: (blocker: (tx: { retry: () => void }) => void) => () => void };
+    if (typeof navigator.block !== "function") {
+      return;
+    }
+
+    const unblock = navigator.block((tx) => {
+      pendingNavigationTxRef.current = tx;
+      setIsLeaveConfirmModalOpen(true);
+    });
+
+    return unblock;
+  }, [hasUnsavedChanges, navigationContext.navigator]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
+  const isProfileLoading = meQuery.isLoading || verificationDraftQuery.isLoading;
+  const saveErrorMessage = "Не удалось сохранить изменения";
+
+  const isSaveDisabled =
+    saveEmployerProfileMutation.isPending ||
+    !formState.companyName.trim() ||
+    !formState.inn.trim() ||
+    currentFormSeed === profileSeed;
+
+  const handleInputChange =
+    (field: keyof EmployerProfileFormState) => (event: ChangeEvent<HTMLInputElement>) => {
+      setFormState((currentValue) => ({
+        ...currentValue,
+        [field]: event.target.value,
+      }));
+    };
+
+  const handleShortDescriptionChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setFormState((currentValue) => ({
+      ...currentValue,
+      shortDescription: event.target.value,
+    }));
+  };
+
+  const handleOfficeAddressChange = (index: number) => (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+
+    setFormState((currentValue) => ({
+      ...currentValue,
+      officeAddresses: currentValue.officeAddresses.map((address, addressIndex) =>
+        addressIndex === index ? nextValue : address,
+      ),
+    }));
+    setActiveOfficeAddressIndex(index);
+    setIsOfficeAddressSuggestionsOpen(true);
+  };
+
+  const handleAddOfficeAddress = () => {
+    setFormState((currentValue) => ({
+      ...currentValue,
+      officeAddresses: [...currentValue.officeAddresses, ""],
+    }));
+    setPendingOfficeAddressFocusIndex(formState.officeAddresses.length);
+    setActiveOfficeAddressIndex(formState.officeAddresses.length);
+    setIsOfficeAddressSuggestionsOpen(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) {
+        URL.revokeObjectURL(avatarPreviewUrl);
+      }
+    };
+  }, [avatarPreviewUrl]);
+
+  useEffect(() => {
+    if (pendingOfficeAddressFocusIndex === null) {
+      return;
+    }
+
+    officeAddressInputRefs.current[pendingOfficeAddressFocusIndex]?.focus();
+    setPendingOfficeAddressFocusIndex(null);
+  }, [formState.officeAddresses.length, pendingOfficeAddressFocusIndex]);
+
+  useEffect(() => {
+    if (pendingActivityAreaFocusIndex === null) {
+      return;
+    }
+
+    activityAreaInputRefs.current[pendingActivityAreaFocusIndex]?.focus();
+    setPendingActivityAreaFocusIndex(null);
+  }, [formState.activityAreas.length, pendingActivityAreaFocusIndex]);
+
+  useEffect(() => {
+    if (editingSummaryField === "organizationSize") {
+      organizationSizeInputRef.current?.focus();
+    }
+
+    if (editingSummaryField === "foundationYear") {
+      foundationYearInputRef.current?.focus();
+    }
+  }, [editingSummaryField]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (officeFieldRef.current && !officeFieldRef.current.contains(event.target as Node)) {
+        setIsOfficeAddressSuggestionsOpen(false);
+        setActiveOfficeAddressIndex(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeQuery =
+      activeOfficeAddressIndex === null ? "" : formState.officeAddresses[activeOfficeAddressIndex]?.trim() ?? "";
+
+    if (activeOfficeAddressIndex === null || !isOfficeAddressSuggestionsOpen || !activeQuery) {
+      setOfficeAddressSuggestions([]);
+      setIsOfficeAddressSuggestionsLoading(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsOfficeAddressSuggestionsLoading(true);
+
+      void getAddressSuggestions(activeQuery, preferredCity)
+        .then((items) => {
+          setOfficeAddressSuggestions(items);
+        })
+        .catch(() => {
+          setOfficeAddressSuggestions([]);
+        })
+        .finally(() => {
+          setIsOfficeAddressSuggestionsLoading(false);
+        });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeOfficeAddressIndex, formState.officeAddresses, isOfficeAddressSuggestionsOpen, preferredCity]);
+
+  const handlePickAvatar = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      event.target.value = "";
+      return;
+    }
+
+    setAvatarPreviewUrl((currentValue) => {
+      if (currentValue) {
+        URL.revokeObjectURL(currentValue);
+      }
+
+      return URL.createObjectURL(file);
+    });
+    void uploadEmployerAvatarMutation.mutateAsync(file).catch(() => {
+      setAvatarPreviewUrl(null);
+    });
+    event.target.value = "";
+  };
+
+  const handleOfficeAddressSuggestionSelect = (index: number, item: AddressSuggestion) => {
+    setFormState((currentValue) => ({
+      ...currentValue,
+      officeAddresses: currentValue.officeAddresses.map((address, addressIndex) =>
+        addressIndex === index ? item.fullAddress : address,
+      ),
+    }));
+    writeLastAddressQueryCookie(item.fullAddress);
+    setRecentAddressQueries(readRecentAddressQueriesCookie());
+    setOfficeAddressSuggestions([]);
+    setIsOfficeAddressSuggestionsOpen(false);
+    setActiveOfficeAddressIndex(null);
+  };
+
+  const handleRecentOfficeAddressQuerySelect = (query: string) => {
+    const normalizedQuery = query.trim();
+
+    if (!normalizedQuery || activeOfficeAddressIndex === null) {
+      return;
+    }
+
+    setFormState((currentValue) => ({
+      ...currentValue,
+      officeAddresses: currentValue.officeAddresses.map((address, addressIndex) =>
+        addressIndex === activeOfficeAddressIndex ? normalizedQuery : address,
+      ),
+    }));
+    writeLastAddressQueryCookie(normalizedQuery);
+    setRecentAddressQueries(readRecentAddressQueriesCookie());
+    setIsOfficeAddressSuggestionsOpen(false);
+    setActiveOfficeAddressIndex(null);
+  };
+
+  const handleActivityAreaChange = (index: number) => (event: ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+
+    setFormState((currentValue) => ({
+      ...currentValue,
+      activityAreas: currentValue.activityAreas.map((area, areaIndex) => (areaIndex === index ? nextValue : area)),
+    }));
+  };
+
+  const handleAddActivityArea = () => {
+    setFormState((currentValue) => ({
+      ...currentValue,
+      activityAreas: [...currentValue.activityAreas, ""],
+    }));
+    setPendingActivityAreaFocusIndex(formState.activityAreas.length);
+  };
+
+  const handleActivityAreaBlur = (index: number) => (event: FocusEvent<HTMLInputElement>) => {
+    if (event.target.value.trim()) {
+      return;
+    }
+
+    setFormState((currentValue) => ({
+      ...currentValue,
+      activityAreas: currentValue.activityAreas.filter((_, areaIndex) => areaIndex !== index),
+    }));
+    activityAreaInputRefs.current = activityAreaInputRefs.current.filter((_, areaIndex) => areaIndex !== index);
+  };
+
+  const handleOfficeAddressBlur = (index: number) => (event: FocusEvent<HTMLInputElement>) => {
+    if (event.target.value.trim()) {
+      return;
+    }
+
+    setFormState((currentValue) => ({
+      ...currentValue,
+      officeAddresses: currentValue.officeAddresses.filter((_, addressIndex) => addressIndex !== index),
+    }));
+    officeAddressInputRefs.current = officeAddressInputRefs.current.filter((_, addressIndex) => addressIndex !== index);
+    setOfficeAddressSuggestions([]);
+    setIsOfficeAddressSuggestionsOpen(false);
+    setActiveOfficeAddressIndex(null);
+  };
+
+  const prioritizedOfficeAddressSuggestions = officeAddressSuggestions.filter((item) =>
+    isSuggestionFromCity(item, preferredCity),
+  );
+  const secondaryOfficeAddressSuggestions = officeAddressSuggestions.filter(
+    (item) => !isSuggestionFromCity(item, preferredCity),
+  );
+
+  const handleSubmit = async () => {
+    if (!employerProfile?.inn || !formState.companyName.trim()) {
+      return;
+    }
+
+    const corporateEmail = formState.corporateEmail.trim() || employerProfile.corporate_email?.trim();
+
+    await saveEmployerProfileMutation.mutateAsync({
+      employer_type: employerProfile.employer_type ?? "company",
+      company_name: formState.companyName.trim(),
+      inn: formState.inn.trim(),
+      corporate_email: corporateEmail || undefined,
+      short_description: normalizeOptionalValue(formState.shortDescription),
+      office_addresses: formState.officeAddresses.map((item) => item.trim()).filter(Boolean),
+      activity_areas: formState.activityAreas.map((item) => item.trim()).filter(Boolean),
+      organization_size: normalizeOptionalValue(formState.organizationSize),
+      foundation_year: formState.foundationYear.trim() ? Number(formState.foundationYear.trim()) : undefined,
+      website: normalizeOptionalValue(formState.website),
+      phone: normalizeOptionalValue(formState.phone),
+      social_link: normalizeOptionalValue(formState.socialLink),
+      max_link: normalizeOptionalValue(formState.maxLink),
+      rutube_link: normalizeOptionalValue(formState.rutubeLink),
+    });
+  };
+
+  const handleSaveSummaryField = async () => {
+    await handleSubmit();
+    setEditingSummaryField(null);
+  };
+
+  const handleCloseLeaveConfirmModal = () => {
+    setIsLeaveConfirmModalOpen(false);
+    pendingNavigationTxRef.current = null;
+  };
+
+  const handleSaveAndLeave = async () => {
+    try {
+      await handleSubmit();
+      setIsLeaveConfirmModalOpen(false);
+      const pendingTx = pendingNavigationTxRef.current;
+      pendingNavigationTxRef.current = null;
+      pendingTx?.retry();
+    } catch {
+      return;
+    }
   };
 
   return (
@@ -69,152 +651,477 @@ export function EmployerDashboardPage() {
           </button>
         </nav>
 
-        <section className="employer-dashboard__hero">
-          <div className="employer-dashboard__hero-body">
-            <p className="employer-dashboard__eyebrow">Дашборд работодателя</p>
-            <h1 className="employer-dashboard__title">
-              Управляйте вакансиями, кандидатами и верификацией из одного окна
-            </h1>
-            <p className="employer-dashboard__description">
-              Уведомления помогают не терять новые отклики, статус проверки компании и рекомендации
-              по сильным кандидатам.
-            </p>
+        <section className="employer-dashboard__profile-grid">
+          <div className="employer-dashboard__form-panel">
+            <div className="employer-dashboard__identity">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="employer-dashboard__avatar-input"
+                hidden
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={handleAvatarChange}
+              />
+              <div className="employer-dashboard__avatar-block">
+                {employerPublicId ? <p className="employer-dashboard__profile-id">ID: {employerPublicId}</p> : null}
+                <div className="employer-dashboard__avatar-shell">
+                  <img
+                    src={avatarPreviewUrl ?? resolveAvatarUrl(employerProfile?.avatar_url) ?? resolveAvatarIcon("employer")}
+                    alt=""
+                    aria-hidden="true"
+                    className="employer-dashboard__avatar-image"
+                  />
+                </div>
+                <div className="employer-dashboard__avatar-action-wrap">
+                  <Button type="button" variant="ghost" size="md" className="employer-dashboard__avatar-action" onClick={handlePickAvatar}>
+                    <span className="employer-dashboard__avatar-action-content">
+                      <span>Изменить аватар</span>
+                      <span aria-hidden="true" className="employer-dashboard__avatar-action-icon" />
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="employer-dashboard__form-grid">
+              <label className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">Наименование компании</span>
+                <Input
+                  value={formState.companyName}
+                  onChange={handleInputChange("companyName")}
+                  className="input--sm employer-dashboard__input"
+                  placeholder="ООО Кейсистемс"
+                  disabled
+                />
+              </label>
+
+              <label className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">Краткое описание</span>
+                <textarea
+                  value={formState.shortDescription}
+                  onChange={handleShortDescriptionChange}
+                  className="employer-dashboard__textarea"
+                  placeholder="2-3 предложения"
+                  disabled={isProfileLoading}
+                  rows={3}
+                />
+              </label>
+
+              <div ref={officeFieldRef} className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">Адреса офисов</span>
+                <div className="employer-dashboard__office-list">
+                  {formState.officeAddresses.map((address, index) => (
+                    <div className="employer-dashboard__office-item" key={`office-address-${index}`}>
+                      <Input
+                        ref={(element) => {
+                          officeAddressInputRefs.current[index] = element;
+                        }}
+                        value={address}
+                        onFocus={() => {
+                          setActiveOfficeAddressIndex(index);
+                          setIsOfficeAddressSuggestionsOpen(true);
+                        }}
+                        onBlur={handleOfficeAddressBlur(index)}
+                        onChange={handleOfficeAddressChange(index)}
+                        className="input--sm employer-dashboard__input employer-dashboard__office-input"
+                        placeholder="Укажите адрес офиса"
+                        disabled={isProfileLoading}
+                      />
+
+                      {isOfficeAddressSuggestionsOpen && activeOfficeAddressIndex === index ? (
+                        <div className="employer-dashboard__office-dropdown">
+                          {isOfficeAddressSuggestionsLoading ? (
+                            <div className="employer-dashboard__office-dropdown-empty">Загружаем адреса...</div>
+                          ) : !address.trim() && recentAddressQueries.length > 0 ? (
+                            <div className="employer-dashboard__office-dropdown-group">
+                              {recentAddressQueries.map((query) => (
+                                <button
+                                  key={query}
+                                  type="button"
+                                  className="employer-dashboard__office-dropdown-option"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => handleRecentOfficeAddressQuerySelect(query)}
+                                >
+                                  <span className="employer-dashboard__office-dropdown-title">{query}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : prioritizedOfficeAddressSuggestions.length > 0 || secondaryOfficeAddressSuggestions.length > 0 ? (
+                            <>
+                              {prioritizedOfficeAddressSuggestions.length > 0 ? (
+                                <div className="employer-dashboard__office-dropdown-group">
+                                  {prioritizedOfficeAddressSuggestions.map((item) => (
+                                    <button
+                                      key={`${item.id}-priority`}
+                                      type="button"
+                                      className="employer-dashboard__office-dropdown-option"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => handleOfficeAddressSuggestionSelect(index, item)}
+                                    >
+                                      <span className="employer-dashboard__office-dropdown-title">{item.fullAddress}</span>
+                                      {item.subtitle ? (
+                                        <span className="employer-dashboard__office-dropdown-subtitle">{item.subtitle}</span>
+                                      ) : null}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              {secondaryOfficeAddressSuggestions.length > 0 ? (
+                                <div className="employer-dashboard__office-dropdown-group">
+                                  {secondaryOfficeAddressSuggestions.map((item) => (
+                                    <button
+                                      key={`${item.id}-secondary`}
+                                      type="button"
+                                      className="employer-dashboard__office-dropdown-option"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => handleOfficeAddressSuggestionSelect(index, item)}
+                                    >
+                                      <span className="employer-dashboard__office-dropdown-title">{item.fullAddress}</span>
+                                      {item.subtitle ? (
+                                        <span className="employer-dashboard__office-dropdown-subtitle">{item.subtitle}</span>
+                                      ) : null}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </>
+                          ) : (
+                            <div className="employer-dashboard__office-dropdown-empty">Ничего не найдено</div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="primary-outline"
+                  size="md"
+                  className="employer-dashboard__office-add"
+                  onClick={handleAddOfficeAddress}
+                  disabled={isProfileLoading}
+                  aria-label="Добавить адрес офиса"
+                >
+                  <span aria-hidden="true" className="employer-dashboard__office-add-icon" />
+                </Button>
+              </div>
+
+              <div className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">Сфера деятельности</span>
+                <div className="employer-dashboard__office-list">
+                  {formState.activityAreas.map((area, index) => (
+                    <div className="employer-dashboard__office-item" key={`activity-area-${index}`}>
+                      <Input
+                        ref={(element) => {
+                          activityAreaInputRefs.current[index] = element;
+                        }}
+                        value={area}
+                        onChange={handleActivityAreaChange(index)}
+                        onBlur={handleActivityAreaBlur(index)}
+                        className="input--sm employer-dashboard__input"
+                        placeholder="Укажите сферу деятельности"
+                        disabled={isProfileLoading}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="primary-outline"
+                  size="md"
+                  className="employer-dashboard__office-add"
+                  onClick={handleAddActivityArea}
+                  disabled={isProfileLoading}
+                  aria-label="Добавить сферу деятельности"
+                >
+                  <span aria-hidden="true" className="employer-dashboard__office-add-icon" />
+                </Button>
+              </div>
+
+              <label className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">Корпоративная почта</span>
+                <Input
+                  type="email"
+                  value={formState.corporateEmail}
+                  onChange={handleInputChange("corporateEmail")}
+                  className="input--sm employer-dashboard__input"
+                  placeholder="hr@company.ru"
+                  disabled={isProfileLoading}
+                />
+              </label>
+
+              <label className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">Сайт</span>
+                <Input
+                  value={formState.website}
+                  onChange={handleInputChange("website")}
+                  className="input--sm employer-dashboard__input"
+                  placeholder="https://"
+                  disabled={isProfileLoading}
+                />
+              </label>
+
+              <label className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">VK</span>
+                <Input
+                  value={formState.socialLink}
+                  onChange={handleInputChange("socialLink")}
+                  className="input--sm employer-dashboard__input"
+                  placeholder="https://vk.com/tramplin"
+                  disabled={isProfileLoading}
+                />
+              </label>
+
+              <label className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">MAX</span>
+                <Input
+                  value={formState.maxLink}
+                  onChange={handleInputChange("maxLink")}
+                  className="input--sm employer-dashboard__input"
+                  placeholder="https://max.ru/tramplin"
+                  disabled={isProfileLoading}
+                />
+              </label>
+
+              <label className="employer-dashboard__field">
+                <span className="employer-dashboard__field-label">RUTUBE</span>
+                <Input
+                  value={formState.rutubeLink}
+                  onChange={handleInputChange("rutubeLink")}
+                  className="input--sm employer-dashboard__input"
+                  placeholder="https://rutube.ru/channel/tramplin"
+                  disabled={isProfileLoading}
+                />
+              </label>
+            </div>
+
+            {verificationStatus === "changes_requested" || verificationStatus === "rejected" ? (
+              <div className="employer-dashboard__moderation-note">
+                <h3 className="employer-dashboard__moderation-title">Комментарий по проверке</h3>
+                <p className="employer-dashboard__moderation-text">
+                  {employerProfile?.moderator_comment?.trim() || "Модератор не оставил комментарий."}
+                </p>
+              </div>
+            ) : null}
+
+            {saveEmployerProfileMutation.isError ? (
+              <p className="employer-dashboard__save-error">{saveErrorMessage}</p>
+            ) : null}
+
+            <div className="employer-dashboard__form-actions">
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                fullWidth
+                className="employer-dashboard__save-button"
+                onClick={() => void handleSubmit()}
+                loading={saveEmployerProfileMutation.isPending}
+                disabled={isSaveDisabled}
+              >
+                Сохранить изменения
+              </Button>
+            </div>
           </div>
-        </section>
 
-        <section className="employer-dashboard__grid">
-          <div className="employer-dashboard__main">
-            <article className="employer-dashboard__panel">
-              <div className="employer-dashboard__panel-header">
-                <div className="employer-dashboard__panel-title-group">
-                  <h2 className="employer-dashboard__panel-title">Сводка по найму</h2>
-                  <p className="employer-dashboard__panel-text">
-                    Ключевые метрики обновляются вместе с уведомлениями и очередями кандидатов.
-                  </p>
+          <aside className="employer-dashboard__summary">
+            <article className="employer-dashboard__summary-card employer-dashboard__summary-card--progress">
+              <div className="employer-dashboard__summary-progress-head">
+                <p className="employer-dashboard__summary-heading">Профиль заполнен на {displayedProfileCompletion}%</p>
+                <div className="employer-dashboard__progress-track" aria-hidden="true">
+                  <span
+                    className="employer-dashboard__progress-value"
+                    style={{ width: `${Math.min(Math.max(displayedProfileCompletion, 6), 100)}%` }}
+                  />
                 </div>
               </div>
-
-              <div className="employer-dashboard__metrics">
-                <div className="employer-dashboard__metric">
-                  <span className="employer-dashboard__metric-label">Активные вакансии</span>
-                  <strong className="employer-dashboard__metric-value">12</strong>
-                  <span className="employer-dashboard__metric-note">+3 за эту неделю</span>
+              <div className="employer-dashboard__summary-progress-meta">
+                <div className="employer-dashboard__summary-progress-item">
+                  <p className="employer-dashboard__summary-meta">
+                    Просмотров профиля: {employerProfile?.profile_views_count ?? 0}
+                  </p>
                 </div>
-                <div className="employer-dashboard__metric">
-                  <span className="employer-dashboard__metric-label">Новые отклики</span>
-                  <strong className="employer-dashboard__metric-value">47</strong>
-                  <span className="employer-dashboard__metric-note">14 требуют разбора сегодня</span>
+                <div className="employer-dashboard__summary-progress-item">
+                  <p className="employer-dashboard__summary-meta">
+                    Размещено возможностей: {activeOpportunitiesCount}
+                  </p>
                 </div>
-                <div className="employer-dashboard__metric">
-                  <span className="employer-dashboard__metric-label">Средний match</span>
-                  <strong className="employer-dashboard__metric-value">86%</strong>
-                  <span className="employer-dashboard__metric-note">Лучше на 9% чем месяц назад</span>
+                <div className="employer-dashboard__summary-progress-item">
+                  <p className="employer-dashboard__summary-meta">
+                    Получено откликов: {responsesCount}
+                  </p>
                 </div>
               </div>
             </article>
 
-            <article className="employer-dashboard__panel">
-              <div className="employer-dashboard__panel-header">
-                <div className="employer-dashboard__panel-title-group">
-                  <h2 className="employer-dashboard__panel-title">Воронка подбора</h2>
-                  <p className="employer-dashboard__panel-text">
-                    Уведомления стоит отправлять на переходах между этапами и при долгом простое кандидата.
-                  </p>
-                </div>
-              </div>
-
-              <div className="employer-dashboard__pipeline">
-                <div className="employer-dashboard__pipeline-card">
-                  <span className="employer-dashboard__pipeline-step">Новые</span>
-                  <strong className="employer-dashboard__pipeline-count">18</strong>
-                  <span className="employer-dashboard__pipeline-detail">6 откликов без ответа более 24 часов</span>
-                </div>
-                <div className="employer-dashboard__pipeline-card">
-                  <span className="employer-dashboard__pipeline-step">Интервью</span>
-                  <strong className="employer-dashboard__pipeline-count">9</strong>
-                  <span className="employer-dashboard__pipeline-detail">3 напоминания интервью на завтра</span>
-                </div>
-                <div className="employer-dashboard__pipeline-card">
-                  <span className="employer-dashboard__pipeline-step">Офферы</span>
-                  <strong className="employer-dashboard__pipeline-count">4</strong>
-                  <span className="employer-dashboard__pipeline-detail">1 оффер ожидает подтверждения студента</span>
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <aside className="employer-dashboard__aside">
-            <article className="employer-dashboard__panel">
-              <div className="employer-dashboard__panel-header">
-                <div className="employer-dashboard__panel-title-group">
-                  <h2 className="employer-dashboard__panel-title">Рекомендуемые кандидаты</h2>
-                  <p className="employer-dashboard__panel-text">
-                    Эти карточки логично связывать с уведомлениями о новых релевантных кандидатах.
-                  </p>
-                </div>
-              </div>
-
-              <div className="employer-dashboard__candidates">
-                <div className="employer-dashboard__candidate">
-                  <div className="employer-dashboard__candidate-body">
-                    <span className="employer-dashboard__candidate-name">Мария Лебедева</span>
-                    <span className="employer-dashboard__candidate-meta">Frontend, React, 4 курс НИУ ВШЭ</span>
-                  </div>
-                  <span className="employer-dashboard__candidate-match">91%</span>
-                </div>
-                <div className="employer-dashboard__candidate">
-                  <div className="employer-dashboard__candidate-body">
-                    <span className="employer-dashboard__candidate-name">Илья Воронов</span>
-                    <span className="employer-dashboard__candidate-meta">Backend, Python, МФТИ</span>
-                  </div>
-                  <span className="employer-dashboard__candidate-match">88%</span>
-                </div>
-                <div className="employer-dashboard__candidate">
-                  <div className="employer-dashboard__candidate-body">
-                    <span className="employer-dashboard__candidate-name">Алина Фёдорова</span>
-                    <span className="employer-dashboard__candidate-meta">Product analytics, SQL, ИТМО</span>
-                  </div>
-                  <span className="employer-dashboard__candidate-match">84%</span>
-                </div>
+            <article className="employer-dashboard__summary-card">
+              <p className="employer-dashboard__summary-label">Статус:</p>
+              <div className="employer-dashboard__status-row">
+                <strong className={formatVerificationClassName(verificationStatus)}>
+                  {formatVerificationLabel(verificationStatus)}
+                </strong>
+                {isVerified ? (
+                  <InfoTooltip
+                    className="employer-dashboard__verification-tooltip"
+                    triggerClassName="employer-dashboard__verification-tooltip-trigger"
+                    panelClassName="employer-dashboard__verification-tooltip-panel"
+                    text={
+                      <span className="employer-dashboard__verification-tooltip-content">
+                        <strong className="employer-dashboard__verification-tooltip-title">
+                          Верифицированная организация
+                        </strong>
+                        <span className="employer-dashboard__verification-tooltip-text">
+                          Документы проверены и подтверждены
+                        </span>
+                      </span>
+                    }
+                  />
+                ) : null}
               </div>
             </article>
 
-            <article className="employer-dashboard__panel">
-              <div className="employer-dashboard__panel-header">
-                <div className="employer-dashboard__panel-title-group">
-                  <h2 className="employer-dashboard__panel-title">Когда создаются уведомления</h2>
-                  <p className="employer-dashboard__panel-text">
-                    Базовые триггеры уже подготовлены под реальный рабочий поток работодателя.
-                  </p>
-                </div>
-              </div>
+            <article className="employer-dashboard__summary-card">
+              <p className="employer-dashboard__summary-label">ИНН:</p>
+              <strong className="employer-dashboard__summary-value">{employerProfile?.inn || "Не указан"}</strong>
+            </article>
 
-              <div className="employer-dashboard__actions">
-                <div className="employer-dashboard__action-card">
-                  <span className="employer-dashboard__action-title">Новый релевантный кандидат</span>
-                  <span className="employer-dashboard__action-text">
-                    Срабатывает, когда matching находит сильный профиль под активную вакансию.
-                  </span>
+            <article className="employer-dashboard__summary-card">
+              <p className="employer-dashboard__summary-label">Размер организации:</p>
+              {editingSummaryField === "organizationSize" ? (
+                <div className="employer-dashboard__summary-input-row">
+                  <Input
+                    ref={organizationSizeInputRef}
+                    value={formState.organizationSize}
+                    onChange={handleInputChange("organizationSize")}
+                    className="input--sm employer-dashboard__input employer-dashboard__summary-input"
+                    placeholder="Не указано"
+                    disabled={isProfileLoading}
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    className="employer-dashboard__summary-confirm"
+                    onClick={() => void handleSaveSummaryField()}
+                    disabled={saveEmployerProfileMutation.isPending}
+                    aria-label="Сохранить размер организации"
+                  >
+                    <span aria-hidden="true" className="employer-dashboard__summary-confirm-icon" />
+                  </Button>
                 </div>
-                <div className="employer-dashboard__action-card">
-                  <span className="employer-dashboard__action-title">Изменение статуса верификации</span>
-                  <span className="employer-dashboard__action-text">
-                    Срабатывает после отправки документов и при решении куратора по компании.
-                  </span>
+              ) : (
+                <div className="employer-dashboard__summary-value-row">
+                  <strong className="employer-dashboard__summary-value">
+                    {formState.organizationSize.trim() || "Не указано"}
+                  </strong>
+                  <button
+                    type="button"
+                    className="employer-dashboard__summary-edit"
+                    onClick={() => setEditingSummaryField("organizationSize")}
+                    aria-label="Редактировать размер организации"
+                  >
+                    <span aria-hidden="true" className="employer-dashboard__summary-edit-icon" />
+                  </button>
                 </div>
-                <div className="employer-dashboard__action-card">
-                  <span className="employer-dashboard__action-title">Риск потерять кандидата</span>
-                  <span className="employer-dashboard__action-text">
-                    Срабатывает, если отклик или интервью долго остаются без ответа.
-                  </span>
+              )}
+            </article>
+
+            <article className="employer-dashboard__summary-card">
+              <p className="employer-dashboard__summary-label">Год основания:</p>
+              {editingSummaryField === "foundationYear" ? (
+                <div className="employer-dashboard__summary-input-row">
+                  <Input
+                    ref={foundationYearInputRef}
+                    value={formState.foundationYear}
+                    onChange={handleInputChange("foundationYear")}
+                    className="input--sm employer-dashboard__input employer-dashboard__summary-input"
+                    placeholder="Не указано"
+                    disabled={isProfileLoading}
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    className="employer-dashboard__summary-confirm"
+                    onClick={() => void handleSaveSummaryField()}
+                    disabled={saveEmployerProfileMutation.isPending}
+                    aria-label="Сохранить год основания"
+                  >
+                    <span aria-hidden="true" className="employer-dashboard__summary-confirm-icon" />
+                  </Button>
                 </div>
-              </div>
+              ) : (
+                <div className="employer-dashboard__summary-value-row">
+                  <strong className="employer-dashboard__summary-value">
+                    {formState.foundationYear.trim() || "Не указано"}
+                  </strong>
+                  <button
+                    type="button"
+                    className="employer-dashboard__summary-edit"
+                    onClick={() => setEditingSummaryField("foundationYear")}
+                    aria-label="Редактировать год основания"
+                  >
+                    <span aria-hidden="true" className="employer-dashboard__summary-edit-icon" />
+                  </button>
+                </div>
+              )}
+            </article>
+
+            <article className="employer-dashboard__summary-card">
+              <p className="employer-dashboard__summary-label">Активные возможности:</p>
+              <strong className="employer-dashboard__summary-value">{activeOpportunitiesCount}</strong>
+            </article>
+
+            <article className="employer-dashboard__summary-card">
+              <p className="employer-dashboard__summary-label">Принято кандидатов:</p>
+              <strong className="employer-dashboard__summary-value">0</strong>
             </article>
           </aside>
         </section>
       </Container>
 
       <Footer theme="employer" />
+      <Modal
+        title="Несохраненные изменения"
+        isOpen={isLeaveConfirmModalOpen}
+        onClose={handleCloseLeaveConfirmModal}
+        panelClassName="employer-dashboard__leave-modal-panel"
+        titleAccentColor="var(--color-danger)"
+        closeOnBackdrop={false}
+      >
+        <div className="employer-dashboard__leave-modal">
+          <p className="employer-dashboard__leave-modal-text">
+            Если перейти на другую страницу сейчас, все несохранённые данные сотрутся.
+          </p>
+          {saveEmployerProfileMutation.isError ? (
+            <p className="employer-dashboard__save-error">{saveErrorMessage}</p>
+          ) : null}
+          <div className="employer-dashboard__leave-modal-actions">
+            <Button
+              type="button"
+              variant="primary-outline"
+              size="md"
+              onClick={handleCloseLeaveConfirmModal}
+              disabled={saveEmployerProfileMutation.isPending}
+            >
+              Отменить
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => void handleSaveAndLeave()}
+              loading={saveEmployerProfileMutation.isPending}
+              disabled={saveEmployerProfileMutation.isPending}
+            >
+              Сохранить
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </main>
   );
 }

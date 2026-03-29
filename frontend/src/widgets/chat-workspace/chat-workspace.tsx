@@ -1,29 +1,30 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import arrowIcon from "../../assets/icons/arrow.svg";
+import clipIcon from "../../assets/icons/clip.svg";
 import { useAuthStore } from "../../features/auth";
 import {
   ChatContact,
   ChatConversation,
   ChatMessage,
   ChatParticipant,
-  createChatConversationRequest,
+  deleteChatMessageRequest,
   decryptChatMessage,
   encryptChatMessage,
   ensureChatKeyPair,
-  listChatContactsRequest,
   listChatConversationsRequest,
   listChatMessagesRequest,
   markChatConversationReadRequest,
+  searchChatContactsRequest,
   sendChatMessageRequest,
+  updateChatMessageRequest,
   upsertMyChatKeyRequest,
   useChatRealtime,
 } from "../../features/chat";
-import arrowIcon from "../../assets/icons/arrow.svg";
-import clipIcon from "../../assets/icons/clip.svg";
-import { abbreviateLegalEntityName, formatPresenceStatus, resolveAvatarIcon } from "../../shared/lib";
-import { Input, Button } from "../../shared/ui";
+import { abbreviateLegalEntityName, formatPresenceStatus, resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import { Button, Input } from "../../shared/ui";
 import "./chat-workspace.css";
 
 type ChatWorkspaceProps = {
@@ -32,11 +33,6 @@ type ChatWorkspaceProps = {
   emptyTitle: string;
   emptyText: string;
   preferredEmployerId?: string | null;
-  createConversationPayload: (contact: ChatContact) => {
-    applicant_user_id?: string;
-    employer_user_id?: string;
-    employer_id?: string;
-  };
 };
 
 type ConversationListItem = {
@@ -45,30 +41,18 @@ type ConversationListItem = {
   unreadCount: number;
   previewText: string;
   updatedAt: string;
-  isExistingConversation: boolean;
-  conversationId: string | null;
-  source: "conversation" | "contact";
-  companyName: string | null;
 };
 
-type ClientMessageStatus = "sending" | "failed";
-
 type ChatMessageView = ChatMessage & {
-  clientStatus?: ClientMessageStatus;
+  clientStatus?: "sending";
   clientText?: string;
 };
 
 const EMPTY_CONVERSATIONS: ChatConversation[] = [];
 const EMPTY_CONTACTS: ChatContact[] = [];
 const EMPTY_MESSAGES: ChatMessageView[] = [];
-
-function logChatDebug(event: string, payload?: Record<string, unknown>) {
-  console.info(`[chat] ${event}`, payload ?? {});
-}
-
-function logChatError(event: string, payload?: Record<string, unknown>) {
-  console.error(`[chat] ${event}`, payload ?? {});
-}
+const CHAT_LIST_SKELETON_COUNT = 5;
+const CHAT_MESSAGE_SKELETON_COUNT = 4;
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("ru-RU", {
@@ -126,20 +110,6 @@ function formatChatDateLabel(value: string) {
   return new Intl.DateTimeFormat("ru-RU", options).format(messageDate);
 }
 
-function isCompactMessageGap(previousMessage: ChatMessageView | null, currentMessage: ChatMessageView | null) {
-  if (!previousMessage || !currentMessage) {
-    return false;
-  }
-
-  if (previousMessage.isOwn !== currentMessage.isOwn) {
-    return false;
-  }
-
-  const previousTimestamp = Date.parse(previousMessage.createdAt);
-  const currentTimestamp = Date.parse(currentMessage.createdAt);
-  return currentTimestamp - previousTimestamp <= 3 * 60 * 1000;
-}
-
 function resolveParticipantTitle(participant: ChatParticipant) {
   if (participant.role === "employer" && participant.companyName) {
     return abbreviateLegalEntityName(participant.companyName);
@@ -152,12 +122,14 @@ function ChatAvatar({
   displayName,
   role,
   avatarUrl,
+  unreadCount = 0,
 }: {
   displayName: string;
   role: string;
   avatarUrl: string | null;
+  unreadCount?: number;
 }) {
-  const imageSource = avatarUrl || resolveAvatarIcon(role);
+  const imageSource = resolveAvatarUrl(avatarUrl) || resolveAvatarIcon(role);
 
   return (
     <span className="chat-workspace__avatar">
@@ -170,8 +142,13 @@ function ChatAvatar({
             : "chat-workspace__avatar-image"
         }
       />
+      {unreadCount > 0 ? <span className="chat-workspace__avatar-unread">{unreadCount}</span> : null}
     </span>
   );
+}
+
+function ChatWorkspaceSkeleton({ className }: { className: string }) {
+  return <span className={`chat-workspace__skeleton ${className}`} aria-hidden="true" />;
 }
 
 export function ChatWorkspace({
@@ -180,7 +157,6 @@ export function ChatWorkspace({
   emptyTitle,
   emptyText,
   preferredEmployerId = null,
-  createConversationPayload,
 }: ChatWorkspaceProps) {
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -189,10 +165,14 @@ export function ChatWorkspace({
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeDraftContact, setActiveDraftContact] = useState<ChatContact | null>(null);
+  const [messageMenu, setMessageMenu] = useState<{ messageId: string; x: number; y: number } | null>(null);
   const [keyPair, setKeyPair] = useState<Awaited<ReturnType<typeof ensureChatKeyPair>> | null>(null);
   const [decryptedPreviewMap, setDecryptedPreviewMap] = useState<Record<string, string>>({});
   const [decryptedMessageMap, setDecryptedMessageMap] = useState<Record<string, string>>({});
+  const [optimisticMessages, setOptimisticMessages] = useState<ChatMessageView[]>([]);
   const deferredSearchValue = useDeferredValue(searchValue);
 
   const conversationsQuery = useQuery({
@@ -203,13 +183,19 @@ export function ChatWorkspace({
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
-  const contactsQuery = useQuery({
-    queryKey: ["chat", "contacts"],
-    queryFn: listChatContactsRequest,
-    enabled: isHydrated && Boolean(accessToken),
-    staleTime: 30_000,
+
+  const normalizedSearchValue = deferredSearchValue.trim();
+  const searchQuery = useQuery({
+    queryKey: ["chat", "search", normalizedSearchValue, preferredEmployerId ?? ""],
+    queryFn: () =>
+      searchChatContactsRequest({
+        query: normalizedSearchValue,
+        employerId: preferredEmployerId,
+      }),
+    enabled: isHydrated && Boolean(accessToken) && (Boolean(normalizedSearchValue) || Boolean(preferredEmployerId)),
+    staleTime: 5_000,
     refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 
   useEffect(() => {
@@ -234,25 +220,14 @@ export function ChatWorkspace({
 
   useChatRealtime(() => {
     void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-    void queryClient.invalidateQueries({ queryKey: ["chat", "contacts"] });
     void queryClient.invalidateQueries({ queryKey: ["chat", "messages"] });
-  });
-
-  const createConversationMutation = useMutation({
-    mutationFn: createChatConversationRequest,
-    onSuccess: (conversation) => {
-      void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["chat", "contacts"] });
-      setActiveConversationId(conversation.id);
-    },
-  });
-
-  const sendMessageMutation = useMutation({
-    mutationFn: sendChatMessageRequest,
+    void queryClient.invalidateQueries({ queryKey: ["chat", "search"] });
   });
 
   const conversations = conversationsQuery.data ?? EMPTY_CONVERSATIONS;
-  const contacts = contactsQuery.data ?? EMPTY_CONTACTS;
+  const searchResults = searchQuery.data ?? EMPTY_CONTACTS;
+  const isConversationListLoading = conversationsQuery.isLoading;
+  const isSearchLoading = searchQuery.isLoading;
 
   const conversationMap = useMemo(
     () =>
@@ -271,304 +246,134 @@ export function ChatWorkspace({
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
-  const messages = (messagesQuery.data ?? EMPTY_MESSAGES) as ChatMessageView[];
-
-  const upsertCachedMessage = (conversationId: string, nextMessage: ChatMessageView) => {
-    queryClient.setQueryData<ChatMessageView[]>(["chat", "messages", conversationId], (currentValue) => {
-      const nextItems = [...(currentValue ?? [])];
-      const existingIndex = nextItems.findIndex((item) => item.id === nextMessage.id);
-      if (existingIndex >= 0) {
-        nextItems[existingIndex] = nextMessage;
-      } else {
-        nextItems.push(nextMessage);
-      }
-
-      nextItems.sort((firstItem, secondItem) => {
-        const firstTimestamp = Date.parse(firstItem.createdAt);
-        const secondTimestamp = Date.parse(secondItem.createdAt);
-        if (firstTimestamp !== secondTimestamp) {
-          return firstTimestamp - secondTimestamp;
-        }
-        return firstItem.id.localeCompare(secondItem.id);
-      });
-
-      return nextItems;
-    });
-  };
-
-  const removeCachedMessage = (conversationId: string, messageId: string) => {
-    queryClient.setQueryData<ChatMessageView[]>(["chat", "messages", conversationId], (currentValue) =>
-      (currentValue ?? []).filter((item) => item.id !== messageId),
-    );
-  };
-
-  const upsertCachedConversation = (conversation: ChatConversation, message: ChatMessageView, updatedAt: string) => {
-    queryClient.setQueryData<ChatConversation[]>(["chat", "conversations"], (currentValue) => {
-      const nextItems = [...(currentValue ?? [])];
-      const nextConversation: ChatConversation = {
-        ...conversation,
-        updatedAt,
-        lastMessage: message,
-      };
-      const existingIndex = nextItems.findIndex((item) => item.id === conversation.id);
-      if (existingIndex >= 0) {
-        nextItems[existingIndex] = {
-          ...nextItems[existingIndex],
-          ...nextConversation,
-        };
-      } else {
-        nextItems.unshift(nextConversation);
-      }
-
-      nextItems.sort((firstItem, secondItem) => Date.parse(secondItem.updatedAt) - Date.parse(firstItem.updatedAt));
-      return nextItems;
-    });
-  };
-
-  const resolveCounterpartKey = async ({
-    conversationId,
-    counterpartUserId,
-    fallbackKey,
-  }: {
-    conversationId: string;
-    counterpartUserId: string;
-    fallbackKey: JsonWebKey | null;
-  }) => {
-    if (fallbackKey) {
-      return fallbackKey;
+  const serverMessages = activeConversationId ? ((messagesQuery.data as ChatMessageView[] | undefined) ?? EMPTY_MESSAGES) : EMPTY_MESSAGES;
+  const isMessagesLoading = messagesQuery.isLoading;
+  const activeThreadKey = activeConversationId ?? (activeDraftContact ? `draft:${activeDraftContact.userId}:${activeDraftContact.employerId ?? "none"}` : null);
+  const activeMessages = useMemo(() => {
+    if (!activeThreadKey) {
+      return EMPTY_MESSAGES;
     }
 
-    const [freshConversations, freshContacts] = await Promise.all([
-      queryClient.fetchQuery({
-        queryKey: ["chat", "conversations"],
-        queryFn: listChatConversationsRequest,
-        staleTime: 0,
-      }),
-      queryClient.fetchQuery({
-        queryKey: ["chat", "contacts"],
-        queryFn: listChatContactsRequest,
-        staleTime: 0,
-      }),
-    ]);
-
-    return (
-      freshConversations.find((item) => item.id === conversationId)?.counterpart.publicKeyJwk ??
-      freshContacts.find((item) => item.userId === counterpartUserId)?.publicKeyJwk ??
-      null
+    const pendingMessages = optimisticMessages.filter((item) => item.conversationId === activeThreadKey);
+    return [...serverMessages, ...pendingMessages].sort(
+      (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
     );
-  };
+  }, [activeThreadKey, optimisticMessages, serverMessages]);
 
-  const items = useMemo<ConversationListItem[]>(() => {
-    const conversationItems = conversations.map((item) => ({
-      id: item.id,
-      counterpart: item.counterpart,
-      unreadCount: item.unreadCount,
-      previewText: item.lastMessage
-        ? (decryptedPreviewMap[item.id] ?? "Сообщение")
-        : item.unreadCount > 0
-          ? "Новое сообщение"
-          : "Нет сообщений",
-      updatedAt: item.updatedAt,
-      isExistingConversation: true,
-      conversationId: item.id,
-      source: "conversation" as const,
-      companyName: item.counterpart.companyName,
-    }));
-
-    const contactItems = contacts
-      .filter((item) => !item.hasConversation)
-      .map((item) => ({
-        id: item.userId,
-        counterpart: {
-          userId: item.userId,
-          displayName: item.displayName,
-          role: item.role,
-          avatarUrl: item.avatarUrl,
-          companyName: item.companyName,
-          companyId: item.employerId,
-          publicKeyJwk: item.publicKeyJwk,
-          isOnline: item.isOnline,
-          lastSeenAt: item.lastSeenAt,
-        },
-        unreadCount: 0,
-        previewText: "Нет сообщений",
-        updatedAt: "",
-        isExistingConversation: false,
-        conversationId: null,
-        source: "contact" as const,
-        companyName: item.companyName,
-      }));
-
-    return [...conversationItems, ...contactItems];
-  }, [contacts, conversations, decryptedPreviewMap]);
-
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = deferredSearchValue.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return items;
-    }
-
-    return items.filter((item) => {
-      const haystack = [resolveParticipantTitle(item.counterpart), item.counterpart.displayName, item.companyName ?? "", item.previewText]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(normalizedQuery);
-    });
-  }, [deferredSearchValue, items]);
-
-  const availableConversationIds = useMemo(() => conversations.map((item) => item.id), [conversations]);
-  const availableContactIds = useMemo(
-    () => contacts.filter((item) => !item.hasConversation).map((item) => item.userId),
-    [contacts],
+  const conversationItems = useMemo<ConversationListItem[]>(
+    () =>
+      conversations.map((item) => ({
+        id: item.id,
+        counterpart: item.counterpart,
+        unreadCount: item.unreadCount,
+        previewText: item.lastMessage ? (decryptedPreviewMap[item.id] ?? "Сообщение") : "Нет сообщений",
+        updatedAt: item.updatedAt,
+      })),
+    [conversations, decryptedPreviewMap],
   );
-  const firstAvailableItemId = availableConversationIds[0] ?? availableContactIds[0] ?? null;
-  const availableConversationIdsKey = availableConversationIds.join("|");
-  const availableContactIdsKey = availableContactIds.join("|");
-  const preferredItemId = useMemo(() => {
-    if (!preferredEmployerId) {
-      return null;
+
+  const resolveExistingConversationId = (contact: Pick<ChatContact, "conversationId" | "userId" | "publicId" | "employerId" | "role">) => {
+    if (contact.conversationId && conversationMap[contact.conversationId]) {
+      return contact.conversationId;
     }
 
-    const matchingConversation = items.find(
-      (item) => item.counterpart.companyId === preferredEmployerId && item.conversationId,
-    );
-    if (matchingConversation?.conversationId) {
-      return matchingConversation.conversationId;
-    }
+    const matchedConversation = conversations.find((item) => {
+      if (item.counterpart.userId === contact.userId) {
+        return true;
+      }
 
-    const matchingContact = items.find(
-      (item) => item.counterpart.companyId === preferredEmployerId && !item.conversationId,
-    );
-    return matchingContact?.id ?? null;
-  }, [items, preferredEmployerId]);
+      if (contact.publicId && item.counterpart.publicId === contact.publicId) {
+        return true;
+      }
 
-  useEffect(() => {
-    if (!preferredItemId) {
-      return;
-    }
+      if (contact.role === "employer" && contact.employerId && item.counterpart.companyId === contact.employerId) {
+        return true;
+      }
 
-    setActiveConversationId((currentValue) => (currentValue === preferredItemId ? currentValue : preferredItemId));
-  }, [preferredItemId]);
+      return false;
+    });
+
+    return matchedConversation?.id ?? null;
+  };
 
   useEffect(() => {
     if (!activeConversationId) {
-      if (preferredItemId) {
-        setActiveConversationId(preferredItemId);
-        return;
-      }
-
-      if (firstAvailableItemId) {
-        setActiveConversationId(firstAvailableItemId);
-      }
       return;
     }
-
-    if (
-      availableConversationIds.includes(activeConversationId) ||
-      availableContactIds.includes(activeConversationId)
-    ) {
+    if (conversationMap[activeConversationId]) {
       return;
     }
-
-    const fallbackItemId = preferredItemId ?? firstAvailableItemId;
-    if (activeConversationId !== fallbackItemId) {
-      setActiveConversationId(fallbackItemId);
-    }
-  }, [
-    activeConversationId,
-    availableContactIds,
-    availableContactIdsKey,
-    availableConversationIds,
-    availableConversationIdsKey,
-    firstAvailableItemId,
-    preferredItemId,
-  ]);
-
-  const activeConversation = activeConversationId ? conversationMap[activeConversationId] ?? null : null;
-  const activeItem = filteredItems.find((item) => item.conversationId === activeConversationId || item.id === activeConversationId) ?? null;
-  const activeCounterpart = activeConversation?.counterpart ?? activeItem?.counterpart ?? null;
-  const activeMessages = activeConversation ? messages : [];
-  const decoratedActiveMessages = useMemo(
-    () =>
-      activeMessages.map((item, index) => ({
-        item,
-        isCompactGap: isCompactMessageGap(index > 0 ? activeMessages[index - 1] : null, item),
-        shouldShowAvatar:
-          !item.isOwn &&
-          !isCompactMessageGap(item, index < activeMessages.length - 1 ? activeMessages[index + 1] : null),
-      })),
-    [activeMessages],
-  );
+    setActiveConversationId(null);
+  }, [activeConversationId, conversationMap]);
 
   useEffect(() => {
-    if (!isHydrated || !accessToken) {
+    if (!preferredEmployerId || normalizedSearchValue || activeConversationId || activeDraftContact) {
       return;
     }
 
-    void Promise.allSettled([
-      queryClient.fetchQuery({
-        queryKey: ["chat", "conversations"],
-        queryFn: listChatConversationsRequest,
-        staleTime: 0,
-      }),
-      queryClient.fetchQuery({
-        queryKey: ["chat", "contacts"],
-        queryFn: listChatContactsRequest,
-        staleTime: 0,
-      }),
-    ]);
-  }, [accessToken, isHydrated, queryClient]);
-  const messageDayGroups = useMemo(() => {
-    const groups: Array<{
-      dayKey: string;
-      dateLabel: string;
-      messages: typeof decoratedActiveMessages;
-    }> = [];
+    const preferredContact = searchResults.find((item) => item.employerId === preferredEmployerId);
+    if (!preferredContact) {
+      return;
+    }
 
-    decoratedActiveMessages.forEach((entry) => {
-      const dayKey = startOfDay(new Date(entry.item.createdAt)).toISOString();
-      const lastGroup = groups[groups.length - 1];
+    const existingConversationId = resolveExistingConversationId(preferredContact);
+    if (existingConversationId) {
+      setActiveConversationId(existingConversationId);
+      setActiveDraftContact(null);
+      return;
+    }
 
-      if (!lastGroup || lastGroup.dayKey !== dayKey) {
-        groups.push({
-          dayKey,
-          dateLabel: formatChatDateLabel(entry.item.createdAt),
-          messages: [entry],
-        });
-        return;
+    setActiveDraftContact(preferredContact);
+  }, [
+    activeConversationId,
+    activeDraftContact,
+    normalizedSearchValue,
+    preferredEmployerId,
+    searchResults,
+  ]);
+
+  useEffect(() => {
+    if (!messageMenu) {
+      return;
+    }
+
+    const handlePointerDown = () => setMessageMenu(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMessageMenu(null);
       }
+    };
 
-      lastGroup.messages.push(entry);
-    });
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
 
-    return groups;
-  }, [decoratedActiveMessages]);
-  const activeMessagesRenderKey = useMemo(
-    () =>
-      activeMessages
-        .map((item) => `${item.id}:${decryptedMessageMap[item.id] ?? item.clientText ?? ""}`)
-        .join("|"),
-    [activeMessages, decryptedMessageMap],
-  );
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [messageMenu]);
 
-  const scrollMessagesToBottom = () => {
-    const container = messagesContainerRef.current;
-    if (!container) {
-      return;
+  const activeConversation = activeConversationId ? conversationMap[activeConversationId] ?? null : null;
+  const activeCounterpart: ChatParticipant | null = useMemo(() => {
+    if (activeConversation) {
+      return activeConversation.counterpart;
     }
-
-    container.scrollTop = container.scrollHeight;
-  };
-
-  const scheduleScrollMessagesToBottom = () => {
-    scrollMessagesToBottom();
-    window.requestAnimationFrame(() => {
-      scrollMessagesToBottom();
-      window.requestAnimationFrame(() => {
-        scrollMessagesToBottom();
-      });
-    });
-  };
+    if (!activeDraftContact) {
+      return null;
+    }
+    return {
+      userId: activeDraftContact.userId,
+      publicId: activeDraftContact.publicId,
+      displayName: activeDraftContact.displayName,
+      role: activeDraftContact.role,
+      avatarUrl: activeDraftContact.avatarUrl,
+      companyName: activeDraftContact.companyName,
+      companyId: activeDraftContact.employerId,
+      publicKeyJwk: activeDraftContact.publicKeyJwk,
+      isOnline: activeDraftContact.isOnline,
+      lastSeenAt: activeDraftContact.lastSeenAt,
+    };
+  }, [activeConversation, activeDraftContact]);
 
   useEffect(() => {
     if (!keyPair) {
@@ -579,15 +384,8 @@ export function ChatWorkspace({
 
     void (async () => {
       const nextPreviewMap: Record<string, string> = {};
-
       for (const item of conversations) {
         if (!item.lastMessage) {
-          continue;
-        }
-
-        const localLastMessage = item.lastMessage as ChatMessageView;
-        if (localLastMessage.clientText) {
-          nextPreviewMap[item.id] = localLastMessage.clientText;
           continue;
         }
 
@@ -606,16 +404,7 @@ export function ChatWorkspace({
       }
 
       if (isMounted) {
-        setDecryptedPreviewMap((currentValue) => {
-          const currentKeys = Object.keys(currentValue);
-          const nextKeys = Object.keys(nextPreviewMap);
-          const isSameLength = currentKeys.length === nextKeys.length;
-          const isSameContent =
-            isSameLength &&
-            nextKeys.every((key) => currentValue[key] === nextPreviewMap[key]);
-
-          return isSameContent ? currentValue : nextPreviewMap;
-        });
+        setDecryptedPreviewMap(nextPreviewMap);
       }
     })();
 
@@ -625,10 +414,9 @@ export function ChatWorkspace({
   }, [conversations, keyPair]);
 
   useEffect(() => {
-    if (!keyPair || !activeConversation) {
+    if (!keyPair || !activeConversation || !activeCounterpart) {
       return;
     }
-    const counterpartPublicKeyJwk = activeConversation.counterpart.publicKeyJwk;
 
     let isMounted = true;
 
@@ -646,7 +434,7 @@ export function ChatWorkspace({
             iv: item.iv,
             salt: item.salt,
             ownPrivateKeyJwk: keyPair.privateKeyJwk,
-            counterpartPublicKeyJwk,
+            counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
             conversationId: item.conversationId,
           });
         } catch {
@@ -655,23 +443,14 @@ export function ChatWorkspace({
       }
 
       if (isMounted) {
-        setDecryptedMessageMap((currentValue) => {
-          const currentKeys = Object.keys(currentValue);
-          const nextKeys = Object.keys(nextMessageMap);
-          const isSameLength = currentKeys.length === nextKeys.length;
-          const isSameContent =
-            isSameLength &&
-            nextKeys.every((key) => currentValue[key] === nextMessageMap[key]);
-
-          return isSameContent ? currentValue : nextMessageMap;
-        });
+        setDecryptedMessageMap(nextMessageMap);
       }
     })();
 
     return () => {
       isMounted = false;
     };
-  }, [activeConversation, activeMessages, keyPair]);
+  }, [activeConversation, activeCounterpart, activeMessages, keyPair]);
 
   useEffect(() => {
     if (!activeConversationId || !activeConversation || activeConversation.unreadCount <= 0) {
@@ -682,226 +461,204 @@ export function ChatWorkspace({
       void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "messages", activeConversationId] });
     });
-  }, [activeConversation?.unreadCount, activeConversationId, queryClient]);
+  }, [activeConversation, activeConversationId, queryClient]);
 
-  useLayoutEffect(() => {
-    scheduleScrollMessagesToBottom();
-  }, [activeConversationId, activeMessages.length, messageDayGroups.length, activeMessagesRenderKey]);
+  const messageDayGroups = useMemo(() => {
+    const groups: Array<{
+      dayKey: string;
+      dateLabel: string;
+      messages: ChatMessageView[];
+    }> = [];
 
-  const handleSelectItem = (item: ConversationListItem) => {
-    if (item.conversationId) {
-      setActiveConversationId(item.conversationId);
-      return;
-    }
-    setActiveConversationId(item.id);
-  };
-
-  const handleSendMessage = async (payload?: { messageId?: string; text?: string; createdAt?: string }) => {
-    if (!keyPair || !activeCounterpart) {
-      logChatError("send.aborted.missing_context", {
-        hasKeyPair: Boolean(keyPair),
-        hasActiveCounterpart: Boolean(activeCounterpart),
-      });
-      return;
-    }
-
-    const trimmedMessage = (payload?.text ?? messageDraft).trim();
-    if (!trimmedMessage) {
-      logChatDebug("send.aborted.empty_message");
-      return;
-    }
-
-    logChatDebug("send.started", {
-      messageId: payload?.messageId ?? null,
-      activeConversationId,
-      counterpartUserId: activeCounterpart.userId,
-      counterpartRole: activeCounterpart.role,
-    });
-
-    let conversationId = activeConversationId && conversationMap[activeConversationId] ? activeConversationId : null;
-    let counterpartPublicKeyJwk = activeConversation?.counterpart.publicKeyJwk ?? activeCounterpart.publicKeyJwk;
-    let conversation = activeConversation;
-
-    if (!conversationId) {
-      logChatDebug("conversation.create.started", {
-        counterpartUserId: activeCounterpart.userId,
-        counterpartRole: activeCounterpart.role,
-      });
-      try {
-        const createdConversation = await createConversationMutation.mutateAsync(
-          createConversationPayload({
-            userId: activeCounterpart.userId,
-            role: activeCounterpart.role,
-            displayName: activeCounterpart.displayName,
-            avatarUrl: activeCounterpart.avatarUrl,
-            companyName: activeCounterpart.companyName,
-            employerId: activeCounterpart.companyId,
-            publicKeyJwk: activeCounterpart.publicKeyJwk,
-            isOnline: activeCounterpart.isOnline,
-            lastSeenAt: activeCounterpart.lastSeenAt,
-            hasConversation: false,
-            conversationId: null,
-          }),
-        );
-        conversationId = createdConversation.id;
-        counterpartPublicKeyJwk = createdConversation.counterpart.publicKeyJwk;
-        conversation = createdConversation;
-        logChatDebug("conversation.create.succeeded", {
-          conversationId,
-          hasCounterpartKey: Boolean(counterpartPublicKeyJwk),
+    activeMessages.forEach((message) => {
+      const dayKey = startOfDay(new Date(message.createdAt)).toISOString();
+      const lastGroup = groups[groups.length - 1];
+      if (!lastGroup || lastGroup.dayKey !== dayKey) {
+        groups.push({
+          dayKey,
+          dateLabel: formatChatDateLabel(message.createdAt),
+          messages: [message],
         });
-        upsertCachedConversation(
-          createdConversation,
-          {
-            id: payload?.messageId ?? `draft-${createdConversation.id}`,
-            conversationId: createdConversation.id,
-            senderUserId: "",
-            senderRole: activeCounterpart.role === "applicant" ? "employer" : "applicant",
-            ciphertext: "",
-            iv: "",
-            salt: "",
-            createdAt: payload?.createdAt ?? new Date().toISOString(),
-            isOwn: true,
-            isReadByPeer: false,
-          },
-          createdConversation.updatedAt,
-        );
-      } catch (error) {
-        logChatError("conversation.create.failed", {
-          counterpartUserId: activeCounterpart.userId,
-          error,
-        });
-        if (!payload?.messageId) {
-          setMessageDraft(trimmedMessage);
-        }
         return;
       }
-    }
+      lastGroup.messages.push(message);
+    });
 
-    if (!conversationId || !conversation) {
-      logChatError("send.aborted.missing_conversation", {
-        conversationId,
-        hasConversation: Boolean(conversation),
-      });
+    return groups;
+  }, [activeMessages]);
+
+  useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+  }, [activeConversationId, messageDayGroups.length, activeMessages.length]);
+
+  const handleSelectConversation = (conversationId: string) => {
+    setEditingMessageId(null);
+    setMessageDraft("");
+    setActiveDraftContact(null);
+    setActiveConversationId(conversationId);
+  };
+
+  const handleSelectSearchContact = (contact: ChatContact) => {
+    setMessageDraft("");
+    setEditingMessageId(null);
+    const existingConversationId = resolveExistingConversationId(contact);
+    if (existingConversationId) {
+      setActiveDraftContact(null);
+      setActiveConversationId(existingConversationId);
+      return;
+    }
+    setActiveConversationId(null);
+    setActiveDraftContact(contact);
+  };
+
+  const handleStartEditMessage = (message: ChatMessageView) => {
+    setMessageMenu(null);
+    setEditingMessageId(message.id);
+    setMessageDraft(decryptedMessageMap[message.id] ?? message.clientText ?? "");
+  };
+
+  const handleCancelEditing = () => {
+    setEditingMessageId(null);
+    setMessageDraft("");
+  };
+
+  const handleDeleteMessage = async (message: ChatMessageView) => {
+    setMessageMenu(null);
+    if (!activeConversation) {
       return;
     }
 
-    const messageId = payload?.messageId ?? `optimistic-${conversationId}-${Date.now()}`;
-    const createdAt = payload?.createdAt ?? new Date().toISOString();
-    const optimisticMessage: ChatMessageView = {
-      id: messageId,
-      conversationId,
-      senderUserId: "",
-      senderRole: activeCounterpart.role === "applicant" ? "employer" : "applicant",
-      ciphertext: "",
-      iv: "",
-      salt: "",
-      createdAt,
-      isOwn: true,
-      isReadByPeer: false,
-      clientStatus: "sending",
-      clientText: trimmedMessage,
-    };
-
-    if (!payload?.messageId) {
-      setMessageDraft("");
-    }
-    setDecryptedMessageMap((currentValue) => ({
-      ...currentValue,
-      [messageId]: trimmedMessage,
-    }));
-    setDecryptedPreviewMap((currentValue) => ({
-      ...currentValue,
-      [conversationId]: trimmedMessage,
-    }));
-    upsertCachedMessage(conversationId, optimisticMessage);
-    upsertCachedConversation(conversation, optimisticMessage, createdAt);
-
-    try {
-      counterpartPublicKeyJwk = await resolveCounterpartKey({
-        conversationId,
-        counterpartUserId: activeCounterpart.userId,
-        fallbackKey: counterpartPublicKeyJwk,
-      });
-      logChatDebug("counterpart_key.resolved", {
-        conversationId,
-        counterpartUserId: activeCounterpart.userId,
-        hasCounterpartKey: Boolean(counterpartPublicKeyJwk),
-      });
-    } catch (error) {
-      logChatError("counterpart_key.resolve_failed", {
-        conversationId,
-        counterpartUserId: activeCounterpart.userId,
-        error,
-      });
-      counterpartPublicKeyJwk = null;
-    }
-
-    const encryptedMessage = await encryptChatMessage({
-      plaintext: trimmedMessage,
-      ownPrivateKeyJwk: keyPair.privateKeyJwk,
-      counterpartPublicKeyJwk,
-      conversationId,
-    });
-    logChatDebug("message.encrypted", {
-      conversationId,
-      messageId,
-      transportMode: counterpartPublicKeyJwk ? "ecdh" : "plain",
-      ciphertextLength: encryptedMessage.ciphertext.length,
+    await deleteChatMessageRequest(message.id);
+    setDecryptedMessageMap((currentValue) => {
+      const nextValue = { ...currentValue };
+      delete nextValue[message.id];
+      return nextValue;
     });
 
-    try {
-      logChatDebug("message.send.attempt", {
-        conversationId,
-        messageId,
-        attempt: 1,
-        totalAttempts: 1,
+    if (editingMessageId === message.id) {
+      handleCancelEditing();
+    }
+
+    void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+    void queryClient.invalidateQueries({ queryKey: ["chat", "messages", activeConversation.id] });
+  };
+
+  const handleSendMessage = async () => {
+    if (!keyPair || !activeCounterpart) {
+      return;
+    }
+
+    const trimmedMessage = messageDraft.trim();
+    if (!trimmedMessage) {
+      return;
+    }
+
+    if (editingMessageId && activeConversation) {
+      const encryptedMessage = await encryptChatMessage({
+        plaintext: trimmedMessage,
+        ownPrivateKeyJwk: keyPair.privateKeyJwk,
+        counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
+        conversationId: activeConversation.id,
       });
-      const sentMessage = await sendMessageMutation.mutateAsync({
-        conversation_id: conversationId,
+
+      const updatedMessage = await updateChatMessageRequest(editingMessageId, {
         ciphertext: encryptedMessage.ciphertext,
         iv: encryptedMessage.iv,
         salt: encryptedMessage.salt,
       });
-      logChatDebug("message.send.succeeded", {
-        conversationId,
-        messageId,
-        persistedMessageId: sentMessage.id,
+
+      setDecryptedMessageMap((currentValue) => ({
+        ...currentValue,
+        [updatedMessage.id]: trimmedMessage,
+      }));
+      setDecryptedPreviewMap((currentValue) => ({
+        ...currentValue,
+        [activeConversation.id]:
+          activeConversation.lastMessage?.id === updatedMessage.id ? trimmedMessage : currentValue[activeConversation.id],
+      }));
+      handleCancelEditing();
+      void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+      void queryClient.invalidateQueries({ queryKey: ["chat", "messages", activeConversation.id] });
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const optimisticMessageId = `optimistic:${createdAt}:${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticConversationId = activeConversation?.id ?? `draft:${activeCounterpart.userId}:${activeCounterpart.companyId ?? "none"}`;
+
+    setOptimisticMessages((currentValue) => [
+      ...currentValue,
+      {
+        id: optimisticMessageId,
+        conversationId: optimisticConversationId,
+        senderUserId: "",
+        senderRole: currentRole ?? activeCounterpart.role,
+        ciphertext: "",
+        iv: "",
+        salt: "",
+        createdAt,
+        isOwn: true,
+        isReadByPeer: false,
+        clientStatus: "sending",
+        clientText: trimmedMessage,
+      },
+    ]);
+    setDecryptedMessageMap((currentValue) => ({
+      ...currentValue,
+      [optimisticMessageId]: trimmedMessage,
+    }));
+    setMessageDraft("");
+
+    try {
+      const encryptedMessage = await encryptChatMessage({
+        plaintext: trimmedMessage,
+        ownPrivateKeyJwk: keyPair.privateKeyJwk,
+        counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
+        conversationId: activeConversation?.id ?? `draft-${activeCounterpart.userId}`,
       });
 
+      const sentMessage = await sendChatMessageRequest({
+        conversation_id: activeConversation?.id ?? undefined,
+        recipient_user_id: activeConversation ? undefined : activeCounterpart.userId,
+        employer_id: activeConversation ? undefined : activeCounterpart.companyId ?? undefined,
+        ciphertext: encryptedMessage.ciphertext,
+        iv: encryptedMessage.iv,
+        salt: encryptedMessage.salt,
+      });
+
+      setOptimisticMessages((currentValue) => currentValue.filter((item) => item.id !== optimisticMessageId));
+      setActiveDraftContact(null);
+      setActiveConversationId(sentMessage.conversationId);
       setDecryptedMessageMap((currentValue) => {
         const nextValue = { ...currentValue };
-        delete nextValue[messageId];
+        delete nextValue[optimisticMessageId];
         nextValue[sentMessage.id] = trimmedMessage;
         return nextValue;
       });
-      removeCachedMessage(conversationId, messageId);
-      upsertCachedMessage(conversationId, sentMessage);
-      upsertCachedConversation(conversation, sentMessage, sentMessage.createdAt);
+      setDecryptedPreviewMap((currentValue) => ({
+        ...currentValue,
+        [sentMessage.conversationId]: trimmedMessage,
+      }));
       void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["chat", "messages", conversationId] });
-    } catch (error) {
-      logChatError("message.send.failed_final", {
-        conversationId,
-        messageId,
-        counterpartUserId: activeCounterpart.userId,
-        hasCounterpartKey: Boolean(counterpartPublicKeyJwk),
-        error,
+      void queryClient.invalidateQueries({ queryKey: ["chat", "messages", sentMessage.conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ["chat", "search"] });
+    } catch {
+      setOptimisticMessages((currentValue) => currentValue.filter((item) => item.id !== optimisticMessageId));
+      setDecryptedMessageMap((currentValue) => {
+        const nextValue = { ...currentValue };
+        delete nextValue[optimisticMessageId];
+        return nextValue;
       });
-      upsertCachedMessage(conversationId, {
-        ...optimisticMessage,
-        clientStatus: "failed",
-      });
-      upsertCachedConversation(
-        conversation,
-        {
-          ...optimisticMessage,
-          clientStatus: "failed",
-        },
-        createdAt,
-      );
+      setMessageDraft(trimmedMessage);
     }
   };
+
+  const showSearchResults = Boolean(normalizedSearchValue);
+  const activeCounterpartTitle = activeCounterpart ? resolveParticipantTitle(activeCounterpart) : null;
 
   return (
     <section
@@ -916,80 +673,147 @@ export function ChatWorkspace({
 
       <div className="chat-workspace">
         <aside className="chat-workspace__sidebar">
-
-          <label className="chat-workspace__search header__search" aria-label="Поиск по чатам">
+          <label className="chat-workspace__search header__search" aria-label="Поиск пользователей">
             <Input
               type="search"
-              placeholder="Поиск"
+              placeholder={currentRole === "employer" ? "Поиск соискателей" : "Поиск пользователей"}
               value={searchValue}
               onChange={(event) => setSearchValue(event.target.value)}
               className="input--sm chat-workspace__search-input"
             />
           </label>
 
-          <div className="chat-workspace__list">
-            {filteredItems.map((item) => {
-              const isActive = item.conversationId
-                ? item.conversationId === activeConversationId
-                : item.id === activeConversationId;
-              const counterpartTitle = resolveParticipantTitle(item.counterpart);
+          {showSearchResults ? (
+            <div className="chat-workspace__list chat-workspace__list--search">
+              {isSearchLoading
+                ? Array.from({ length: 3 }, (_, index) => (
+                    <div key={`chat-search-skeleton-${index}`} className="chat-workspace__list-item chat-workspace__list-item--skeleton">
+                      <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar" />
+                      <span className="chat-workspace__list-content">
+                        <span className="chat-workspace__list-main">
+                          <ChatWorkspaceSkeleton className="chat-workspace__skeleton--list-name" />
+                          <span className="chat-workspace__presence-row">
+                            <ChatWorkspaceSkeleton className="chat-workspace__skeleton--status-dot" />
+                            <ChatWorkspaceSkeleton className="chat-workspace__skeleton--presence" />
+                          </span>
+                        </span>
+                        <span className="chat-workspace__list-meta">
+                          <ChatWorkspaceSkeleton className="chat-workspace__skeleton--preview" />
+                        </span>
+                      </span>
+                    </div>
+                  ))
+                : null}
+              {!isSearchLoading && searchResults.length === 0 ? (
+                <div className="chat-workspace__hint">Ничего не найдено</div>
+              ) : null}
+              {searchResults.map((item) => {
+                const isActive =
+                  item.conversationId === activeConversationId ||
+                  (!item.conversationId && activeDraftContact?.userId === item.userId && activeDraftContact?.employerId === item.employerId);
+                const counterpartTitle =
+                  item.role === "employer" && item.companyName
+                    ? abbreviateLegalEntityName(item.companyName)
+                    : item.displayName;
 
-              return (
-                <button
-                  key={item.conversationId ?? item.id}
-                  type="button"
-                  className={`chat-workspace__list-item${isActive ? " chat-workspace__list-item--active" : ""}`}
-                  onClick={() => handleSelectItem(item)}
-                >
-                  <ChatAvatar
-                    displayName={item.counterpart.displayName}
-                    role={item.counterpart.role}
-                    avatarUrl={item.counterpart.avatarUrl}
-                  />
-
-                  <span className="chat-workspace__list-content">
-                    <span className="chat-workspace__list-main">
-                      <span className="chat-workspace__list-name">{counterpartTitle}</span>
-                      <span className="chat-workspace__presence-row">
-                        <span
-                          className={`chat-workspace__status${item.counterpart.isOnline ? " chat-workspace__status--online" : ""}`}
-                        />
-                        <span className="chat-workspace__presence-text">
-                          {formatPresenceStatus({
-                            isOnline: item.counterpart.isOnline,
-                            lastSeenAt: item.counterpart.lastSeenAt,
-                          })}
+                return (
+                  <button
+                    key={`${item.userId}:${item.employerId ?? "none"}`}
+                    type="button"
+                    className={`chat-workspace__list-item${isActive ? " chat-workspace__list-item--active" : ""}`}
+                    onClick={() => handleSelectSearchContact(item)}
+                  >
+                    <ChatAvatar displayName={item.displayName} role={item.role} avatarUrl={item.avatarUrl} />
+                    <span className="chat-workspace__list-content">
+                      <span className="chat-workspace__list-main">
+                        <span className="chat-workspace__list-name">{counterpartTitle}</span>
+                        <span className="chat-workspace__presence-row">
+                          <span className={`chat-workspace__status${item.isOnline ? " chat-workspace__status--online" : ""}`} />
+                          <span className="chat-workspace__presence-text">
+                            {formatPresenceStatus({
+                              isOnline: item.isOnline,
+                              lastSeenAt: item.lastSeenAt,
+                            })}
+                          </span>
                         </span>
                       </span>
                     </span>
-                    <span className="chat-workspace__list-meta">
-                      <span className="chat-workspace__list-preview">{item.previewText}</span>
-                      <span
-                        className={
-                          item.updatedAt
-                            ? "chat-workspace__list-time"
-                            : "chat-workspace__list-time chat-workspace__list-time--empty"
-                        }
-                      >
-                        {item.updatedAt ? formatTime(item.updatedAt) : "00:00"}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="chat-workspace__list">
+            {isConversationListLoading ? (
+              Array.from({ length: CHAT_LIST_SKELETON_COUNT }, (_, index) => (
+                <div key={`chat-list-skeleton-${index}`} className="chat-workspace__list-item chat-workspace__list-item--skeleton">
+                  <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar" />
+                  <span className="chat-workspace__list-content">
+                    <span className="chat-workspace__list-main">
+                      <ChatWorkspaceSkeleton className="chat-workspace__skeleton--list-name" />
+                      <span className="chat-workspace__presence-row">
+                        <ChatWorkspaceSkeleton className="chat-workspace__skeleton--status-dot" />
+                        <ChatWorkspaceSkeleton className="chat-workspace__skeleton--presence" />
                       </span>
                     </span>
+                    <span className="chat-workspace__list-meta">
+                      <ChatWorkspaceSkeleton className="chat-workspace__skeleton--preview" />
+                      <ChatWorkspaceSkeleton className="chat-workspace__skeleton--time" />
+                    </span>
                   </span>
-                  {item.unreadCount > 0 ? <span className="chat-workspace__unread">{item.unreadCount}</span> : null}
-                </button>
-              );
-            })}
+                </div>
+              ))
+            ) : conversationItems.length === 0 ? (
+              <div className="chat-workspace__hint">Пока нет чатов</div>
+            ) : (
+              conversationItems.map((item) => {
+                const isActive = item.id === activeConversationId;
+                const counterpartTitle = resolveParticipantTitle(item.counterpart);
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`chat-workspace__list-item${isActive ? " chat-workspace__list-item--active" : ""}`}
+                    onClick={() => handleSelectConversation(item.id)}
+                  >
+                    <ChatAvatar
+                      displayName={item.counterpart.displayName}
+                      role={item.counterpart.role}
+                      avatarUrl={item.counterpart.avatarUrl}
+                      unreadCount={item.unreadCount}
+                    />
+                    <span className="chat-workspace__list-content">
+                      <span className="chat-workspace__list-main">
+                        <span className="chat-workspace__list-name">{counterpartTitle}</span>
+                        <span className="chat-workspace__presence-row">
+                          <span
+                            className={`chat-workspace__status${item.counterpart.isOnline ? " chat-workspace__status--online" : ""}`}
+                          />
+                          <span className="chat-workspace__presence-text">
+                            {formatPresenceStatus({
+                              isOnline: item.counterpart.isOnline,
+                              lastSeenAt: item.counterpart.lastSeenAt,
+                            })}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="chat-workspace__list-meta">
+                        <span className="chat-workspace__list-preview">{item.previewText}</span>
+                        <span className="chat-workspace__list-time">{formatTime(item.updatedAt)}</span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </aside>
 
         <div className="chat-workspace__content">
-          {activeCounterpart ? (
+          {activeCounterpart && activeCounterpartTitle ? (
             <>
-              {(() => {
-                const activeCounterpartTitle = resolveParticipantTitle(activeCounterpart);
-
-                return (
-                  <>
               <header className="chat-workspace__thread-header">
                 <div className="chat-workspace__thread-title-group">
                   <ChatAvatar
@@ -1000,9 +824,7 @@ export function ChatWorkspace({
                   <div>
                     <h2 className="chat-workspace__thread-name">{activeCounterpartTitle}</h2>
                     <p className="chat-workspace__thread-meta">
-                      <span
-                        className={`chat-workspace__status${activeCounterpart.isOnline ? " chat-workspace__status--online" : ""}`}
-                      />
+                      <span className={`chat-workspace__status${activeCounterpart.isOnline ? " chat-workspace__status--online" : ""}`} />
                       <span>
                         {formatPresenceStatus({
                           isOnline: activeCounterpart.isOnline,
@@ -1016,27 +838,57 @@ export function ChatWorkspace({
 
               <div className="chat-workspace__messages" ref={messagesContainerRef}>
                 <div className="chat-workspace__messages-inner">
-                  {activeConversation ? (
+                  {activeConversation && isMessagesLoading ? (
+                    <div className="chat-workspace__messages-skeleton">
+                      {Array.from({ length: CHAT_MESSAGE_SKELETON_COUNT }, (_, index) => {
+                        const isOwn = index % 2 === 1;
+
+                        return (
+                          <div
+                            key={`chat-message-skeleton-${index}`}
+                            className={`chat-workspace__message-skeleton-row${isOwn ? " chat-workspace__message-skeleton-row--own" : ""}`}
+                          >
+                            {!isOwn ? (
+                              <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar chat-workspace__skeleton--avatar-small" />
+                            ) : null}
+                            <div className="chat-workspace__message-skeleton-bubble">
+                              <ChatWorkspaceSkeleton className="chat-workspace__skeleton--message-line" />
+                              <ChatWorkspaceSkeleton className={`chat-workspace__skeleton--message-line${index % 2 === 0 ? " chat-workspace__skeleton--message-line-short" : ""}`} />
+                              <ChatWorkspaceSkeleton className="chat-workspace__skeleton--message-meta" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : activeConversation || activeMessages.length > 0 ? (
                     messageDayGroups.map((group) => (
                       <div key={group.dayKey} className="chat-workspace__day-group">
                         <div className="chat-workspace__date-divider">
                           <span className="chat-workspace__date-divider-label">{group.dateLabel}</span>
                         </div>
-                        {group.messages.map(({ item, isCompactGap, shouldShowAvatar }) => (
+                        {group.messages.map((item) => (
                           <div key={item.id} className="chat-workspace__message-entry">
                             <div
-                              className={`chat-workspace__message${item.isOwn ? " chat-workspace__message--own" : ""}${item.clientStatus === "failed" ? " chat-workspace__message--failed" : ""}${isCompactGap ? " chat-workspace__message--compact" : ""}${item.isOwn && currentRole === "applicant" ? " chat-workspace__message--own-applicant" : ""}${item.isOwn && currentRole === "employer" ? " chat-workspace__message--own-employer" : ""}`}
+                              className={`chat-workspace__message${item.isOwn ? " chat-workspace__message--own" : ""}`}
+                              onContextMenu={(event) => {
+                                if (!item.isOwn || item.clientStatus) {
+                                  return;
+                                }
+                                event.preventDefault();
+                                setMessageMenu({
+                                  messageId: item.id,
+                                  x: event.clientX,
+                                  y: event.clientY,
+                                });
+                              }}
                             >
-                              {!item.isOwn && shouldShowAvatar ? (
+                              {!item.isOwn ? (
                                 <ChatAvatar
                                   displayName={activeCounterpart.displayName}
                                   role={activeCounterpart.role}
                                   avatarUrl={activeCounterpart.avatarUrl}
                                 />
-                              ) : !item.isOwn ? (
-                                <span className="chat-workspace__avatar chat-workspace__avatar--spacer" aria-hidden="true" />
                               ) : null}
-
                               <div className="chat-workspace__message-body">
                                 <p className="chat-workspace__message-text">
                                   {decryptedMessageMap[item.id] ?? "Расшифровка сообщения..."}
@@ -1044,44 +896,14 @@ export function ChatWorkspace({
                                 <div className="chat-workspace__message-meta">
                                   <span>{formatTime(item.createdAt)}</span>
                                   {item.isOwn ? (
-                                    item.clientStatus === "failed" ? (
-                                      <button
-                                        type="button"
-                                        className="chat-workspace__message-retry"
-                                        onClick={() =>
-                                          void handleSendMessage({
-                                            messageId: item.id,
-                                            text: item.clientText,
-                                            createdAt: item.createdAt,
-                                          })
-                                        }
-                                      >
-                                        Не отправлено. Повторить
-                                      </button>
-                                    ) : (
+                                    <span
+                                      className={`chat-workspace__message-status${item.clientStatus === "sending" ? " chat-workspace__message-status--sending" : item.isReadByPeer ? " chat-workspace__message-status--read" : " chat-workspace__message-status--delivered"}`}
+                                    >
                                       <span
-                                        className={`chat-workspace__message-status${item.clientStatus === "sending" ? " chat-workspace__message-status--sending" : item.isReadByPeer ? " chat-workspace__message-status--read" : " chat-workspace__message-status--delivered"}`}
-                                        aria-label={
-                                          item.clientStatus === "sending"
-                                            ? "Отправляется"
-                                            : item.isReadByPeer
-                                              ? "Прочитано"
-                                              : "Доставлено"
-                                        }
-                                        title={
-                                          item.clientStatus === "sending"
-                                            ? "Отправляется"
-                                            : item.isReadByPeer
-                                              ? "Прочитано"
-                                              : "Доставлено"
-                                        }
-                                      >
-                                        <span
-                                          className={`chat-workspace__message-status-icon${item.isReadByPeer ? " chat-workspace__message-status-icon--read" : " chat-workspace__message-status-icon--check"}`}
-                                          aria-hidden="true"
-                                        />
-                                      </span>
-                                    )
+                                        className={`chat-workspace__message-status-icon${item.clientStatus === "sending" ? " chat-workspace__message-status-icon--spinner" : item.isReadByPeer ? " chat-workspace__message-status-icon--read" : " chat-workspace__message-status-icon--check"}`}
+                                        aria-hidden="true"
+                                      />
+                                    </span>
                                   ) : null}
                                 </div>
                               </div>
@@ -1092,20 +914,31 @@ export function ChatWorkspace({
                     ))
                   ) : (
                     <div className="chat-workspace__placeholder">
-                      <h2 className="chat-workspace__empty-title">{emptyTitle}</h2>
-                      <p className="chat-workspace__empty-text">{emptyText}</p>
+                      <h2 className="chat-workspace__empty-title">Новый диалог</h2>
+                      <p className="chat-workspace__empty-text">
+                        Диалог появится в списке только после первого отправленного сообщения.
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
 
               <div className="chat-workspace__composer">
+                {editingMessageId ? (
+                  <div className="chat-workspace__composer-editing">
+                    <div className="chat-workspace__composer-editing-copy">
+                      <span className="chat-workspace__composer-editing-label">Редактирование сообщения</span>
+                      <span className="chat-workspace__composer-editing-text">
+                        {decryptedMessageMap[editingMessageId] ?? activeMessages.find((item) => item.id === editingMessageId)?.clientText ?? ""}
+                      </span>
+                    </div>
+                    <button type="button" className="chat-workspace__composer-editing-cancel" onClick={handleCancelEditing}>
+                      Отменить
+                    </button>
+                  </div>
+                ) : null}
                 <div className="chat-workspace__composer-row">
-                  <button
-                    type="button"
-                    className="chat-workspace__composer-attach"
-                    aria-label="Прикрепить файл"
-                  >
+                  <button type="button" className="chat-workspace__composer-attach" aria-label="Прикрепить файл" disabled>
                     <img src={clipIcon} alt="" aria-hidden="true" className="chat-workspace__composer-attach-icon" />
                   </button>
                   <Input
@@ -1115,7 +948,7 @@ export function ChatWorkspace({
                     value={messageDraft}
                     onChange={(event) => setMessageDraft(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+                      if (event.key !== "Enter" || event.nativeEvent.isComposing || messagesQuery.isFetching) {
                         return;
                       }
                       event.preventDefault();
@@ -1130,14 +963,12 @@ export function ChatWorkspace({
                     className="chat-workspace__composer-send"
                     onClick={() => void handleSendMessage()}
                     aria-label="Отправить сообщение"
+                    disabled={!messageDraft.trim()}
                   >
                     <img src={arrowIcon} alt="" aria-hidden="true" className="chat-workspace__composer-send-icon" />
                   </Button>
                 </div>
               </div>
-                  </>
-                );
-              })()}
             </>
           ) : (
             <div className="chat-workspace__placeholder">
@@ -1147,6 +978,39 @@ export function ChatWorkspace({
           )}
         </div>
       </div>
+      {messageMenu ? (
+        <div
+          className="chat-workspace__message-menu"
+          style={{ top: messageMenu.y, left: messageMenu.x }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <button
+            type="button"
+            className="chat-workspace__message-menu-item"
+            onClick={() => {
+              const targetMessage = activeMessages.find((item) => item.id === messageMenu.messageId);
+              if (targetMessage) {
+                handleStartEditMessage(targetMessage);
+              }
+            }}
+          >
+            Редактировать
+          </button>
+          <button
+            type="button"
+            className="chat-workspace__message-menu-item chat-workspace__message-menu-item--danger"
+            onClick={() => {
+              const targetMessage = activeMessages.find((item) => item.id === messageMenu.messageId);
+              if (targetMessage) {
+                void handleDeleteMessage(targetMessage);
+              }
+            }}
+          >
+            Удалить
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

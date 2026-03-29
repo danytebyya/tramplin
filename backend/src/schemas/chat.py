@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ChatUserKeyUpsertRequest(BaseModel):
@@ -8,6 +8,7 @@ class ChatUserKeyUpsertRequest(BaseModel):
 
 class ChatParticipantRead(BaseModel):
     user_id: str
+    public_id: str | None = None
     display_name: str
     role: str
     company_name: str | None = None
@@ -18,18 +19,52 @@ class ChatParticipantRead(BaseModel):
 
 
 class ChatConversationCreateRequest(BaseModel):
-    applicant_user_id: str | None = None
-    employer_user_id: str | None = None
+    recipient_user_id: str | None = None
     employer_id: str | None = None
+
+    @field_validator("recipient_user_id", "employer_id")
+    @classmethod
+    def strip_optional_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized_value = value.strip()
+        if not normalized_value:
+            return None
+        return normalized_value
 
 
 class ChatMessageCreateRequest(BaseModel):
-    conversation_id: str
+    conversation_id: str | None = None
+    recipient_user_id: str | None = None
+    employer_id: str | None = None
     ciphertext: str = Field(min_length=1)
     iv: str = Field(min_length=8, max_length=120)
     salt: str = Field(min_length=8, max_length=120)
 
-    @field_validator("conversation_id", "ciphertext", "iv", "salt")
+    @field_validator("conversation_id", "recipient_user_id", "employer_id", "ciphertext", "iv", "salt")
+    @classmethod
+    def strip_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise ValueError("Значение не может быть пустым")
+        return normalized_value
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "ChatMessageCreateRequest":
+        instance = self
+        if not instance.conversation_id and not instance.recipient_user_id:
+            raise ValueError("Нужно указать диалог или получателя")
+        return instance
+
+
+class ChatMessageUpdateRequest(BaseModel):
+    ciphertext: str = Field(min_length=1)
+    iv: str = Field(min_length=8, max_length=120)
+    salt: str = Field(min_length=8, max_length=120)
+
+    @field_validator("ciphertext", "iv", "salt")
     @classmethod
     def strip_fields(cls, value: str) -> str:
         normalized_value = value.strip()
@@ -73,6 +108,7 @@ class ChatMessageListResponse(BaseModel):
 
 class ChatContactRead(BaseModel):
     user_id: str
+    public_id: str | None = None
     role: str
     display_name: str
     company_name: str | None = None
@@ -96,3 +132,8 @@ class ChatUserKeyRead(BaseModel):
 class ChatReadReceiptResponse(BaseModel):
     conversation_id: str
     read_at: str
+
+
+class ChatMessageDeleteResponse(BaseModel):
+    id: str
+    conversation_id: str

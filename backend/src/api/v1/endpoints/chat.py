@@ -8,7 +8,12 @@ from src.api.v1.endpoints.notifications import get_current_user_by_access_token
 from src.db import get_db
 from src.models import User
 from src.realtime.chat_hub import chat_hub
-from src.schemas.chat import ChatConversationCreateRequest, ChatMessageCreateRequest, ChatUserKeyUpsertRequest
+from src.schemas.chat import (
+    ChatConversationCreateRequest,
+    ChatMessageCreateRequest,
+    ChatMessageUpdateRequest,
+    ChatUserKeyUpsertRequest,
+)
 from src.services.chat_service import ChatService
 from src.utils.errors import AppError
 from src.utils.responses import success_response
@@ -43,6 +48,23 @@ def list_chat_contacts(
     db: Session = Depends(get_db),
 ) -> dict:
     payload = ChatService(db).list_contacts(current_user, access_payload=access_payload)
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.get("/search", status_code=status.HTTP_200_OK)
+def search_chat_contacts(
+    q: str = Query(default=""),
+    employer_id: str | None = Query(default=None),
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = ChatService(db).search_contacts(
+        current_user,
+        q,
+        employer_id=employer_id,
+        access_payload=access_payload,
+    )
     return success_response(payload.model_dump(mode="json"))
 
 
@@ -86,6 +108,29 @@ def send_chat_message(
     db: Session = Depends(get_db),
 ) -> dict:
     payload = ChatService(db).send_message(current_user, body, access_payload=access_payload)
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.put("/messages/{message_id}", status_code=status.HTTP_200_OK)
+def update_chat_message(
+    message_id: str,
+    body: ChatMessageUpdateRequest,
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = ChatService(db).update_message(current_user, message_id, body, access_payload=access_payload)
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.delete("/messages/{message_id}", status_code=status.HTTP_200_OK)
+def delete_chat_message(
+    message_id: str,
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = ChatService(db).delete_message(current_user, message_id, access_payload=access_payload)
     return success_response(payload.model_dump(mode="json"))
 
 

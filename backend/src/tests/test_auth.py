@@ -55,6 +55,7 @@ def test_register_applicant(client, db_session):
     assert body["success"] is True
     assert body["data"]["user"]["email"] == "student@example.com"
     assert body["data"]["user"]["role"] == "applicant"
+    assert re.fullmatch(r"\d{8}", body["data"]["user"]["public_id"])
 
 
 def test_register_employer_without_profile(client, db_session):
@@ -199,6 +200,31 @@ def test_users_table_rejects_duplicate_email_case_insensitive(db_session):
 
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+def test_non_curator_users_receive_public_id_while_curator_does_not(db_session):
+    applicant = User(
+        email="public-id-applicant@example.com",
+        display_name="Applicant",
+        password_hash="hashed",
+        role=UserRole.APPLICANT,
+        status=UserStatus.ACTIVE,
+    )
+    curator = User(
+        email="public-id-curator@example.com",
+        display_name="Curator",
+        password_hash="hashed",
+        role=UserRole.CURATOR,
+        status=UserStatus.ACTIVE,
+    )
+    db_session.add_all([applicant, curator])
+    db_session.commit()
+
+    db_session.refresh(applicant)
+    db_session.refresh(curator)
+
+    assert re.fullmatch(r"\d{8}", applicant.public_id or "")
+    assert curator.public_id is None
 
 
 def test_check_email_returns_exists_for_registered_user(client, db_session):

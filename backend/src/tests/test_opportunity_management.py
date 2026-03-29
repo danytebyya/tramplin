@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from src.core.security import hash_password
-from src.enums import EmployerType, EmployerVerificationRequestStatus, MembershipRole, UserRole, UserStatus
+from src.enums import EmployerType, EmployerVerificationRequestStatus, EmployerVerificationStatus, MembershipRole, UserRole, UserStatus
 from src.models import Employer, EmployerMembership, EmployerProfile, Opportunity, User
 from src.models.opportunity import OpportunityStatus
 from src.tests.test_moderation_dashboard import _create_curator, _login
@@ -182,6 +182,41 @@ def test_create_opportunity_still_returns_success_when_notifications_fail(client
     body = response.json()["data"]
     assert body["title"] == "Python backend vacancy"
     assert db_session.query(Opportunity).filter(Opportunity.id == UUID(body["id"])).one_or_none() is not None
+
+
+def test_unverified_employer_cannot_create_opportunity(client, db_session):
+    employer = _create_employer_user(db_session, email="unverified-employer@example.com", inn="7707083898")
+    employer.employer_profile.verification_status = EmployerVerificationStatus.UNVERIFIED
+    company = db_session.query(Employer).filter(Employer.inn == "7707083898").one()
+    company.verified_at = None
+    company.verification_status = EmployerVerificationRequestStatus.PENDING
+    db_session.add(employer.employer_profile)
+    db_session.add(company)
+    db_session.commit()
+
+    employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
+
+    response = client.post(
+        "/api/v1/opportunities",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+        json={
+            "title": "Нельзя создать",
+            "description": "Подробное описание публикации для проверки ограничения по верификации компании.",
+            "opportunity_type": "vacancy",
+            "city": "Чебоксары",
+            "address": "ул. Калинина, 15",
+            "salary_label": "100 000 ₽",
+            "tags": ["Python", "FastAPI"],
+            "format": "offline",
+            "level_label": "junior",
+            "employment_label": "full-time",
+            "latitude": 56.1282,
+            "longitude": 47.2519,
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "EMPLOYER_OPPORTUNITY_VERIFICATION_REQUIRED"
 
 
 def test_deleted_pending_opportunity_disappears_from_content_moderation(client, db_session):

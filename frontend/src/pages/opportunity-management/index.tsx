@@ -10,7 +10,7 @@ import editIcon from "../../assets/icons/edit.svg";
 import uploadIcon from "../../assets/icons/upload.svg";
 import {
   CitySelection,
-  readLastAddressQueryCookie,
+  readRecentAddressQueriesCookie,
   readSelectedCityCookie,
   writeLastAddressQueryCookie,
   writeSelectedCityCookie,
@@ -607,7 +607,7 @@ export function OpportunityManagementPage() {
     useState<(typeof mentorExperienceOptions)[number]>(mentorExperienceOptions[0]);
   const [createOpportunityPublishDate, setCreateOpportunityPublishDate] = useState("");
   const [createOpportunityAddress, setCreateOpportunityAddress] = useState("");
-  const [lastAddressQuery, setLastAddressQuery] = useState(() => readLastAddressQueryCookie() ?? "");
+  const [recentAddressQueries, setRecentAddressQueries] = useState<string[]>(() => readRecentAddressQueriesCookie());
   const [createOpportunityCitySuggestions, setCreateOpportunityCitySuggestions] = useState<CitySuggestion[]>([]);
   const [isCitySuggestionsOpen, setIsCitySuggestionsOpen] = useState(false);
   const [isCitySuggestionsLoading, setIsCitySuggestionsLoading] = useState(false);
@@ -827,6 +827,8 @@ export function OpportunityManagementPage() {
   }, [createOpportunityAddress, createOpportunityCity, isCreateOpportunityModalOpen]);
 
   const employerAccess = getEmployerAccessState(role, accessToken);
+  const employerVerificationStatus = meQuery.data?.data?.user?.employer_profile?.verification_status;
+  const canCreateOpportunity = employerVerificationStatus === "verified";
 
   if (role !== "employer") {
     return <Navigate to="/" replace />;
@@ -1035,7 +1037,7 @@ export function OpportunityManagementPage() {
     setCreateOpportunityMentorExperience(mentorExperienceOptions[0]);
     setCreateOpportunityPublishDate("");
     setCreateOpportunityAddress("");
-    setLastAddressQuery(readLastAddressQueryCookie() ?? "");
+    setRecentAddressQueries(readRecentAddressQueriesCookie());
     setCreateOpportunityAddressSuggestions([]);
     setIsAddressSuggestionsOpen(false);
     setSelectedLocationPoint(null);
@@ -1046,6 +1048,14 @@ export function OpportunityManagementPage() {
   };
 
   const openCreateOpportunityModal = () => {
+    if (!canCreateOpportunity) {
+      setFormErrors((current) => ({
+        ...current,
+        submit: "Создание возможностей доступно только верифицированным компаниям.",
+      }));
+      return;
+    }
+
     resetCreateOpportunityForm();
     setIsCreateOpportunityModalOpen(true);
   };
@@ -1092,7 +1102,7 @@ export function OpportunityManagementPage() {
     setCreateOpportunityPublishDate(record.plannedPublishAt?.slice(0, 10) ?? "");
     setCreateOpportunityAddress(record.address);
     writeLastAddressQueryCookie(record.address);
-    setLastAddressQuery(record.address);
+    setRecentAddressQueries(readRecentAddressQueriesCookie());
     setCreateOpportunityAddressSuggestions([]);
     setIsAddressSuggestionsOpen(false);
     setSelectedLocationPoint({ lon: record.longitude, lat: record.latitude });
@@ -1127,7 +1137,7 @@ export function OpportunityManagementPage() {
   const handleAddressSuggestionSelect = (item: AddressSuggestion) => {
     setCreateOpportunityAddress(item.fullAddress);
     writeLastAddressQueryCookie(item.fullAddress);
-    setLastAddressQuery(item.fullAddress);
+    setRecentAddressQueries(readRecentAddressQueriesCookie());
     setCreateOpportunityAddressSuggestions([]);
     setIsAddressSuggestionsOpen(false);
     addressInputRef.current?.blur();
@@ -1137,8 +1147,8 @@ export function OpportunityManagementPage() {
     }
   };
 
-  const handleLastAddressQuerySelect = () => {
-    const normalizedQuery = lastAddressQuery.trim();
+  const handleRecentAddressQuerySelect = (query: string) => {
+    const normalizedQuery = query.trim();
 
     if (!normalizedQuery) {
       return;
@@ -1156,10 +1166,14 @@ export function OpportunityManagementPage() {
         }
 
         setCreateOpportunityAddress(normalizedQuery);
+        writeLastAddressQueryCookie(normalizedQuery);
+        setRecentAddressQueries(readRecentAddressQueriesCookie());
         setIsAddressSuggestionsOpen(false);
       })
       .catch(() => {
         setCreateOpportunityAddress(normalizedQuery);
+        writeLastAddressQueryCookie(normalizedQuery);
+        setRecentAddressQueries(readRecentAddressQueriesCookie());
         setIsAddressSuggestionsOpen(false);
       })
       .finally(() => {
@@ -1186,7 +1200,7 @@ export function OpportunityManagementPage() {
         if (nextAddress) {
           setCreateOpportunityAddress(nextAddress);
           writeLastAddressQueryCookie(nextAddress);
-          setLastAddressQuery(nextAddress);
+          setRecentAddressQueries(readRecentAddressQueriesCookie());
           setCreateOpportunityAddressSuggestions([]);
           setIsAddressSuggestionsOpen(false);
         }
@@ -1544,6 +1558,7 @@ export function OpportunityManagementPage() {
               size="md"
               className="opportunity-management-page__create-button"
               onClick={openCreateOpportunityModal}
+              disabled={!canCreateOpportunity}
             >
               Создать возможность
             </Button>
@@ -1911,8 +1926,6 @@ export function OpportunityManagementPage() {
                   const nextValue = event.target.value;
 
                   setCreateOpportunityAddress(nextValue);
-                  writeLastAddressQueryCookie(nextValue);
-                  setLastAddressQuery(nextValue);
                   setIsAddressSuggestionsOpen(true);
                   setFormErrors((current) => ({ ...current, address: undefined }));
                 }}
@@ -1927,17 +1940,20 @@ export function OpportunityManagementPage() {
               <div className="opportunity-management-page__modal-address-dropdown">
                 {isAddressSuggestionsLoading ? (
                   <div className="opportunity-management-page__modal-address-empty">Загружаем адреса...</div>
-                ) : !createOpportunityAddress.trim() && lastAddressQuery.trim() ? (
-                  <button
-                    type="button"
-                    className="opportunity-management-page__modal-address-option"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={handleLastAddressQuerySelect}
-                  >
-                    <span className="opportunity-management-page__modal-address-option-title">
-                      {lastAddressQuery}
-                    </span>
-                  </button>
+                ) : !createOpportunityAddress.trim() && recentAddressQueries.length > 0 ? (
+                  recentAddressQueries.map((query) => (
+                    <button
+                      key={query}
+                      type="button"
+                      className="opportunity-management-page__modal-address-option"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleRecentAddressQuerySelect(query)}
+                    >
+                      <span className="opportunity-management-page__modal-address-option-title">
+                        {query}
+                      </span>
+                    </button>
+                  ))
                 ) : createOpportunityAddressSuggestions.length > 0 ? (
                   createOpportunityAddressSuggestions.map((item) => (
                     <button

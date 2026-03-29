@@ -1,9 +1,12 @@
 import logging
+import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.api import api_router
 from src.core.config import settings
@@ -29,6 +32,19 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+)
+
+avatar_storage_dir = os.getenv("EMPLOYER_AVATARS_STORAGE_DIR")
+app.mount(
+    "/storage/company-avatars",
+    StaticFiles(
+        directory=str(
+            Path(avatar_storage_dir).expanduser().resolve()
+            if avatar_storage_dir
+            else Path(__file__).resolve().parents[1] / "storage" / "company-avatars"
+        )
+    ),
+    name="company-avatars",
 )
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)

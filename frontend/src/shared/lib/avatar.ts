@@ -1,20 +1,54 @@
-import adminAvatarIcon from "../../assets/icons/admin.png";
-import applicantAvatarIcon from "../../assets/icons/applicant.png";
-import employerAvatarIcon from "../../assets/icons/employer.png";
-import profileAvatarIcon from "../../assets/icons/profile.png";
+import { env } from "../config/env";
+
+const AVATAR_PUBLIC_PREFIX = "/storage/company-avatars";
+
+function resolveApiOrigin() {
+  try {
+    return new URL(env.apiBaseUrl).origin;
+  } catch {
+    return "";
+  }
+}
+
+function buildAvatarStorageUrl(fileName: string) {
+  const apiOrigin = resolveApiOrigin();
+  return `${apiOrigin}${AVATAR_PUBLIC_PREFIX}/${fileName}`;
+}
+
+export function resolveAvatarUrl(avatarUrl: string | null | undefined) {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  if (
+    avatarUrl.startsWith("http://") ||
+    avatarUrl.startsWith("https://") ||
+    avatarUrl.startsWith("blob:") ||
+    avatarUrl.startsWith("data:")
+  ) {
+    return avatarUrl;
+  }
+
+  if (avatarUrl.startsWith("/")) {
+    const apiOrigin = resolveApiOrigin();
+    return `${apiOrigin}${avatarUrl}`;
+  }
+
+  return avatarUrl;
+}
 
 export function resolveAvatarIcon(role: string | null | undefined) {
   if (role === "employer") {
-    return employerAvatarIcon;
+    return buildAvatarStorageUrl("employer.png");
   }
 
   if (role === "applicant") {
-    return applicantAvatarIcon;
+    return buildAvatarStorageUrl("applicant.png");
   }
 
   if (role === "admin") {
-    return adminAvatarIcon;
+    return buildAvatarStorageUrl("admin.png");
   }
 
-  return profileAvatarIcon;
+  return buildAvatarStorageUrl("profile.png");
 }

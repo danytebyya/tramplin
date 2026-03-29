@@ -2,6 +2,6 @@ export function cn(...classNames: Array<string | undefined | false | null>): str
   return classNames.filter(Boolean).join(" ");
 }
 
-export { resolveAvatarIcon } from "./avatar";
+export { resolveAvatarIcon, resolveAvatarUrl } from "./avatar";
 export { abbreviateLegalEntityName } from "./legal-entity";
 export { formatPresenceStatus } from "./presence";

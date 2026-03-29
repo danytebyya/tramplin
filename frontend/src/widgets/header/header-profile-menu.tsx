@@ -2,10 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import adminAvatarIcon from "../../assets/icons/admin.png";
-import applicantAvatarIcon from "../../assets/icons/applicant.png";
-import employerAvatarIcon from "../../assets/icons/employer.png";
-import profileDropdownIcon from "../../assets/icons/profile.png";
 import profileIcon from "../../assets/icons/profile.svg";
 import {
   listAccountContextsRequest,
@@ -13,6 +9,7 @@ import {
   switchAccountContextRequest,
   useAuthStore,
 } from "../../features/auth";
+import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 
 export type HeaderProfileMenuItem = {
@@ -25,20 +22,8 @@ type HeaderProfileMenuProps = {
   items: HeaderProfileMenuItem[];
 };
 
-function resolveAccountContextAvatar(role: string | undefined) {
-  if (role === "employer") {
-    return employerAvatarIcon;
-  }
-
-  if (role === "applicant") {
-    return applicantAvatarIcon;
-  }
-
-  if (role === "admin") {
-    return adminAvatarIcon;
-  }
-
-  return profileDropdownIcon;
+function resolveAccountContextAvatar(role: string | undefined, avatarUrl?: string | null) {
+  return resolveAvatarUrl(avatarUrl) || resolveAvatarIcon(role);
 }
 
 function resolveAccountContextSubtitle(
@@ -214,6 +199,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
   }
 
   const user = meQuery.data?.data?.user;
+  const employerAvatarUrl = user?.employer_profile?.avatar_url ?? null;
   const currentRole = activeContextRole ?? user?.role;
   const isModerationRole = currentRole === "curator" || currentRole === "junior" || currentRole === "admin";
   const hasAccountContextCards = !isModerationRole && accountContextItems.length > 0;
@@ -312,7 +298,10 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
                   >
                     <span className="header__profile-context-avatar">
                       <img
-                        src={resolveAccountContextAvatar(item.role)}
+                        src={resolveAccountContextAvatar(
+                          item.role,
+                          item.role === "employer" ? employerAvatarUrl : null,
+                        )}
                         alt=""
                         aria-hidden="true"
                         className="header__profile-context-avatar-image"

@@ -62,6 +62,12 @@ class OpportunityService:
     ) -> EmployerOpportunityRead:
         employer, membership = self._resolve_employer_access(current_user=current_user, access_payload=access_payload)
         self._ensure_manage_opportunities_allowed(membership)
+        if employer.verified_at is None:
+            raise AppError(
+                code="EMPLOYER_OPPORTUNITY_VERIFICATION_REQUIRED",
+                message="Создание возможностей доступно только верифицированным компаниям",
+                status_code=403,
+            )
 
         opportunity = Opportunity(
             employer_id=employer.id,

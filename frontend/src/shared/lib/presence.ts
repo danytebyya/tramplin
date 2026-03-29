@@ -3,6 +3,25 @@ type PresenceStatus = {
   lastSeenAt: string | null;
 };
 
+function formatCount(value: number, one: string, few: string, many: string) {
+  const normalizedValue = Math.abs(value) % 100;
+  const remainder = normalizedValue % 10;
+
+  if (normalizedValue > 10 && normalizedValue < 20) {
+    return many;
+  }
+
+  if (remainder > 1 && remainder < 5) {
+    return few;
+  }
+
+  if (remainder === 1) {
+    return one;
+  }
+
+  return many;
+}
+
 export function formatPresenceStatus({ isOnline, lastSeenAt }: PresenceStatus): string {
   if (isOnline) {
     return "Online";
@@ -19,5 +38,10 @@ export function formatPresenceStatus({ isOnline, lastSeenAt }: PresenceStatus): 
     return "Был(а) в сети только что";
   }
 
-  return `Был(а) в сети ${diffMinutes} мин назад`;
+  if (diffMinutes < 60) {
+    return `Был(а) в сети ${diffMinutes} ${formatCount(diffMinutes, "минуту", "минуты", "минут")} назад`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  return `Был(а) в сети ${diffHours} ${formatCount(diffHours, "час", "часа", "часов")} назад`;
 }

@@ -362,13 +362,6 @@ export function EmployerOnboardingPage() {
   });
 
   const handleOnboardingSubmit = (values: EmployerOnboardingValues) => {
-    const currentUserEmail = currentUserQuery.data?.data?.user?.email?.trim();
-
-    if (!currentUserEmail) {
-      setApiError("Не удалось получить email текущего пользователя. Обновите страницу и попробуйте ещё раз.");
-      return;
-    }
-
     if (!verifiedEmployerData || verifiedEmployerData.inn !== values.inn.replace(/\D/g, "")) {
       setError("inn", {
         type: "manual",
@@ -396,7 +389,6 @@ export function EmployerOnboardingPage() {
         employer_type: verifiedEmployerData.employerType,
         company_name: verifiedEmployerData.fullName,
         inn: values.inn.replace(/\D/g, ""),
-        corporate_email: currentUserEmail,
         website: values.website?.trim() || undefined,
         phone: values.phone.trim() || undefined,
         social_link: values.socialLink?.trim() || undefined,

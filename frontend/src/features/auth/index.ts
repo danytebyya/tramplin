@@ -85,6 +85,7 @@ export type MeResponse = {
   data?: {
     user?: {
       id?: string;
+      public_id?: string | null;
       email?: string;
       display_name?: string;
       preferred_city?: string | null;
@@ -99,6 +100,17 @@ export type MeResponse = {
         inn?: string;
         corporate_email?: string;
         website?: string | null;
+        phone?: string | null;
+        social_link?: string | null;
+        max_link?: string | null;
+        rutube_link?: string | null;
+        avatar_url?: string | null;
+        short_description?: string | null;
+        office_addresses?: string[] | null;
+        activity_areas?: string[] | null;
+        organization_size?: string | null;
+        foundation_year?: number | null;
+        profile_views_count?: number | null;
         verification_status?:
           | "unverified"
           | "pending_review"

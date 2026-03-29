@@ -12,6 +12,7 @@ from src.schemas.user import (
 def serialize_user(user: User) -> dict:
     return UserRead(
         id=user.id,
+        public_id=user.public_id,
         email=user.email,
         display_name=user.display_name,
         preferred_city=user.preferred_city,

@@ -59,6 +59,8 @@ EMPLOYER_STAFF_PERMISSION_LABELS = {
 
 
 class EmployerService:
+    AVATAR_PUBLIC_PREFIX = "/storage/company-avatars"
+
     def __init__(self, db: Session) -> None:
         self.db = db
 
@@ -68,6 +70,32 @@ class EmployerService:
         if configured_path:
             return Path(configured_path).expanduser().resolve()
         return Path(__file__).resolve().parents[2] / "storage" / "verification-documents"
+
+    @staticmethod
+    def _get_avatar_storage_dir() -> Path:
+        configured_path = os.getenv("EMPLOYER_AVATARS_STORAGE_DIR")
+        if configured_path:
+            return Path(configured_path).expanduser().resolve()
+        return Path(__file__).resolve().parents[2] / "storage" / "company-avatars"
+
+    @classmethod
+    def _build_avatar_public_url(cls, file_name: str) -> str:
+        return f"{cls.AVATAR_PUBLIC_PREFIX}/{file_name}"
+
+    @classmethod
+    def _resolve_avatar_storage_path(cls, avatar_url: str | None) -> Path | None:
+        if not avatar_url:
+            return None
+
+        if avatar_url.startswith(cls.AVATAR_PUBLIC_PREFIX + "/"):
+            file_name = avatar_url.removeprefix(cls.AVATAR_PUBLIC_PREFIX + "/")
+            return cls._get_avatar_storage_dir() / file_name
+
+        candidate = Path(avatar_url)
+        if candidate.is_absolute():
+            return candidate
+
+        return None
 
     def upsert_profile(self, current_user: User, payload: EmployerOnboardingRequest) -> EmployerProfile:
         if current_user.role != UserRole.EMPLOYER:
@@ -90,6 +118,15 @@ class EmployerService:
                 inn=payload.inn,
                 corporate_email=payload.corporate_email,
                 website=payload.website,
+                phone=payload.phone,
+                social_link=payload.social_link,
+                max_link=payload.max_link,
+                rutube_link=payload.rutube_link,
+                short_description=payload.short_description,
+                office_addresses=payload.office_addresses,
+                activity_areas=payload.activity_areas,
+                organization_size=payload.organization_size,
+                foundation_year=payload.foundation_year,
                 verification_status=EmployerVerificationStatus.UNVERIFIED,
             )
             self.db.add(employer_profile)
@@ -99,9 +136,66 @@ class EmployerService:
             employer_profile.inn = payload.inn
             employer_profile.corporate_email = payload.corporate_email
             employer_profile.website = payload.website
+            employer_profile.phone = payload.phone
+            employer_profile.social_link = payload.social_link
+            employer_profile.max_link = payload.max_link
+            employer_profile.rutube_link = payload.rutube_link
+            employer_profile.short_description = payload.short_description
+            employer_profile.office_addresses = payload.office_addresses
+            employer_profile.activity_areas = payload.activity_areas
+            employer_profile.organization_size = payload.organization_size
+            employer_profile.foundation_year = payload.foundation_year
 
         employer_profile.moderator_comment = None
 
+        self.db.commit()
+        self.db.refresh(employer_profile)
+        return employer_profile
+
+    def upload_avatar(
+        self,
+        *,
+        current_user: User,
+        original_filename: str,
+        mime_type: str,
+        content: bytes,
+    ) -> EmployerProfile:
+        if current_user.role != UserRole.EMPLOYER:
+            raise AppError(
+                code="EMPLOYER_PROFILE_FORBIDDEN",
+                message="Профиль работодателя доступен только работодателям",
+                status_code=403,
+            )
+
+        employer_profile = current_user.employer_profile
+        if employer_profile is None:
+            raise AppError(
+                code="EMPLOYER_PROFILE_REQUIRED",
+                message="Сначала заполните профиль работодателя",
+                status_code=400,
+            )
+
+        if not mime_type.startswith("image/"):
+            raise AppError(
+                code="EMPLOYER_AVATAR_INVALID_TYPE",
+                message="Можно загрузить только изображение",
+                status_code=400,
+            )
+
+        storage_dir = self._get_avatar_storage_dir()
+        storage_dir.mkdir(parents=True, exist_ok=True)
+
+        suffix = Path(original_filename).suffix or ".png"
+        target_path = storage_dir / f"{uuid4()}{suffix}"
+        target_path.write_bytes(content)
+
+        previous_file = self._resolve_avatar_storage_path(employer_profile.avatar_url)
+        if previous_file is not None:
+            if previous_file.exists() and previous_file.is_file():
+                previous_file.unlink()
+
+        employer_profile.avatar_url = self._build_avatar_public_url(target_path.name)
+        self.db.add(employer_profile)
         self.db.commit()
         self.db.refresh(employer_profile)
         return employer_profile
@@ -830,6 +924,7 @@ class EmployerService:
                 display_name=employer_profile.company_name,
                 legal_name=employer_profile.company_name,
                 inn=employer_profile.inn,
+                description_short=employer_profile.short_description,
                 website_url=employer_profile.website,
                 corporate_email=employer_profile.corporate_email,
                 phone=employer_profile.phone,
@@ -843,6 +938,7 @@ class EmployerService:
             employer.employer_type = EmployerType(employer_profile.employer_type)
             employer.display_name = employer_profile.company_name
             employer.legal_name = employer_profile.company_name
+            employer.description_short = employer_profile.short_description
             employer.website_url = employer_profile.website
             employer.corporate_email = employer_profile.corporate_email
             employer.phone = employer_profile.phone

@@ -35,7 +35,7 @@ export function NetworkingPage() {
   return (
     <main className="networking-page settings-page settings-page--applicant">
       <Header
-        containerClassName="networking-page__header-container"
+        containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
@@ -62,14 +62,9 @@ export function NetworkingPage() {
 
         <ChatWorkspace
           title="Нетворкинг"
-          subtitle="Личный защищенный канал связи с работодателями и рекрутерами"
-          emptyTitle="Выберите контакт"
-          emptyText="Слева отображаются активные диалоги и доступные работодатели для первого касания."
+          emptyTitle="Пока нет активного чата"
+          emptyText="Используйте поиск сверху, чтобы найти пользователя, или откройте существующий диалог слева."
           preferredEmployerId={preferredEmployerId}
-          createConversationPayload={(contact) => ({
-            employer_user_id: contact.userId,
-            employer_id: contact.employerId ?? undefined,
-          })}
         />
       </Container>
 

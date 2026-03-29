@@ -420,3 +420,42 @@ def test_submit_verification_documents_applies_deleted_document_ids_only_on_subm
     assert next_draft_response.status_code == 200
     file_names = sorted(document["file_name"] for document in next_draft_response.json()["data"]["documents"])
     assert file_names == ["new-c.pdf", "old-b.pdf"]
+
+
+def test_upload_employer_avatar_persists_avatar_url(client, db_session):
+    access_token = _register_and_login_employer(client, db_session, email="avatar@example.com")
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Avatar Corp",
+            "inn": "7707083897",
+            "corporate_email": "hr@avatar.example",
+            "website": "https://avatar.example",
+        },
+    )
+    assert profile_response.status_code == 200
+
+    response = client.post(
+        "/api/v1/companies/avatar",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files=[("file", ("avatar.png", b"fake-image-content", "image/png"))],
+    )
+
+    assert response.status_code == 200
+    avatar_url = response.json()["data"]["avatar_url"]
+    assert avatar_url
+    assert avatar_url.startswith("/storage/company-avatars/")
+
+    from pathlib import Path
+    from src.models import EmployerProfile, User
+    from src.services.employer_service import EmployerService
+
+    user = db_session.query(User).filter(User.email == "avatar@example.com").one()
+    employer_profile = db_session.query(EmployerProfile).filter(EmployerProfile.user_id == user.id).one()
+
+    assert employer_profile.avatar_url == avatar_url
+    stored_file = EmployerService._get_avatar_storage_dir() / Path(avatar_url).name
+    assert stored_file.exists()
