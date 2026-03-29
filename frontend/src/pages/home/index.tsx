@@ -266,8 +266,8 @@ export function HomePage() {
     "Нетворкинг с другими соискателями",
     "Чат с работодателями",
   ];
-  const platformStats = [
-    { value: String(opportunityStats.vacancies), label: "вакансии" },
+  const platformStats: Array<{ value: string; label: string; featured?: boolean }> = [
+    { value: String(opportunityStats.vacancies), label: "вакансии", featured: true },
     { value: String(opportunityStats.internships), label: "стажировок" },
     { value: String(opportunityStats.events), label: "мероприятий" },
     { value: String(opportunityStats.mentorships), label: "менторов" },
