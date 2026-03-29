@@ -202,7 +202,8 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
         </div>
       ) : null}
 
-      <div className="opportunity-filters__toolbar">
+      {viewMode === "list" ? (
+        <div className="opportunity-filters__toolbar">
         <div className="opportunity-filters__search-group">
           <label className="opportunity-filters__search" aria-label="Поиск по возможностям">
             <Input
@@ -852,7 +853,8 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      ) : null}
     </section>
   );
 }
