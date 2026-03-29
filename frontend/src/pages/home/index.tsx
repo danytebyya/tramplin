@@ -21,6 +21,7 @@ import { subscribeOpportunityWorkflow } from "../../features/opportunity-workflo
 import {
   listMyAppliedOpportunityIdsRequest,
   submitOpportunityApplicationRequest,
+  withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
 import { getEmployerAccessState, meRequest, updatePreferredCityRequest, useAuthStore } from "../../features/auth";
 import { ModerationDashboardContent } from "../curator-dashboard";
@@ -212,7 +213,17 @@ export function HomePage() {
     },
   });
   const submitApplicationMutation = useMutation({
-    mutationFn: submitOpportunityApplicationRequest,
+    mutationFn: async ({
+      opportunityId,
+      shouldWithdraw,
+    }: {
+      opportunityId: string;
+      shouldWithdraw: boolean;
+    }) => {
+      return shouldWithdraw
+        ? withdrawOpportunityApplicationRequest(opportunityId)
+        : submitOpportunityApplicationRequest(opportunityId);
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] }),
@@ -660,11 +671,14 @@ export function HomePage() {
       return;
     }
 
-    if (appliedOpportunityIds.includes(opportunityId) || submitApplicationMutation.isPending) {
+    if (submitApplicationMutation.isPending) {
       return;
     }
 
-    submitApplicationMutation.mutate(opportunityId);
+    submitApplicationMutation.mutate({
+      opportunityId,
+      shouldWithdraw: appliedOpportunityIds.includes(opportunityId),
+    });
   };
 
   const handleWriteToEmployer = (opportunity: Opportunity) => {
@@ -788,7 +802,6 @@ export function HomePage() {
                     aria-hidden="true"
                     className="home-page__hero-background"
                     loading="eager"
-                    fetchPriority="high"
                     decoding="async"
                   />
                   <div className="home-page__hero-copy-content">

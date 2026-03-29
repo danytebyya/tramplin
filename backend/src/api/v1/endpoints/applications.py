@@ -28,3 +28,13 @@ def list_my_application_opportunity_ids(
 ) -> dict:
     response = ApplicationService(db).list_my_opportunity_ids(current_user)
     return success_response(response.model_dump(mode="json"))
+
+
+@router.delete("/{opportunity_id}", status_code=status.HTTP_200_OK)
+def withdraw_application(
+    opportunity_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = ApplicationService(db).withdraw(current_user, opportunity_id)
+    return success_response(response.model_dump(mode="json"))

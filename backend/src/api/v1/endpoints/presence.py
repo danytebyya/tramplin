@@ -24,6 +24,8 @@ async def presence_stream(
         logger.warning("presence.stream.reject code=%s", exc.code)
         await websocket.close(code=1008)
         return
+    finally:
+        db.close()
 
     logger.info("presence.stream.connect user_id=%s", current_user.id)
     await presence_hub.connect(current_user.id, websocket)
@@ -43,3 +45,4 @@ async def presence_stream(
     finally:
         logger.info("presence.stream.disconnect user_id=%s", current_user.id)
         await presence_hub.disconnect(current_user.id, websocket, db)
+        db.close()

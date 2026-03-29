@@ -10,6 +10,9 @@ type OpportunityApiItem = {
   company_verified: boolean;
   company_rating: number | null;
   company_reviews_count: number;
+  contact_email?: string | null;
+  company_website?: string | null;
+  company_phone?: string | null;
   salary_label: string;
   location_label: string;
   format: Opportunity["format"];
@@ -94,6 +97,9 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
       companyVerified: item.company_verified,
       companyRating: item.company_rating,
       companyReviewsCount: item.company_reviews_count,
+      contactEmail: item.contact_email ?? null,
+      companyWebsite: item.company_website ?? null,
+      companyPhone: item.company_phone ?? null,
       salaryLabel: item.salary_label,
       locationLabel: item.location_label,
       format: normalizePublicOpportunityFormat(item.format),

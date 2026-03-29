@@ -132,6 +132,36 @@ def test_applicant_cannot_submit_duplicate_application(client, db_session):
     assert second_response.json()["error"]["code"] == "APPLICATION_ALREADY_EXISTS"
 
 
+def test_applicant_can_withdraw_application(client, db_session):
+    employer = _create_employer_user(db_session, email="withdraw-employer@example.com", inn="7707083913")
+    applicant = _create_applicant_user(db_session, email="withdraw-applicant@example.com")
+    applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
+
+    submit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
+    assert submit_response.status_code == 201
+
+    withdraw_response = client.delete(
+        f"/api/v1/applications/{employer._test_opportunity_id}",  # type: ignore[attr-defined]
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+    )
+
+    assert withdraw_response.status_code == 200
+    body = withdraw_response.json()["data"]
+    assert body["opportunity_id"] == employer._test_opportunity_id  # type: ignore[attr-defined]
+    assert body["status"] == "withdrawn"
+
+    list_response = client.get(
+        "/api/v1/applications/mine/opportunity-ids",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["opportunity_ids"] == []
+
+
 def test_employer_opportunity_stats_show_real_application_count(client, db_session):
     employer = _create_employer_user(db_session, email="stats-employer@example.com", inn="7707083912")
     applicant = _create_applicant_user(db_session, email="stats-applicant@example.com")

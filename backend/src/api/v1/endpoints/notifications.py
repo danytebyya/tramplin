@@ -102,6 +102,8 @@ async def notifications_stream(
         logger.warning("notifications.stream.reject code=%s", exc.code)
         await websocket.close(code=1008)
         return
+    finally:
+        db.close()
 
     logger.info("notifications.stream.connect user_id=%s", current_user.id)
     await notification_hub.connect(current_user.id, websocket)

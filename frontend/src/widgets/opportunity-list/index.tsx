@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
 import { Badge, Button } from "../../shared/ui";
@@ -51,7 +53,11 @@ export function OpportunityList({
             <div className="opportunity-list__content">
               <div className="opportunity-list__title-block">
                 <div className="opportunity-list__title-row">
-                  <h3 className="opportunity-list__title">{opportunity.title}</h3>
+                  <h3 className="opportunity-list__title">
+                    <Link to={`/opportunities/${opportunity.id}`} className="opportunity-list__title-link">
+                      {opportunity.title}
+                    </Link>
+                  </h3>
                   <button
                     type="button"
                     className="opportunity-list__favorite"

@@ -11,6 +11,9 @@ export type Opportunity = {
   companyVerified: boolean;
   companyRating: number | null;
   companyReviewsCount: number;
+  contactEmail?: string | null;
+  companyWebsite?: string | null;
+  companyPhone?: string | null;
   salaryLabel: string;
   locationLabel: string;
   format: OpportunityFormat;

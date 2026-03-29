@@ -14,6 +14,7 @@ import {
 import {
   listMyAppliedOpportunityIdsRequest,
   submitOpportunityApplicationRequest,
+  withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
 import { useAuthStore } from "../../features/auth";
 import { Button, Checkbox, Container, Input, Radio } from "../../shared/ui";
@@ -256,7 +257,17 @@ export function FavoritesPage() {
   });
 
   const submitApplicationMutation = useMutation({
-    mutationFn: submitOpportunityApplicationRequest,
+    mutationFn: async ({
+      opportunityId,
+      shouldWithdraw,
+    }: {
+      opportunityId: string;
+      shouldWithdraw: boolean;
+    }) => {
+      return shouldWithdraw
+        ? withdrawOpportunityApplicationRequest(opportunityId)
+        : submitOpportunityApplicationRequest(opportunityId);
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] });
     },
@@ -926,7 +937,12 @@ export function FavoritesPage() {
               const shouldFavorite = !favoriteOpportunityIds.includes(opportunityId);
               favoriteOpportunityMutation.mutate({ opportunityId, shouldFavorite });
             }}
-            onApply={(opportunityId) => submitApplicationMutation.mutate(opportunityId)}
+            onApply={(opportunityId) =>
+              submitApplicationMutation.mutate({
+                opportunityId,
+                shouldWithdraw: appliedOpportunityIds.includes(opportunityId),
+              })
+            }
           />
         ) : (
           <section className="favorites-page__empty">

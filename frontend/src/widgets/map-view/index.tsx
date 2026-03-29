@@ -5,6 +5,7 @@ import { load } from "@2gis/mapgl";
 import { Clusterer } from "@2gis/mapgl-clusterer";
 import type { ClusterStyle, InputMarker } from "@2gis/mapgl-clusterer";
 import type { Map as DGisMap } from "@2gis/mapgl/types";
+import { Link } from "react-router-dom";
 
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
@@ -2428,6 +2429,12 @@ export function MapView({
               >
                 {roleName !== "employer" && isSelectedOpportunityApplied ? "Отозвать отклик" : "Откликнуться"}
               </Button>
+              <Link
+                to={`/opportunities/${selectedOpportunity.id}`}
+                className="map-view__details-link button button--secondary-outline button--sm"
+              >
+                Подробнее
+              </Link>
               <button
                 type="button"
                 className="map-view__details-favorite"

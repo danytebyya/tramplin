@@ -11,6 +11,17 @@ import logoSecondary from "../../assets/icons/logo-secondary.svg";
 import { HeaderProfileMenu, HeaderProfileMenuItem } from "./header-profile-menu";
 import "./header.css";
 
+const opportunityCategoryLinks: Array<{
+  value: "all" | "vacancy" | "internship" | "event" | "mentorship";
+  label: string;
+}> = [
+  { value: "all", label: "Все" },
+  { value: "vacancy", label: "Вакансии" },
+  { value: "internship", label: "Стажировки" },
+  { value: "event", label: "Мероприятия" },
+  { value: "mentorship", label: "Менторские программы" },
+];
+
 type HeaderProps = {
   containerClassName?: string;
   profileMenuItems: HeaderProfileMenuItem[];
@@ -136,18 +147,19 @@ export function Header({
           {bottomContent ?? (city && onCityChange ? (
             <>
               <nav className="header__categories" aria-label="Категории">
-                <a href="#vacancies" className="header__category-link">
-                  Вакансии
-                </a>
-                <a href="#internships" className="header__category-link">
-                  Стажировки
-                </a>
-                <a href="#events" className="header__category-link">
-                  Мероприятия
-                </a>
-                <a href="#mentorship" className="header__category-link">
-                  Менторство
-                </a>
+                {opportunityCategoryLinks.map((item) => (
+                  <Link
+                    key={item.value}
+                    to={{
+                      pathname: "/",
+                      search: item.value === "all" ? "" : `?category=${item.value}`,
+                      hash: "#opportunity-map",
+                    }}
+                    className="header__category-link"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
               </nav>
 
               <CitySelector value={city} onChange={onCityChange} />

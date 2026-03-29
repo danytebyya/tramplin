@@ -156,7 +156,7 @@
   padding-left: 48px;
   border-color: var(--color-bg-primary);
   background: var(--color-bg-primary);
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .favorites-page__search-input.input::placeholder {

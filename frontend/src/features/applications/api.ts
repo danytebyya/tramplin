@@ -23,6 +23,11 @@ export async function submitOpportunityApplicationRequest(opportunityId: string)
   return response.data;
 }
 
+export async function withdrawOpportunityApplicationRequest(opportunityId: string) {
+  const response = await apiClient.delete<SubmitApplicationResponse>(`/applications/${opportunityId}`);
+  return response.data;
+}
+
 export async function listMyAppliedOpportunityIdsRequest() {
   const response = await apiClient.get<MyApplicationIdsResponse>("/applications/mine/opportunity-ids");
   return response.data;

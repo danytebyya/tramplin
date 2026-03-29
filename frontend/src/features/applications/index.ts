@@ -1,1 +1,5 @@
-export { listMyAppliedOpportunityIdsRequest, submitOpportunityApplicationRequest } from "./api";
+export {
+  listMyAppliedOpportunityIdsRequest,
+  submitOpportunityApplicationRequest,
+  withdrawOpportunityApplicationRequest,
+} from "./api";

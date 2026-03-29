@@ -11,6 +11,9 @@ class OpportunityPublicRead(BaseModel):
     company_verified: bool
     company_rating: float | None = None
     company_reviews_count: int = 0
+    contact_email: str | None = None
+    company_website: str | None = None
+    company_phone: str | None = None
     salary_label: str
     location_label: str
     format: str
