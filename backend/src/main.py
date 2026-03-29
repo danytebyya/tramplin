@@ -11,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from src.api import api_router
 from src.core.config import settings
 from src.core.logging import setup_logging
+from src.db.session import SessionLocal
+from src.services import BootstrapService
 from src.utils.errors import AppError
 from src.utils.responses import error_response, success_response
 
@@ -48,6 +50,15 @@ app.mount(
 )
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+
+@app.on_event("startup")
+def bootstrap_staff_accounts() -> None:
+    db = SessionLocal()
+    try:
+        BootstrapService(db).ensure_initial_staff_accounts()
+    finally:
+        db.close()
 
 
 def _normalize_validation_message(error: dict) -> str:

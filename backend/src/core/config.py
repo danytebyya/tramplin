@@ -40,10 +40,15 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(default=30, alias="JWT_REFRESH_TOKEN_EXPIRE_DAYS")
     jwt_issuer: str = Field(default="tramplin-api", alias="JWT_ISSUER")
 
-    initial_admin_email: str = Field(default="admin@tramplin.local", alias="INITIAL_ADMIN_EMAIL")
-    initial_admin_password: str = Field(default="ChangeMe123", alias="INITIAL_ADMIN_PASSWORD")
+    initial_admin_email: str | None = Field(default=None, alias="INITIAL_ADMIN_EMAIL")
+    initial_admin_password: str | None = Field(default=None, alias="INITIAL_ADMIN_PASSWORD")
     initial_admin_display_name: str = Field(
         default="Platform Admin", alias="INITIAL_ADMIN_DISPLAY_NAME"
+    )
+    initial_curator_email: str | None = Field(default=None, alias="INITIAL_CURATOR_EMAIL")
+    initial_curator_password: str | None = Field(default=None, alias="INITIAL_CURATOR_PASSWORD")
+    initial_curator_display_name: str = Field(
+        default="Platform Curator", alias="INITIAL_CURATOR_DISPLAY_NAME"
     )
 
     otp_code_length: int = Field(default=6, alias="OTP_CODE_LENGTH")

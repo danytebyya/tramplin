@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import editIcon from "../../assets/icons/edit.svg";
 import deleteIcon from "../../assets/icons/delete.svg";
 import checkMarkIcon from "../../assets/icons/check-mark.svg";
+import closeIcon from "../../assets/icons/close.svg";
 import {
   CitySelection,
   readSelectedCityCookie,
@@ -28,8 +30,12 @@ import {
   updateApplicantDashboardRequest,
   useAuthStore,
 } from "../../features/auth";
+import {
+  OpportunityTagCatalogCategory,
+  listOpportunityTagCatalogRequest,
+} from "../../features/opportunity/api";
 import { resolveAvatarIcon } from "../../shared/lib";
-import { Badge, Button, Checkbox, Container, Input, Modal, Status } from "../../shared/ui";
+import { Badge, Button, Checkbox, Container, Input, Modal, Select } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import "./seeker-dashboard.css";
@@ -116,6 +122,25 @@ type CertificateDraft = Omit<EditableCertificate, "id">;
 type SectionMode = null | "about" | "skills" | "links" | "career-interests";
 type CollectionModal = null | "project" | "achievement" | "certificate";
 type SeekerLevel = "Junior" | "Middle" | "Senior";
+type SkillSelectorMode = "hard" | "soft" | "language" | "project-tech" | null;
+type DeleteModalState =
+  | null
+  | {
+      kind: "project" | "achievement" | "certificate";
+      id: string;
+      title: string;
+      entityLabel: string;
+    };
+
+type SkillsDraftState = {
+  level: SeekerLevel;
+  hardSkills: string[];
+  softSkills: string[];
+  languages: string[];
+  hardSkillsQuery: string;
+  softSkillsQuery: string;
+  languagesQuery: string;
+};
 
 const EMPTY_PROFILE_FORM: ProfileFormState = {
   fullName: "",
@@ -151,21 +176,112 @@ const EMPTY_CERTIFICATE_DRAFT: CertificateDraft = {
 
 const EMPLOYMENT_OPTIONS = ["Full-time", "Part-time", "Стажировка", "Проектная работа"];
 const WORK_FORMAT_OPTIONS = ["Оффлайн", "Гибрид", "Удаленно"];
+const SOFT_SKILL_CATEGORY_SLUGS = ["applicant-soft-skills"];
+const LANGUAGE_CATEGORY_SLUGS = ["spoken-languages"];
+const HARD_SKILL_EXCLUDED_CATEGORY_SLUGS = [
+  "applicant-soft-skills",
+  "spoken-languages",
+  "level-format",
+  "specialization",
+];
 
 function resolveLevelStatusVariant(level: SeekerLevel) {
   if (level === "Middle") {
-    return "pending-review" as const;
+    return "warning" as const;
   }
 
   if (level === "Senior") {
-    return "rejected" as const;
+    return "danger" as const;
   }
 
-  return "approved" as const;
+  return "success" as const;
 }
 
 function normalizeStringArray(value?: string[] | null) {
   return (value ?? []).map((item) => item.trim()).filter(Boolean);
+}
+
+function createSkillsDraft(profile: DashboardState["profile"]): SkillsDraftState {
+  return {
+    level: profile.level,
+    hardSkills: [...profile.hardSkills],
+    softSkills: [...profile.softSkills],
+    languages: [...profile.languages],
+    hardSkillsQuery: "",
+    softSkillsQuery: "",
+    languagesQuery: "",
+  };
+}
+
+function normalizeCatalogValue(value: string) {
+  return value.trim().toLocaleLowerCase("ru-RU");
+}
+
+function splitCommaSeparatedValues(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function collectCatalogItems(categories: OpportunityTagCatalogCategory[] | undefined, slugs: string[]) {
+  const itemMap = new Map<string, string>();
+
+  for (const category of categories ?? []) {
+    if (!slugs.includes(category.slug)) {
+      continue;
+    }
+
+    for (const item of category.items) {
+      const normalizedName = item.name.trim();
+      if (normalizedName.length === 0 || itemMap.has(normalizedName)) {
+        continue;
+      }
+      itemMap.set(normalizedName, normalizedName);
+    }
+  }
+
+  return Array.from(itemMap.values()).sort((left, right) => left.localeCompare(right, "ru"));
+}
+
+function collectHardSkillItems(categories: OpportunityTagCatalogCategory[] | undefined) {
+  const itemMap = new Map<string, string>();
+
+  for (const category of categories ?? []) {
+    if (HARD_SKILL_EXCLUDED_CATEGORY_SLUGS.includes(category.slug)) {
+      continue;
+    }
+
+    if (!["technology", "skill", "language"].includes(category.tagType)) {
+      continue;
+    }
+
+    for (const item of category.items) {
+      const normalizedName = item.name.trim();
+      if (normalizedName.length === 0 || itemMap.has(normalizedName)) {
+        continue;
+      }
+      itemMap.set(normalizedName, normalizedName);
+    }
+  }
+
+  return Array.from(itemMap.values()).sort((left, right) => left.localeCompare(right, "ru"));
+}
+
+function filterCatalogItems(items: string[], query: string, selected: string[]) {
+  const normalizedQuery = normalizeCatalogValue(query);
+
+  return items.filter((item) => {
+    if (selected.includes(item)) {
+      return false;
+    }
+
+    if (normalizedQuery.length === 0) {
+      return true;
+    }
+
+    return normalizeCatalogValue(item).includes(normalizedQuery);
+  });
 }
 
 function mapProject(project: ApplicantDashboardProject): EditableProject {
@@ -276,20 +392,40 @@ function buildProfileFormState(user: SeekerUser | undefined, state: DashboardSta
 }
 
 function calculateProfileCompletion(state: DashboardState, formState: ProfileFormState) {
-  const fields = [
-    formState.fullName,
-    formState.email,
-    formState.university,
-    formState.course,
-    formState.graduationYear,
-    state.profile.about,
-    state.profile.desiredSalaryFrom,
-    state.profile.level,
-    state.profile.hardSkills.join(","),
-    state.profile.portfolioUrl,
+  const weightedFields = [
+    { filled: formState.fullName.trim().length > 0, weight: 1 },
+    { filled: formState.email.trim().length > 0, weight: 1 },
+    { filled: formState.university.trim().length > 0, weight: 1 },
+    { filled: formState.course.trim().length > 0, weight: 1 },
+    { filled: formState.graduationYear.trim().length > 0, weight: 1 },
+    { filled: formState.city.trim().length > 0, weight: 1 },
+    { filled: state.profile.about.trim().length > 0, weight: 2 },
+    { filled: state.profile.level.trim().length > 0, weight: 1 },
+    { filled: state.profile.hardSkills.length > 0, weight: 2 },
+    { filled: state.profile.softSkills.length > 0, weight: 2 },
+    { filled: state.profile.languages.length > 0, weight: 2 },
+    { filled: state.profile.githubUrl.trim().length > 0, weight: 1 },
+    { filled: state.profile.gitlabUrl.trim().length > 0, weight: 1 },
+    { filled: state.profile.bitbucketUrl.trim().length > 0, weight: 1 },
+    { filled: state.profile.linkedinUrl.trim().length > 0, weight: 1 },
+    { filled: state.profile.portfolioUrl.trim().length > 0, weight: 1 },
+    { filled: state.profile.habrUrl.trim().length > 0, weight: 1 },
+    { filled: state.profile.resumeUrl.trim().length > 0, weight: 1 },
+    { filled: state.profile.desiredSalaryFrom.trim().length > 0, weight: 2 },
+    { filled: state.preferredCity.trim().length > 0, weight: 1 },
+    { filled: state.profile.preferredLocation.trim().length > 0, weight: 2 },
+    { filled: state.profile.employmentTypes.length > 0, weight: 2 },
+    { filled: state.profile.workFormats.length > 0, weight: 2 },
+    { filled: state.projects.length > 0, weight: 4 },
+    { filled: state.achievements.length > 0, weight: 3 },
+    { filled: state.certificates.length > 0, weight: 3 },
   ];
-  const filledCount = fields.filter((value) => value.trim().length > 0).length;
-  return Math.round((filledCount / fields.length) * 100);
+  const totalWeight = weightedFields.reduce((sum, item) => sum + item.weight, 0);
+  const filledWeight = weightedFields.reduce(
+    (sum, item) => sum + (item.filled ? item.weight : 0),
+    0,
+  );
+  return Math.round((filledWeight / totalWeight) * 100);
 }
 
 function buildPayload(state: DashboardState) {
@@ -359,17 +495,135 @@ function formatLinkLabel(value: string, fallback: string) {
   return value.trim() || fallback;
 }
 
-function splitTagInput(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function resolveOptionalEntityId(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
     ? value
     : null;
+}
+
+type SkillTagSelectorProps = {
+  fieldRef: RefObject<HTMLLabelElement>;
+  label: string;
+  placeholder: string;
+  selected: string[];
+  query: string;
+  options: string[];
+  isOpen: boolean;
+  isLoading: boolean;
+  onQueryChange: (value: string) => void;
+  onOpen: () => void;
+  onSelect: (value: string) => void;
+  onRemove: (value: string) => void;
+};
+
+function SkillTagSelector({
+  fieldRef,
+  label,
+  placeholder,
+  selected,
+  query,
+  options,
+  isOpen,
+  isLoading,
+  onQueryChange,
+  onOpen,
+  onSelect,
+  onRemove,
+}: SkillTagSelectorProps) {
+  const searchRef = useRef<HTMLDivElement | null>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setDropdownStyle(null);
+      return;
+    }
+
+    const updateDropdownPosition = () => {
+      const rect = searchRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      setDropdownStyle({
+        position: "fixed",
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: rect.width,
+      });
+    };
+
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+    };
+  }, [isOpen, options.length, query, selected.length]);
+
+  return (
+    <label ref={fieldRef} className="seeker-dashboard__field seeker-dashboard__field--skill-select">
+      <span className="seeker-dashboard__field-label">{label}</span>
+      <div className="seeker-dashboard__skill-selector">
+        <div ref={searchRef} className="seeker-dashboard__skill-search">
+          <Input
+            className="input--secondary input--sm"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onFocus={onOpen}
+            placeholder={placeholder}
+          />
+        </div>
+        {selected.length > 0 ? (
+          <div className="seeker-dashboard__skill-chip-list">
+            {selected.map((item) => (
+              <Badge key={item} variant="secondary" className="seeker-dashboard__skill-chip">
+                <span className="seeker-dashboard__skill-chip-text">{item}</span>
+                <button
+                  type="button"
+                  className="seeker-dashboard__skill-chip-remove"
+                  aria-label={`Удалить ${item}`}
+                  onClick={() => onRemove(item)}
+                >
+                  <span className="seeker-dashboard__skill-chip-remove-icon" aria-hidden="true" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        {isOpen && dropdownStyle && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="seeker-dashboard__skill-dropdown seeker-dashboard__skill-dropdown--portal"
+                style={dropdownStyle}
+                role="listbox"
+                aria-label={label}
+              >
+                {isLoading ? (
+                  <div className="seeker-dashboard__skill-dropdown-empty">Загружаем список...</div>
+                ) : options.length > 0 ? (
+                  options.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className="seeker-dashboard__skill-dropdown-option"
+                      onClick={() => onSelect(item)}
+                    >
+                      {item}
+                    </button>
+                  ))
+                ) : (
+                  <div className="seeker-dashboard__skill-dropdown-empty">Ничего не найдено</div>
+                )}
+              </div>,
+              document.body,
+            )
+          : null}
+      </div>
+    </label>
+  );
 }
 
 export function SeekerDashboardPage() {
@@ -383,6 +637,10 @@ export function SeekerDashboardPage() {
   const cityFieldRef = useRef<HTMLLabelElement | null>(null);
   const universityFieldRef = useRef<HTMLLabelElement | null>(null);
   const preferredLocationFieldRef = useRef<HTMLLabelElement | null>(null);
+  const hardSkillsFieldRef = useRef<HTMLLabelElement | null>(null);
+  const softSkillsFieldRef = useRef<HTMLLabelElement | null>(null);
+  const languagesFieldRef = useRef<HTMLLabelElement | null>(null);
+  const projectTechnologiesFieldRef = useRef<HTMLLabelElement | null>(null);
 
   const [headerCity, setHeaderCity] = useState(() => readSelectedCityCookie() ?? "");
   const [dashboardState, setDashboardState] = useState<DashboardState | null>(null);
@@ -392,12 +650,33 @@ export function SeekerDashboardPage() {
 
   const [activeEditor, setActiveEditor] = useState<SectionMode>(null);
   const [aboutDraft, setAboutDraft] = useState("");
-  const [skillsDraft, setSkillsDraft] = useState({
-    level: "Junior" as SeekerLevel,
-    hardSkillsText: "",
-    softSkillsText: "",
-    languagesText: "",
-  });
+  const [skillsDraft, setSkillsDraft] = useState<SkillsDraftState>(() =>
+    createSkillsDraft({
+      fullName: "",
+      university: "",
+      about: "",
+      studyCourse: "",
+      graduationYear: "",
+      level: "Junior",
+      hardSkills: [],
+      softSkills: [],
+      languages: [],
+      githubUrl: "",
+      gitlabUrl: "",
+      bitbucketUrl: "",
+      linkedinUrl: "",
+      portfolioUrl: "",
+      habrUrl: "",
+      resumeUrl: "",
+      desiredSalaryFrom: "",
+      preferredLocation: "",
+      employmentTypes: [],
+      workFormats: [],
+      profileViewsCount: 0,
+      recommendationsCount: 0,
+    }),
+  );
+  const [activeSkillSelector, setActiveSkillSelector] = useState<SkillSelectorMode>(null);
   const [linksDraft, setLinksDraft] = useState({
     githubUrl: "",
     gitlabUrl: "",
@@ -421,7 +700,9 @@ export function SeekerDashboardPage() {
   const [achievementDraft, setAchievementDraft] = useState<AchievementDraft>(EMPTY_ACHIEVEMENT_DRAFT);
   const [certificateDraft, setCertificateDraft] = useState<CertificateDraft>(EMPTY_CERTIFICATE_DRAFT);
   const [activeModal, setActiveModal] = useState<CollectionModal>(null);
+  const [pendingDelete, setPendingDelete] = useState<DeleteModalState>(null);
   const [modalProjectDraft, setModalProjectDraft] = useState<ProjectDraft>(EMPTY_PROJECT_DRAFT);
+  const [modalProjectTechnologiesQuery, setModalProjectTechnologiesQuery] = useState("");
   const [modalAchievementDraft, setModalAchievementDraft] =
     useState<AchievementDraft>(EMPTY_ACHIEVEMENT_DRAFT);
   const [modalCertificateDraft, setModalCertificateDraft] =
@@ -462,6 +743,14 @@ export function SeekerDashboardPage() {
     retry: false,
   });
 
+  const tagCatalogQuery = useQuery({
+    queryKey: ["opportunity-tag-catalog"],
+    queryFn: listOpportunityTagCatalogRequest,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
   const saveDashboardMutation = useMutation({
     mutationFn: updateApplicantDashboardRequest,
   });
@@ -471,6 +760,139 @@ export function SeekerDashboardPage() {
   const applicantAvatar = resolveAvatarIcon("applicant");
   const profilePublicId = user?.public_id ?? user?.id ?? "000000";
   const confirmIcon = <img src={checkMarkIcon} alt="" aria-hidden="true" className="seeker-dashboard__confirm-icon" />;
+  const hardSkillOptions = useMemo(
+    () => collectHardSkillItems(tagCatalogQuery.data),
+    [tagCatalogQuery.data],
+  );
+  const softSkillOptions = useMemo(
+    () => collectCatalogItems(tagCatalogQuery.data, SOFT_SKILL_CATEGORY_SLUGS),
+    [tagCatalogQuery.data],
+  );
+  const languageOptions = useMemo(
+    () => collectCatalogItems(tagCatalogQuery.data, LANGUAGE_CATEGORY_SLUGS),
+    [tagCatalogQuery.data],
+  );
+  const filteredHardSkillOptions = useMemo(
+    () => filterCatalogItems(hardSkillOptions, skillsDraft.hardSkillsQuery, skillsDraft.hardSkills),
+    [hardSkillOptions, skillsDraft.hardSkills, skillsDraft.hardSkillsQuery],
+  );
+  const filteredSoftSkillOptions = useMemo(
+    () => filterCatalogItems(softSkillOptions, skillsDraft.softSkillsQuery, skillsDraft.softSkills),
+    [softSkillOptions, skillsDraft.softSkills, skillsDraft.softSkillsQuery],
+  );
+  const filteredLanguageOptions = useMemo(
+    () => filterCatalogItems(languageOptions, skillsDraft.languagesQuery, skillsDraft.languages),
+    [languageOptions, skillsDraft.languages, skillsDraft.languagesQuery],
+  );
+  const modalProjectTechnologyItems = useMemo(
+    () => splitCommaSeparatedValues(modalProjectDraft.technologies),
+    [modalProjectDraft.technologies],
+  );
+  const filteredProjectTechnologyOptions = useMemo(
+    () =>
+      filterCatalogItems(
+        hardSkillOptions,
+        modalProjectTechnologiesQuery,
+        modalProjectTechnologyItems,
+      ),
+    [hardSkillOptions, modalProjectTechnologiesQuery, modalProjectTechnologyItems],
+  );
+  const projectSelectOptions = useMemo(
+    () =>
+      dashboardState?.projects
+        .filter((item) => item.title.trim().length > 0)
+        .map((item) => ({
+          value: item.title,
+          label: item.title,
+        })) ?? [],
+    [dashboardState?.projects],
+  );
+  const isProjectModalValid =
+    modalProjectDraft.title.trim().length > 0 &&
+    modalProjectDraft.description.trim().length > 0 &&
+    modalProjectTechnologyItems.length > 0 &&
+    modalProjectDraft.repositoryUrl.trim().length > 0;
+  const isAchievementModalValid =
+    modalAchievementDraft.title.trim().length > 0 &&
+    modalAchievementDraft.eventName.trim().length > 0 &&
+    modalAchievementDraft.projectName.trim().length > 0 &&
+    modalAchievementDraft.award.trim().length > 0;
+  const isCertificateModalValid =
+    modalCertificateDraft.title.trim().length > 0 &&
+    modalCertificateDraft.organizationName.trim().length > 0 &&
+    modalCertificateDraft.issuedAt.trim().length > 0 &&
+    modalCertificateDraft.credentialUrl.trim().length > 0;
+
+  const addSkillValue = (mode: Exclude<SkillSelectorMode, null>, value: string) => {
+    setSkillsDraft((current) => {
+      if (mode === "hard") {
+        return {
+          ...current,
+          hardSkills: current.hardSkills.includes(value) ? current.hardSkills : [...current.hardSkills, value],
+          hardSkillsQuery: "",
+        };
+      }
+
+      if (mode === "soft") {
+        return {
+          ...current,
+          softSkills: current.softSkills.includes(value) ? current.softSkills : [...current.softSkills, value],
+          softSkillsQuery: "",
+        };
+      }
+
+      return {
+        ...current,
+        languages: current.languages.includes(value) ? current.languages : [...current.languages, value],
+        languagesQuery: "",
+      };
+    });
+    setActiveSkillSelector(mode);
+  };
+
+  const removeSkillValue = (mode: Exclude<SkillSelectorMode, null>, value: string) => {
+    setSkillsDraft((current) => {
+      if (mode === "hard") {
+        return {
+          ...current,
+          hardSkills: current.hardSkills.filter((item) => item !== value),
+        };
+      }
+
+      if (mode === "soft") {
+        return {
+          ...current,
+          softSkills: current.softSkills.filter((item) => item !== value),
+        };
+      }
+
+      return {
+        ...current,
+        languages: current.languages.filter((item) => item !== value),
+      };
+    });
+  };
+
+  const addProjectTechnologyValue = (value: string) => {
+    const nextItems = modalProjectTechnologyItems.includes(value)
+      ? modalProjectTechnologyItems
+      : [...modalProjectTechnologyItems, value];
+
+    setModalProjectDraft((current) => ({
+      ...current,
+      technologies: nextItems.join(", "),
+    }));
+    setModalProjectTechnologiesQuery("");
+    setActiveSkillSelector("project-tech");
+  };
+
+  const removeProjectTechnologyValue = (value: string) => {
+    const nextItems = modalProjectTechnologyItems.filter((item) => item !== value);
+    setModalProjectDraft((current) => ({
+      ...current,
+      technologies: nextItems.join(", "),
+    }));
+  };
 
   useEffect(() => {
     if (!user || !dashboardQuery.data?.data || isInitialized) {
@@ -483,12 +905,7 @@ export function SeekerDashboardPage() {
     setHeaderCity(readSelectedCityCookie() || nextState.preferredCity || "");
     setCitySelectionConfirmed(true);
     setAboutDraft(nextState.profile.about);
-    setSkillsDraft({
-      level: nextState.profile.level,
-      hardSkillsText: nextState.profile.hardSkills.join(", "),
-      softSkillsText: nextState.profile.softSkills.join(", "),
-      languagesText: nextState.profile.languages.join(", "),
-    });
+    setSkillsDraft(createSkillsDraft(nextState.profile));
     setLinksDraft({
       githubUrl: nextState.profile.githubUrl,
       gitlabUrl: nextState.profile.gitlabUrl,
@@ -508,11 +925,20 @@ export function SeekerDashboardPage() {
   }, [dashboardQuery.data?.data, isInitialized, user]);
 
   useEffect(() => {
-    if (!isCityDropdownOpen) {
+    const isAnyDropdownOpen =
+      isCityDropdownOpen ||
+      isUniversityDropdownOpen ||
+      isPreferredLocationDropdownOpen ||
+      activeSkillSelector !== null;
+
+    if (!isAnyDropdownOpen) {
       return;
     }
 
     const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isSkillPortalClick = Boolean(target?.closest(".seeker-dashboard__skill-dropdown--portal"));
+
       if (!cityFieldRef.current?.contains(event.target as Node)) {
         setIsCityDropdownOpen(false);
       }
@@ -524,11 +950,48 @@ export function SeekerDashboardPage() {
       if (!preferredLocationFieldRef.current?.contains(event.target as Node)) {
         setIsPreferredLocationDropdownOpen(false);
       }
+
+      if (
+        !isSkillPortalClick &&
+        !hardSkillsFieldRef.current?.contains(event.target as Node) &&
+        activeSkillSelector === "hard"
+      ) {
+        setActiveSkillSelector(null);
+      }
+
+      if (
+        !isSkillPortalClick &&
+        !softSkillsFieldRef.current?.contains(event.target as Node) &&
+        activeSkillSelector === "soft"
+      ) {
+        setActiveSkillSelector(null);
+      }
+
+      if (
+        !isSkillPortalClick &&
+        !languagesFieldRef.current?.contains(event.target as Node) &&
+        activeSkillSelector === "language"
+      ) {
+        setActiveSkillSelector(null);
+      }
+
+      if (
+        !isSkillPortalClick &&
+        !projectTechnologiesFieldRef.current?.contains(event.target as Node) &&
+        activeSkillSelector === "project-tech"
+      ) {
+        setActiveSkillSelector(null);
+      }
     };
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isCityDropdownOpen]);
+  }, [
+    activeSkillSelector,
+    isCityDropdownOpen,
+    isPreferredLocationDropdownOpen,
+    isUniversityDropdownOpen,
+  ]);
 
   useEffect(() => {
     const normalizedQuery = profileForm.university.trim();
@@ -712,12 +1175,7 @@ export function SeekerDashboardPage() {
 
     setDashboardState(nextDashboard);
     setAboutDraft(nextDashboard.profile.about);
-    setSkillsDraft({
-      level: nextDashboard.profile.level,
-      hardSkillsText: nextDashboard.profile.hardSkills.join(", "),
-      softSkillsText: nextDashboard.profile.softSkills.join(", "),
-      languagesText: nextDashboard.profile.languages.join(", "),
-    });
+    setSkillsDraft(createSkillsDraft(nextDashboard.profile));
     setLinksDraft({
       githubUrl: nextDashboard.profile.githubUrl,
       gitlabUrl: nextDashboard.profile.gitlabUrl,
@@ -820,11 +1278,12 @@ export function SeekerDashboardPage() {
         profile: {
           ...dashboardState.profile,
           level: skillsDraft.level,
-          hardSkills: splitTagInput(skillsDraft.hardSkillsText),
-          softSkills: splitTagInput(skillsDraft.softSkillsText),
-          languages: splitTagInput(skillsDraft.languagesText),
+          hardSkills: skillsDraft.hardSkills,
+          softSkills: skillsDraft.softSkills,
+          languages: skillsDraft.languages,
         },
       });
+      setActiveSkillSelector(null);
       setActiveEditor(null);
     } catch {
       setSaveError("Не удалось сохранить навыки.");
@@ -920,6 +1379,9 @@ export function SeekerDashboardPage() {
     if (!dashboardState || !editingProjectId) {
       return;
     }
+    const previousProject = dashboardState.projects.find((item) => item.id === editingProjectId);
+    const nextTitle = projectDraft.title.trim();
+    const previousTitle = previousProject?.title.trim() ?? "";
     try {
       await persistDashboard({
         ...dashboardState,
@@ -928,6 +1390,14 @@ export function SeekerDashboardPage() {
             ? { id: item.id, ...projectDraft }
             : item,
         ),
+        achievements:
+          previousTitle.length > 0 && previousTitle !== nextTitle
+            ? dashboardState.achievements.map((item) =>
+                item.projectName === previousTitle
+                  ? { ...item, projectName: nextTitle }
+                  : item,
+              )
+            : dashboardState.achievements,
       });
       setEditingProjectId(null);
       setProjectDraft(EMPTY_PROJECT_DRAFT);
@@ -938,6 +1408,10 @@ export function SeekerDashboardPage() {
 
   const handleAchievementUpdate = async () => {
     if (!dashboardState || !editingAchievementId) {
+      return;
+    }
+    if (!achievementDraft.projectName.trim()) {
+      setSaveError("Для достижения нужно выбрать проект.");
       return;
     }
     try {
@@ -980,14 +1454,40 @@ export function SeekerDashboardPage() {
     if (!dashboardState) {
       return;
     }
+    const deletedProject = dashboardState.projects.find((item) => item.id === projectId);
+    const deletedProjectTitle = deletedProject?.title.trim() ?? "";
     try {
       await persistDashboard({
         ...dashboardState,
         projects: dashboardState.projects.filter((item) => item.id !== projectId),
+        achievements:
+          deletedProjectTitle.length > 0
+            ? dashboardState.achievements.filter((item) => item.projectName !== deletedProjectTitle)
+            : dashboardState.achievements,
       });
     } catch {
       setSaveError("Не удалось удалить проект.");
     }
+  };
+
+  const handlePendingDeleteConfirm = async () => {
+    if (!pendingDelete) {
+      return;
+    }
+
+    if (pendingDelete.kind === "project") {
+      await handleProjectDelete(pendingDelete.id);
+    }
+
+    if (pendingDelete.kind === "achievement") {
+      await handleAchievementDelete(pendingDelete.id);
+    }
+
+    if (pendingDelete.kind === "certificate") {
+      await handleCertificateDelete(pendingDelete.id);
+    }
+
+    setPendingDelete(null);
   };
 
   const handleAchievementDelete = async (achievementId: string) => {
@@ -1035,6 +1535,10 @@ export function SeekerDashboardPage() {
       });
       setActiveModal(null);
       setModalProjectDraft(EMPTY_PROJECT_DRAFT);
+      setModalProjectTechnologiesQuery("");
+      if (activeSkillSelector === "project-tech") {
+        setActiveSkillSelector(null);
+      }
     } catch {
       setSaveError("Не удалось добавить проект.");
     }
@@ -1042,6 +1546,10 @@ export function SeekerDashboardPage() {
 
   const handleAchievementAdd = async () => {
     if (!dashboardState || !modalAchievementDraft.title.trim()) {
+      return;
+    }
+    if (!modalAchievementDraft.projectName.trim()) {
+      setSaveError("Для достижения нужно выбрать проект.");
       return;
     }
     try {
@@ -1567,6 +2075,7 @@ export function SeekerDashboardPage() {
                     value={aboutDraft}
                     onChange={(event) => setAboutDraft(event.target.value)}
                     rows={12}
+                    placeholder="Расскажите о себе, своём опыте, интересах и карьерных целях"
                   />
                 ) : dashboardState.profile.about ? (
                   dashboardState.profile.about.split(/\n+/).map((paragraph) => (
@@ -1578,7 +2087,13 @@ export function SeekerDashboardPage() {
               </div>
             </article>
 
-            <article className="seeker-dashboard__content-card">
+            <article
+              className={
+                activeEditor === "skills"
+                  ? "seeker-dashboard__content-card seeker-dashboard__content-card--skills-editing"
+                  : "seeker-dashboard__content-card"
+              }
+            >
               <div className="seeker-dashboard__content-card-head">
                 <h3 className="seeker-dashboard__content-card-title">Навыки</h3>
                 {activeEditor === "skills" ? (
@@ -1591,12 +2106,8 @@ export function SeekerDashboardPage() {
                     className="seeker-dashboard__icon-button"
                     aria-label="Редактировать навыки"
                     onClick={() => {
-                      setSkillsDraft({
-                        level: dashboardState.profile.level,
-                        hardSkillsText: dashboardState.profile.hardSkills.join(", "),
-                        softSkillsText: dashboardState.profile.softSkills.join(", "),
-                        languagesText: dashboardState.profile.languages.join(", "),
-                      });
+                      setSkillsDraft(createSkillsDraft(dashboardState.profile));
+                      setActiveSkillSelector(null);
                       setActiveEditor("skills");
                     }}
                   >
@@ -1622,47 +2133,68 @@ export function SeekerDashboardPage() {
                         ))}
                       </div>
                     </div>
-                    <label className="seeker-dashboard__field">
-                      <span className="seeker-dashboard__field-label">Hard skills</span>
-                      <Input
-                        className="input--secondary input--sm"
-                        value={skillsDraft.hardSkillsText}
-                        onChange={(event) =>
-                          setSkillsDraft((current) => ({ ...current, hardSkillsText: event.target.value }))
-                        }
-                        placeholder="Через запятую"
-                      />
-                    </label>
-                    <label className="seeker-dashboard__field">
-                      <span className="seeker-dashboard__field-label">Soft skills</span>
-                      <Input
-                        className="input--secondary input--sm"
-                        value={skillsDraft.softSkillsText}
-                        onChange={(event) =>
-                          setSkillsDraft((current) => ({ ...current, softSkillsText: event.target.value }))
-                        }
-                        placeholder="Через запятую"
-                      />
-                    </label>
-                    <label className="seeker-dashboard__field">
-                      <span className="seeker-dashboard__field-label">Языки</span>
-                      <Input
-                        className="input--secondary input--sm"
-                        value={skillsDraft.languagesText}
-                        onChange={(event) =>
-                          setSkillsDraft((current) => ({ ...current, languagesText: event.target.value }))
-                        }
-                        placeholder="Через запятую"
-                      />
-                    </label>
+                    <SkillTagSelector
+                      fieldRef={hardSkillsFieldRef}
+                      label="Hard skills"
+                      placeholder="Найдите hard skill"
+                      selected={skillsDraft.hardSkills}
+                      query={skillsDraft.hardSkillsQuery}
+                      options={filteredHardSkillOptions}
+                      isOpen={activeSkillSelector === "hard"}
+                      isLoading={tagCatalogQuery.isLoading}
+                      onQueryChange={(value) => {
+                        setSkillsDraft((current) => ({ ...current, hardSkillsQuery: value }));
+                        setActiveSkillSelector("hard");
+                      }}
+                      onOpen={() => setActiveSkillSelector("hard")}
+                      onSelect={(value) => addSkillValue("hard", value)}
+                      onRemove={(value) => removeSkillValue("hard", value)}
+                    />
+                    <SkillTagSelector
+                      fieldRef={softSkillsFieldRef}
+                      label="Soft skills"
+                      placeholder="Найдите soft skill"
+                      selected={skillsDraft.softSkills}
+                      query={skillsDraft.softSkillsQuery}
+                      options={filteredSoftSkillOptions}
+                      isOpen={activeSkillSelector === "soft"}
+                      isLoading={tagCatalogQuery.isLoading}
+                      onQueryChange={(value) => {
+                        setSkillsDraft((current) => ({ ...current, softSkillsQuery: value }));
+                        setActiveSkillSelector("soft");
+                      }}
+                      onOpen={() => setActiveSkillSelector("soft")}
+                      onSelect={(value) => addSkillValue("soft", value)}
+                      onRemove={(value) => removeSkillValue("soft", value)}
+                    />
+                    <SkillTagSelector
+                      fieldRef={languagesFieldRef}
+                      label="Языки"
+                      placeholder="Найдите язык"
+                      selected={skillsDraft.languages}
+                      query={skillsDraft.languagesQuery}
+                      options={filteredLanguageOptions}
+                      isOpen={activeSkillSelector === "language"}
+                      isLoading={tagCatalogQuery.isLoading}
+                      onQueryChange={(value) => {
+                        setSkillsDraft((current) => ({ ...current, languagesQuery: value }));
+                        setActiveSkillSelector("language");
+                      }}
+                      onOpen={() => setActiveSkillSelector("language")}
+                      onSelect={(value) => addSkillValue("language", value)}
+                      onRemove={(value) => removeSkillValue("language", value)}
+                    />
                   </>
                 ) : (
                   <>
                     <div className="seeker-dashboard__skill-group">
                       <span className="seeker-dashboard__skill-title">Уровень</span>
-                      <Status variant={resolveLevelStatusVariant(dashboardState.profile.level)}>
+                      <Badge
+                        variant={resolveLevelStatusVariant(dashboardState.profile.level)}
+                        className="seeker-dashboard__level-badge"
+                      >
                         {dashboardState.profile.level}
-                      </Status>
+                      </Badge>
                     </div>
                     <div className="seeker-dashboard__skill-group">
                       <span className="seeker-dashboard__skill-title">Hard skills</span>
@@ -1821,7 +2353,18 @@ export function SeekerDashboardPage() {
                           <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
                         </button>
                       )}
-                      <button type="button" className="seeker-dashboard__icon-button" onClick={() => void handleProjectDelete(project.id)}>
+                      <button
+                        type="button"
+                        className="seeker-dashboard__icon-button"
+                        onClick={() =>
+                          setPendingDelete({
+                            kind: "project",
+                            id: project.id,
+                            title: "Удаление проекта",
+                            entityLabel: project.title || "этот проект",
+                          })
+                        }
+                      >
                         <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
                       </button>
                     </div>
@@ -1933,7 +2476,18 @@ export function SeekerDashboardPage() {
                           <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
                         </button>
                       )}
-                      <button type="button" className="seeker-dashboard__icon-button" onClick={() => void handleAchievementDelete(item.id)}>
+                      <button
+                        type="button"
+                        className="seeker-dashboard__icon-button"
+                        onClick={() =>
+                          setPendingDelete({
+                            kind: "achievement",
+                            id: item.id,
+                            title: "Удаление достижения",
+                            entityLabel: item.title || "это достижение",
+                          })
+                        }
+                      >
                         <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
                       </button>
                     </div>
@@ -1941,25 +2495,54 @@ export function SeekerDashboardPage() {
                   <div className="seeker-dashboard__collection-card-body">
                     {editingAchievementId === item.id ? (
                       <>
-                        {[
-                          ["Мероприятие", "eventName"],
-                          ["Проект", "projectName"],
-                          ["Награда", "award"],
-                        ].map(([label, key]) => (
-                          <label key={key} className="seeker-dashboard__field">
-                            <span className="seeker-dashboard__collection-card-label">{`${label}:`}</span>
-                            <Input
-                              className="input--secondary input--sm"
-                              value={achievementDraft[key as keyof AchievementDraft]}
-                              onChange={(event) =>
-                                setAchievementDraft((current) => ({
-                                  ...current,
-                                  [key]: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                        ))}
+                        <label className="seeker-dashboard__field">
+                          <span className="seeker-dashboard__collection-card-label">Мероприятие:</span>
+                          <Input
+                            className="input--secondary input--sm"
+                            value={achievementDraft.eventName}
+                            onChange={(event) =>
+                              setAchievementDraft((current) => ({
+                                ...current,
+                                eventName: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="seeker-dashboard__field">
+                          <span className="seeker-dashboard__collection-card-label">Проект:</span>
+                          <Select
+                            className="seeker-dashboard__select"
+                            variant="secondary"
+                            size="sm"
+                            placeholder={
+                              projectSelectOptions.length > 0
+                                ? "Выберите проект"
+                                : "Сначала добавьте проект"
+                            }
+                            value={achievementDraft.projectName}
+                            options={projectSelectOptions}
+                            disabled={projectSelectOptions.length === 0}
+                            onValueChange={(value) =>
+                              setAchievementDraft((current) => ({
+                                ...current,
+                                projectName: value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="seeker-dashboard__field">
+                          <span className="seeker-dashboard__collection-card-label">Награда:</span>
+                          <Input
+                            className="input--secondary input--sm"
+                            value={achievementDraft.award}
+                            onChange={(event) =>
+                              setAchievementDraft((current) => ({
+                                ...current,
+                                award: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
                       </>
                     ) : (
                       <>
@@ -2011,7 +2594,18 @@ export function SeekerDashboardPage() {
                           <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
                         </button>
                       )}
-                      <button type="button" className="seeker-dashboard__icon-button" onClick={() => void handleCertificateDelete(item.id)}>
+                      <button
+                        type="button"
+                        className="seeker-dashboard__icon-button"
+                        onClick={() =>
+                          setPendingDelete({
+                            kind: "certificate",
+                            id: item.id,
+                            title: "Удаление сертификата",
+                            entityLabel: item.title || "этот сертификат",
+                          })
+                        }
+                      >
                         <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
                       </button>
                     </div>
@@ -2068,41 +2662,196 @@ export function SeekerDashboardPage() {
         </section>
       </Container>
 
-      <Modal title="Добавить проект" isOpen={activeModal === "project"} onClose={() => setActiveModal(null)}>
+      <Modal
+        title="Добавление проекта"
+        isOpen={activeModal === "project"}
+        onClose={() => {
+          setActiveModal(null);
+          setModalProjectTechnologiesQuery("");
+          if (activeSkillSelector === "project-tech") {
+            setActiveSkillSelector(null);
+          }
+        }}
+        titleAccentColor="var(--color-secondary)"
+      >
         <div className="seeker-dashboard__modal-form">
-          <Input className="input--secondary input--sm" value={modalProjectDraft.title} onChange={(event) => setModalProjectDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название проекта" />
-          <textarea className="seeker-dashboard__textarea seeker-dashboard__textarea--sm" value={modalProjectDraft.description} onChange={(event) => setModalProjectDraft((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Описание" />
-          <Input className="input--secondary input--sm" value={modalProjectDraft.technologies} onChange={(event) => setModalProjectDraft((current) => ({ ...current, technologies: event.target.value }))} placeholder="Технологии" />
-          <Input className="input--secondary input--sm" value={modalProjectDraft.periodLabel} onChange={(event) => setModalProjectDraft((current) => ({ ...current, periodLabel: event.target.value }))} placeholder="Период" />
-          <Input className="input--secondary input--sm" value={modalProjectDraft.roleName} onChange={(event) => setModalProjectDraft((current) => ({ ...current, roleName: event.target.value }))} placeholder="Роль" />
-          <Input className="input--secondary input--sm" value={modalProjectDraft.repositoryUrl} onChange={(event) => setModalProjectDraft((current) => ({ ...current, repositoryUrl: event.target.value }))} placeholder="Ссылка" />
-          <Button type="button" variant="secondary" size="md" onClick={() => void handleProjectAdd()}>
-            Сохранить
-          </Button>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Название проекта</span>
+            <Input className="input--secondary input--sm" value={modalProjectDraft.title} onChange={(event) => setModalProjectDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название проекта" />
+          </label>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Описание</span>
+            <textarea className="seeker-dashboard__textarea seeker-dashboard__textarea--sm" value={modalProjectDraft.description} onChange={(event) => setModalProjectDraft((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Описание" />
+          </label>
+          <SkillTagSelector
+            fieldRef={projectTechnologiesFieldRef}
+            label="Технологии"
+            placeholder="Найдите hard skill"
+            selected={modalProjectTechnologyItems}
+            query={modalProjectTechnologiesQuery}
+            options={filteredProjectTechnologyOptions}
+            isOpen={activeSkillSelector === "project-tech"}
+            isLoading={tagCatalogQuery.isLoading}
+            onQueryChange={(value) => {
+              setModalProjectTechnologiesQuery(value);
+              setActiveSkillSelector("project-tech");
+            }}
+            onOpen={() => setActiveSkillSelector("project-tech")}
+            onSelect={addProjectTechnologyValue}
+            onRemove={removeProjectTechnologyValue}
+          />
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Ссылка</span>
+            <Input className="input--secondary input--sm" value={modalProjectDraft.repositoryUrl} onChange={(event) => setModalProjectDraft((current) => ({ ...current, repositoryUrl: event.target.value }))} placeholder="Ссылка" />
+          </label>
+          <div className="seeker-dashboard__modal-actions">
+            <Button
+              type="button"
+              variant="secondary-outline"
+              size="md"
+              fullWidth
+              onClick={() => {
+                setActiveModal(null);
+                setModalProjectTechnologiesQuery("");
+                if (activeSkillSelector === "project-tech") {
+                  setActiveSkillSelector(null);
+                }
+              }}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              fullWidth
+              disabled={!isProjectModalValid}
+              onClick={() => void handleProjectAdd()}
+            >
+              Добавить
+            </Button>
+          </div>
         </div>
       </Modal>
 
-      <Modal title="Добавить достижение" isOpen={activeModal === "achievement"} onClose={() => setActiveModal(null)}>
+      <Modal
+        title="Добавление достижения"
+        isOpen={activeModal === "achievement"}
+        onClose={() => setActiveModal(null)}
+        titleAccentColor="var(--color-secondary)"
+      >
         <div className="seeker-dashboard__modal-form">
-          <Input className="input--secondary input--sm" value={modalAchievementDraft.title} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
-          <Input className="input--secondary input--sm" value={modalAchievementDraft.eventName} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, eventName: event.target.value }))} placeholder="Мероприятие" />
-          <Input className="input--secondary input--sm" value={modalAchievementDraft.projectName} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, projectName: event.target.value }))} placeholder="Проект" />
-          <Input className="input--secondary input--sm" value={modalAchievementDraft.award} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, award: event.target.value }))} placeholder="Награда" />
-          <Button type="button" variant="secondary" size="md" onClick={() => void handleAchievementAdd()}>
-            Сохранить
-          </Button>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Название</span>
+            <Input className="input--secondary input--sm" value={modalAchievementDraft.title} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
+          </label>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Мероприятие</span>
+            <Input className="input--secondary input--sm" value={modalAchievementDraft.eventName} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, eventName: event.target.value }))} placeholder="Мероприятие" />
+          </label>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Проект</span>
+            <Select
+              className="seeker-dashboard__select"
+              variant="secondary"
+              size="sm"
+              placeholder={
+                projectSelectOptions.length > 0
+                  ? "Выберите проект"
+                  : "Сначала добавьте проект"
+              }
+              value={modalAchievementDraft.projectName}
+              options={projectSelectOptions}
+              disabled={projectSelectOptions.length === 0}
+              onValueChange={(value) =>
+                setModalAchievementDraft((current) => ({
+                  ...current,
+                  projectName: value,
+                }))
+              }
+            />
+          </label>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Награда</span>
+            <Input className="input--secondary input--sm" value={modalAchievementDraft.award} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, award: event.target.value }))} placeholder="Награда" />
+          </label>
+          <div className="seeker-dashboard__modal-actions">
+            <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setActiveModal(null)}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              fullWidth
+              disabled={!isAchievementModalValid}
+              onClick={() => void handleAchievementAdd()}
+            >
+              Добавить
+            </Button>
+          </div>
         </div>
       </Modal>
 
-      <Modal title="Добавить сертификат" isOpen={activeModal === "certificate"} onClose={() => setActiveModal(null)}>
+      <Modal
+        title="Добавление сертификата"
+        isOpen={activeModal === "certificate"}
+        onClose={() => setActiveModal(null)}
+        titleAccentColor="var(--color-secondary)"
+      >
         <div className="seeker-dashboard__modal-form">
-          <Input className="input--secondary input--sm" value={modalCertificateDraft.title} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
-          <Input className="input--secondary input--sm" value={modalCertificateDraft.organizationName} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, organizationName: event.target.value }))} placeholder="Организация" />
-          <Input className="input--secondary input--sm" value={modalCertificateDraft.issuedAt} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, issuedAt: event.target.value }))} placeholder="Дата в формате YYYY-MM-DD" />
-          <Input className="input--secondary input--sm" value={modalCertificateDraft.credentialUrl} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, credentialUrl: event.target.value }))} placeholder="Ссылка" />
-          <Button type="button" variant="secondary" size="md" onClick={() => void handleCertificateAdd()}>
-            Сохранить
-          </Button>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Название</span>
+            <Input className="input--secondary input--sm" value={modalCertificateDraft.title} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
+          </label>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Организация</span>
+            <Input className="input--secondary input--sm" value={modalCertificateDraft.organizationName} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, organizationName: event.target.value }))} placeholder="Организация" />
+          </label>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Дата</span>
+            <Input className="input--secondary input--sm" value={modalCertificateDraft.issuedAt} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, issuedAt: event.target.value }))} placeholder="Дата в формате YYYY-MM-DD" />
+          </label>
+          <label className="seeker-dashboard__field">
+            <span className="seeker-dashboard__field-label">Ссылка</span>
+            <Input className="input--secondary input--sm" value={modalCertificateDraft.credentialUrl} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, credentialUrl: event.target.value }))} placeholder="Ссылка" />
+          </label>
+          <div className="seeker-dashboard__modal-actions">
+            <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setActiveModal(null)}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              fullWidth
+              disabled={!isCertificateModalValid}
+              onClick={() => void handleCertificateAdd()}
+            >
+              Добавить
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title={pendingDelete?.title ?? ""}
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        titleAccentColor="var(--color-secondary)"
+      >
+        <div className="seeker-dashboard__modal-form">
+          <p className="seeker-dashboard__paragraph">
+            {`Удалить ${pendingDelete?.entityLabel ?? "элемент"}?`}
+          </p>
+          <div className="seeker-dashboard__modal-actions">
+            <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setPendingDelete(null)}>
+              Отмена
+            </Button>
+            <Button type="button" variant="danger" size="md" fullWidth onClick={() => void handlePendingDeleteConfirm()}>
+              Удалить
+            </Button>
+          </div>
         </div>
       </Modal>
 

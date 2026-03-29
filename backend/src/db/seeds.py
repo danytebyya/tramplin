@@ -154,6 +154,33 @@ TAG_CATALOG = [
             "Product Manager", "UI/UX Designer",
         ],
     },
+    {
+        "slug": "applicant-hard-skills",
+        "name": "Hard skills",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "Python", "Django", "FastAPI", "TypeScript", "React", "PostgreSQL", "MySQL", "Docker",
+            "Git", "REST API",
+        ],
+    },
+    {
+        "slug": "applicant-soft-skills",
+        "name": "Soft skills",
+        "tag_type": TagType.SKILL,
+        "items": [
+            "Командная работа", "Коммуникабельность", "Аналитическое мышление", "Ответственность",
+            "Критическое мышление", "Тайм-менеджмент",
+        ],
+    },
+    {
+        "slug": "spoken-languages",
+        "name": "Языки",
+        "tag_type": TagType.LANGUAGE,
+        "items": [
+            "Русский", "Английский A1", "Английский A2", "Английский B1", "Английский B2",
+            "Английский C1", "Английский C2", "Немецкий", "Французский", "Испанский", "Китайский",
+        ],
+    },
 ]
 
 

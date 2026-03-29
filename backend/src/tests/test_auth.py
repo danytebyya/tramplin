@@ -2,12 +2,17 @@ import re
 from uuid import UUID
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
+from fastapi.testclient import TestClient
 
 from src.core.config import settings
+from src.db.session import get_db
 from src.enums import UserRole, UserStatus
 from src.models import EmailVerificationState, User
+import src.main as main_module
+from src.main import app
 
 
 def _request_code(client, db_session, email: str, *, force_resend: bool = False) -> str:
@@ -225,6 +230,54 @@ def test_non_curator_users_receive_public_id_while_curator_does_not(db_session):
 
     assert re.fullmatch(r"\d{8}", applicant.public_id or "")
     assert curator.public_id is None
+
+
+def test_startup_bootstraps_initial_curator_from_env(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "initial_curator_email", "bootstrap-curator@example.com")
+    monkeypatch.setattr(settings, "initial_curator_password", "BootstrapPass123")
+    monkeypatch.setattr(settings, "initial_curator_display_name", "Bootstrap Curator")
+    monkeypatch.setattr(settings, "initial_admin_email", "")
+    monkeypatch.setattr(settings, "initial_admin_password", "")
+
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(),
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+    monkeypatch.setattr(main_module, "SessionLocal", testing_session_local)
+
+    def override_get_db():
+        session = testing_session_local()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(app) as test_client:
+            response = test_client.post(
+                "/api/v1/auth/sessions",
+                json={
+                    "email": "bootstrap-curator@example.com",
+                    "password": "BootstrapPass123",
+                },
+            )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["data"]["user"]["email"] == "bootstrap-curator@example.com"
+        assert body["data"]["user"]["role"] == "curator"
+
+        persisted_user = db_session.execute(
+            select(User).where(User.email == "bootstrap-curator@example.com")
+        ).scalar_one()
+        assert persisted_user.role == UserRole.CURATOR
+        assert persisted_user.curator_profile is not None
+        assert persisted_user.curator_profile.full_name == "Bootstrap Curator"
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_check_email_returns_exists_for_registered_user(client, db_session):
