@@ -10,7 +10,7 @@ import {
   removeSelectedCityCookie,
   writeSelectedCityCookie,
 } from "../../features/city-selector";
-import { listOpportunitiesRequest } from "../../entities/opportunity/api";
+import { getPlatformStatsRequest, listOpportunitiesRequest } from "../../entities/opportunity/api";
 import {
   addFavoriteOpportunityRequest,
   FavoriteAuthModal,
@@ -134,6 +134,12 @@ export function HomePage() {
     enabled: !isModerationRole,
     staleTime: 5 * 60 * 1000,
   });
+  const platformStatsQuery = useQuery({
+    queryKey: ["platform", "stats"],
+    queryFn: getPlatformStatsRequest,
+    enabled: !isModerationRole,
+    staleTime: 60 * 1000,
+  });
   const currentUserQuery = useQuery({
     queryKey: ["auth", "me"],
     queryFn: meRequest,
@@ -223,6 +229,15 @@ export function HomePage() {
       },
     );
   }, [opportunities]);
+  const platformCounts = platformStatsQuery.data ?? {
+    companiesCount: 0,
+    applicantsCount: 0,
+    vacanciesCount: opportunityStats.vacancies,
+    internshipsCount: opportunityStats.internships,
+    eventsCount: opportunityStats.events,
+    mentorshipsCount: opportunityStats.mentorships,
+  };
+  const formatPlatformCount = (value: number) => new Intl.NumberFormat("ru-RU").format(value);
   const applicantSteps = [
     "Зарегистрируйтесь",
     "Найдите возможности",
@@ -267,10 +282,12 @@ export function HomePage() {
     "Чат с работодателями",
   ];
   const platformStats: Array<{ value: string; label: string; featured?: boolean }> = [
-    { value: String(opportunityStats.vacancies), label: "вакансии", featured: true },
-    { value: String(opportunityStats.internships), label: "стажировок" },
-    { value: String(opportunityStats.events), label: "мероприятий" },
-    { value: String(opportunityStats.mentorships), label: "менторов" },
+    { value: formatPlatformCount(platformCounts.companiesCount), label: "компаний", featured: true },
+    { value: formatPlatformCount(platformCounts.applicantsCount), label: "соискателей", featured: true },
+    { value: formatPlatformCount(platformCounts.vacanciesCount), label: "вакансии" },
+    { value: formatPlatformCount(platformCounts.internshipsCount), label: "стажировок" },
+    { value: formatPlatformCount(platformCounts.eventsCount), label: "мероприятий" },
+    { value: formatPlatformCount(platformCounts.mentorshipsCount), label: "менторов" },
   ];
   const landingTheme =
     roleName === "applicant"

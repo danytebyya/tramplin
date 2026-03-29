@@ -8,6 +8,7 @@ from src.api.v1.endpoints.favorites import router as favorites_router
 from src.api.v1.endpoints.moderation import router as moderation_router
 from src.api.v1.endpoints.notifications import router as notifications_router
 from src.api.v1.endpoints.opportunities import router as opportunities_router
+from src.api.v1.endpoints.platform import router as platform_router
 from src.api.v1.endpoints.presence import router as presence_router
 from src.api.v1.endpoints.tags import router as tags_router
 from src.api.v1.endpoints.users import router as users_router
@@ -21,6 +22,7 @@ api_router.include_router(favorites_router)
 api_router.include_router(moderation_router)
 api_router.include_router(notifications_router)
 api_router.include_router(opportunities_router)
+api_router.include_router(platform_router)
 api_router.include_router(presence_router)
 api_router.include_router(tags_router)
 api_router.include_router(users_router)

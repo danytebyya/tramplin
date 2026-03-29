@@ -246,7 +246,7 @@ body.home-page--map-floating {
 .home-page__explorer-content {
   position: relative;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
   transition: height 320ms ease;
 }
 
@@ -385,6 +385,7 @@ body.home-page--map-floating {
 .home-page__explorer-panel--active {
   position: relative;
   opacity: 1;
+  overflow: visible;
   transform: translate3d(0, 0, 0);
 }
 

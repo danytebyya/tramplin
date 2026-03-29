@@ -23,9 +23,18 @@
   width: 100%;
 }
 
+.opportunity-filters__toolbar--map {
+  gap: 0;
+}
+
 .opportunity-filters__search-group {
   flex: 1 1 0;
   min-width: 0;
+  transition: flex 220ms var(--opportunity-filters-easing);
+}
+
+.opportunity-filters__search-group--expanded {
+  flex: 1 1 100%;
 }
 
 .opportunity-filters__actions {
@@ -34,6 +43,22 @@
   gap: 16px;
   flex: 2 1 0;
   min-width: 0;
+  overflow: visible;
+  transition:
+    flex 220ms var(--opportunity-filters-easing),
+    opacity 180ms ease,
+    transform 220ms var(--opportunity-filters-easing);
+}
+
+.opportunity-filters__actions--hidden {
+  flex: 0 1 0;
+  max-width: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(12px);
+  margin: 0;
+  pointer-events: none;
 }
 
 .opportunity-filters__dropdown-shell {
@@ -158,6 +183,7 @@
 }
 
 .opportunity-filters__reset {
+  display: none;
   border: none;
   background: transparent;
   color: var(--home-accent, var(--color-secondary));

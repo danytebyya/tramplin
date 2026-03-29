@@ -753,6 +753,13 @@
   color: var(--color-text-primary);
 }
 
+.chat-workspace__composer-error {
+  padding: 0 4px;
+  color: var(--color-danger);
+  font-size: 13px;
+  line-height: 18px;
+}
+
 .chat-workspace__composer-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

@@ -31,6 +31,26 @@ type OpportunityFeedResponse = {
   };
 };
 
+type PlatformStatsResponse = {
+  data?: {
+    companies_count?: number;
+    applicants_count?: number;
+    vacancies_count?: number;
+    internships_count?: number;
+    events_count?: number;
+    mentorships_count?: number;
+  };
+};
+
+export type PlatformStats = {
+  companiesCount: number;
+  applicantsCount: number;
+  vacanciesCount: number;
+  internshipsCount: number;
+  eventsCount: number;
+  mentorshipsCount: number;
+};
+
 function isPublicOpportunity(item: OpportunityApiItem) {
   return item.business_status === "active" && item.moderation_status === "approved";
 }
@@ -69,4 +89,18 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
       moderationStatus: item.moderation_status,
     })),
   ];
+}
+
+export async function getPlatformStatsRequest(): Promise<PlatformStats> {
+  const response = await apiClient.get<PlatformStatsResponse>("/platform/stats");
+  const data = response.data?.data;
+
+  return {
+    companiesCount: data?.companies_count ?? 0,
+    applicantsCount: data?.applicants_count ?? 0,
+    vacanciesCount: data?.vacancies_count ?? 0,
+    internshipsCount: data?.internships_count ?? 0,
+    eventsCount: data?.events_count ?? 0,
+    mentorshipsCount: data?.mentorships_count ?? 0,
+  };
 }

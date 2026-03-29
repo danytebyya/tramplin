@@ -202,9 +202,20 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
         </div>
       ) : null}
 
-      {viewMode === "list" ? (
-        <div className="opportunity-filters__toolbar">
-        <div className="opportunity-filters__search-group">
+      <div
+        className={
+          viewMode === "list"
+            ? "opportunity-filters__toolbar"
+            : "opportunity-filters__toolbar opportunity-filters__toolbar--map"
+        }
+      >
+        <div
+          className={
+            viewMode === "list"
+              ? "opportunity-filters__search-group"
+              : "opportunity-filters__search-group opportunity-filters__search-group--expanded"
+          }
+        >
           <label className="opportunity-filters__search" aria-label="Поиск по возможностям">
             <Input
               placeholder="Поиск"
@@ -214,10 +225,17 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
           </label>
         </div>
 
-        <div className="opportunity-filters__actions">
-          <div ref={sortRef} className="opportunity-filters__dropdown-shell">
-            <button
-              type="button"
+        <div
+          className={
+            viewMode === "list"
+              ? "opportunity-filters__actions"
+              : "opportunity-filters__actions opportunity-filters__actions--hidden"
+          }
+          aria-hidden={viewMode !== "list"}
+        >
+            <div ref={sortRef} className="opportunity-filters__dropdown-shell">
+              <button
+                type="button"
               className="opportunity-filters__placeholder"
               onClick={() => setIsSortOpen((current) => !current)}
             >
@@ -846,15 +864,11 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                 <Button type="button" variant="secondary" fullWidth>
                   Показать результаты
                 </Button>
-                <Button type="button" variant="secondary-outline" fullWidth onClick={resetAllFilters}>
-                  Сбросить фильтры
-                </Button>
+              </div>
               </div>
             </div>
           </div>
-        </div>
-        </div>
-      ) : null}
+      </div>
     </section>
   );
 }

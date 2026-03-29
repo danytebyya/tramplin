@@ -177,6 +177,8 @@ export function ChatWorkspace({
   const [decryptedPreviewMap, setDecryptedPreviewMap] = useState<Record<string, string>>({});
   const [decryptedMessageMap, setDecryptedMessageMap] = useState<Record<string, string>>({});
   const [optimisticMessages, setOptimisticMessages] = useState<ChatMessageView[]>([]);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
   const deferredSearchValue = useDeferredValue(searchValue);
 
   const conversationsQuery = useQuery({
@@ -518,6 +520,7 @@ export function ChatWorkspace({
   const handleSelectConversation = (conversationId: string) => {
     setEditingMessageId(null);
     setMessageDraft("");
+    setComposerError(null);
     setActiveDraftContact(null);
     setActiveConversationId(conversationId);
   };
@@ -525,6 +528,7 @@ export function ChatWorkspace({
   const handleSelectSearchContact = (contact: ChatContact) => {
     setMessageDraft("");
     setEditingMessageId(null);
+    setComposerError(null);
     const existingConversationId = resolveExistingConversationId(contact);
     if (existingConversationId) {
       setActiveDraftContact(null);
@@ -544,6 +548,7 @@ export function ChatWorkspace({
   const handleCancelEditing = () => {
     setEditingMessageId(null);
     setMessageDraft("");
+    setComposerError(null);
   };
 
   const handleDeleteMessage = async (message: ChatMessageView) => {
@@ -568,7 +573,7 @@ export function ChatWorkspace({
   };
 
   const handleSendMessage = async () => {
-    if (!keyPair || !activeCounterpart) {
+    if (!activeCounterpart || isSendingMessage) {
       return;
     }
 
@@ -577,32 +582,60 @@ export function ChatWorkspace({
       return;
     }
 
+    setComposerError(null);
+
+    let activeKeyPair = keyPair;
+    if (!activeKeyPair) {
+      try {
+        activeKeyPair = await ensureChatKeyPair();
+        storeChatKeyPair(activeKeyPair);
+        setKeyPair(activeKeyPair);
+        await upsertMyChatKeyRequest({
+          algorithm: activeKeyPair.algorithm,
+          public_key_jwk: activeKeyPair.publicKeyJwk,
+          private_key_jwk: activeKeyPair.privateKeyJwk,
+        });
+      } catch (error) {
+        console.error("chat.send.bootstrap_failed", error);
+        setComposerError("Не удалось подготовить чат для отправки сообщения.");
+        return;
+      }
+    }
+
     if (editingMessageId && activeConversation) {
-      const encryptedMessage = await encryptChatMessage({
-        plaintext: trimmedMessage,
-        ownPrivateKeyJwk: keyPair.privateKeyJwk,
-        counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
-        conversationId: activeConversation.id,
-      });
+      setIsSendingMessage(true);
+      try {
+        const encryptedMessage = await encryptChatMessage({
+          plaintext: trimmedMessage,
+          ownPrivateKeyJwk: activeKeyPair.privateKeyJwk,
+          counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
+          conversationId: activeConversation.id,
+        });
 
-      const updatedMessage = await updateChatMessageRequest(editingMessageId, {
-        ciphertext: encryptedMessage.ciphertext,
-        iv: encryptedMessage.iv,
-        salt: encryptedMessage.salt,
-      });
+        const updatedMessage = await updateChatMessageRequest(editingMessageId, {
+          ciphertext: encryptedMessage.ciphertext,
+          iv: encryptedMessage.iv,
+          salt: encryptedMessage.salt,
+        });
 
-      setDecryptedMessageMap((currentValue) => ({
-        ...currentValue,
-        [updatedMessage.id]: trimmedMessage,
-      }));
-      setDecryptedPreviewMap((currentValue) => ({
-        ...currentValue,
-        [activeConversation.id]:
-          activeConversation.lastMessage?.id === updatedMessage.id ? trimmedMessage : currentValue[activeConversation.id],
-      }));
-      handleCancelEditing();
-      void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-      void queryClient.invalidateQueries({ queryKey: ["chat", "messages", activeConversation.id] });
+        setDecryptedMessageMap((currentValue) => ({
+          ...currentValue,
+          [updatedMessage.id]: trimmedMessage,
+        }));
+        setDecryptedPreviewMap((currentValue) => ({
+          ...currentValue,
+          [activeConversation.id]:
+            activeConversation.lastMessage?.id === updatedMessage.id ? trimmedMessage : currentValue[activeConversation.id],
+        }));
+        handleCancelEditing();
+        void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+        void queryClient.invalidateQueries({ queryKey: ["chat", "messages", activeConversation.id] });
+      } catch (error) {
+        console.error("chat.update.failed", error);
+        setComposerError("Не удалось обновить сообщение.");
+      } finally {
+        setIsSendingMessage(false);
+      }
       return;
     }
 
@@ -633,6 +666,8 @@ export function ChatWorkspace({
     }));
     setMessageDraft("");
 
+    setIsSendingMessage(true);
+
     try {
       const targetConversation =
         activeConversation ??
@@ -643,7 +678,7 @@ export function ChatWorkspace({
 
       const encryptedMessage = await encryptChatMessage({
         plaintext: trimmedMessage,
-        ownPrivateKeyJwk: keyPair.privateKeyJwk,
+        ownPrivateKeyJwk: activeKeyPair.privateKeyJwk,
         counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
         conversationId: targetConversation.id,
       });
@@ -671,7 +706,8 @@ export function ChatWorkspace({
       void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "messages", sentMessage.conversationId] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "search"] });
-    } catch {
+    } catch (error) {
+      console.error("chat.send.failed", error);
       setOptimisticMessages((currentValue) => currentValue.filter((item) => item.id !== optimisticMessageId));
       setDecryptedMessageMap((currentValue) => {
         const nextValue = { ...currentValue };
@@ -679,6 +715,9 @@ export function ChatWorkspace({
         return nextValue;
       });
       setMessageDraft(trimmedMessage);
+      setComposerError("Не удалось отправить сообщение. Попробуйте ещё раз.");
+    } finally {
+      setIsSendingMessage(false);
     }
   };
 
@@ -962,6 +1001,7 @@ export function ChatWorkspace({
                     </button>
                   </div>
                 ) : null}
+                {composerError ? <div className="chat-workspace__composer-error">{composerError}</div> : null}
                 <div className="chat-workspace__composer-row">
                   <button type="button" className="chat-workspace__composer-attach" aria-label="Прикрепить файл" disabled>
                     <img src={clipIcon} alt="" aria-hidden="true" className="chat-workspace__composer-attach-icon" />
@@ -973,7 +1013,7 @@ export function ChatWorkspace({
                     value={messageDraft}
                     onChange={(event) => setMessageDraft(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key !== "Enter" || event.nativeEvent.isComposing || messagesQuery.isFetching) {
+                      if (event.key !== "Enter" || event.nativeEvent.isComposing || messagesQuery.isFetching || isSendingMessage) {
                         return;
                       }
                       event.preventDefault();
@@ -988,7 +1028,8 @@ export function ChatWorkspace({
                     className="chat-workspace__composer-send"
                     onClick={() => void handleSendMessage()}
                     aria-label="Отправить сообщение"
-                    disabled={!messageDraft.trim()}
+                    disabled={!messageDraft.trim() || isSendingMessage}
+                    loading={isSendingMessage}
                   >
                     <img src={arrowIcon} alt="" aria-hidden="true" className="chat-workspace__composer-send-icon" />
                   </Button>

@@ -245,9 +245,7 @@ export async function sendChatMessageRequest(payload: {
   iv: string;
   salt: string;
 }) {
-  const response = await apiClient.post<{ data?: ChatMessageApi }>("/chat/messages", payload, {
-    timeout: 2500,
-  });
+  const response = await apiClient.post<{ data?: ChatMessageApi }>("/chat/messages", payload);
   if (!response.data?.data) {
     throw new Error("Не удалось отправить сообщение");
   }
@@ -262,9 +260,7 @@ export async function updateChatMessageRequest(
     salt: string;
   },
 ) {
-  const response = await apiClient.put<{ data?: ChatMessageApi }>(`/chat/messages/${messageId}`, payload, {
-    timeout: 2500,
-  });
+  const response = await apiClient.put<{ data?: ChatMessageApi }>(`/chat/messages/${messageId}`, payload);
   if (!response.data?.data) {
     throw new Error("Не удалось обновить сообщение");
   }
@@ -272,9 +268,7 @@ export async function updateChatMessageRequest(
 }
 
 export async function deleteChatMessageRequest(messageId: string) {
-  const response = await apiClient.delete<{ data?: { id?: string; conversation_id?: string } }>(`/chat/messages/${messageId}`, {
-    timeout: 2500,
-  });
+  const response = await apiClient.delete<{ data?: { id?: string; conversation_id?: string } }>(`/chat/messages/${messageId}`);
   return response.data?.data ?? null;
 }
 

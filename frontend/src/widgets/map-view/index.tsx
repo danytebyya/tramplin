@@ -664,6 +664,13 @@ export function MapView({
           aria-hidden={!isFiltersVisible}
         >
           <div className="map-view__filter-card map-view__filter-card--category">
+            <div className="map-view__filter-panel-head">
+              <h2 className="map-view__filter-panel-title">Фильтры</h2>
+              <button type="button" className="map-view__filter-reset">
+                Сбросить
+              </button>
+            </div>
+
             <button
               type="button"
               className="map-view__filter-category-button"
@@ -691,9 +698,15 @@ export function MapView({
             }
             aria-hidden={!isCategoryOpen}
           >
-            <div className="map-view__city-search">
-              <span className="map-view__city-search-placeholder">Город</span>
-              <span className="map-view__city-search-icon" aria-hidden="true" />
+            <div className="map-view__filter-section">
+              <div className="map-view__filter-section-head">
+                <h3 className="map-view__filter-title">Город</h3>
+              </div>
+
+              <div className="map-view__city-search">
+                <span className="map-view__city-search-placeholder">Город</span>
+                <span className="map-view__city-search-icon" aria-hidden="true" />
+              </div>
             </div>
 
             <div className="map-view__city-list" role="listbox" aria-label="Выбор города">
@@ -713,7 +726,7 @@ export function MapView({
               ))}
             </div>
 
-            <button type="button" className="map-view__filter-reset">
+            <button type="button" className="map-view__filter-reset map-view__filter-reset--inline">
               Сбросить
             </button>
           </div>
