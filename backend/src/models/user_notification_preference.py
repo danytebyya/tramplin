@@ -19,6 +19,7 @@ class UserNotificationPreference(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     email_overdue_reviews: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_company_profile_changes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_publication_changes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email_chat_reminders: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     email_daily_digest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_weekly_report: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     push_new_verification_requests: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -26,6 +27,7 @@ class UserNotificationPreference(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     push_overdue_reviews: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     push_company_profile_changes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     push_publication_changes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    push_chat_reminders: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     push_daily_digest: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     push_weekly_report: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

@@ -11,6 +11,7 @@ import { EmployerDashboardPage } from "../../pages/employer-dashboard";
 import { EmployerChatPage } from "../../pages/employer-chat";
 import { EmployerOnboardingPage } from "../../pages/employer-onboarding";
 import { EmployerVerificationPage } from "../../pages/employer-verification";
+import { FavoritesPage } from "../../pages/favorites";
 import { LoginPage } from "../../pages/login";
 import { LegalDocumentPage } from "../../pages/legal/index";
 import { HomePage } from "../../pages/home";
@@ -319,6 +320,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SeekerDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/favorites"
+        element={
+          <ProtectedRoute>
+            <FavoritesPage />
           </ProtectedRoute>
         }
       />

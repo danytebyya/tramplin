@@ -1,5 +1,6 @@
 from src.services.auth_service import AuthService
 from src.services.bootstrap_service import BootstrapService
+from src.services.chat_reminder_service import ChatReminderService
 from src.services.dadata_service import DadataService
 from src.services.email_service import send_email
 from src.services.email_verification_service import EmailVerificationService
@@ -15,6 +16,7 @@ from src.services.user_service import UserService
 __all__ = [
     "AuthService",
     "BootstrapService",
+    "ChatReminderService",
     "DadataService",
     "EmailVerificationService",
     "EmployerService",

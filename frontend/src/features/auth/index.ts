@@ -245,6 +245,7 @@ export type NotificationPreferenceKey =
   | "overdue_reviews"
   | "company_profile_changes"
   | "publication_changes"
+  | "chat_reminders"
   | "daily_digest"
   | "weekly_report";
 

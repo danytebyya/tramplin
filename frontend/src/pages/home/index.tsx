@@ -38,7 +38,7 @@ import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import type { Opportunity } from "../../entities/opportunity";
 import analyticsIcon from "../../assets/icons/analytics.svg";
-import backgroundImage from "../../assets/icons/background.jpg";
+import backgroundImage from "../../assets/icons/background-hero.jpg";
 import databaseIcon from "../../assets/icons/db.svg";
 import designIcon from "../../assets/icons/design.svg";
 import developmentIcon from "../../assets/icons/development.svg";
@@ -720,10 +720,16 @@ export function HomePage() {
           <section className="home-page__hero">
             <Container className="home-page__container home-page__hero-container">
               <section className="home-page__hero-block">
-                <div
-                  className="home-page__hero-copy"
-                  style={{ "--home-hero-background": `url("${backgroundImage}")` } as CSSProperties}
-                >
+                <div className="home-page__hero-copy">
+                  <img
+                    src={backgroundImage}
+                    alt=""
+                    aria-hidden="true"
+                    className="home-page__hero-background"
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                  />
                   <div className="home-page__hero-copy-content">
                     <div className="home-page__hero-panel">
                       <img src={heroLogo} alt="Трамплин" className="home-page__hero-logo" />

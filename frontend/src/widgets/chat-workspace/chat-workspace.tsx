@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import clipIcon from "../../assets/icons/clip.svg";
-import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
 import { useAuthStore } from "../../features/auth";
 import {
   canUseChatCrypto,
@@ -65,6 +64,8 @@ const SYSTEM_WELCOME_MESSAGE_ID = "tramplin-welcome";
 const SYSTEM_PARTICIPANT_ID = "tramplin-system";
 const SYSTEM_NOTES_STORAGE_KEY_PREFIX = "tramplin.chat.notes";
 const SYSTEM_WELCOME_AT_STORAGE_KEY_PREFIX = "tramplin.chat.welcome-at";
+const ACTIVE_CONVERSATION_STORAGE_KEY_PREFIX = "tramplin.chat.active-conversation";
+const SYSTEM_BRAND_AVATAR_URL = "/favicon.svg";
 
 type LocalNoteRecord = {
   id: string;
@@ -97,6 +98,10 @@ function getNotesStorageKey(subject: string | null, role: string | null) {
 
 function getWelcomeAtStorageKey(subject: string | null, role: string | null) {
   return `${SYSTEM_WELCOME_AT_STORAGE_KEY_PREFIX}:${subject ?? "guest"}:${role ?? "unknown"}`;
+}
+
+function getActiveConversationStorageKey(subject: string | null, role: string | null) {
+  return `${ACTIVE_CONVERSATION_STORAGE_KEY_PREFIX}:${subject ?? "guest"}:${role ?? "unknown"}`;
 }
 
 function readStoredNotes(subject: string | null, role: string | null): LocalNoteRecord[] {
@@ -146,6 +151,31 @@ function readOrCreateWelcomeAt(subject: string | null, role: string | null) {
   const nextValue = new Date().toISOString();
   window.localStorage.setItem(storageKey, nextValue);
   return nextValue;
+}
+
+function readStoredActiveConversationId(subject: string | null, role: string | null) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedValue = window.localStorage.getItem(getActiveConversationStorageKey(subject, role));
+  return storedValue?.trim() || null;
+}
+
+function writeStoredActiveConversationId(subject: string | null, role: string | null, conversationId: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(getActiveConversationStorageKey(subject, role), conversationId);
+}
+
+function clearStoredActiveConversationId(subject: string | null, role: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(getActiveConversationStorageKey(subject, role));
 }
 
 function formatTime(value: string) {
@@ -204,6 +234,17 @@ function formatChatDateLabel(value: string) {
   return new Intl.DateTimeFormat("ru-RU", options).format(messageDate);
 }
 
+function isCompactMessageSpacing(previousCreatedAt: string, currentCreatedAt: string) {
+  const previousTime = new Date(previousCreatedAt).getTime();
+  const currentTime = new Date(currentCreatedAt).getTime();
+
+  if (Number.isNaN(previousTime) || Number.isNaN(currentTime)) {
+    return false;
+  }
+
+  return currentTime - previousTime < 3 * 60 * 1000;
+}
+
 function resolveParticipantTitle(participant: ChatParticipant) {
   if (participant.role === "employer" && participant.companyName) {
     return abbreviateLegalEntityName(participant.companyName);
@@ -223,8 +264,11 @@ function ChatAvatar({
   avatarUrl: string | null;
   unreadCount?: number;
 }) {
-  const imageSource = resolveAvatarUrl(avatarUrl) || resolveAvatarIcon(role);
-  const isBrandAvatar = avatarUrl === logoPrimaryBlack;
+  const imageSource =
+    avatarUrl === SYSTEM_BRAND_AVATAR_URL
+      ? SYSTEM_BRAND_AVATAR_URL
+      : resolveAvatarUrl(avatarUrl) || resolveAvatarIcon(role);
+  const isBrandAvatar = avatarUrl === SYSTEM_BRAND_AVATAR_URL;
 
   return (
     <span className="chat-workspace__avatar">
@@ -274,6 +318,7 @@ export function ChatWorkspace({
   const [composerError, setComposerError] = useState<string | null>(null);
   const [localNotes, setLocalNotes] = useState<LocalNoteRecord[]>([]);
   const [systemWelcomeAt, setSystemWelcomeAt] = useState(() => new Date().toISOString());
+  const hasRestoredActiveConversationRef = useRef(false);
   const deferredSearchValue = useDeferredValue(searchValue);
   const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
 
@@ -283,6 +328,10 @@ export function ChatWorkspace({
 
   useEffect(() => {
     setSystemWelcomeAt(readOrCreateWelcomeAt(currentUserId, currentRole ?? null));
+  }, [currentRole, currentUserId]);
+
+  useEffect(() => {
+    hasRestoredActiveConversationRef.current = false;
   }, [currentRole, currentUserId]);
 
   const persistLocalNotes = (nextNotes: LocalNoteRecord[]) => {
@@ -437,7 +486,7 @@ export function ChatWorkspace({
       publicId: null,
       displayName: "Трамплин",
       role: "admin",
-      avatarUrl: logoPrimaryBlack,
+      avatarUrl: SYSTEM_BRAND_AVATAR_URL,
       companyName: null,
       companyId: null,
       publicKeyJwk: null,
@@ -508,15 +557,35 @@ export function ChatWorkspace({
       return;
     }
     setActiveConversationId(null);
-  }, [activeConversationId, conversationMap]);
+    clearStoredActiveConversationId(currentUserId, currentRole ?? null);
+  }, [activeConversationId, conversationMap, currentRole, currentUserId]);
 
   useEffect(() => {
-    if (activeConversationId || activeDraftContact || normalizedSearchValue) {
+    if (
+      hasRestoredActiveConversationRef.current ||
+      !isHydrated ||
+      activeConversationId ||
+      activeDraftContact ||
+      normalizedSearchValue
+    ) {
       return;
     }
 
-    setActiveConversationId(SYSTEM_CHAT_ID);
-  }, [activeConversationId, activeDraftContact, normalizedSearchValue]);
+    const storedConversationId = readStoredActiveConversationId(currentUserId, currentRole ?? null);
+    hasRestoredActiveConversationRef.current = true;
+
+    if (storedConversationId) {
+      setActiveConversationId(storedConversationId);
+    }
+  }, [activeConversationId, activeDraftContact, currentRole, currentUserId, isHydrated, normalizedSearchValue]);
+
+  useEffect(() => {
+    if (!activeConversationId) {
+      return;
+    }
+
+    writeStoredActiveConversationId(currentUserId, currentRole ?? null, activeConversationId);
+  }, [activeConversationId, currentRole, currentUserId]);
 
   useEffect(() => {
     if (!preferredEmployerId || normalizedSearchValue || activeConversationId || activeDraftContact) {
@@ -1251,10 +1320,19 @@ export function ChatWorkspace({
                         <div className="chat-workspace__date-divider">
                           <span className="chat-workspace__date-divider-label">{group.dateLabel}</span>
                         </div>
-                        {group.messages.map((item) => (
+                        {group.messages.map((item, index) => {
+                          const previousMessage = group.messages[index - 1] ?? null;
+                          const spacingClassName =
+                            previousMessage && isCompactMessageSpacing(previousMessage.createdAt, item.createdAt)
+                              ? " chat-workspace__message--compact"
+                              : previousMessage
+                                ? " chat-workspace__message--spaced"
+                                : "";
+
+                          return (
                           <div key={item.id} className="chat-workspace__message-entry">
                             <div
-                              className={`chat-workspace__message${item.isOwn ? " chat-workspace__message--own" : ""}`}
+                              className={`chat-workspace__message${item.isOwn ? " chat-workspace__message--own" : ""}${spacingClassName}`}
                               onContextMenu={(event) => {
                                 if (!item.isOwn || item.clientStatus) {
                                   return;
@@ -1294,7 +1372,8 @@ export function ChatWorkspace({
                               </div>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))
                   ) : (

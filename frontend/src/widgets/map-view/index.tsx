@@ -1,16 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { load } from "@2gis/mapgl";
 import { Clusterer } from "@2gis/mapgl-clusterer";
 import type { ClusterStyle, InputMarker } from "@2gis/mapgl-clusterer";
-import type { Map } from "@2gis/mapgl/types";
+import type { Map as DGisMap } from "@2gis/mapgl/types";
 
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
-import { getCityViewportByName } from "../../features/city-selector/api";
+import {
+  AddressSuggestion,
+  CitySuggestion,
+  getAddressSuggestions,
+  getCitySuggestions,
+  getCityViewportByName,
+  popularCities,
+} from "../../features/city-selector/api";
+import {
+  OpportunityTagCatalogCategory,
+  listOpportunityTagCatalogRequest,
+} from "../../features/opportunity/api";
 import { env } from "../../shared/config/env";
-import { Badge, Button } from "../../shared/ui";
+import { Badge, Button, Checkbox, DateInput, Input } from "../../shared/ui";
+import "../../features/city-selector/city-selector.css";
 import "./map-view.css";
+
+type FilterGroup = {
+  id: string;
+  title: string;
+  items: string[];
+};
 
 type MapViewProps = {
   opportunities: Opportunity[];
@@ -42,8 +61,98 @@ const cityViewportByName: Record<string, { center: [number, number]; zoom: numbe
   Чебоксары: { center: [47.2512, 56.1287], zoom: 12 },
 };
 
+const vacancySkillGroups: FilterGroup[] = [
+  { id: "languages", title: "Языки программирования", items: ["JavaScript", "TypeScript", "Python", "Java", "Go", "C#", "PHP"] },
+  { id: "frameworks", title: "Фреймворки и библиотеки", items: ["React", "Vue", "Angular", "Next.js", "Django", "FastAPI", "Node.js"] },
+  { id: "databases", title: "Базы данных", items: ["PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch"] },
+  { id: "devops", title: "DevOps", items: ["Docker", "Kubernetes", "CI/CD", "GitHub Actions", "Terraform"] },
+  { id: "clouds", title: "Облака", items: ["AWS", "Azure", "Google Cloud", "Yandex Cloud"] },
+  { id: "analytics", title: "Аналитика и Data Science", items: ["SQL", "Pandas", "NumPy", "Power BI", "Tableau"] },
+  { id: "design", title: "Дизайн", items: ["Figma", "Adobe XD", "Photoshop", "Illustrator"] },
+  { id: "other", title: "Другое", items: ["Git", "Scrum", "Agile", "English"] },
+];
+const themeGroups: FilterGroup[] = [
+  { id: "languages", title: "Языки программирования", items: ["Backend", "Frontend", "Mobile"] },
+  { id: "frameworks", title: "Фреймворки и библиотеки", items: ["React", "Vue", "Angular", "Next.js"] },
+  { id: "databases", title: "Базы данных", items: ["PostgreSQL", "MySQL", "Redis"] },
+  { id: "devops", title: "DevOps и инструменты", items: ["Docker", "Kubernetes", "CI/CD"] },
+  { id: "design", title: "Дизайн", items: ["UX/UI", "Product Design", "Graphic Design"] },
+  { id: "analytics", title: "Аналитика и Data Science", items: ["Analytics", "ML", "BI"] },
+  { id: "other", title: "Другое", items: ["Soft skills", "Карьера", "Нетворкинг"] },
+];
+const mentorExpertiseGroups: FilterGroup[] = [
+  { id: "languages", title: "Языки программирования", items: ["Python", "JavaScript", "Go", "Java"] },
+  { id: "frameworks", title: "Фреймворки и библиотеки", items: ["React", "Vue", "Django", "FastAPI"] },
+  { id: "databases", title: "Базы данных", items: ["PostgreSQL", "MySQL", "MongoDB"] },
+  { id: "devops", title: "DevOps и инструменты", items: ["Docker", "Kubernetes", "CI/CD"] },
+  { id: "design", title: "Дизайн", items: ["Figma", "UX/UI"] },
+  { id: "analytics", title: "Аналитика и Data Science", items: ["SQL", "Pandas", "ML"] },
+  { id: "other", title: "Другое", items: ["Soft skills", "Leadership", "Product"] },
+];
+const vacancyLevels = ["Junior", "Middle", "Senior"];
+const formatOptions = ["Офлайн", "Гибрид", "Удалённо"];
+const employmentOptions = ["Полная занятость", "Частичная занятость", "Проектная работа", "Стажировка"];
+const publicationOptions = ["За всё время", "За сегодня", "За 3 дня", "За неделю"];
+const eventTypeOptions = ["День открытых дверей", "Хакатон", "Лекция / воркшоп", "Конференция", "Карьерный день"];
+const costOptions = ["Бесплатно", "Платно"];
+const mentorshipDirections = ["Карьерный рост", "Технические навыки", "Подготовка к собеседованиям", "Soft skills", "Code review"];
+const mentorAvailabilityOptions = ["Сейчас свободен", "В течение недели"];
+const mentorExperienceOptions = ["Junior+", "Middle+", "Senior"];
+const popularVacancySkills = ["Python", "JavaScript", "React", "SQL", "Docker"];
+const HARD_SKILL_EXCLUDED_CATEGORY_SLUGS = [
+  "applicant-soft-skills",
+  "spoken-languages",
+  "level-format",
+  "specialization",
+];
+
 function normalizeCityValue(city: string) {
   return city.trim().toLowerCase();
+}
+
+function normalizeCatalogValue(value: string) {
+  return value.trim().toLocaleLowerCase("ru-RU");
+}
+
+function collectHardSkillItems(categories: OpportunityTagCatalogCategory[] | undefined) {
+  const itemMap = new Map<string, string>();
+
+  for (const category of categories ?? []) {
+    if (HARD_SKILL_EXCLUDED_CATEGORY_SLUGS.includes(category.slug)) {
+      continue;
+    }
+
+    if (!["technology", "skill", "language"].includes(category.tagType)) {
+      continue;
+    }
+
+    for (const item of category.items) {
+      const normalizedName = item.name.trim();
+      if (normalizedName.length === 0 || itemMap.has(normalizedName)) {
+        continue;
+      }
+
+      itemMap.set(normalizedName, normalizedName);
+    }
+  }
+
+  return Array.from(itemMap.values()).sort((left, right) => left.localeCompare(right, "ru"));
+}
+
+function filterCatalogItems(items: string[], query: string, selected: string[]) {
+  const normalizedQuery = normalizeCatalogValue(query);
+
+  return items.filter((item) => {
+    if (selected.includes(item)) {
+      return false;
+    }
+
+    if (normalizedQuery.length === 0) {
+      return true;
+    }
+
+    return normalizeCatalogValue(item).includes(normalizedQuery);
+  });
 }
 
 function resolveViewportByCityName(selectedCity: string) {
@@ -116,21 +225,224 @@ function getOpportunityKindLabel(kind: Opportunity["kind"]) {
   return "Вакансия";
 }
 
-const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved" | "all" }> = [
-  { label: "Все", value: "all" },
+function normalizeFilterText(value: string) {
+  return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+}
+
+function parseNumberInput(value: string) {
+  const normalizedValue = value.replace(",", ".").trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function parseAmountLabel(value: string) {
+  const normalizedValue = normalizeFilterText(value);
+  const isFree = normalizedValue.includes("бесплат");
+  const numbers = value
+    .replace(/\u00A0/g, " ")
+    .match(/\d+(?:[\s.,]\d+)*/g)
+    ?.map((item) => Number(item.replace(/\s+/g, "").replace(",", ".")))
+    .filter((item) => Number.isFinite(item)) ?? [];
+
+  if (numbers.length === 0) {
+    return {
+      min: isFree ? 0 : null,
+      max: isFree ? 0 : null,
+      isFree,
+    };
+  }
+
+  return {
+    min: Math.min(...numbers),
+    max: Math.max(...numbers),
+    isFree,
+  };
+}
+
+function normalizeFormatOption(value: string): Opportunity["format"] | null {
+  const normalizedValue = normalizeFilterText(value);
+
+  if (normalizedValue === "офлайн") {
+    return "office";
+  }
+
+  if (normalizedValue === "гибрид") {
+    return "hybrid";
+  }
+
+  if (normalizedValue === "удаленно" || normalizedValue === "удалённо") {
+    return "remote";
+  }
+
+  return null;
+}
+
+function normalizeLevelOption(value: string) {
+  const normalizedValue = normalizeFilterText(value);
+
+  if (normalizedValue.includes("junior")) {
+    return "junior";
+  }
+
+  if (normalizedValue.includes("middle")) {
+    return "middle";
+  }
+
+  if (normalizedValue.includes("senior")) {
+    return "senior";
+  }
+
+  if (normalizedValue.includes("стаж")) {
+    return "intern";
+  }
+
+  return normalizedValue;
+}
+
+function normalizeEmploymentOption(value: string) {
+  const normalizedValue = normalizeFilterText(value);
+
+  if (normalizedValue.includes("полная") || normalizedValue.includes("full")) {
+    return "full";
+  }
+
+  if (normalizedValue.includes("частич") || normalizedValue.includes("part")) {
+    return "part";
+  }
+
+  if (normalizedValue.includes("проект") || normalizedValue.includes("project")) {
+    return "project";
+  }
+
+  if (normalizedValue.includes("стаж")) {
+    return "internship";
+  }
+
+  return normalizedValue;
+}
+
+function isSameDay(left: string | null | undefined, right: string | null | undefined) {
+  if (!left || !right) {
+    return false;
+  }
+
+  const leftDate = new Date(left);
+  const rightDate = new Date(right);
+
+  return (
+    !Number.isNaN(leftDate.getTime()) &&
+    !Number.isNaN(rightDate.getTime()) &&
+    leftDate.getFullYear() === rightDate.getFullYear() &&
+    leftDate.getMonth() === rightDate.getMonth() &&
+    leftDate.getDate() === rightDate.getDate()
+  );
+}
+
+function haversineDistanceKm(
+  from: { lat: number; lon: number },
+  to: { lat: number; lon: number },
+) {
+  const earthRadiusKm = 6371;
+  const dLat = ((to.lat - from.lat) * Math.PI) / 180;
+  const dLon = ((to.lon - from.lon) * Math.PI) / 180;
+  const fromLat = (from.lat * Math.PI) / 180;
+  const toLat = (to.lat * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusKm * c;
+}
+
+function matchesTagSelection(opportunity: Opportunity, selectedTags: string[]) {
+  if (selectedTags.length === 0) {
+    return true;
+  }
+
+  const opportunityTags = opportunity.tags.map((item) => normalizeCatalogValue(item));
+  return selectedTags.every((tag) => opportunityTags.includes(normalizeCatalogValue(tag)));
+}
+
+function matchesStringSelection(value: string | null | undefined, selectedValues: string[]) {
+  if (selectedValues.length === 0) {
+    return true;
+  }
+
+  if (!value) {
+    return false;
+  }
+
+  return selectedValues.some((item) => normalizeFilterText(item) === normalizeFilterText(value));
+}
+
+function matchesNumericRange(value: string, from: string, to: string) {
+  const amount = parseAmountLabel(value);
+  const parsedFrom = parseNumberInput(from);
+  const parsedTo = parseNumberInput(to);
+
+  if (parsedFrom === null && parsedTo === null) {
+    return true;
+  }
+
+  if (amount.min === null && amount.max === null) {
+    return false;
+  }
+
+  const minValue = amount.min ?? amount.max ?? 0;
+  const maxValue = amount.max ?? amount.min ?? 0;
+
+  if (parsedFrom !== null && maxValue < parsedFrom) {
+    return false;
+  }
+
+  if (parsedTo !== null && minValue > parsedTo) {
+    return false;
+  }
+
+  return true;
+}
+
+const formatLabels: Array<{ label: string; value: Opportunity["format"] | "saved" }> = [
   { label: "Офлайн", value: "office" },
   { label: "Гибрид", value: "hybrid" },
   { label: "Удаленно", value: "remote" },
   { label: "Избранное", value: "saved" },
 ];
 
-const initialFormatValue: Opportunity["format"] | "saved" | "all" = "all";
+const baseFormatValue: Opportunity["format"][] = ["office", "hybrid", "remote"];
+const initialFormatValue: Array<Opportunity["format"] | "saved"> = [...baseFormatValue];
+
+function toggleFormatSelection(
+  current: Array<Opportunity["format"] | "saved">,
+  nextValue: Opportunity["format"] | "saved",
+): Array<Opportunity["format"] | "saved"> {
+  if (nextValue === "saved") {
+    return current.length === 1 && current[0] === "saved" ? [...baseFormatValue] : ["saved"];
+  }
+
+  if (current.length === 1 && current[0] === "saved") {
+    return [nextValue];
+  }
+
+  if (current.includes(nextValue)) {
+    const remainingValues = current.filter((value) => value !== nextValue);
+    return remainingValues.length > 0 ? remainingValues : [...baseFormatValue];
+  }
+
+  return [...current, nextValue];
+}
 
 const markerPalette = {
-  cyan: "#06b6d4",
-  amber: "#f59e0b",
-  blue: "#2563eb",
-  slate: "#64748b",
+  office: "#2563eb",
+  hybrid: "#06b6d4",
+  remote: "#6b7280",
+  saved: "#f59e0b",
 } as const;
 
 const clusterPaletteByRole = {
@@ -208,8 +520,24 @@ function createClusterStyle(pointsCount: number, roleName?: string): ClusterStyl
   };
 }
 
+function resolveMarkerColor(opportunity: Opportunity, favoriteOpportunityIds: string[]) {
+  if (favoriteOpportunityIds.includes(opportunity.id)) {
+    return markerPalette.saved;
+  }
+
+  if (opportunity.format === "office") {
+    return markerPalette.office;
+  }
+
+  if (opportunity.format === "hybrid") {
+    return markerPalette.hybrid;
+  }
+
+  return markerPalette.remote;
+}
+
 function applyViewport(
-  map: Map,
+  map: DGisMap,
   viewport: {
     center: [number, number];
     zoom: number;
@@ -247,7 +575,7 @@ export function MapView({
   onApply,
 }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<Map | null>(null);
+  const mapInstanceRef = useRef<DGisMap | null>(null);
   const clustererRef = useRef<Clusterer | null>(null);
   const hasAlignedInitialViewportRef = useRef(false);
   const previousSelectedOpportunityIdRef = useRef<string | null>(null);
@@ -257,25 +585,379 @@ export function MapView({
   const [isMapReady, setIsMapReady] = useState(false);
   const [isMapVisible, setIsMapVisible] = useState(false);
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [isOpportunitiesOpen, setIsOpportunitiesOpen] = useState(true);
+  const [isEventsOpen, setIsEventsOpen] = useState(false);
+  const [isMentorshipOpen, setIsMentorshipOpen] = useState(false);
   const [isFormatBarExpanded, setIsFormatBarExpanded] = useState(true);
-  const [selectedFormat, setSelectedFormat] = useState<Opportunity["format"] | "saved" | "all">(initialFormatValue);
-  const cityOptions = Array.from(
-    new Set(["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары", selectedCity]),
-  );
+  const [selectedFormat, setSelectedFormat] = useState<Array<Opportunity["format"] | "saved">>(initialFormatValue);
+  const [selectedVacancyCity, setSelectedVacancyCity] = useState("");
+  const [vacancyCityQuery, setVacancyCityQuery] = useState("");
+  const [selectedEventCity, setSelectedEventCity] = useState("");
+  const [eventCityQuery, setEventCityQuery] = useState("");
+  const [selectedMentorCity, setSelectedMentorCity] = useState("");
+  const [mentorCityQuery, setMentorCityQuery] = useState("");
+  const [selectedVacancyAddressLabel, setSelectedVacancyAddressLabel] = useState("");
+  const [selectedVacancyAddressPoint, setSelectedVacancyAddressPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [vacancyAddress, setVacancyAddress] = useState("");
+  const [selectedEventAddressLabel, setSelectedEventAddressLabel] = useState("");
+  const [selectedEventAddressPoint, setSelectedEventAddressPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [eventAddress, setEventAddress] = useState("");
+  const [selectedMentorAddressLabel, setSelectedMentorAddressLabel] = useState("");
+  const [selectedMentorAddressPoint, setSelectedMentorAddressPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [mentorAddress, setMentorAddress] = useState("");
+  const [vacancyRadiusFrom, setVacancyRadiusFrom] = useState("");
+  const [vacancyRadiusTo, setVacancyRadiusTo] = useState("");
+  const [eventRadiusFrom, setEventRadiusFrom] = useState("");
+  const [eventRadiusTo, setEventRadiusTo] = useState("");
+  const [mentorRadiusFrom, setMentorRadiusFrom] = useState("");
+  const [mentorRadiusTo, setMentorRadiusTo] = useState("");
+  const [hideEventsOnMap, setHideEventsOnMap] = useState(false);
+  const [hideMentorshipOnEventMap, setHideMentorshipOnEventMap] = useState(false);
+  const [hideEventsOnMentorMap, setHideEventsOnMentorMap] = useState(false);
+  const [vacancySkillQuery, setVacancySkillQuery] = useState("");
+  const [eventThemeQuery, setEventThemeQuery] = useState("");
+  const [mentorExpertiseQuery, setMentorExpertiseQuery] = useState("");
+  const [selectedVacancySkills, setSelectedVacancySkills] = useState<string[]>([]);
+  const [selectedEventThemes, setSelectedEventThemes] = useState<string[]>([]);
+  const [selectedMentorExpertise, setSelectedMentorExpertise] = useState<string[]>([]);
+  const [selectedVacancyLevels, setSelectedVacancyLevels] = useState<string[]>([]);
+  const [selectedVacancyFormats, setSelectedVacancyFormats] = useState<string[]>([]);
+  const [selectedVacancyEmployment, setSelectedVacancyEmployment] = useState<string[]>([]);
+  const [vacancySalaryFrom, setVacancySalaryFrom] = useState("");
+  const [vacancySalaryTo, setVacancySalaryTo] = useState("");
+  const [selectedPublicationPeriods, setSelectedPublicationPeriods] = useState<string[]>([]);
+  const [eventOrganizerQuery, setEventOrganizerQuery] = useState("");
+  const [mentorOrganizerQuery, setMentorOrganizerQuery] = useState("");
+  const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>([]);
+  const [selectedEventFormats, setSelectedEventFormats] = useState<string[]>([]);
+  const [selectedEventCosts, setSelectedEventCosts] = useState<string[]>([]);
+  const [eventCostFrom, setEventCostFrom] = useState("");
+  const [eventCostTo, setEventCostTo] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [selectedMentorshipDirections, setSelectedMentorshipDirections] = useState<string[]>([]);
+  const [selectedMentorAvailability, setSelectedMentorAvailability] = useState<string[]>([]);
+  const [selectedMentorExperience, setSelectedMentorExperience] = useState<string[]>([]);
+  const [mentorCostFrom, setMentorCostFrom] = useState("");
+  const [mentorCostTo, setMentorCostTo] = useState("");
+  const [selectedMentorFormats, setSelectedMentorFormats] = useState<string[]>([]);
+  const [mentorDate, setMentorDate] = useState("");
+  const [vacancyCitySuggestions, setVacancyCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [eventCitySuggestions, setEventCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [mentorCitySuggestions, setMentorCitySuggestions] = useState<CitySuggestion[]>([]);
+  const [isVacancyCityLoading, setIsVacancyCityLoading] = useState(false);
+  const [isEventCityLoading, setIsEventCityLoading] = useState(false);
+  const [isMentorCityLoading, setIsMentorCityLoading] = useState(false);
+  const [hasVacancyCityError, setHasVacancyCityError] = useState(false);
+  const [hasEventCityError, setHasEventCityError] = useState(false);
+  const [hasMentorCityError, setHasMentorCityError] = useState(false);
+  const [vacancyAddressSuggestions, setVacancyAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [eventAddressSuggestions, setEventAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [mentorAddressSuggestions, setMentorAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isVacancyAddressLoading, setIsVacancyAddressLoading] = useState(false);
+  const [isEventAddressLoading, setIsEventAddressLoading] = useState(false);
+  const [isMentorAddressLoading, setIsMentorAddressLoading] = useState(false);
+  const tagCatalogQuery = useQuery({
+    queryKey: ["opportunity-tag-catalog"],
+    queryFn: listOpportunityTagCatalogRequest,
+  });
   const filteredOpportunities = useMemo(() => {
+    const normalizedVacancyCity = normalizeFilterText(selectedVacancyCity);
+    const normalizedEventCity = normalizeFilterText(selectedEventCity);
+    const normalizedMentorCity = normalizeFilterText(selectedMentorCity);
+    const normalizedEventOrganizer = normalizeFilterText(eventOrganizerQuery);
+    const normalizedMentorOrganizer = normalizeFilterText(mentorOrganizerQuery);
+    const normalizedVacancyFormats = selectedVacancyFormats
+      .map(normalizeFormatOption)
+      .filter((item): item is Opportunity["format"] => Boolean(item));
+    const normalizedEventFormats = selectedEventFormats
+      .map(normalizeFormatOption)
+      .filter((item): item is Opportunity["format"] => Boolean(item));
+    const normalizedMentorFormats = selectedMentorFormats
+      .map(normalizeFormatOption)
+      .filter((item): item is Opportunity["format"] => Boolean(item));
+    const normalizedVacancyLevels = selectedVacancyLevels.map(normalizeLevelOption);
+    const normalizedMentorExperience = selectedMentorExperience.map(normalizeLevelOption);
+    const normalizedVacancyEmployment = selectedVacancyEmployment.map(normalizeEmploymentOption);
+    const now = new Date();
+    const oneDayMs = 24 * 60 * 60 * 1000;
+
     return opportunities.filter((opportunity) => {
-      if (selectedFormat === "all") {
+      const isFavorite = favoriteOpportunityIds.includes(opportunity.id);
+      const isSavedOnlyMode = selectedFormat.length === 1 && selectedFormat[0] === "saved";
+      const isFormatVisible = isSavedOnlyMode ? true : selectedFormat.includes(opportunity.format);
+      const isFavoriteVisible = isSavedOnlyMode ? isFavorite : true;
+
+      if (!isFormatVisible || !isFavoriteVisible) {
+        return false;
+      }
+
+      const opportunityKind = opportunity.kind;
+      const normalizedOpportunityCity = normalizeFilterText(opportunity.city ?? opportunity.locationLabel);
+      const normalizedCompanyName = normalizeFilterText(opportunity.companyName);
+      const normalizedLevel = normalizeLevelOption(opportunity.levelLabel);
+      const normalizedEmployment = normalizeEmploymentOption(opportunity.employmentLabel);
+      const plannedDate = opportunity.plannedPublishAt ?? null;
+      const publishedDate = opportunity.publishedAt ?? null;
+
+      if ((opportunityKind === "vacancy" || opportunityKind === "internship") && hideEventsOnMap) {
+        return false;
+      }
+
+      if (opportunityKind === "event" && hideMentorshipOnEventMap) {
+        return false;
+      }
+
+      if (opportunityKind === "mentorship" && hideEventsOnMentorMap) {
+        return false;
+      }
+
+      if (opportunityKind === "vacancy" || opportunityKind === "internship") {
+        if (normalizedVacancyCity && !normalizedOpportunityCity.includes(normalizedVacancyCity)) {
+          return false;
+        }
+
+        if ((vacancyRadiusFrom || vacancyRadiusTo) && selectedVacancyAddressPoint) {
+          const distanceKm = haversineDistanceKm(selectedVacancyAddressPoint, {
+            lat: opportunity.latitude,
+            lon: opportunity.longitude,
+          });
+          const fromKm = parseNumberInput(vacancyRadiusFrom);
+          const toKm = parseNumberInput(vacancyRadiusTo);
+
+          if ((fromKm !== null && distanceKm < fromKm) || (toKm !== null && distanceKm > toKm)) {
+            return false;
+          }
+        }
+
+        if (!matchesTagSelection(opportunity, selectedVacancySkills)) {
+          return false;
+        }
+
+        if (normalizedVacancyLevels.length > 0 && !normalizedVacancyLevels.includes(normalizedLevel)) {
+          return false;
+        }
+
+        if (normalizedVacancyFormats.length > 0 && !normalizedVacancyFormats.includes(opportunity.format)) {
+          return false;
+        }
+
+        if (normalizedVacancyEmployment.length > 0 && !normalizedVacancyEmployment.includes(normalizedEmployment)) {
+          return false;
+        }
+
+        if (!matchesNumericRange(opportunity.salaryLabel, vacancySalaryFrom, vacancySalaryTo)) {
+          return false;
+        }
+
+        if (selectedPublicationPeriods.length > 0 && !selectedPublicationPeriods.includes("За всё время")) {
+          if (!publishedDate) {
+            return false;
+          }
+
+          const publishedAt = new Date(publishedDate);
+          if (Number.isNaN(publishedAt.getTime())) {
+            return false;
+          }
+
+          const elapsedMs = now.getTime() - publishedAt.getTime();
+          const matchesPublicationPeriod = selectedPublicationPeriods.some((period) => {
+            if (period === "За сегодня") {
+              return elapsedMs <= oneDayMs;
+            }
+
+            if (period === "За 3 дня") {
+              return elapsedMs <= oneDayMs * 3;
+            }
+
+            if (period === "За неделю") {
+              return elapsedMs <= oneDayMs * 7;
+            }
+
+            return false;
+          });
+
+          if (!matchesPublicationPeriod) {
+            return false;
+          }
+        }
+
         return true;
       }
 
-      if (selectedFormat === "saved") {
-        return favoriteOpportunityIds.includes(opportunity.id);
+      if (opportunityKind === "event") {
+        if (normalizedEventCity && !normalizedOpportunityCity.includes(normalizedEventCity)) {
+          return false;
+        }
+
+        if ((eventRadiusFrom || eventRadiusTo) && selectedEventAddressPoint) {
+          const distanceKm = haversineDistanceKm(selectedEventAddressPoint, {
+            lat: opportunity.latitude,
+            lon: opportunity.longitude,
+          });
+          const fromKm = parseNumberInput(eventRadiusFrom);
+          const toKm = parseNumberInput(eventRadiusTo);
+
+          if ((fromKm !== null && distanceKm < fromKm) || (toKm !== null && distanceKm > toKm)) {
+            return false;
+          }
+        }
+
+        if (!matchesTagSelection(opportunity, selectedEventThemes)) {
+          return false;
+        }
+
+        if (normalizedEventOrganizer && !normalizedCompanyName.includes(normalizedEventOrganizer)) {
+          return false;
+        }
+
+        if (!matchesStringSelection(opportunity.eventType, selectedEventTypes)) {
+          return false;
+        }
+
+        if (normalizedEventFormats.length > 0 && !normalizedEventFormats.includes(opportunity.format)) {
+          return false;
+        }
+
+        if (selectedEventCosts.length > 0) {
+          const amount = parseAmountLabel(opportunity.salaryLabel);
+          const wantsFree = selectedEventCosts.includes("Бесплатно");
+          const wantsPaid = selectedEventCosts.includes("Платно");
+          const isPaid = !amount.isFree && ((amount.max ?? 0) > 0 || normalizeFilterText(opportunity.salaryLabel).length > 0);
+
+          if (!((wantsFree && amount.isFree) || (wantsPaid && isPaid))) {
+            return false;
+          }
+        }
+
+        if (!matchesNumericRange(opportunity.salaryLabel, eventCostFrom, eventCostTo)) {
+          return false;
+        }
+
+        if (eventDate && !isSameDay(plannedDate, eventDate)) {
+          return false;
+        }
+
+        return true;
       }
 
-      return opportunity.format === selectedFormat;
+      if (opportunityKind === "mentorship") {
+        if (normalizedMentorCity && !normalizedOpportunityCity.includes(normalizedMentorCity)) {
+          return false;
+        }
+
+        if ((mentorRadiusFrom || mentorRadiusTo) && selectedMentorAddressPoint) {
+          const distanceKm = haversineDistanceKm(selectedMentorAddressPoint, {
+            lat: opportunity.latitude,
+            lon: opportunity.longitude,
+          });
+          const fromKm = parseNumberInput(mentorRadiusFrom);
+          const toKm = parseNumberInput(mentorRadiusTo);
+
+          if ((fromKm !== null && distanceKm < fromKm) || (toKm !== null && distanceKm > toKm)) {
+            return false;
+          }
+        }
+
+        if (!matchesTagSelection(opportunity, selectedMentorExpertise)) {
+          return false;
+        }
+
+        if (normalizedMentorOrganizer && !normalizedCompanyName.includes(normalizedMentorOrganizer)) {
+          return false;
+        }
+
+        if (!matchesStringSelection(opportunity.mentorshipDirection, selectedMentorshipDirections)) {
+          return false;
+        }
+
+        if (selectedMentorAvailability.length > 0) {
+          const plannedAt = plannedDate ? new Date(plannedDate) : null;
+          const isDateValid = plannedAt !== null && !Number.isNaN(plannedAt.getTime());
+          const matchesAvailability = selectedMentorAvailability.some((item) => {
+            if (item === "Сейчас свободен") {
+              return !isDateValid || (plannedAt as Date).getTime() <= now.getTime();
+            }
+
+            if (item === "В течение недели") {
+              return isDateValid && (plannedAt as Date).getTime() > now.getTime() && (plannedAt as Date).getTime() <= now.getTime() + oneDayMs * 7;
+            }
+
+            return false;
+          });
+
+          if (!matchesAvailability) {
+            return false;
+          }
+        }
+
+        if (normalizedMentorExperience.length > 0) {
+          const currentMentorExperience = normalizeLevelOption(opportunity.mentorExperience ?? opportunity.levelLabel);
+          if (!normalizedMentorExperience.includes(currentMentorExperience)) {
+            return false;
+          }
+        }
+
+        if (!matchesNumericRange(opportunity.salaryLabel, mentorCostFrom, mentorCostTo)) {
+          return false;
+        }
+
+        if (normalizedMentorFormats.length > 0 && !normalizedMentorFormats.includes(opportunity.format)) {
+          return false;
+        }
+
+        if (mentorDate && !isSameDay(plannedDate, mentorDate)) {
+          return false;
+        }
+
+        return true;
+      }
+
+      return true;
     });
-  }, [favoriteOpportunityIds, opportunities, selectedFormat]);
+  }, [
+    eventCostFrom,
+    eventCostTo,
+    eventDate,
+    eventOrganizerQuery,
+    eventRadiusFrom,
+    eventRadiusTo,
+    favoriteOpportunityIds,
+    hideEventsOnMap,
+    hideEventsOnMentorMap,
+    hideMentorshipOnEventMap,
+    mentorCostFrom,
+    mentorCostTo,
+    mentorDate,
+    mentorOrganizerQuery,
+    mentorRadiusFrom,
+    mentorRadiusTo,
+    opportunities,
+    selectedEventCosts,
+    selectedEventFormats,
+    selectedEventThemes,
+    selectedEventTypes,
+    selectedFormat,
+    selectedMentorAddressPoint,
+    selectedMentorAvailability,
+    selectedMentorCity,
+    selectedMentorExperience,
+    selectedMentorExpertise,
+    selectedMentorFormats,
+    selectedMentorshipDirections,
+    selectedVacancyAddressPoint,
+    selectedVacancyCity,
+    selectedVacancyEmployment,
+    selectedVacancyFormats,
+    selectedVacancyLevels,
+    selectedVacancySkills,
+    selectedPublicationPeriods,
+    selectedEventAddressPoint,
+    selectedEventCity,
+    vacancyRadiusFrom,
+    vacancyRadiusTo,
+    vacancySalaryFrom,
+    vacancySalaryTo,
+  ]);
   const normalizedSelectedCity = normalizeCityValue(selectedCity);
   const cityMatchedOpportunities = useMemo(() => {
     return filteredOpportunities.filter((opportunity) =>
@@ -291,6 +973,373 @@ export function MapView({
   const isSelectedOpportunityApplied = selectedOpportunity
     ? appliedOpportunityIds.includes(selectedOpportunity.id)
     : false;
+  const themeVariant = roleName === "applicant" ? "secondary" : roleName === "curator" ? "accent" : "primary";
+  const badgeThemeVariant = roleName === "applicant" ? "secondary" : roleName === "curator" ? "info" : "primary";
+  const outlineThemeVariant = themeVariant === "secondary" ? "secondary-outline" : themeVariant === "accent" ? "accent-outline" : "primary-outline";
+  const hardSkillOptions = useMemo(
+    () => collectHardSkillItems(tagCatalogQuery.data),
+    [tagCatalogQuery.data],
+  );
+  const filteredVacancySkillOptions = useMemo(
+    () => filterCatalogItems(hardSkillOptions, vacancySkillQuery, selectedVacancySkills),
+    [hardSkillOptions, selectedVacancySkills, vacancySkillQuery],
+  );
+  const filteredEventThemeOptions = useMemo(
+    () => filterCatalogItems(hardSkillOptions, eventThemeQuery, selectedEventThemes),
+    [eventThemeQuery, hardSkillOptions, selectedEventThemes],
+  );
+  const filteredMentorExpertiseOptions = useMemo(
+    () => filterCatalogItems(hardSkillOptions, mentorExpertiseQuery, selectedMentorExpertise),
+    [hardSkillOptions, mentorExpertiseQuery, selectedMentorExpertise],
+  );
+  const registeredCompanyOptions = useMemo(() => {
+    const companyMap = new Map<string, string>();
+
+    opportunities.forEach((opportunity) => {
+      const companyName = opportunity.companyName.trim();
+      if (!companyName) {
+        return;
+      }
+
+      companyMap.set(companyName.toLocaleLowerCase("ru-RU"), companyName);
+    });
+
+    return Array.from(companyMap.values()).sort((left, right) => left.localeCompare(right, "ru"));
+  }, [opportunities]);
+
+  const toggleSelection = (value: string, selectedValues: string[], setter: (value: string[]) => void) => {
+    setter(
+      selectedValues.includes(value)
+        ? selectedValues.filter((item) => item !== value)
+        : [...selectedValues, value],
+    );
+  };
+
+  const filterGroups = (groups: FilterGroup[], query: string) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return groups;
+    }
+
+    return groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => item.toLowerCase().includes(normalizedQuery)),
+      }))
+      .filter((group) => group.items.length > 0);
+  };
+
+  const filterSuggestions = (items: string[], query: string) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return items;
+    }
+
+    return items.filter((item) => item.toLowerCase().includes(normalizedQuery));
+  };
+
+  const resetVacancyFilters = () => {
+    setSelectedVacancyCity("");
+    setVacancyCityQuery("");
+    setSelectedVacancyAddressLabel("");
+    setSelectedVacancyAddressPoint(null);
+    setVacancyAddress("");
+    setVacancyRadiusFrom("");
+    setVacancyRadiusTo("");
+    setHideEventsOnMap(false);
+    setVacancySkillQuery("");
+    setSelectedVacancySkills([]);
+    setSelectedVacancyLevels([]);
+    setSelectedVacancyFormats([]);
+    setSelectedVacancyEmployment([]);
+    setVacancySalaryFrom("");
+    setVacancySalaryTo("");
+    setSelectedPublicationPeriods([]);
+  };
+
+  const resetEventFilters = () => {
+    setSelectedEventCity("");
+    setEventCityQuery("");
+    setSelectedEventAddressLabel("");
+    setSelectedEventAddressPoint(null);
+    setEventAddress("");
+    setEventRadiusFrom("");
+    setEventRadiusTo("");
+    setHideMentorshipOnEventMap(false);
+    setEventThemeQuery("");
+    setSelectedEventThemes([]);
+    setEventOrganizerQuery("");
+    setSelectedEventTypes([]);
+    setSelectedEventFormats([]);
+    setSelectedEventCosts([]);
+    setEventCostFrom("");
+    setEventCostTo("");
+    setEventDate("");
+  };
+
+  const resetMentorshipFilters = () => {
+    setSelectedMentorCity("");
+    setMentorCityQuery("");
+    setSelectedMentorAddressLabel("");
+    setSelectedMentorAddressPoint(null);
+    setMentorAddress("");
+    setMentorRadiusFrom("");
+    setMentorRadiusTo("");
+    setHideEventsOnMentorMap(false);
+    setMentorExpertiseQuery("");
+    setSelectedMentorExpertise([]);
+    setMentorOrganizerQuery("");
+    setSelectedMentorshipDirections([]);
+    setSelectedMentorAvailability([]);
+    setSelectedMentorExperience([]);
+    setMentorCostFrom("");
+    setMentorCostTo("");
+    setSelectedMentorFormats([]);
+    setMentorDate("");
+  };
+
+  useEffect(() => {
+    let isActive = true;
+    const normalizedQuery = vacancyCityQuery.trim();
+
+    if (!normalizedQuery) {
+      setVacancyCitySuggestions([]);
+      setIsVacancyCityLoading(false);
+      setHasVacancyCityError(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsVacancyCityLoading(true);
+      setHasVacancyCityError(false);
+      void getCitySuggestions(normalizedQuery)
+        .then((items) => {
+          if (!isActive) {
+            return;
+          }
+          setVacancyCitySuggestions(items);
+        })
+        .catch(() => {
+          if (!isActive) {
+            return;
+          }
+          setHasVacancyCityError(true);
+          setVacancyCitySuggestions([]);
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+          setIsVacancyCityLoading(false);
+        });
+    }, 220);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [vacancyCityQuery]);
+
+  useEffect(() => {
+    let isActive = true;
+    const normalizedQuery = eventCityQuery.trim();
+
+    if (!normalizedQuery) {
+      setEventCitySuggestions([]);
+      setIsEventCityLoading(false);
+      setHasEventCityError(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsEventCityLoading(true);
+      setHasEventCityError(false);
+      void getCitySuggestions(normalizedQuery)
+        .then((items) => {
+          if (!isActive) {
+            return;
+          }
+          setEventCitySuggestions(items);
+        })
+        .catch(() => {
+          if (!isActive) {
+            return;
+          }
+          setHasEventCityError(true);
+          setEventCitySuggestions([]);
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+          setIsEventCityLoading(false);
+        });
+    }, 220);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [eventCityQuery]);
+
+  useEffect(() => {
+    let isActive = true;
+    const normalizedQuery = mentorCityQuery.trim();
+
+    if (!normalizedQuery) {
+      setMentorCitySuggestions([]);
+      setIsMentorCityLoading(false);
+      setHasMentorCityError(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsMentorCityLoading(true);
+      setHasMentorCityError(false);
+      void getCitySuggestions(normalizedQuery)
+        .then((items) => {
+          if (!isActive) {
+            return;
+          }
+          setMentorCitySuggestions(items);
+        })
+        .catch(() => {
+          if (!isActive) {
+            return;
+          }
+          setHasMentorCityError(true);
+          setMentorCitySuggestions([]);
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+          setIsMentorCityLoading(false);
+        });
+    }, 220);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [mentorCityQuery]);
+
+  useEffect(() => {
+    let isActive = true;
+    const normalizedQuery = vacancyAddress.trim();
+
+    if (!normalizedQuery) {
+      setVacancyAddressSuggestions([]);
+      setIsVacancyAddressLoading(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsVacancyAddressLoading(true);
+      void getAddressSuggestions(normalizedQuery, selectedCity)
+        .then((items) => {
+          if (!isActive) {
+            return;
+          }
+          setVacancyAddressSuggestions(items);
+        })
+        .catch(() => {
+          if (!isActive) {
+            return;
+          }
+          setVacancyAddressSuggestions([]);
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+          setIsVacancyAddressLoading(false);
+        });
+    }, 220);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [selectedCity, vacancyAddress]);
+
+  useEffect(() => {
+    let isActive = true;
+    const normalizedQuery = eventAddress.trim();
+
+    if (!normalizedQuery) {
+      setEventAddressSuggestions([]);
+      setIsEventAddressLoading(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsEventAddressLoading(true);
+      void getAddressSuggestions(normalizedQuery, selectedCity)
+        .then((items) => {
+          if (!isActive) {
+            return;
+          }
+          setEventAddressSuggestions(items);
+        })
+        .catch(() => {
+          if (!isActive) {
+            return;
+          }
+          setEventAddressSuggestions([]);
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+          setIsEventAddressLoading(false);
+        });
+    }, 220);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [eventAddress, selectedCity]);
+
+  useEffect(() => {
+    let isActive = true;
+    const normalizedQuery = mentorAddress.trim();
+
+    if (!normalizedQuery) {
+      setMentorAddressSuggestions([]);
+      setIsMentorAddressLoading(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsMentorAddressLoading(true);
+      void getAddressSuggestions(normalizedQuery, selectedCity)
+        .then((items) => {
+          if (!isActive) {
+            return;
+          }
+          setMentorAddressSuggestions(items);
+        })
+        .catch(() => {
+          if (!isActive) {
+            return;
+          }
+          setMentorAddressSuggestions([]);
+        })
+        .finally(() => {
+          if (!isActive) {
+            return;
+          }
+          setIsMentorAddressLoading(false);
+        });
+    }, 220);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [mentorAddress, selectedCity]);
 
   useEffect(() => {
     onSelectOpportunityRef.current = onSelectOpportunity;
@@ -453,7 +1502,7 @@ export function MapView({
     }
 
     const inputMarkers: InputMarker[] = filteredOpportunities.map((opportunity) => {
-      const markerColor = markerPalette[opportunity.accent];
+      const markerColor = resolveMarkerColor(opportunity, favoriteOpportunityIds);
       const isSelected = opportunity.id === selectedOpportunityId;
 
       return {
@@ -473,7 +1522,7 @@ export function MapView({
     });
 
     clustererRef.current.load(inputMarkers);
-  }, [filteredOpportunities, isMapReady, selectedOpportunityId]);
+  }, [favoriteOpportunityIds, filteredOpportunities, isMapReady, selectedOpportunityId]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -613,6 +1662,375 @@ export function MapView({
     mapInstanceRef.current.setZoom(mapInstanceRef.current.getZoom() - 1, { duration: 220 });
   };
 
+  const renderCitySection = (
+    query: string,
+    setQuery: (value: string) => void,
+    selectedValue: string,
+    setSelectedValue: (value: string) => void,
+    suggestions: CitySuggestion[],
+    isLoading: boolean,
+    hasError: boolean,
+    reset: () => void,
+  ) => (
+    <div className="map-view__filter-block">
+      <div className="map-view__filter-block-head">
+        <h3 className="map-view__filter-title">Город</h3>
+        <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
+      </div>
+      <div className="city-selector__search map-view__city-search-shell">
+        <span className="city-selector__search-icon" aria-hidden="true" />
+        <Input
+          type="search"
+          value={query}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setQuery(nextValue);
+            if (nextValue !== selectedValue) {
+              setSelectedValue("");
+            }
+          }}
+          placeholder="Поиск по городам"
+          clearable
+          className={`input--${themeVariant} input--sm city-selector__search-input map-view__filter-input`}
+        />
+      </div>
+      {query.trim() && normalizeFilterText(query) !== normalizeFilterText(selectedValue) ? (
+        <div className="city-selector__list map-view__city-selector-list" role="listbox" aria-label="Список городов">
+          {isLoading ? <div className="city-selector__empty">Ищем города...</div> : null}
+          {!isLoading && hasError ? <div className="city-selector__empty">Не удалось загрузить список городов.</div> : null}
+          {!isLoading && !hasError && suggestions.length === 0 ? <div className="city-selector__empty">Ничего не найдено.</div> : null}
+          {!isLoading && !hasError && suggestions.map((city) => (
+            <button
+              key={city.id}
+              type="button"
+              className={city.name === selectedValue ? "city-selector__option city-selector__option--active" : "city-selector__option"}
+              onClick={() => {
+                setSelectedValue(city.name);
+                setQuery(city.name);
+                onSelectCity(city.name);
+              }}
+            >
+              <span className="city-selector__option-label">{city.name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const renderRadiusSection = (
+    title: string,
+    address: string,
+    setAddress: (value: string) => void,
+    selectedAddressLabel: string,
+    setSelectedAddressLabel: (value: string) => void,
+    setSelectedAddressPoint: (value: { lat: number; lon: number } | null) => void,
+    suggestions: AddressSuggestion[],
+    isLoading: boolean,
+    from: string,
+    setFrom: (value: string) => void,
+    to: string,
+    setTo: (value: string) => void,
+    reset: () => void,
+  ) => (
+    <div className="map-view__filter-block">
+      <div className="map-view__filter-block-head">
+        <h3 className="map-view__filter-title">{title}</h3>
+        <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
+      </div>
+      <div className="city-selector__search map-view__city-search-shell">
+        <span className="city-selector__search-icon" aria-hidden="true" />
+        <Input
+          value={address}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setAddress(nextValue);
+            if (nextValue !== selectedAddressLabel) {
+              setSelectedAddressLabel("");
+              setSelectedAddressPoint(null);
+            }
+          }}
+          placeholder="Улица и номер дома"
+          clearable
+          className={`input--${themeVariant} input--sm city-selector__search-input map-view__filter-input`}
+        />
+      </div>
+      {address.trim() && normalizeFilterText(address) !== normalizeFilterText(selectedAddressLabel) ? (
+        <div className="city-selector__list map-view__city-selector-list" role="listbox" aria-label="Список адресов">
+          {isLoading ? (
+            <div className="city-selector__empty">Загружаем адреса...</div>
+          ) : suggestions.length > 0 ? (
+            suggestions.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="city-selector__option map-view__address-option"
+                onClick={() => {
+                  setSelectedAddressLabel(item.fullAddress);
+                  setSelectedAddressPoint(item.point ? { lat: item.point.lat, lon: item.point.lon } : null);
+                  setAddress(item.fullAddress);
+                }}
+              >
+                <span className="city-selector__option-label map-view__address-option-title">{item.fullAddress}</span>
+                {item.subtitle ? <span className="map-view__address-option-subtitle">{item.subtitle}</span> : null}
+              </button>
+            ))
+          ) : (
+            <div className="city-selector__empty">Ничего не найдено.</div>
+          )}
+        </div>
+      ) : null}
+      <div className="map-view__filter-range-grid">
+        <Input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="от" className={`input--${themeVariant} input--sm map-view__filter-input`} />
+        <Input value={to} onChange={(event) => setTo(event.target.value)} placeholder="до" className={`input--${themeVariant} input--sm map-view__filter-input`} />
+      </div>
+    </div>
+  );
+
+  const renderDisplaySection = (label: string, checked: boolean, onChange: (checked: boolean) => void) => (
+    <div className="map-view__filter-block">
+      <h3 className="map-view__filter-title">Отображение</h3>
+      <label className="map-view__filter-checkbox-row">
+        <Checkbox checked={checked} onChange={(event) => onChange(event.target.checked)} variant={themeVariant} />
+        <span>{label}</span>
+      </label>
+    </div>
+  );
+
+  const renderTagSection = (
+    title: string,
+    query: string,
+    setQuery: (value: string) => void,
+    selected: string[],
+    setSelected: (value: string[]) => void,
+    options: string[],
+    isLoading: boolean,
+    groups: FilterGroup[],
+    reset: () => void,
+    popular?: string[],
+  ) => (
+    <div className="map-view__filter-block">
+      <div className="map-view__filter-block-head">
+        <h3 className="map-view__filter-title">{title}</h3>
+        <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
+      </div>
+      <div className="city-selector__search map-view__city-search-shell">
+        <span className="city-selector__search-icon" aria-hidden="true" />
+        <Input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Поиск навыка"
+          clearable
+          className={`input--${themeVariant} input--sm city-selector__search-input map-view__filter-input`}
+        />
+      </div>
+      {query.trim() ? (
+        <div className="city-selector__list map-view__city-selector-list" role="listbox" aria-label={title}>
+          {isLoading ? <div className="city-selector__empty">Загружаем список...</div> : null}
+          {!isLoading && options.length === 0 ? <div className="city-selector__empty">Ничего не найдено.</div> : null}
+          {!isLoading && options.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="city-selector__option"
+              onClick={() => {
+                toggleSelection(item, selected, setSelected);
+                setQuery("");
+              }}
+            >
+              <span className="city-selector__option-label">{item}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {selected.length > 0 ? (
+        <div className="map-view__filter-chip-list">
+          {selected.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={`badge badge--${badgeThemeVariant} map-view__filter-chip map-view__filter-chip--active`}
+              onClick={() => toggleSelection(item, selected, setSelected)}
+            >
+              <span className="badge__label">
+                <span>{item}</span>
+                <span className="map-view__filter-chip-remove" aria-hidden="true" />
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {popular?.length ? (
+        <div className="map-view__filter-subsection">
+          <p className="map-view__filter-subtitle">Популярные</p>
+          <div className="map-view__filter-chip-list">
+            {popular.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={
+                  selected.includes(item)
+                    ? `badge badge--${badgeThemeVariant} map-view__filter-chip map-view__filter-chip--active`
+                    : `badge badge--${badgeThemeVariant} map-view__filter-chip`
+                }
+                onClick={() => toggleSelection(item, selected, setSelected)}
+              >
+                <span className="badge__label">{item}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="map-view__filter-groups">
+        {filterGroups(groups, query).map((group) => (
+          <div key={group.id} className="map-view__filter-subsection">
+            <p className="map-view__filter-subtitle">{group.title}</p>
+            <div className="map-view__filter-chip-list">
+              {group.items.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={
+                    selected.includes(item)
+                      ? `badge badge--${badgeThemeVariant} map-view__filter-chip map-view__filter-chip--active`
+                      : `badge badge--${badgeThemeVariant} map-view__filter-chip`
+                  }
+                  onClick={() => toggleSelection(item, selected, setSelected)}
+                >
+                  <span className="badge__label">{item}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderCheckboxSection = (
+    title: string,
+    options: string[],
+    selected: string[],
+    setSelected: (value: string[]) => void,
+    singleColumn = false,
+  ) => (
+    <div className="map-view__filter-block">
+      <div className="map-view__filter-block-head">
+        <h3 className="map-view__filter-title">{title}</h3>
+        <button type="button" className="map-view__filter-reset-link" onClick={() => setSelected([])}>Сбросить</button>
+      </div>
+      <div className={singleColumn ? "map-view__filter-checkbox-grid map-view__filter-checkbox-grid--single" : "map-view__filter-checkbox-grid"}>
+        {options.map((option) => (
+          <label key={option} className="map-view__filter-checkbox-row">
+            <Checkbox
+              checked={selected.includes(option)}
+              onChange={() => toggleSelection(option, selected, setSelected)}
+              variant={themeVariant}
+            />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderAmountSection = (
+    title: string,
+    from: string,
+    setFrom: (value: string) => void,
+    to: string,
+    setTo: (value: string) => void,
+    reset: () => void,
+    options?: string[],
+    selected?: string[],
+    setSelected?: (value: string[]) => void,
+  ) => (
+    <div className="map-view__filter-block">
+      <div className="map-view__filter-block-head">
+        <h3 className="map-view__filter-title">{title}</h3>
+        <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
+      </div>
+      {options && selected && setSelected ? (
+        <div className="map-view__filter-checkbox-grid map-view__filter-checkbox-grid--single">
+          {options.map((option) => (
+            <label key={option} className="map-view__filter-checkbox-row">
+              <Checkbox
+                checked={selected.includes(option)}
+                onChange={() => toggleSelection(option, selected, setSelected)}
+                variant={themeVariant}
+              />
+              <span>{option}</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
+      <div className="map-view__filter-range-grid">
+        <Input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="от" className={`input--${themeVariant} input--sm map-view__filter-input`} />
+        <Input value={to} onChange={(event) => setTo(event.target.value)} placeholder="до" className={`input--${themeVariant} input--sm map-view__filter-input`} />
+      </div>
+    </div>
+  );
+
+  const renderOrganizerSection = (
+    title: string,
+    query: string,
+    setQuery: (value: string) => void,
+    items: string[],
+    reset: () => void,
+  ) => (
+    <div className="map-view__filter-block">
+      <div className="map-view__filter-block-head">
+        <h3 className="map-view__filter-title">{title}</h3>
+        <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
+      </div>
+      <div className="city-selector__search map-view__city-search-shell">
+        <span className="city-selector__search-icon" aria-hidden="true" />
+        <Input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Поиск организатора"
+          clearable
+          className={`input--${themeVariant} input--sm city-selector__search-input map-view__filter-input`}
+        />
+      </div>
+      {query.trim() ? (
+        <div className="city-selector__list map-view__city-selector-list" role="listbox" aria-label={title}>
+          {filterSuggestions(items, query).length === 0 ? <div className="city-selector__empty">Ничего не найдено.</div> : null}
+          {filterSuggestions(items, query).map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="city-selector__option"
+              onClick={() => setQuery(item)}
+            >
+              <span className="city-selector__option-label">{item}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const renderDateSection = (title: string, value: string, onChange: (value: string) => void, reset: () => void) => (
+    <div className="map-view__filter-block">
+      <div className="map-view__filter-block-head">
+        <h3 className="map-view__filter-title">{title}</h3>
+        <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
+      </div>
+      <DateInput value={value} onChange={onChange} variant={themeVariant} className="map-view__filter-date" />
+    </div>
+  );
+
+  const renderFilterFooter = (onReset: () => void) => (
+    <div className="map-view__filter-footer">
+      <Button type="button" variant={outlineThemeVariant} size="sm" fullWidth onClick={onReset}>
+        Сбросить фильтры
+      </Button>
+    </div>
+  );
+
   return (
     <section
       className={isTransitioning ? "map-view map-view--transitioning" : "map-view"}
@@ -663,72 +2081,271 @@ export function MapView({
           }
           aria-hidden={!isFiltersVisible}
         >
-          <div className="map-view__filter-card map-view__filter-card--category">
-            <div className="map-view__filter-panel-head">
-              <h2 className="map-view__filter-panel-title">Фильтры</h2>
-              <button type="button" className="map-view__filter-reset">
-                Сбросить
+          <div className="map-view__filter-group">
+            <div className="map-view__filter-group-menu">
+              <button
+                type="button"
+                className="map-view__filter-group-trigger"
+                onClick={() => setIsOpportunitiesOpen((current) => !current)}
+              >
+                <span className="map-view__filter-accordion-title">
+                  Вакансии и стажировки
+                </span>
+                <span
+                  className={
+                    isOpportunitiesOpen
+                      ? "map-view__filter-category-icon"
+                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
+                  }
+                  aria-hidden="true"
+                />
               </button>
+              <button type="button" className="map-view__filter-reset-link" onClick={resetVacancyFilters}>Сбросить</button>
             </div>
-
-            <button
-              type="button"
-              className="map-view__filter-category-button"
-              onClick={() => setIsCategoryOpen((current) => !current)}
+            <div
+              className={
+                isOpportunitiesOpen
+                  ? "map-view__filter-group-panel"
+                  : "map-view__filter-group-panel map-view__filter-group-panel--hidden"
+              }
+              aria-hidden={!isOpportunitiesOpen}
             >
-              <span className="map-view__filter-title map-view__filter-title--lg">
-                Вакансии и стажировки
-              </span>
-              <span
-                className={
-                  isCategoryOpen
-                    ? "map-view__filter-category-icon"
-                    : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
-                }
-                aria-hidden="true"
-              />
-            </button>
+              {renderCitySection(vacancyCityQuery, setVacancyCityQuery, selectedVacancyCity, setSelectedVacancyCity, vacancyCitySuggestions, isVacancyCityLoading, hasVacancyCityError, () => {
+                setSelectedVacancyCity("");
+                setVacancyCityQuery("");
+              })}
+              {renderRadiusSection(
+                "Радиус поиска, км",
+                vacancyAddress,
+                setVacancyAddress,
+                selectedVacancyAddressLabel,
+                setSelectedVacancyAddressLabel,
+                setSelectedVacancyAddressPoint,
+                vacancyAddressSuggestions,
+                isVacancyAddressLoading,
+                vacancyRadiusFrom,
+                setVacancyRadiusFrom,
+                vacancyRadiusTo,
+                setVacancyRadiusTo,
+                () => {
+                  setSelectedVacancyAddressLabel("");
+                  setSelectedVacancyAddressPoint(null);
+                  setVacancyAddress("");
+                  setVacancyRadiusFrom("");
+                  setVacancyRadiusTo("");
+                },
+              )}
+              {renderDisplaySection("Не отображать на карте вакансии и стажировки", hideEventsOnMap, setHideEventsOnMap)}
+              {renderTagSection(
+                "Навыки (Стек)",
+                vacancySkillQuery,
+                setVacancySkillQuery,
+                selectedVacancySkills,
+                setSelectedVacancySkills,
+                filteredVacancySkillOptions,
+                tagCatalogQuery.isLoading,
+                vacancySkillGroups,
+                () => {
+                  setVacancySkillQuery("");
+                  setSelectedVacancySkills([]);
+                },
+                popularVacancySkills,
+              )}
+              {renderCheckboxSection("Уровень", vacancyLevels, selectedVacancyLevels, setSelectedVacancyLevels)}
+              {renderCheckboxSection("Формат", formatOptions, selectedVacancyFormats, setSelectedVacancyFormats)}
+              {renderCheckboxSection("Занятость", employmentOptions, selectedVacancyEmployment, setSelectedVacancyEmployment)}
+              {renderAmountSection(
+                "Зарплата",
+                vacancySalaryFrom,
+                setVacancySalaryFrom,
+                vacancySalaryTo,
+                setVacancySalaryTo,
+                () => {
+                  setVacancySalaryFrom("");
+                  setVacancySalaryTo("");
+                },
+              )}
+              {renderCheckboxSection("Дата публикации", publicationOptions, selectedPublicationPeriods, setSelectedPublicationPeriods, true)}
+              {renderFilterFooter(resetVacancyFilters)}
+            </div>
           </div>
 
-          <div
-            className={
-              isCategoryOpen
-                ? "map-view__filter-card map-view__filter-card--panel"
-                : "map-view__filter-card map-view__filter-card--panel map-view__filter-card--panel-hidden"
-            }
-            aria-hidden={!isCategoryOpen}
-          >
-            <div className="map-view__filter-section">
-              <div className="map-view__filter-section-head">
-                <h3 className="map-view__filter-title">Город</h3>
-              </div>
-
-              <div className="map-view__city-search">
-                <span className="map-view__city-search-placeholder">Город</span>
-                <span className="map-view__city-search-icon" aria-hidden="true" />
-              </div>
-            </div>
-
-            <div className="map-view__city-list" role="listbox" aria-label="Выбор города">
-              {cityOptions.map((city) => (
-                <button
-                  key={city}
-                  type="button"
+          <div className="map-view__filter-group">
+            <div className="map-view__filter-group-menu">
+              <button
+                type="button"
+                className="map-view__filter-group-trigger"
+                onClick={() => setIsEventsOpen((current) => !current)}
+              >
+                <span className="map-view__filter-accordion-title">Мероприятия</span>
+                <span
                   className={
-                    city === selectedCity
-                      ? "map-view__city-option map-view__city-option--active"
-                      : "map-view__city-option"
+                    isEventsOpen
+                      ? "map-view__filter-category-icon"
+                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
                   }
-                  onClick={() => onSelectCity(city)}
-                >
-                  {city}
-                </button>
-              ))}
+                  aria-hidden="true"
+                />
+              </button>
+              <button type="button" className="map-view__filter-reset-link" onClick={resetEventFilters}>Сбросить</button>
             </div>
+            <div
+              className={
+                isEventsOpen
+                  ? "map-view__filter-group-panel"
+                  : "map-view__filter-group-panel map-view__filter-group-panel--hidden"
+              }
+              aria-hidden={!isEventsOpen}
+            >
+              {renderCitySection(eventCityQuery, setEventCityQuery, selectedEventCity, setSelectedEventCity, eventCitySuggestions, isEventCityLoading, hasEventCityError, () => {
+                setSelectedEventCity("");
+                setEventCityQuery("");
+              })}
+              {renderRadiusSection(
+                "Радиус поиска, км",
+                eventAddress,
+                setEventAddress,
+                selectedEventAddressLabel,
+                setSelectedEventAddressLabel,
+                setSelectedEventAddressPoint,
+                eventAddressSuggestions,
+                isEventAddressLoading,
+                eventRadiusFrom,
+                setEventRadiusFrom,
+                eventRadiusTo,
+                setEventRadiusTo,
+                () => {
+                  setSelectedEventAddressLabel("");
+                  setSelectedEventAddressPoint(null);
+                  setEventAddress("");
+                  setEventRadiusFrom("");
+                  setEventRadiusTo("");
+                },
+              )}
+              {renderDisplaySection("Не отображать на карте мероприятия", hideMentorshipOnEventMap, setHideMentorshipOnEventMap)}
+              {renderTagSection(
+                "Тематика",
+                eventThemeQuery,
+                setEventThemeQuery,
+                selectedEventThemes,
+                setSelectedEventThemes,
+                filteredEventThemeOptions,
+                tagCatalogQuery.isLoading,
+                themeGroups,
+                () => {
+                  setEventThemeQuery("");
+                  setSelectedEventThemes([]);
+                },
+              )}
+              {renderOrganizerSection("Организатор", eventOrganizerQuery, setEventOrganizerQuery, registeredCompanyOptions, () => setEventOrganizerQuery(""))}
+              {renderCheckboxSection("Тип", eventTypeOptions, selectedEventTypes, setSelectedEventTypes, true)}
+              {renderCheckboxSection("Формат", formatOptions, selectedEventFormats, setSelectedEventFormats)}
+              {renderAmountSection(
+                "Стоимость",
+                eventCostFrom,
+                setEventCostFrom,
+                eventCostTo,
+                setEventCostTo,
+                () => {
+                  setSelectedEventCosts([]);
+                  setEventCostFrom("");
+                  setEventCostTo("");
+                },
+                costOptions,
+                selectedEventCosts,
+                setSelectedEventCosts,
+              )}
+              {renderDateSection("Дата проведения", eventDate, setEventDate, () => setEventDate(""))}
+              {renderFilterFooter(resetEventFilters)}
+            </div>
+          </div>
 
-            <button type="button" className="map-view__filter-reset map-view__filter-reset--inline">
-              Сбросить
-            </button>
+          <div className="map-view__filter-group">
+            <div className="map-view__filter-group-menu">
+              <button
+                type="button"
+                className="map-view__filter-group-trigger"
+                onClick={() => setIsMentorshipOpen((current) => !current)}
+              >
+                <span className="map-view__filter-accordion-title">Менторские программы</span>
+                <span
+                  className={
+                    isMentorshipOpen
+                      ? "map-view__filter-category-icon"
+                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
+                  }
+                  aria-hidden="true"
+                />
+              </button>
+              <button type="button" className="map-view__filter-reset-link" onClick={resetMentorshipFilters}>Сбросить</button>
+            </div>
+            <div
+              className={
+                isMentorshipOpen
+                  ? "map-view__filter-group-panel"
+                  : "map-view__filter-group-panel map-view__filter-group-panel--hidden"
+              }
+              aria-hidden={!isMentorshipOpen}
+            >
+              {renderCitySection(mentorCityQuery, setMentorCityQuery, selectedMentorCity, setSelectedMentorCity, mentorCitySuggestions, isMentorCityLoading, hasMentorCityError, () => {
+                setSelectedMentorCity("");
+                setMentorCityQuery("");
+              })}
+              {renderRadiusSection(
+                "Радиус поиска, км",
+                mentorAddress,
+                setMentorAddress,
+                selectedMentorAddressLabel,
+                setSelectedMentorAddressLabel,
+                setSelectedMentorAddressPoint,
+                mentorAddressSuggestions,
+                isMentorAddressLoading,
+                mentorRadiusFrom,
+                setMentorRadiusFrom,
+                mentorRadiusTo,
+                setMentorRadiusTo,
+                () => {
+                  setSelectedMentorAddressLabel("");
+                  setSelectedMentorAddressPoint(null);
+                  setMentorAddress("");
+                  setMentorRadiusFrom("");
+                  setMentorRadiusTo("");
+                },
+              )}
+              {renderDisplaySection("Не отображать на карте менторские программы", hideEventsOnMentorMap, setHideEventsOnMentorMap)}
+              {renderTagSection(
+                "Область экспертизы",
+                mentorExpertiseQuery,
+                setMentorExpertiseQuery,
+                selectedMentorExpertise,
+                setSelectedMentorExpertise,
+                filteredMentorExpertiseOptions,
+                tagCatalogQuery.isLoading,
+                mentorExpertiseGroups,
+                () => {
+                  setMentorExpertiseQuery("");
+                  setSelectedMentorExpertise([]);
+                },
+              )}
+              {renderOrganizerSection("Организатор", mentorOrganizerQuery, setMentorOrganizerQuery, registeredCompanyOptions, () => setMentorOrganizerQuery(""))}
+              {renderCheckboxSection("Направление менторства", mentorshipDirections, selectedMentorshipDirections, setSelectedMentorshipDirections, true)}
+              {renderCheckboxSection("Доступность ментора", mentorAvailabilityOptions, selectedMentorAvailability, setSelectedMentorAvailability, true)}
+              {renderCheckboxSection("Опыт ментора", mentorExperienceOptions, selectedMentorExperience, setSelectedMentorExperience, true)}
+              {renderAmountSection(
+                "Стоимость",
+                mentorCostFrom,
+                setMentorCostFrom,
+                mentorCostTo,
+                setMentorCostTo,
+                () => {
+                  setMentorCostFrom("");
+                  setMentorCostTo("");
+                },
+              )}
+              {renderCheckboxSection("Формат", formatOptions, selectedMentorFormats, setSelectedMentorFormats)}
+              {renderDateSection("Дата проведения", mentorDate, setMentorDate, () => setMentorDate(""))}
+              {renderFilterFooter(resetMentorshipFilters)}
+            </div>
           </div>
         </div>
       </div>
@@ -909,11 +2526,11 @@ export function MapView({
               key={item.value}
               type="button"
               className={
-                item.value === selectedFormat
-                  ? "map-view__format-chip map-view__format-chip--active"
-                  : "map-view__format-chip"
+                selectedFormat.includes(item.value)
+                  ? `map-view__format-chip map-view__format-chip--${item.value} map-view__format-chip--active`
+                  : `map-view__format-chip map-view__format-chip--${item.value}`
               }
-              onClick={() => setSelectedFormat(item.value)}
+              onClick={() => setSelectedFormat((current) => toggleFormatSelection(current, item.value))}
             >
               {item.label}
             </button>

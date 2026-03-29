@@ -13,6 +13,7 @@ from src.core.config import settings
 from src.core.logging import setup_logging
 from src.db.session import SessionLocal
 from src.services import BootstrapService
+from src.services.chat_reminder_service import ChatReminderWorker
 from src.utils.errors import AppError
 from src.utils.responses import error_response, success_response
 
@@ -50,6 +51,7 @@ app.mount(
 )
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+chat_reminder_worker = ChatReminderWorker()
 
 
 @app.on_event("startup")
@@ -59,6 +61,12 @@ def bootstrap_staff_accounts() -> None:
         BootstrapService(db).ensure_initial_staff_accounts()
     finally:
         db.close()
+    chat_reminder_worker.start()
+
+
+@app.on_event("shutdown")
+def shutdown_chat_reminder_worker() -> None:
+    chat_reminder_worker.stop()
 
 
 def _normalize_validation_message(error: dict) -> str:

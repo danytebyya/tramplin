@@ -76,6 +76,7 @@ class UserRepository:
         preferences.email_overdue_reviews = email_notifications["overdue_reviews"]
         preferences.email_company_profile_changes = email_notifications["company_profile_changes"]
         preferences.email_publication_changes = email_notifications["publication_changes"]
+        preferences.email_chat_reminders = email_notifications["chat_reminders"]
         preferences.email_daily_digest = email_notifications["daily_digest"]
         preferences.email_weekly_report = email_notifications["weekly_report"]
         preferences.push_new_verification_requests = push_notifications["new_verification_requests"]
@@ -83,6 +84,7 @@ class UserRepository:
         preferences.push_overdue_reviews = push_notifications["overdue_reviews"]
         preferences.push_company_profile_changes = push_notifications["company_profile_changes"]
         preferences.push_publication_changes = push_notifications["publication_changes"]
+        preferences.push_chat_reminders = push_notifications["chat_reminders"]
         preferences.push_daily_digest = push_notifications["daily_digest"]
         preferences.push_weekly_report = push_notifications["weekly_report"]
         self.db.add(preferences)

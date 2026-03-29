@@ -146,6 +146,58 @@ def test_approved_future_publication_stays_scheduled_until_date(client, db_sessi
     assert opportunity.business_status == OpportunityStatus.SCHEDULED
 
 
+def test_due_scheduled_publication_sets_published_at_when_it_enters_public_feed(client, db_session):
+    employer = _create_employer_user(db_session, email="due-scheduled-employer@example.com", inn="7707083896")
+    curator = _create_curator(db_session, email="due-scheduled-curator@example.com")
+    employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
+    curator_access_token = _login(client, email=curator.email, password="CuratorPass123")
+
+    planned_publish_at = datetime.now(UTC) + timedelta(days=1)
+    create_response = client.post(
+        "/api/v1/opportunities",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+        json={
+            "title": "Scheduled public vacancy",
+            "description": "Полное описание вакансии с достаточным количеством деталей для публикации после модерации.",
+            "opportunity_type": "vacancy",
+            "city": "Москва",
+            "address": "ул. Арбат, 12",
+            "salary_label": "150 000 ₽",
+            "tags": ["Python", "FastAPI"],
+            "format": "hybrid",
+            "level_label": "junior",
+            "employment_label": "full-time",
+            "planned_publish_at": planned_publish_at.isoformat(),
+            "latitude": 55.7522,
+            "longitude": 37.5927,
+        },
+    )
+
+    opportunity_id = create_response.json()["data"]["id"]
+
+    approve_response = client.post(
+        f"/api/v1/moderation/content-items/{opportunity_id}/approve",
+        headers={"Authorization": f"Bearer {curator_access_token}"},
+        json={"moderator_comment": "Можно публиковать"},
+    )
+
+    assert approve_response.status_code == 200
+
+    opportunity = db_session.query(Opportunity).filter(Opportunity.id == UUID(opportunity_id)).one()
+    opportunity.starts_at = datetime.now(UTC) - timedelta(hours=2)
+    db_session.add(opportunity)
+    db_session.commit()
+
+    public_response = client.get("/api/v1/opportunities")
+
+    assert public_response.status_code == 200
+
+    db_session.refresh(opportunity)
+    assert opportunity.business_status == OpportunityStatus.ACTIVE
+    assert opportunity.published_at is not None
+    assert opportunity.published_at == opportunity.starts_at
+
+
 def test_create_opportunity_still_returns_success_when_notifications_fail(client, db_session, monkeypatch):
     employer = _create_employer_user(db_session, email="notify-employer@example.com", inn="7707083895")
     _create_curator(db_session, email="notify-curator@example.com")

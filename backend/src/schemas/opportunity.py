@@ -25,6 +25,14 @@ class OpportunityPublicRead(BaseModel):
     business_status: str
     moderation_status: str
     responses_count: int = 0
+    city: str = ""
+    address: str = ""
+    published_at: str | None = None
+    active_until: str | None = None
+    planned_publish_at: str | None = None
+    event_type: str | None = None
+    mentorship_direction: str | None = None
+    mentor_experience: str | None = None
 
 
 class OpportunityFeedResponse(BaseModel):

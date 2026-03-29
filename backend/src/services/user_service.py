@@ -493,6 +493,7 @@ class UserService:
             preferences.email_overdue_reviews = False
             preferences.email_company_profile_changes = True
             preferences.email_publication_changes = False
+            preferences.email_chat_reminders = True
             preferences.email_daily_digest = False
             preferences.email_weekly_report = False
             preferences.push_new_verification_requests = True
@@ -500,6 +501,7 @@ class UserService:
             preferences.push_overdue_reviews = False
             preferences.push_company_profile_changes = True
             preferences.push_publication_changes = False
+            preferences.push_chat_reminders = True
             preferences.push_daily_digest = False
             preferences.push_weekly_report = False
             return
@@ -512,6 +514,7 @@ class UserService:
         preferences.email_overdue_reviews = False
         preferences.email_company_profile_changes = False
         preferences.email_publication_changes = False
+        preferences.email_chat_reminders = False
         preferences.email_daily_digest = False
         preferences.email_weekly_report = False
         preferences.push_new_verification_requests = False
@@ -519,6 +522,7 @@ class UserService:
         preferences.push_overdue_reviews = False
         preferences.push_company_profile_changes = False
         preferences.push_publication_changes = False
+        preferences.push_chat_reminders = False
         preferences.push_daily_digest = False
         preferences.push_weekly_report = False
 
@@ -541,6 +545,7 @@ class UserService:
             and preferences.email_overdue_reviews is False
             and preferences.email_company_profile_changes is False
             and preferences.email_publication_changes is False
+            and preferences.email_chat_reminders is False
             and preferences.email_daily_digest is False
             and preferences.email_weekly_report is False
             and preferences.push_new_verification_requests is True
@@ -548,6 +553,7 @@ class UserService:
             and preferences.push_overdue_reviews is False
             and preferences.push_company_profile_changes is False
             and preferences.push_publication_changes is False
+            and preferences.push_chat_reminders is False
             and preferences.push_daily_digest is False
             and preferences.push_weekly_report is False
         )
@@ -562,6 +568,7 @@ class UserService:
                     "overdue_reviews": preferences.email_overdue_reviews,
                     "company_profile_changes": preferences.email_company_profile_changes,
                     "publication_changes": preferences.email_publication_changes,
+                    "chat_reminders": preferences.email_chat_reminders,
                     "daily_digest": preferences.email_daily_digest,
                     "weekly_report": preferences.email_weekly_report,
                 },
@@ -571,6 +578,7 @@ class UserService:
                     "overdue_reviews": preferences.push_overdue_reviews,
                     "company_profile_changes": preferences.push_company_profile_changes,
                     "publication_changes": preferences.push_publication_changes,
+                    "chat_reminders": preferences.push_chat_reminders,
                     "daily_digest": preferences.push_daily_digest,
                     "weekly_report": preferences.push_weekly_report,
                 },

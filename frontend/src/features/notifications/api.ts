@@ -12,6 +12,7 @@ export type NotificationKind =
   | "profile"
   | "opportunity"
   | "application"
+  | "chat"
   | "employer_verification"
   | "candidates";
 

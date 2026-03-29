@@ -27,6 +27,7 @@ from src.schemas.chat import (
     ChatUserKeyRead,
     ChatUserKeyUpsertRequest,
 )
+from src.services.chat_reminder_service import ChatReminderService
 from src.utils.errors import AppError
 
 logger = logging.getLogger(__name__)
@@ -271,6 +272,16 @@ class ChatService:
         own_read_state.last_read_message_id = message.id
         own_read_state.last_read_at = message.created_at
         self.db.add(own_read_state)
+        recipient_user_id, recipient_profile_role, recipient_employer_id = self._resolve_reminder_recipient_scope(
+            conversation=conversation,
+            sender_user_id=str(current_user.id),
+        )
+        ChatReminderService(self.db).mark_incoming_message_pending(
+            recipient_user_id=recipient_user_id,
+            profile_role=recipient_profile_role,
+            employer_id=recipient_employer_id,
+            message_created_at=message.created_at,
+        )
         self.db.commit()
         logger.info(
             "chat.send_message.succeeded user_id=%s conversation_id=%s message_id=%s created_at=%s",
@@ -374,6 +385,11 @@ class ChatService:
         state.last_read_message_id = conversation.last_message_id
         state.last_read_at = read_at
         self.db.add(state)
+        ChatReminderService(self.db).sync_scope_read_state(
+            user_id=str(current_user.id),
+            profile_role=scope.profile_role,
+            employer_id=scope.employer_id,
+        )
         self.db.commit()
 
         event = {
@@ -565,6 +581,25 @@ class ChatService:
                 created_by_user_id=str(current_user.id),
             )
         return conversation, True
+
+    @staticmethod
+    def _resolve_reminder_recipient_scope(
+        *,
+        conversation: ChatConversation,
+        sender_user_id: str,
+    ) -> tuple[str, str, str | None]:
+        if str(conversation.applicant_user_id) == sender_user_id:
+            return (
+                str(conversation.employer_user_id),
+                UserRole.EMPLOYER.value,
+                str(conversation.employer_id) if conversation.employer_id else None,
+            )
+
+        return (
+            str(conversation.applicant_user_id),
+            UserRole.APPLICANT.value,
+            None,
+        )
 
     @staticmethod
     def _publish_to_user(user_id: str, payload: dict) -> None:

@@ -1342,9 +1342,6 @@ export function OpportunityManagementPage() {
             <NavLink to="/" end className="header__nav-link">
               Главная
             </NavLink>
-            <a href="#about" className="header__nav-link">
-              О проекте
-            </a>
           </nav>
         }
       />

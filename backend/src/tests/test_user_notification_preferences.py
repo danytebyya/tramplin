@@ -26,6 +26,7 @@ def test_notification_preferences_returns_defaults(client, db_session):
             "overdue_reviews": False,
             "company_profile_changes": False,
             "publication_changes": False,
+            "chat_reminders": True,
             "daily_digest": False,
             "weekly_report": False,
         },
@@ -35,6 +36,7 @@ def test_notification_preferences_returns_defaults(client, db_session):
             "overdue_reviews": False,
             "company_profile_changes": False,
             "publication_changes": False,
+            "chat_reminders": True,
             "daily_digest": False,
             "weekly_report": False,
         },
@@ -66,6 +68,7 @@ def test_employer_notification_preferences_defaults_enable_visible_settings(clie
             "overdue_reviews": False,
             "company_profile_changes": True,
             "publication_changes": False,
+            "chat_reminders": True,
             "daily_digest": False,
             "weekly_report": False,
         },
@@ -75,6 +78,7 @@ def test_employer_notification_preferences_defaults_enable_visible_settings(clie
             "overdue_reviews": False,
             "company_profile_changes": True,
             "publication_changes": False,
+            "chat_reminders": True,
             "daily_digest": False,
             "weekly_report": False,
         },
@@ -99,6 +103,7 @@ def test_employer_notification_preferences_upgrade_legacy_defaults(client, db_se
             email_overdue_reviews=False,
             email_company_profile_changes=False,
             email_publication_changes=False,
+            email_chat_reminders=False,
             email_daily_digest=False,
             email_weekly_report=False,
             push_new_verification_requests=True,
@@ -106,6 +111,7 @@ def test_employer_notification_preferences_upgrade_legacy_defaults(client, db_se
             push_overdue_reviews=False,
             push_company_profile_changes=False,
             push_publication_changes=False,
+            push_chat_reminders=False,
             push_daily_digest=False,
             push_weekly_report=False,
         )
@@ -136,6 +142,7 @@ def test_notification_preferences_can_be_updated(client, db_session):
             "overdue_reviews": True,
             "company_profile_changes": True,
             "publication_changes": False,
+            "chat_reminders": True,
             "daily_digest": True,
             "weekly_report": False,
         },
@@ -145,6 +152,7 @@ def test_notification_preferences_can_be_updated(client, db_session):
             "overdue_reviews": True,
             "company_profile_changes": False,
             "publication_changes": True,
+            "chat_reminders": False,
             "daily_digest": False,
             "weekly_report": True,
         },
@@ -162,7 +170,9 @@ def test_notification_preferences_can_be_updated(client, db_session):
     persisted_preferences = db_session.execute(select(UserNotificationPreference)).scalar_one()
     assert persisted_preferences.email_content_complaints is True
     assert persisted_preferences.email_daily_digest is True
+    assert persisted_preferences.email_chat_reminders is True
     assert persisted_preferences.push_publication_changes is True
+    assert persisted_preferences.push_chat_reminders is False
     assert persisted_preferences.push_weekly_report is True
 
 
@@ -193,6 +203,7 @@ def test_curator_notification_preferences_defaults_are_disabled(client, db_sessi
             "overdue_reviews": False,
             "company_profile_changes": False,
             "publication_changes": False,
+            "chat_reminders": False,
             "daily_digest": False,
             "weekly_report": False,
         },
@@ -202,6 +213,7 @@ def test_curator_notification_preferences_defaults_are_disabled(client, db_sessi
             "overdue_reviews": False,
             "company_profile_changes": False,
             "publication_changes": False,
+            "chat_reminders": False,
             "daily_digest": False,
             "weekly_report": False,
         },

@@ -24,6 +24,14 @@ export type Opportunity = {
   accent: "cyan" | "amber" | "blue" | "slate";
   businessStatus: OpportunityBusinessStatus;
   moderationStatus: OpportunityModerationStatus;
+  city?: string;
+  address?: string;
+  publishedAt?: string | null;
+  activeUntil?: string | null;
+  plannedPublishAt?: string | null;
+  eventType?: string | null;
+  mentorshipDirection?: string | null;
+  mentorExperience?: string | null;
 };
 
 export const opportunityViewOptions = [

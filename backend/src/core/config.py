@@ -88,6 +88,16 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
     smtp_timeout_seconds: int = Field(default=10, alias="SMTP_TIMEOUT_SECONDS")
     frontend_base_url: str = Field(default="http://localhost:5173", alias="FRONTEND_BASE_URL")
+    chat_unread_email_delay_minutes: int = Field(default=10, alias="CHAT_UNREAD_EMAIL_DELAY_MINUTES")
+    chat_unread_notification_cooldown_hours: int = Field(
+        default=24,
+        alias="CHAT_UNREAD_NOTIFICATION_COOLDOWN_HOURS",
+    )
+    chat_reminder_worker_enabled: bool = Field(default=True, alias="CHAT_REMINDER_WORKER_ENABLED")
+    chat_reminder_worker_interval_seconds: int = Field(
+        default=60,
+        alias="CHAT_REMINDER_WORKER_INTERVAL_SECONDS",
+    )
     dadata_api_key: str | None = Field(default=None, alias="DADATA_API_KEY")
     dadata_suggestions_url: str = Field(
         default="https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/party",

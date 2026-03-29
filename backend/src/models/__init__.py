@@ -1,6 +1,6 @@
 from src.models.auth_login_event import AuthLoginEvent
 from src.models.application import Application, ApplicationStatus
-from src.models.chat import ChatConversation, ChatConversationReadState, ChatMessage, ChatUserKey
+from src.models.chat import ChatConversation, ChatConversationReadState, ChatMessage, ChatUnreadReminderState, ChatUserKey
 from src.models.employer_verification import (
     Employer,
     EmployerMembership,
@@ -48,6 +48,7 @@ __all__ = [
     "ChatConversation",
     "ChatMessage",
     "ChatConversationReadState",
+    "ChatUnreadReminderState",
     "ApplicantProfile",
     "ApplicantProject",
     "ApplicantAchievement",

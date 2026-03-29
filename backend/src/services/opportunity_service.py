@@ -35,8 +35,30 @@ class OpportunityService:
         self.logger = logging.getLogger(__name__)
 
     def list_public_feed(self) -> list[dict]:
+        self._activate_due_scheduled_opportunities()
         opportunities = self.repo.list_public_feed()
         return [self._serialize_public_opportunity(opportunity, index) for index, opportunity in enumerate(opportunities)]
+
+    def _activate_due_scheduled_opportunities(self) -> None:
+        now = datetime.now(UTC)
+        stmt = select(Opportunity).where(
+            Opportunity.deleted_at.is_(None),
+            Opportunity.moderation_status == ModerationStatus.APPROVED,
+            Opportunity.business_status == OpportunityStatus.SCHEDULED,
+            Opportunity.starts_at.is_not(None),
+            Opportunity.starts_at <= now,
+        )
+        opportunities = list(self.repo.db.execute(stmt).scalars().all())
+
+        if not opportunities:
+            return
+
+        for opportunity in opportunities:
+            opportunity.business_status = OpportunityStatus.ACTIVE
+            opportunity.published_at = self._normalize_datetime(opportunity.starts_at) or now
+            self.repo.db.add(opportunity)
+
+        self.repo.db.commit()
 
     def list_employer_items(self, current_user: User, *, access_payload: dict | None = None) -> list[EmployerOpportunityRead]:
         employer, membership = self._resolve_employer_access(current_user=current_user, access_payload=access_payload)
@@ -85,6 +107,9 @@ class OpportunityService:
             contact_email=current_user.email or employer.corporate_email,
             starts_at=payload.planned_publish_at,
             application_deadline=self._resolve_application_deadline(payload.planned_publish_at),
+            event_type=payload.event_type,
+            mentorship_direction=payload.mentorship_direction,
+            mentor_experience=payload.mentor_experience,
             is_paid=self._resolve_is_paid(payload),
         )
         self.repo.db.add(opportunity)
@@ -135,6 +160,9 @@ class OpportunityService:
         opportunity.contact_email = current_user.email or employer.corporate_email
         opportunity.starts_at = payload.planned_publish_at
         opportunity.application_deadline = self._resolve_application_deadline(payload.planned_publish_at)
+        opportunity.event_type = payload.event_type
+        opportunity.mentorship_direction = payload.mentorship_direction
+        opportunity.mentor_experience = payload.mentor_experience
         opportunity.is_paid = self._resolve_is_paid(payload)
         opportunity.business_status = OpportunityStatus.DRAFT
         opportunity.moderation_status = ModerationStatus.PENDING_REVIEW
@@ -183,11 +211,21 @@ class OpportunityService:
         self._publish_content_moderation_updated(opportunity, status="deleted")
 
     def _serialize_public_opportunity(self, opportunity: Opportunity, index: int) -> dict:
-        tags = [link.tag.name for link in opportunity.tag_links if link.tag is not None][:6]
+        tags = [link.tag.name for link in opportunity.tag_links if link.tag is not None]
         location = opportunity.location
         format_value = self._normalize_format(opportunity.work_format)
         city = location.city if location and location.city else "Россия"
         kind = self._kind_value(opportunity.opportunity_type)
+        event_type = opportunity.event_type or self._extract_first_matching(tags, self._event_type_names())
+        mentorship_direction = opportunity.mentorship_direction or self._extract_first_matching(tags, self._mentorship_direction_names())
+        clean_tags = [
+            item
+            for item in tags
+            if item != event_type and item != mentorship_direction
+        ][:6]
+        starts_at = self._normalize_datetime(opportunity.starts_at)
+        active_until = self._normalize_datetime(opportunity.application_deadline)
+        published_at = self._normalize_datetime(opportunity.published_at)
 
         return {
             "id": str(opportunity.id),
@@ -195,22 +233,30 @@ class OpportunityService:
             "title": opportunity.title,
             "company_name": opportunity.employer.display_name,
             "company_verified": opportunity.employer.verified_at is not None,
-            "company_rating": self._company_rating(index),
-            "company_reviews_count": self._company_reviews_count(index),
+            "company_rating": None,
+            "company_reviews_count": 0,
             "salary_label": self._build_salary_label(opportunity),
             "location_label": f"{city}, {self._format_label(format_value)}",
-            "format": format_value,
+            "format": "office" if format_value == "offline" else "remote" if format_value == "online" else format_value,
             "kind": kind,
             "level_label": self._level_label(opportunity.level),
             "employment_label": self._employment_label(opportunity.employment_type, opportunity_type=opportunity.opportunity_type),
             "description": opportunity.description,
-            "tags": tags,
+            "tags": clean_tags,
             "latitude": float(location.latitude or Decimal("56.130000")),
             "longitude": float(location.longitude or Decimal("47.250000")),
             "accent": self._accent_value(kind, index),
             "business_status": self._resolve_public_business_status(opportunity).value,
             "moderation_status": opportunity.moderation_status.value,
             "responses_count": 0,
+            "city": city,
+            "address": location.formatted_address if location and location.formatted_address else "",
+            "published_at": published_at.isoformat() if published_at is not None else None,
+            "active_until": active_until.isoformat() if active_until is not None else None,
+            "planned_publish_at": starts_at.isoformat() if starts_at is not None else None,
+            "event_type": event_type,
+            "mentorship_direction": mentorship_direction,
+            "mentor_experience": opportunity.mentor_experience,
         }
 
     def _serialize_employer_opportunity(
@@ -222,8 +268,8 @@ class OpportunityService:
         location = opportunity.location
         tags = [link.tag.name for link in opportunity.tag_links if link.tag is not None]
         opportunity_type = self._kind_value(opportunity.opportunity_type)
-        event_type = self._extract_first_matching(tags, self._event_type_names())
-        mentorship_direction = self._extract_first_matching(tags, self._mentorship_direction_names())
+        event_type = opportunity.event_type or self._extract_first_matching(tags, self._event_type_names())
+        mentorship_direction = opportunity.mentorship_direction or self._extract_first_matching(tags, self._mentorship_direction_names())
         clean_tags = [
             item
             for item in tags
@@ -261,7 +307,7 @@ class OpportunityService:
             responses_count=responses_count,
             event_type=event_type,
             mentorship_direction=mentorship_direction,
-            mentor_experience=self._level_label(opportunity.level) if opportunity.opportunity_type == OpportunityType.MENTORSHIP_PROGRAM else None,
+            mentor_experience=opportunity.mentor_experience,
         )
 
     def _build_management_location_label(self, opportunity: Opportunity) -> str:

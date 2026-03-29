@@ -136,17 +136,24 @@ body.home-page--map-floating {
 }
 
 .home-page__hero-copy {
-  --home-hero-background: none;
   position: relative;
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
   min-height: 680px;
-  background-image: var(--home-hero-background);
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  background: #08121f;
   overflow: hidden;
+}
+
+.home-page__hero-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .home-page__hero-copy-content {
@@ -155,8 +162,8 @@ body.home-page--map-floating {
   display: flex;
   flex-direction: column;
   gap: 48px;
-  min-height: 680px;
-  padding-top: 180px;
+  min-height: 810px;
+  padding-top: 222px;
   padding-right: max(24px, calc((100vw - 1080px) / 2 + 24px));
   padding-bottom: 40px;
   padding-left: max(24px, calc((100vw - 1080px) / 2 + 24px));

@@ -45,7 +45,7 @@ export function NetworkingPage() {
           <button type="button" className="settings-page__tab">
             Мои отклики
           </button>
-          <button type="button" className="settings-page__tab">
+          <button type="button" className="settings-page__tab" onClick={() => navigate("/favorites")}>
             Избранное
           </button>
           <button type="button" className="settings-page__tab settings-page__tab--active">

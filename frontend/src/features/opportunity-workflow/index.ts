@@ -682,9 +682,9 @@ export function toPublicOpportunity(record: WorkflowOpportunityRecord): Opportun
     employerId: "",
     title: record.title,
     companyName: record.companyName,
-    companyVerified: true,
-    companyRating: 4.8,
-    companyReviewsCount: 12,
+    companyVerified: false,
+    companyRating: null,
+    companyReviewsCount: 0,
     salaryLabel: record.salaryLabel,
     locationLabel: record.locationLabel,
     format:
@@ -700,9 +700,17 @@ export function toPublicOpportunity(record: WorkflowOpportunityRecord): Opportun
     tags: record.tags,
     latitude: record.latitude,
     longitude: record.longitude,
-    accent: "blue",
+    accent: "slate",
     businessStatus: "active",
     moderationStatus: "approved",
+    city: record.locationLabel.split(",")[0]?.trim() ?? "",
+    address: record.locationLabel,
+    publishedAt: record.publishedAt ?? null,
+    activeUntil: record.activeUntil ?? null,
+    plannedPublishAt: record.plannedPublishAt ?? null,
+    eventType: null,
+    mentorshipDirection: null,
+    mentorExperience: record.kind === "mentorship" ? record.levelLabel : null,
   };
 }
 

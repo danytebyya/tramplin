@@ -23,6 +23,14 @@ type OpportunityApiItem = {
   accent: Opportunity["accent"];
   business_status: Opportunity["businessStatus"];
   moderation_status: Opportunity["moderationStatus"];
+  city?: string;
+  address?: string;
+  published_at?: string | null;
+  active_until?: string | null;
+  planned_publish_at?: string | null;
+  event_type?: string | null;
+  mentorship_direction?: string | null;
+  mentor_experience?: string | null;
 };
 
 type OpportunityFeedResponse = {
@@ -30,6 +38,18 @@ type OpportunityFeedResponse = {
     items?: OpportunityApiItem[];
   };
 };
+
+function normalizePublicOpportunityFormat(format: string): Opportunity["format"] {
+  if (format === "offline" || format === "office") {
+    return "office";
+  }
+
+  if (format === "hybrid") {
+    return "hybrid";
+  }
+
+  return "remote";
+}
 
 type PlatformStatsResponse = {
   data?: {
@@ -76,7 +96,7 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
       companyReviewsCount: item.company_reviews_count,
       salaryLabel: item.salary_label,
       locationLabel: item.location_label,
-      format: item.format,
+      format: normalizePublicOpportunityFormat(item.format),
       kind: item.kind,
       levelLabel: item.level_label,
       employmentLabel: item.employment_label,
@@ -87,6 +107,14 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
       accent: item.accent,
       businessStatus: item.business_status,
       moderationStatus: item.moderation_status,
+      city: item.city ?? "",
+      address: item.address ?? "",
+      publishedAt: item.published_at ?? null,
+      activeUntil: item.active_until ?? null,
+      plannedPublishAt: item.planned_publish_at ?? null,
+      eventType: item.event_type ?? null,
+      mentorshipDirection: item.mentorship_direction ?? null,
+      mentorExperience: item.mentor_experience ?? null,
     })),
   ];
 }

@@ -14,6 +14,7 @@ os.environ.setdefault("EMAIL_TRANSPORT", "log")
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite://")
 os.environ.setdefault("OTP_REQUEST_LIMIT", "5")
 os.environ.setdefault("OTP_VERIFY_ATTEMPT_LIMIT", "10")
+os.environ.setdefault("CHAT_REMINDER_WORKER_ENABLED", "false")
 
 from src.db.base import Base
 from src.db.session import get_db

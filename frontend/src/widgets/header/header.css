@@ -26,8 +26,8 @@
 }
 
 .header--landing .header__top {
-  background: linear-gradient(180deg, rgba(9, 18, 31, 0.86), rgba(9, 18, 31, 0.62));
-  backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(40px);
 }
 
 .header--landing .header__bottom {
@@ -561,7 +561,7 @@
 .header__categories--curator {
   grid-column: 1 / -1;
   justify-content: flex-start;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 24px;
 }
 
@@ -569,11 +569,15 @@
   display: inline-flex;
   align-items: center;
   min-height: 50px;
-  color: var(--color-text-inverse);
+  color: var(--color-text-primary);
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
   text-decoration: none;
   transition: color var(--transition-base);
+}
+
+.header--landing .header__category-link {
+  color: var(--color-bg-primary);
 }
 
 .header__category-link:hover {

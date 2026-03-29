@@ -82,6 +82,7 @@ const notificationPreferenceKeys: NotificationPreferenceKey[] = [
   "overdue_reviews",
   "company_profile_changes",
   "publication_changes",
+  "chat_reminders",
   "daily_digest",
   "weekly_report",
 ];
@@ -92,6 +93,7 @@ const defaultNotificationPreferenceGroup: NotificationPreferenceGroup = {
   overdue_reviews: false,
   company_profile_changes: false,
   publication_changes: false,
+  chat_reminders: true,
   daily_digest: false,
   weekly_report: false,
 };
@@ -104,6 +106,7 @@ function resolveDefaultNotificationPreferenceGroup(role: string | null): Notific
       overdue_reviews: false,
       company_profile_changes: true,
       publication_changes: false,
+      chat_reminders: true,
       daily_digest: false,
       weekly_report: false,
     };
@@ -116,6 +119,7 @@ function resolveDefaultNotificationPreferenceGroup(role: string | null): Notific
       overdue_reviews: false,
       company_profile_changes: false,
       publication_changes: false,
+      chat_reminders: false,
       daily_digest: false,
       weekly_report: false,
     };
@@ -131,6 +135,8 @@ function resolveNotificationPreferenceLabel(role: string | null, key: Notificati
         return "Новые отклики на вакансии";
       case "company_profile_changes":
         return "Ответы кураторов на модерацию";
+      case "chat_reminders":
+        return "Напоминания о непрочитанных сообщениях";
       default:
         return key;
     }
@@ -140,6 +146,8 @@ function resolveNotificationPreferenceLabel(role: string | null, key: Notificati
     switch (key) {
       case "publication_changes":
         return "Ответы работодателей по откликам";
+      case "chat_reminders":
+        return "Напоминания о непрочитанных сообщениях";
       case "daily_digest":
         return "Новые рекомендации по вакансиям";
       case "weekly_report":
@@ -160,6 +168,8 @@ function resolveNotificationPreferenceLabel(role: string | null, key: Notificati
       return "Изменения в профиле компании";
     case "publication_changes":
       return "Изменения в публикациях";
+    case "chat_reminders":
+      return "Напоминания о непрочитанных сообщениях";
     case "daily_digest":
       return "Ежедневная сводка";
     case "weekly_report":
@@ -171,11 +181,11 @@ function resolveNotificationPreferenceLabel(role: string | null, key: Notificati
 
 function resolveVisibleNotificationKeys(role: string | null): NotificationPreferenceKey[] {
   if (role === "employer") {
-    return ["new_verification_requests", "company_profile_changes"];
+    return ["new_verification_requests", "company_profile_changes", "chat_reminders"];
   }
 
   if (role === "applicant") {
-    return ["publication_changes", "daily_digest", "weekly_report"];
+    return ["publication_changes", "chat_reminders", "daily_digest", "weekly_report"];
   }
 
   return notificationPreferenceKeys;
@@ -285,7 +295,7 @@ function resolvePublicSettingsTabs(role: string | null, employerAccess: ReturnTy
   return [
     { label: "Профиль", to: "/dashboard/applicant" },
     { label: "Мои отклики" },
-    { label: "Избранное" },
+    { label: "Избранное", to: "/favorites" },
     { label: "Нетворкинг", to: "/networking" },
     { label: "Настройки", to: "/settings", isCurrent: true },
   ];

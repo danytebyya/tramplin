@@ -6,6 +6,7 @@ class NotificationKind(StrEnum):
     PROFILE = "profile"
     OPPORTUNITY = "opportunity"
     APPLICATION = "application"
+    CHAT = "chat"
     EMPLOYER_VERIFICATION = "employer_verification"
     CANDIDATES = "candidates"
 

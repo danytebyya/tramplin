@@ -14,7 +14,7 @@ export function buildApplicantProfileMenuItems(navigate: NavigateFunction): Head
   return [
     { label: "Профиль", onClick: () => navigate("/dashboard/applicant") },
     { label: "Мои отклики" },
-    { label: "Избранное" },
+    { label: "Избранное", onClick: () => navigate("/favorites") },
     { label: "Нетворкинг", onClick: () => navigate("/networking") },
     { label: "Настройки", onClick: () => navigate("/settings") },
     { label: "Выход", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },

@@ -261,6 +261,7 @@ class NotificationPreferenceChannelRead(BaseModel):
     overdue_reviews: bool
     company_profile_changes: bool
     publication_changes: bool
+    chat_reminders: bool
     daily_digest: bool
     weekly_report: bool
 

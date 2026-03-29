@@ -509,7 +509,7 @@
   display: flex;
   gap: 14px;
   align-items: flex-end;
-  margin-top: 10px;
+  margin-top: 16px;
 }
 
 .chat-workspace__message-entry {
@@ -553,6 +553,10 @@
 
 .chat-workspace__message--compact {
   margin-top: 4px;
+}
+
+.chat-workspace__message--spaced {
+  margin-top: 16px;
 }
 
 .chat-workspace__message--own {
@@ -683,8 +687,8 @@
 }
 
 .chat-workspace__message-status-icon--check {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   mask-image: url("../../assets/icons/check-mark.svg");
   -webkit-mask-image: url("../../assets/icons/check-mark.svg");
 }

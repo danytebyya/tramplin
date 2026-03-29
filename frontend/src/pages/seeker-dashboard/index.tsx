@@ -1619,7 +1619,9 @@ export function SeekerDashboardPage() {
             Профиль
           </button>
           <button type="button" className="seeker-dashboard__tab">Мои отклики</button>
-          <button type="button" className="seeker-dashboard__tab">Избранное</button>
+          <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/favorites")}>
+            Избранное
+          </button>
           <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/networking")}>
             Нетворкинг
           </button>

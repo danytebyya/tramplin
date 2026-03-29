@@ -10,6 +10,7 @@ from src.models import (
     ChatConversation,
     ChatConversationReadState,
     ChatMessage,
+    ChatUnreadReminderState,
     ChatUserKey,
     Employer,
     EmployerMembership,
@@ -67,6 +68,34 @@ class ChatRepository:
         )
         if employer_id is not None:
             query = query.where(ChatConversation.employer_id == UUID(str(employer_id)))
+        return self.db.execute(query).scalars().all()
+
+    def list_conversations_for_scope(
+        self,
+        user_id: str,
+        *,
+        profile_role: str,
+        employer_id: str | None = None,
+    ) -> Sequence[ChatConversation]:
+        if profile_role == "employer":
+            query: Select = select(ChatConversation).where(
+                ChatConversation.employer_user_id == UUID(str(user_id)),
+                ChatConversation.last_message_id.is_not(None),
+            )
+            if employer_id is not None:
+                query = query.where(ChatConversation.employer_id == UUID(str(employer_id)))
+            return self.db.execute(
+                query.order_by(ChatConversation.last_message_at.desc().nullslast(), ChatConversation.created_at.desc())
+            ).scalars().all()
+
+        query = (
+            select(ChatConversation)
+            .where(
+                ChatConversation.applicant_user_id == UUID(str(user_id)),
+                ChatConversation.last_message_id.is_not(None),
+            )
+            .order_by(ChatConversation.last_message_at.desc().nullslast(), ChatConversation.created_at.desc())
+        )
         return self.db.execute(query).scalars().all()
 
     def list_messages(self, conversation_id: str) -> Sequence[ChatMessage]:
@@ -288,3 +317,49 @@ class ChatRepository:
         if membership is None:
             return None
         return self.get_employer(str(membership.employer_id))
+
+    def get_unread_reminder_state(
+        self,
+        *,
+        user_id: str,
+        scope_key: str,
+    ) -> ChatUnreadReminderState | None:
+        query = select(ChatUnreadReminderState).where(
+            ChatUnreadReminderState.user_id == UUID(str(user_id)),
+            ChatUnreadReminderState.scope_key == scope_key,
+        )
+        return self.db.execute(query).scalar_one_or_none()
+
+    def get_or_create_unread_reminder_state(
+        self,
+        *,
+        user_id: str,
+        profile_role: str,
+        employer_id: str | None,
+        scope_key: str,
+    ) -> ChatUnreadReminderState:
+        item = self.get_unread_reminder_state(user_id=user_id, scope_key=scope_key)
+        if item is not None:
+            return item
+
+        item = ChatUnreadReminderState(
+            user_id=UUID(str(user_id)),
+            profile_role=profile_role,
+            employer_id=UUID(str(employer_id)) if employer_id else None,
+            scope_key=scope_key,
+        )
+        self.db.add(item)
+        self.db.flush()
+        return item
+
+    def list_due_unread_reminder_states(self, *, due_before: datetime) -> Sequence[ChatUnreadReminderState]:
+        query = (
+            select(ChatUnreadReminderState)
+            .where(
+                ChatUnreadReminderState.is_pending.is_(True),
+                ChatUnreadReminderState.first_unread_message_at.is_not(None),
+                ChatUnreadReminderState.first_unread_message_at <= due_before,
+            )
+            .order_by(ChatUnreadReminderState.first_unread_message_at.asc(), ChatUnreadReminderState.updated_at.asc())
+        )
+        return self.db.execute(query).scalars().all()

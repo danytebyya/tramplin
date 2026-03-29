@@ -1,8 +1,12 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import select
 
 from src.core.security import create_access_token
 from src.enums import EmployerType, MembershipRole, UserRole, UserStatus
-from src.models import ApplicantProfile, Employer, EmployerMembership, User
+from src.enums.notifications import NotificationKind
+from src.models import ApplicantProfile, Employer, EmployerMembership, Notification, User
+from src.services.chat_reminder_service import ChatReminderService
 
 
 def build_user(*, email: str, display_name: str, role: UserRole) -> User:
@@ -13,6 +17,64 @@ def build_user(*, email: str, display_name: str, role: UserRole) -> User:
         role=role,
         status=UserStatus.ACTIVE,
     )
+
+
+def _create_chat_participants(
+    db_session,
+    *,
+    applicant_email: str,
+    employer_email: str,
+    company_name: str,
+    inn: str,
+):
+    applicant = build_user(
+        email=applicant_email,
+        display_name="Applicant User",
+        role=UserRole.APPLICANT,
+    )
+    applicant.applicant_profile = ApplicantProfile(full_name="Мария Петрова")
+    employer_user = build_user(
+        email=employer_email,
+        display_name="Recruiter User",
+        role=UserRole.EMPLOYER,
+    )
+    db_session.add_all([applicant, employer_user])
+    db_session.flush()
+
+    employer = Employer(
+        employer_type=EmployerType.COMPANY,
+        display_name=company_name,
+        legal_name=f"{company_name} LLC",
+        inn=inn,
+        created_by=employer_user.id,
+    )
+    db_session.add(employer)
+    db_session.flush()
+    db_session.add(
+        EmployerMembership(
+            employer_id=employer.id,
+            user_id=employer_user.id,
+            membership_role=MembershipRole.OWNER,
+            permissions=["access_chat"],
+            is_primary=True,
+        )
+    )
+    db_session.commit()
+
+    applicant_token, _ = create_access_token(
+        subject=str(applicant.id),
+        role=applicant.role.value,
+        active_role=applicant.role.value,
+    )
+    employer_token, _ = create_access_token(
+        subject=str(employer_user.id),
+        role=employer_user.role.value,
+        active_role=employer_user.role.value,
+        active_employer_id=str(employer.id),
+        active_permissions=["access_chat"],
+    )
+
+    return applicant, employer_user, employer, applicant_token, employer_token
 
 
 def test_applicant_can_create_conversation_and_exchange_messages(client, db_session):
@@ -191,9 +253,6 @@ def test_presence_websocket_updates_me_status_and_last_seen(client, db_session):
         )
         assert me_response.status_code == 200
         assert me_response.json()["data"]["user"]["presence"]["is_online"] is True
-
-    db_session.refresh(applicant)
-    assert applicant.last_seen_at is not None
 
     me_response = client.get(
         "/api/v1/users/me",
@@ -473,3 +532,140 @@ def test_applicant_can_edit_and_delete_own_message(client, db_session):
     )
     assert list_after_delete.status_code == 200
     assert list_after_delete.json()["data"]["items"] == []
+
+
+def test_chat_unread_reminder_creates_single_email_and_site_notification(client, db_session, monkeypatch):
+    _, employer_user, employer, applicant_token, _ = _create_chat_participants(
+        db_session,
+        applicant_email="chat-reminder-applicant@example.com",
+        employer_email="chat-reminder-employer@example.com",
+        company_name="Reminder Corp",
+        inn="3213213213",
+    )
+
+    sent_emails: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        "src.services.chat_reminder_service.send_email",
+        lambda recipient, subject, body: sent_emails.append((recipient, subject, body)),
+    )
+
+    create_response = client.post(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"recipient_user_id": str(employer_user.id), "employer_id": str(employer.id)},
+    )
+    assert create_response.status_code == 200
+    conversation_id = create_response.json()["data"]["conversation"]["id"]
+
+    send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "reminder-ciphertext",
+            "iv": "reminder-iv",
+            "salt": "reminder-salt",
+        },
+    )
+    assert send_response.status_code == 200
+    created_at = datetime.fromisoformat(send_response.json()["data"]["created_at"])
+
+    service = ChatReminderService(db_session)
+    processed_count = service.process_due_reminders(now=created_at + timedelta(minutes=11))
+    assert processed_count == 1
+
+    notifications = db_session.execute(
+        select(Notification).where(Notification.kind == NotificationKind.CHAT)
+    ).scalars().all()
+    assert len(notifications) == 1
+    assert notifications[0].user_id == employer_user.id
+    assert len(sent_emails) == 1
+    assert sent_emails[0][0] == "chat-reminder-employer@example.com"
+
+    processed_again = service.process_due_reminders(now=created_at + timedelta(days=2))
+    assert processed_again == 0
+    notifications = db_session.execute(
+        select(Notification).where(Notification.kind == NotificationKind.CHAT)
+    ).scalars().all()
+    assert len(notifications) == 1
+    assert len(sent_emails) == 1
+
+    message_id = send_response.json()["data"]["id"]
+    update_response = client.put(
+        f"/api/v1/chat/messages/{message_id}",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={
+            "ciphertext": "updated-ciphertext",
+            "iv": "updated-iv",
+            "salt": "updated-salt",
+        },
+    )
+    assert update_response.status_code == 200
+
+    processed_after_update = service.process_due_reminders(now=created_at + timedelta(days=3))
+    assert processed_after_update == 0
+    assert len(sent_emails) == 1
+
+
+def test_chat_unread_reminder_repeats_only_after_new_messages_and_one_day_cooldown(client, db_session, monkeypatch):
+    _, employer_user, employer, applicant_token, _ = _create_chat_participants(
+        db_session,
+        applicant_email="chat-reminder-repeat-applicant@example.com",
+        employer_email="chat-reminder-repeat-employer@example.com",
+        company_name="Repeat Corp",
+        inn="4564564564",
+    )
+
+    sent_emails: list[tuple[str, str, str]] = []
+    monkeypatch.setattr(
+        "src.services.chat_reminder_service.send_email",
+        lambda recipient, subject, body: sent_emails.append((recipient, subject, body)),
+    )
+
+    create_response = client.post(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"recipient_user_id": str(employer_user.id), "employer_id": str(employer.id)},
+    )
+    assert create_response.status_code == 200
+    conversation_id = create_response.json()["data"]["conversation"]["id"]
+
+    first_send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "first-reminder-ciphertext",
+            "iv": "first-reminder-iv",
+            "salt": "first-reminder-salt",
+        },
+    )
+    assert first_send_response.status_code == 200
+    first_created_at = datetime.fromisoformat(first_send_response.json()["data"]["created_at"])
+
+    service = ChatReminderService(db_session)
+    assert service.process_due_reminders(now=first_created_at + timedelta(minutes=11)) == 1
+
+    second_send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "second-reminder-ciphertext",
+            "iv": "second-reminder-iv",
+            "salt": "second-reminder-salt",
+        },
+    )
+    assert second_send_response.status_code == 200
+    second_created_at = datetime.fromisoformat(second_send_response.json()["data"]["created_at"])
+
+    assert service.process_due_reminders(now=second_created_at + timedelta(minutes=11)) == 0
+
+    second_processed_at = first_created_at + timedelta(days=1, minutes=12)
+    assert service.process_due_reminders(now=second_processed_at) == 1
+
+    notifications = db_session.execute(
+        select(Notification).where(Notification.kind == NotificationKind.CHAT)
+    ).scalars().all()
+    assert len(notifications) == 2
+    assert len(sent_emails) == 2

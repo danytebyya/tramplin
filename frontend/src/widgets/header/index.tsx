@@ -78,7 +78,6 @@ export function Header({
   const resolvedTopNavigation = topNavigation === undefined ? (
     <nav className="header__nav" aria-label="Основная навигация">
       <a href="/" className="header__nav-link">Главная</a>
-      <a href="/#about" className="header__nav-link">О проекте</a>
     </nav>
   ) : topNavigation;
   const logoSource =
