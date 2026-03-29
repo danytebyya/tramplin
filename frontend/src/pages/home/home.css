@@ -5,10 +5,16 @@
   --home-accent: var(--color-primary);
   --home-accent-soft: var(--color-primary-light);
   --home-accent-strong: var(--color-primary-active);
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   position: relative;
   background: #ffffff;
   color: #1e293b;
+}
+
+.home-page > .site-footer {
+  margin-top: auto;
 }
 
 body.home-page--map-floating {
@@ -135,7 +141,7 @@ body.home-page--map-floating {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
-  min-height: 810px;
+  min-height: 680px;
   background-image: var(--home-hero-background);
   background-position: center;
   background-repeat: no-repeat;
@@ -149,10 +155,10 @@ body.home-page--map-floating {
   display: flex;
   flex-direction: column;
   gap: 48px;
-  min-height: 810px;
-  padding-top: 225px;
+  min-height: 680px;
+  padding-top: 180px;
   padding-right: max(24px, calc((100vw - 1080px) / 2 + 24px));
-  padding-bottom: 56px;
+  padding-bottom: 40px;
   padding-left: max(24px, calc((100vw - 1080px) / 2 + 24px));
 }
 
@@ -473,8 +479,12 @@ body.home-page--map-floating {
 }
 
 .home-page__explorer-panel--hidden {
+  display: none;
   position: absolute;
   inset: 0;
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -773,6 +783,16 @@ body.home-page--map-floating {
   box-shadow: none;
 }
 
+.home-page .map-view {
+  min-height: 560px;
+}
+
+.home-page .map-view__map,
+.home-page .map-view__canvas {
+  min-height: 560px;
+  height: 560px;
+}
+
 .home-page__directions-section,
 .home-page__benefits-section,
 .home-page__numbers-section,
@@ -956,6 +976,16 @@ body.home-page--map-floating {
 }
 
 @media (max-width: 1279px) {
+  .home-page .map-view {
+    min-height: 600px;
+  }
+
+  .home-page .map-view__map,
+  .home-page .map-view__canvas {
+    min-height: 600px;
+    height: 600px;
+  }
+
   .home-page__directions-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -967,6 +997,16 @@ body.home-page--map-floating {
 }
 
 @media (max-width: 1023px) {
+  .home-page .map-view {
+    min-height: 560px;
+  }
+
+  .home-page .map-view__map,
+  .home-page .map-view__canvas {
+    min-height: 560px;
+    height: 560px;
+  }
+
   .home-page--map-floating .map-view__filters,
   .home-page--map-floating .map-view__expand-button {
     top: 144px;
@@ -1000,13 +1040,13 @@ body.home-page--map-floating {
   }
 
   .home-page__hero-copy {
-    min-height: 810px;
+    min-height: 620px;
   }
 
   .home-page__hero-copy-content {
-    min-height: 810px;
-    padding-top: 156px;
-    padding-bottom: 40px;
+    min-height: 620px;
+    padding-top: 140px;
+    padding-bottom: 32px;
   }
 
   .home-page__hero-panel {
@@ -1043,6 +1083,16 @@ body.home-page--map-floating {
 }
 
 @media (max-width: 767px) {
+  .home-page .map-view {
+    min-height: 460px;
+  }
+
+  .home-page .map-view__map,
+  .home-page .map-view__canvas {
+    min-height: 460px;
+    height: 460px;
+  }
+
   .home-page--map-floating .opportunity-filters {
     width: calc(100vw - 24px);
     top: 8px;
@@ -1072,12 +1122,12 @@ body.home-page--map-floating {
   }
 
   .home-page__hero-copy {
-    min-height: 810px;
+    min-height: 560px;
   }
 
   .home-page__hero-copy-content {
-    min-height: 810px;
-    padding-top: 148px;
+    min-height: 560px;
+    padding-top: 128px;
   }
 
   .home-page__hero-actions {

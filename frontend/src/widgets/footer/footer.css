@@ -1,7 +1,7 @@
 .site-footer {
   --site-footer-accent: var(--color-primary);
   --site-footer-accent-strong: var(--color-primary-active);
-  padding: 64px 0;
+  padding: 48px 0 32px;
   background: var(--color-bg-secondary);
 }
 
@@ -27,7 +27,7 @@
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   column-gap: 24px;
-  gap: 72px;
+  gap: 40px;
 }
 
 .site-footer__main {
@@ -169,8 +169,10 @@
 
   .site-footer__logo-card {
     grid-column: 1 / span 4;
-    min-height: 220px;
+    min-height: 56px;
     max-width: none;
+    align-self: start;
+    justify-content: flex-start;
   }
 
   .site-footer__column:nth-of-type(1) {
@@ -193,7 +195,7 @@
 
 @media (max-width: 1023px) {
   .site-footer {
-    padding-top: 64px;
+    padding-top: 40px;
   }
 
   .site-footer__bottom {
