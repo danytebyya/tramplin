@@ -7,6 +7,7 @@ Create Date: 2026-03-30 12:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -17,6 +18,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    user_role_enum = postgresql.ENUM(
+        "guest",
+        "applicant",
+        "employer",
+        "junior",
+        "curator",
+        "admin",
+        name="user_role",
+        create_type=False,
+    )
+
     op.add_column(
         "user_notification_preferences",
         sa.Column("email_chat_reminders", sa.Boolean(), nullable=False, server_default=sa.true()),
@@ -46,7 +58,7 @@ def upgrade() -> None:
         "chat_unread_reminder_states",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("user_id", sa.Uuid(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("profile_role", sa.Enum("applicant", "employer", "junior", "curator", "admin", name="user_role", create_type=False), nullable=False),
+        sa.Column("profile_role", user_role_enum, nullable=False),
         sa.Column("employer_id", sa.Uuid(), sa.ForeignKey("employers.id", ondelete="CASCADE"), nullable=True),
         sa.Column("scope_key", sa.String(length=160), nullable=False),
         sa.Column("is_pending", sa.Boolean(), nullable=False, server_default=sa.false()),

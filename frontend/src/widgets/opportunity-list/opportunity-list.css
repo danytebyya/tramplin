@@ -72,6 +72,12 @@
 
 .opportunity-list__text {
   color: var(--color-text-secondary);
+  display: -webkit-box;
+  min-height: calc(var(--type-caption-line) * 3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .opportunity-list__tags {

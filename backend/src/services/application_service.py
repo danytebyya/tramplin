@@ -114,3 +114,48 @@ class ApplicationService:
             )
         ).scalars().all()
         return MyApplicationIdsResponse(opportunity_ids=[str(item) for item in rows])
+
+    def withdraw(self, current_user: User, opportunity_id: str) -> ApplicationSubmitRead:
+        if current_user.role != UserRole.APPLICANT:
+            raise AppError(
+                code="APPLICATION_FORBIDDEN",
+                message="Отзыв отклика доступен только соискателям",
+                status_code=403,
+            )
+
+        application = self.db.execute(
+            select(Application).where(
+                Application.opportunity_id == UUID(opportunity_id),
+                Application.applicant_user_id == current_user.id,
+                Application.deleted_at.is_(None),
+                Application.status.not_in(
+                    [
+                        ApplicationStatus.WITHDRAWN,
+                        ApplicationStatus.REJECTED,
+                        ApplicationStatus.CANCELED,
+                    ]
+                ),
+            )
+        ).scalar_one_or_none()
+        if application is None:
+            raise AppError(
+                code="APPLICATION_NOT_FOUND",
+                message="Активный отклик не найден",
+                status_code=404,
+            )
+
+        now = datetime.now(UTC)
+        application.status = ApplicationStatus.WITHDRAWN
+        application.status_changed_at = now
+        application.last_activity_at = now
+
+        self.db.commit()
+        self.db.refresh(application)
+
+        return ApplicationSubmitRead(
+            id=str(application.id),
+            opportunity_id=str(application.opportunity_id),
+            applicant_user_id=str(application.applicant_user_id),
+            status=application.status.value,
+            submitted_at=application.submitted_at.isoformat(),
+        )

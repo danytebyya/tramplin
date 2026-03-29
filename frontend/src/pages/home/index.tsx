@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import {
   CitySelector,
@@ -46,6 +46,31 @@ import logoPrimary from "../../assets/icons/logo-primary.svg";
 import logoSecondary from "../../assets/icons/logo-secondary.svg";
 import securityIcon from "../../assets/icons/security.svg";
 import "./home.css";
+
+type OpportunityCategoryFilter = "all" | Opportunity["kind"];
+
+const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label: string }> = [
+  { value: "all", label: "Все" },
+  { value: "vacancy", label: "Вакансии" },
+  { value: "internship", label: "Стажировки" },
+  { value: "event", label: "Мероприятия" },
+  { value: "mentorship", label: "Менторские программы" },
+];
+
+function resolveOpportunityCategoryFilter(search: string): OpportunityCategoryFilter {
+  const category = new URLSearchParams(search).get("category");
+
+  if (
+    category === "vacancy" ||
+    category === "internship" ||
+    category === "event" ||
+    category === "mentorship"
+  ) {
+    return category;
+  }
+
+  return "all";
+}
 
 function cloneMapSnapshot(source: HTMLElement) {
   const snapshot = source.cloneNode(true) as HTMLElement;
@@ -117,6 +142,10 @@ export function HomePage() {
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
   const roleName = String(role ?? "");
+  const selectedCategoryFilter = useMemo(
+    () => resolveOpportunityCategoryFilter(location.search),
+    [location.search],
+  );
   const isJunior = roleName === "junior";
   const isCurator = roleName === "curator";
   const isAdmin = roleName === "admin";
@@ -229,6 +258,13 @@ export function HomePage() {
       },
     );
   }, [opportunities]);
+  const displayedOpportunities = useMemo(() => {
+    if (selectedCategoryFilter === "all") {
+      return opportunities;
+    }
+
+    return opportunities.filter((opportunity) => opportunity.kind === selectedCategoryFilter);
+  }, [opportunities, selectedCategoryFilter]);
   const platformCounts = platformStatsQuery.data ?? {
     companiesCount: 0,
     applicantsCount: 0,
@@ -512,10 +548,10 @@ export function HomePage() {
   }, [mapExpandMode]);
 
   useEffect(() => {
-    if (selectedOpportunityId && !opportunities.some((opportunity) => opportunity.id === selectedOpportunityId)) {
+    if (selectedOpportunityId && !displayedOpportunities.some((opportunity) => opportunity.id === selectedOpportunityId)) {
       setSelectedOpportunityId(null);
     }
-  }, [opportunities, selectedOpportunityId]);
+  }, [displayedOpportunities, selectedOpportunityId]);
 
   useEffect(() => {
     if (location.hash !== "#dashboard" || !isModerationRole) {
@@ -531,6 +567,21 @@ export function HomePage() {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }, [isModerationRole, location.hash]);
+
+  useEffect(() => {
+    if (isModerationRole || location.hash !== "#opportunity-map") {
+      return;
+    }
+
+    const target = document.getElementById("opportunity-map");
+    if (!target) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [isModerationRole, location.hash, selectedCategoryFilter]);
 
   useEffect(() => {
     const preferredCity = currentUserQuery.data?.data?.user?.preferred_city?.trim();
@@ -644,6 +695,33 @@ export function HomePage() {
     navigate("/employer/opportunities");
   };
 
+  const categoryNavigation = (
+    <>
+      <nav className="header__categories" aria-label="Категории">
+        {opportunityCategoryLinks.map((item) => (
+          <Link
+            key={item.value}
+            to={{
+              pathname: "/",
+              search: item.value === "all" ? "" : `?category=${item.value}`,
+              hash: "#opportunity-map",
+            }}
+            className={
+              selectedCategoryFilter === item.value
+                ? "header__category-link active"
+                : "header__category-link"
+            }
+            aria-current={selectedCategoryFilter === item.value ? "page" : undefined}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </nav>
+
+      <CitySelector value={selectedCity} onChange={handleCityChange} />
+    </>
+  );
+
   return (
     <main className={homePageClassName}>
       <Header
@@ -689,24 +767,7 @@ export function HomePage() {
           isModerationRole ? (
             <CuratorHeaderNavigation isAdmin={isAdmin} currentPage="dashboard" />
           ) : (
-            <>
-              <nav className="header__categories" aria-label="Категории">
-                <a href="#vacancies" className="header__category-link">
-                  Вакансии
-                </a>
-                <a href="#internships" className="header__category-link">
-                  Стажировки
-                </a>
-                <a href="#events" className="header__category-link">
-                  Мероприятия
-                </a>
-                <a href="#mentorship" className="header__category-link">
-                  Менторство
-                </a>
-              </nav>
-
-              <CitySelector value={selectedCity} onChange={handleCityChange} />
-            </>
+            categoryNavigation
           )
         }
       />
@@ -871,7 +932,7 @@ export function HomePage() {
                             }
                           >
                             <MapView
-                              opportunities={opportunities}
+                              opportunities={displayedOpportunities}
                               favoriteOpportunityIds={favoriteOpportunityIds}
                               appliedOpportunityIds={appliedOpportunityIds}
                               selectedOpportunityId={selectedOpportunityId}
@@ -899,7 +960,7 @@ export function HomePage() {
                         aria-hidden={viewMode !== "list"}
                       >
                         <OpportunityList
-                          opportunities={opportunities}
+                          opportunities={displayedOpportunities}
                           favoriteOpportunityIds={favoriteOpportunityIds}
                           appliedOpportunityIds={appliedOpportunityIds}
                           roleName={roleName}

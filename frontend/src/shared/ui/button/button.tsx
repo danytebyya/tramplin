@@ -14,6 +14,7 @@ type ButtonVariant =
   | "accent-outline"
   | "accent-ghost"
   | "danger"
+  | "danger-outline"
   | "danger-ghost"
   | "success"
   | "success-ghost";

@@ -104,12 +104,11 @@ export function OpportunityList({
                 <div className="opportunity-list__content-actions">
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant={roleName !== "employer" && isApplied ? "danger-outline" : "secondary"}
                     size="sm"
-                    disabled={roleName !== "employer" && isApplied}
                     onClick={() => onApply?.(opportunity.id)}
                   >
-                    {roleName !== "employer" && isApplied ? "Отклик отправлен" : actionLabel}
+                    {roleName !== "employer" && isApplied ? "Отозвать отклик" : actionLabel}
                   </Button>
                 </div>
               </div>

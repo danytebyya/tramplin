@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 
-import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
+import { CitySelection, CitySelector, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { Opportunity } from "../../entities/opportunity";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
 import {
@@ -26,13 +26,14 @@ import "./favorites.css";
 type FavoriteSortField = "title" | "company" | "rating" | "published";
 type FavoriteSortDirection = "asc" | "desc";
 type FavoriteStatsKey = "total" | "vacancy" | "internship" | "event" | "mentorship";
+type OpportunityCategoryFilter = "all" | Opportunity["kind"];
 
 const favoriteMetricDefinitions: Array<{ key: FavoriteStatsKey; label: string }> = [
   { key: "total", label: "Всего:" },
   { key: "vacancy", label: "Вакансии:" },
   { key: "internship", label: "Стажировки:" },
   { key: "event", label: "Мероприятия:" },
-  { key: "mentorship", label: "Менторские программы:" },
+  { key: "mentorship", label: "Менторство:" },
 ];
 
 const ALL_TIME_PUBLICATION_OPTION = "За всё время";
@@ -47,6 +48,13 @@ const sortFieldOptions: Array<{ value: FavoriteSortField; label: string }> = [
   { value: "company", label: "По компании" },
   { value: "rating", label: "По рейтингу" },
   { value: "published", label: "По дате публикации" },
+];
+const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label: string }> = [
+  { value: "all", label: "Все" },
+  { value: "vacancy", label: "Вакансии" },
+  { value: "internship", label: "Стажировки" },
+  { value: "event", label: "Мероприятия" },
+  { value: "mentorship", label: "Менторские программы" },
 ];
 
 const applicantTabs: Array<{ label: string; to?: string; isCurrent?: boolean }> = [
@@ -166,6 +174,18 @@ function formatCount(value: number) {
   return new Intl.NumberFormat("ru-RU").format(value);
 }
 
+function resolveThemeRole(role: string | null) {
+  if (role === "junior") {
+    return "curator";
+  }
+
+  if (role === "employer" || role === "curator" || role === "admin") {
+    return role;
+  }
+
+  return "applicant";
+}
+
 export function FavoritesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -174,6 +194,7 @@ export function FavoritesPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
+  const themeRole = resolveThemeRole(role);
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const isApplicant = role === "applicant";
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
@@ -527,6 +548,27 @@ export function FavoritesPage() {
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
+        bottomContent={
+          <>
+            <nav className="header__categories" aria-label="Категории">
+              {opportunityCategoryLinks.map((item) => (
+                <Link
+                  key={item.value}
+                  to={{
+                    pathname: "/",
+                    search: item.value === "all" ? "" : `?category=${item.value}`,
+                    hash: "#opportunity-map",
+                  }}
+                  className="header__category-link"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+
+            <CitySelector value={selectedCity} onChange={handleCityChange} />
+          </>
+        }
       />
 
       <Container className="settings-page__container favorites-page__container">
@@ -889,27 +931,11 @@ export function FavoritesPage() {
         ) : (
           <section className="favorites-page__empty">
             <h2 className="favorites-page__empty-title">Ничего не найдено</h2>
-            <p className="favorites-page__empty-text">
-              В избранном пока нет карточек под текущие параметры поиска и фильтрации.
-            </p>
             <div className="favorites-page__empty-actions">
               <Button
                 type="button"
-                variant="secondary-outline"
-                size="sm"
-                onClick={() => {
-                  setSearch("");
-                  setAppliedSearch("");
-                  resetFilters();
-                  resetSorting();
-                }}
-              >
-                Сбросить всё
-              </Button>
-              <Button
-                type="button"
                 variant="secondary"
-                size="sm"
+                size="md"
                 onClick={() => navigate("/#opportunity-map")}
               >
                 Перейти к возможностям
@@ -919,7 +945,7 @@ export function FavoritesPage() {
         )}
       </Container>
 
-      <Footer />
+      <Footer theme={themeRole} />
     </main>
   );
 }

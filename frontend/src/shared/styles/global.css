@@ -506,6 +506,36 @@ a {
   color: var(--color-text-tertiary);
 }
 
+.button--danger-outline {
+  background: var(--color-bg-primary);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.button--danger-outline:not(.button--loading):not(:disabled):hover {
+  border-color: var(--color-danger-hover);
+  color: var(--color-danger-hover);
+  box-shadow: 0 4px 12px 0 rgba(239, 68, 68, 0.24);
+}
+
+.button--danger-outline:not(.button--loading):not(:disabled):active {
+  border-color: var(--color-danger-active);
+  color: var(--color-danger-active);
+  box-shadow: none;
+}
+
+.button--danger-outline:not(.button--loading):focus-visible {
+  outline: none;
+  border-width: 3px;
+  border-color: var(--color-danger-active);
+}
+
+.button--danger-outline:disabled {
+  background: var(--color-bg-primary);
+  border-color: var(--color-primary-disabled);
+  color: var(--color-text-tertiary);
+}
+
 .button--danger-ghost {
   background: transparent;
   border-color: transparent;

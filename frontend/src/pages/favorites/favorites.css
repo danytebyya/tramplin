@@ -9,8 +9,6 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding-top: 24px;
-  padding-bottom: 56px;
 }
 
 .favorites-page__header {
@@ -24,7 +22,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: -6px;
+  margin-top: 0;
   margin-bottom: 4px;
   margin-left: -16px;
 }
@@ -88,26 +86,25 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 128px;
-  padding: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  gap: 16px;
+  padding: 32px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .favorites-page__metric-label {
   color: var(--color-text-primary);
-  font-size: 15px;
-  line-height: 20px;
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
+  text-align: center;
 }
 
 .favorites-page__metric-value {
-  margin-top: 12px;
-  color: #6b7280;
-  font-size: clamp(36px, 3vw, 52px);
-  line-height: 1;
-  font-weight: 700;
+  color: var(--color-text-secondary);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line);
+  font-weight: 500;
 }
 
 .favorites-page__toolbar {
@@ -332,9 +329,7 @@
   align-items: center;
   gap: 12px;
   padding: 48px 24px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+  background: var(--color-bg-primary);
   text-align: center;
 }
 
@@ -354,7 +349,7 @@
 
 .favorites-page__empty-actions {
   display: flex;
-  gap: 12px;
+  align-items: flex-start;
   margin-top: 8px;
 }
 

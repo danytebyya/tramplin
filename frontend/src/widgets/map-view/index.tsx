@@ -2421,13 +2421,12 @@ export function MapView({
             <div className="map-view__details-actions">
               <Button
                 type="button"
-                variant="secondary"
+                variant={roleName !== "employer" && isSelectedOpportunityApplied ? "danger-outline" : "secondary"}
                 size="sm"
                 className="map-view__details-apply"
-                disabled={roleName !== "employer" && isSelectedOpportunityApplied}
                 onClick={() => onApply?.(selectedOpportunity.id)}
               >
-                {roleName !== "employer" && isSelectedOpportunityApplied ? "Отклик отправлен" : "Откликнуться"}
+                {roleName !== "employer" && isSelectedOpportunityApplied ? "Отозвать отклик" : "Откликнуться"}
               </Button>
               <button
                 type="button"
