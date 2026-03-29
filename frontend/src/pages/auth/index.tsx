@@ -142,6 +142,8 @@ export function AuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
+  const requestedRole = searchParams.get("role");
+  const initialRole = requestedRole === "employer" || requestedRole === "applicant" ? requestedRole : "applicant";
   const explicitReturnTo = searchParams.get("returnTo") ?? readCompanyInviteReturnTo();
   const inviteReturnParams = explicitReturnTo ? new URLSearchParams(explicitReturnTo.split("?")[1] ?? "") : null;
   const inviteToken = inviteReturnParams?.get("invite_token") ?? undefined;
@@ -188,7 +190,7 @@ export function AuthPage() {
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: initialPersistedState?.values ?? {
-      role: "applicant",
+      role: initialRole,
       email: "",
       password: "",
       confirmPassword: "",

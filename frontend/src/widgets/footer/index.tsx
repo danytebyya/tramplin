@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
+import logoSecondaryBlack from "../../assets/icons/logo-secondary-black.svg";
 import { Container } from "../../shared/ui";
 import "./footer.css";
 
@@ -24,7 +25,7 @@ export function Footer({
   const location = useLocation();
   const isAdminCompact = theme === "admin";
   const returnTo = `${location.pathname}${location.search}${location.hash}`;
-  const brandLogo = logoPrimaryBlack;
+  const brandLogo = theme === "applicant" ? logoSecondaryBlack : logoPrimaryBlack;
 
   return (
     <footer className={`site-footer site-footer--${theme}`} id="about">

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import {
   CitySelector,
@@ -24,7 +24,7 @@ import {
 } from "../../features/applications";
 import { getEmployerAccessState, meRequest, updatePreferredCityRequest, useAuthStore } from "../../features/auth";
 import { ModerationDashboardContent } from "../curator-dashboard";
-import { Button, Container, Input } from "../../shared/ui";
+import { Button, Container } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
 import {
@@ -37,6 +37,14 @@ import {
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import type { Opportunity } from "../../entities/opportunity";
+import analyticsIcon from "../../assets/icons/analytics.svg";
+import backgroundImage from "../../assets/icons/background.jpg";
+import databaseIcon from "../../assets/icons/db.svg";
+import designIcon from "../../assets/icons/design.svg";
+import developmentIcon from "../../assets/icons/development.svg";
+import logoPrimary from "../../assets/icons/logo-primary.svg";
+import logoSecondary from "../../assets/icons/logo-secondary.svg";
+import securityIcon from "../../assets/icons/security.svg";
 import "./home.css";
 
 function cloneMapSnapshot(source: HTMLElement) {
@@ -183,6 +191,96 @@ export function HomePage() {
     () => myApplicationsQuery.data?.data?.opportunity_ids ?? [],
     [myApplicationsQuery.data?.data?.opportunity_ids],
   );
+  const opportunityStats = useMemo(() => {
+    return opportunities.reduce(
+      (accumulator, opportunity) => {
+        accumulator.total += 1;
+
+        if (opportunity.kind === "vacancy") {
+          accumulator.vacancies += 1;
+        }
+
+        if (opportunity.kind === "internship") {
+          accumulator.internships += 1;
+        }
+
+        if (opportunity.kind === "event") {
+          accumulator.events += 1;
+        }
+
+        if (opportunity.kind === "mentorship") {
+          accumulator.mentorships += 1;
+        }
+
+        return accumulator;
+      },
+      {
+        total: 0,
+        vacancies: 0,
+        internships: 0,
+        events: 0,
+        mentorships: 0,
+      },
+    );
+  }, [opportunities]);
+  const applicantSteps = [
+    "Зарегистрируйтесь",
+    "Найдите возможности",
+    "Откликайтесь",
+    "Получайте ответы",
+    "Стройте карьеру",
+  ];
+  const employerSteps = [
+    "Зарегистрируйте компанию",
+    "Создайте карточку возможности",
+    "Получайте отклики",
+    "Управляйте откликами",
+    "Найдите таланты",
+  ];
+  const mapHighlights = [
+    {
+      accent: "Нажмите на маркер",
+      text: " и вы увидите подробную информацию о возможности",
+    },
+    {
+      accent: "Используйте фильтры,",
+      text: "чтобы найти подходящие вакансии",
+    },
+    {
+      accent: "Разверните карту —",
+      text: "так проще просматривать вакансии",
+    },
+  ];
+  const directions = [
+    { icon: developmentIcon, label: "Разработка" },
+    { icon: databaseIcon, label: "Базы данных" },
+    { icon: designIcon, label: "Дизайн" },
+    { icon: analyticsIcon, label: "Аналитика" },
+    { icon: securityIcon, label: "Безопасность" },
+  ];
+  const platformBenefits = [
+    "Проверенные работодатели",
+    "Бесплатное пользование",
+    "Менторская поддержка",
+    "Карьерные мероприятия",
+    "Нетворкинг с другими соискателями",
+    "Чат с работодателями",
+  ];
+  const platformStats = [
+    { value: String(opportunityStats.vacancies), label: "вакансии" },
+    { value: String(opportunityStats.internships), label: "стажировок" },
+    { value: String(opportunityStats.events), label: "мероприятий" },
+    { value: String(opportunityStats.mentorships), label: "менторов" },
+  ];
+  const landingTheme =
+    roleName === "applicant"
+      ? "applicant"
+      : roleName === "employer"
+        ? "employer"
+        : roleName === "curator" || roleName === "admin"
+          ? "curator"
+          : undefined;
+  const heroLogo = roleName === "applicant" ? logoSecondary : logoPrimary;
 
   const getExpandedRect = () => ({
     top: MAP_EXPANDED_TOP_OFFSET,
@@ -504,12 +602,38 @@ export function HomePage() {
   const handleWriteToEmployer = (opportunity: Opportunity) => {
     navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`);
   };
+  const handleFindOpportunity = () => {
+    if (!isAuthenticated) {
+      navigate("/register?role=applicant");
+      return;
+    }
+
+    const filtersElement = document.querySelector(".opportunity-filters");
+
+    if (!filtersElement) {
+      document.getElementById("opportunity-map")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    const top = filtersElement.getBoundingClientRect().top + window.scrollY - 10;
+    window.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+  };
+  const handleCreateOpportunity = () => {
+    if (!isAuthenticated) {
+      navigate("/register?role=employer");
+      return;
+    }
+
+    navigate("/employer/opportunities");
+  };
 
   return (
     <main className={homePageClassName}>
       <Header
         containerClassName="home-page__container"
         profileMenuItems={profileMenuItems}
+        theme={landingTheme}
+        variant={isModerationRole ? "default" : "landing"}
         city={selectedCity}
         onCityChange={handleCityChange}
         isAuthenticated={isAuthenticated}
@@ -519,9 +643,6 @@ export function HomePage() {
               <NavLink to="/" end className="header__nav-link">
                 Главная
               </NavLink>
-              <a href="#about" className="header__nav-link">
-                О проекте
-              </a>
             </nav>
           )
         }
@@ -581,91 +702,296 @@ export function HomePage() {
         <>
           <section className="home-page__hero">
             <Container className="home-page__container home-page__hero-container">
-              <div className={explorerClassName}>
-                <OpportunityFilters viewMode={viewMode} isMapExpanded={isMapExpandedLayout} onViewModeChange={setViewMode} />
-
+              <section className="home-page__hero-block">
                 <div
-                  className={
-                    viewMode === "list"
-                      ? "home-page__explorer-content home-page__explorer-content--list"
-                      : "home-page__explorer-content"
-                  }
+                  className="home-page__hero-copy"
+                  style={{ "--home-hero-background": `url("${backgroundImage}")` } as CSSProperties}
                 >
-                  <div
-                    className={
-                      viewMode === "map"
-                        ? [
-                            "home-page__explorer-panel",
-                            "home-page__explorer-panel--active",
-                            isMapFloating ? "home-page__explorer-panel--map-floating" : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")
-                        : "home-page__explorer-panel home-page__explorer-panel--hidden"
-                    }
-                    ref={viewMode === "map" ? mapPanelShellRef : undefined}
-                    style={
-                      viewMode === "map" && isMapFloating && mapPanelPlaceholderHeight !== null
-                        ? { minHeight: `${mapPanelPlaceholderHeight}px` }
-                        : undefined
-                    }
-                    aria-hidden={viewMode !== "map"}
-                  >
+                  <div className="home-page__hero-copy-content">
+                    <div className="home-page__hero-panel">
+                      <img src={heroLogo} alt="Трамплин" className="home-page__hero-logo" />
+                      <div className="home-page__hero-heading">
+                        <h1 className="home-page__title">Ваш старт в IT-карьере</h1>
+                      </div>
+                      <div className="home-page__hero-description">
+                        <p className="home-page__text">Платформа для студентов, выпускников и работодателей</p>
+                      </div>
+                    </div>
+                    <div className="home-page__hero-actions">
+                      <Button type="button" variant={roleName === "applicant" ? "secondary" : "primary"} onClick={handleFindOpportunity}>
+                        Найти возможность
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary-outline"
+                        className="home-page__hero-button-login"
+                        onClick={handleCreateOpportunity}
+                      >
+                        Создать возможность
+                      </Button>
+                    </div>
+                    <div className="home-page__hero-stats" aria-label="Статистика платформы">
+                      <article className="home-page__stat-card">
+                        <span className="home-page__stat-value">{opportunityStats.vacancies}</span>
+                        <span className="home-page__stat-label">вакансий</span>
+                      </article>
+                      <article className="home-page__stat-card">
+                        <span className="home-page__stat-value">{opportunityStats.internships}</span>
+                        <span className="home-page__stat-label">стажировок</span>
+                      </article>
+                      <article className="home-page__stat-card">
+                        <span className="home-page__stat-value">{opportunityStats.events}</span>
+                        <span className="home-page__stat-label">мероприятий</span>
+                      </article>
+                      <article className="home-page__stat-card">
+                        <span className="home-page__stat-value">{opportunityStats.mentorships}</span>
+                        <span className="home-page__stat-label">менторских программ</span>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </Container>
+          </section>
+
+          <section className="home-page__content-sections">
+            <Container className="home-page__container home-page__content-sections-container">
+              <div className="home-page__journey-section" id="about">
+                <div className="home-page__section-heading">
+                  <h2 className="home-page__section-title"><span className="home-page__section-title-accent">Как</span> это работает?</h2>
+                </div>
+                <div className="home-page__journey-grid">
+                  <article className="home-page__journey-card">
+                    <h3 className="home-page__journey-title">Для <span className="home-page__journey-title-accent">соискателей</span></h3>
+                    <ol className="home-page__journey-list">
+                      {applicantSteps.map((step, index) => (
+                        <li key={step} className="home-page__journey-item">
+                          <span className="home-page__journey-step">{index + 1}</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </article>
+                  <article className="home-page__journey-card">
+                    <h3 className="home-page__journey-title">Для <span className="home-page__journey-title-accent">работодателей</span></h3>
+                    <ol className="home-page__journey-list">
+                      {employerSteps.map((step, index) => (
+                        <li key={step} className="home-page__journey-item">
+                          <span className="home-page__journey-step">{index + 1}</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </article>
+                </div>
+              </div>
+
+              <div className="home-page__map-section" id="opportunity-map">
+                <div className="home-page__map-section-head">
+                  <div className="home-page__section-heading home-page__section-heading--compact">
+                    <h2 className="home-page__section-title"><span className="home-page__section-title-accent">Карта</span> возможностей</h2>
+                    <div className="home-page__section-text-block">
+                      <p className="home-page__section-text">
+                        IT-карьера <span className="home-page__section-text-accent">не привязана</span> к месту
+                      </p>
+                      <p className="home-page__section-subtext">
+                        Смотрите вакансии, стажировки, мероприятия и менторские программы на карте России.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="home-page__map-shell">
+                  <div className={explorerClassName}>
+                    <OpportunityFilters viewMode={viewMode} isMapExpanded={isMapExpandedLayout} onViewModeChange={setViewMode} />
+
                     <div
                       className={
-                        isMapFloating
-                          ? `home-page__map-panel-overlay home-page__map-panel-overlay--${mapExpandMode}`
-                          : "home-page__map-panel-overlay"
+                        viewMode === "list"
+                          ? "home-page__explorer-content home-page__explorer-content--list"
+                          : "home-page__explorer-content"
                       }
                     >
                       <div
-                        ref={mapPanelLiveRef}
                         className={
-                          isMapTransitioning
-                            ? "home-page__map-panel-live home-page__map-panel-live--hidden"
-                            : "home-page__map-panel-live"
+                          viewMode === "map"
+                            ? [
+                                "home-page__explorer-panel",
+                                "home-page__explorer-panel--active",
+                                isMapFloating ? "home-page__explorer-panel--map-floating" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")
+                            : "home-page__explorer-panel home-page__explorer-panel--hidden"
                         }
+                        ref={viewMode === "map" ? mapPanelShellRef : undefined}
+                        style={
+                          viewMode === "map" && isMapFloating && mapPanelPlaceholderHeight !== null
+                            ? { minHeight: `${mapPanelPlaceholderHeight}px` }
+                            : undefined
+                        }
+                        aria-hidden={viewMode !== "map"}
                       >
-                        <MapView
+                        <div
+                          className={
+                            isMapFloating
+                              ? `home-page__map-panel-overlay home-page__map-panel-overlay--${mapExpandMode}`
+                              : "home-page__map-panel-overlay"
+                          }
+                        >
+                          <div
+                            ref={mapPanelLiveRef}
+                            className={
+                              isMapTransitioning
+                                ? "home-page__map-panel-live home-page__map-panel-live--hidden"
+                                : "home-page__map-panel-live"
+                            }
+                          >
+                            <MapView
+                              opportunities={opportunities}
+                              favoriteOpportunityIds={favoriteOpportunityIds}
+                              appliedOpportunityIds={appliedOpportunityIds}
+                              selectedOpportunityId={selectedOpportunityId}
+                              selectedCity={selectedCity}
+                              selectedCityViewport={selectedCityViewport}
+                              isExpanded={isMapExpanded}
+                              isTransitioning={isMapTransitioning}
+                              roleName={roleName}
+                              onSelectOpportunity={setSelectedOpportunityId}
+                              onToggleFavorite={handleToggleFavorite}
+                              onSelectCity={handleCityChange}
+                              onCloseDetails={() => setSelectedOpportunityId(null)}
+                              onToggleExpand={handleToggleMapExpand}
+                              onApply={handleApplyOpportunity}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        className={
+                          viewMode === "list"
+                            ? "home-page__explorer-panel home-page__explorer-panel--active"
+                            : "home-page__explorer-panel home-page__explorer-panel--hidden"
+                        }
+                        aria-hidden={viewMode !== "list"}
+                      >
+                        <OpportunityList
                           opportunities={opportunities}
                           favoriteOpportunityIds={favoriteOpportunityIds}
                           appliedOpportunityIds={appliedOpportunityIds}
-                          selectedOpportunityId={selectedOpportunityId}
-                          selectedCity={selectedCity}
-                          selectedCityViewport={selectedCityViewport}
-                          isExpanded={isMapExpanded}
-                          isTransitioning={isMapTransitioning}
                           roleName={roleName}
-                          onSelectOpportunity={setSelectedOpportunityId}
                           onToggleFavorite={handleToggleFavorite}
-                          onSelectCity={handleCityChange}
-                          onCloseDetails={() => setSelectedOpportunityId(null)}
-                          onToggleExpand={handleToggleMapExpand}
                           onApply={handleApplyOpportunity}
+                          onWrite={handleWriteToEmployer}
                         />
                       </div>
                     </div>
                   </div>
-                  <div
-                    className={
-                      viewMode === "list"
-                        ? "home-page__explorer-panel home-page__explorer-panel--active"
-                        : "home-page__explorer-panel home-page__explorer-panel--hidden"
-                    }
-                    aria-hidden={viewMode !== "list"}
-                  >
-                    <OpportunityList
-                      opportunities={opportunities}
-                      favoriteOpportunityIds={favoriteOpportunityIds}
-                      appliedOpportunityIds={appliedOpportunityIds}
-                      roleName={roleName}
-                      onToggleFavorite={handleToggleFavorite}
-                      onApply={handleApplyOpportunity}
-                      onWrite={handleWriteToEmployer}
-                    />
-                  </div>
+                </div>
+
+                <div className="home-page__highlight-grid">
+                  {mapHighlights.map((highlight) => (
+                    <article key={highlight.accent} className="home-page__highlight-card">
+                      <p className="home-page__highlight-text">
+                        <span className="home-page__highlight-accent">{highlight.accent}</span>
+                        {highlight.text}
+                      </p>
+                    </article>
+                  ))}
                 </div>
               </div>
+
+              <section className="home-page__directions-section">
+                <div className="home-page__section-heading home-page__section-heading--compact">
+                  <h2 className="home-page__section-title"><span className="home-page__section-title-accent">Популярные</span> направления</h2>
+                </div>
+                <div className="home-page__directions-grid">
+                  {directions.map((direction) => (
+                    <article key={direction.label} className="home-page__direction-card">
+                      <span
+                        aria-hidden="true"
+                        className="home-page__direction-icon"
+                        style={{ "--home-direction-icon": `url("${direction.icon}")` } as CSSProperties}
+                      />
+                      <h3 className="home-page__direction-title">{direction.label}</h3>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="home-page__benefits-section">
+                <div className="home-page__section-heading home-page__section-heading--compact">
+                  <h2 className="home-page__section-title"><span className="home-page__section-title-accent">Преимущества</span> нашей платформы</h2>
+                </div>
+                <ul className="home-page__benefits-list">
+                  {platformBenefits.map((benefit) => (
+                    <li key={benefit} className="home-page__benefit-item">{benefit}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="home-page__numbers-section">
+                <div className="home-page__section-heading home-page__section-heading--compact">
+                  <h2 className="home-page__section-title">Трамплин <span className="home-page__section-title-accent">в цифрах</span></h2>
+                </div>
+                <div className="home-page__numbers-grid">
+                  {platformStats.map((stat) => (
+                    <article
+                      key={stat.label}
+                      className={
+                        stat.featured
+                          ? "home-page__number-card home-page__number-card--featured"
+                          : "home-page__number-card"
+                      }
+                    >
+                      <span className="home-page__number-value">{stat.value}</span>
+                      <span className="home-page__number-label">{stat.label}</span>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              {isAuthenticated ? null : (
+                <section className="home-page__cta-section">
+                  <div className="home-page__section-heading home-page__section-heading--compact">
+                    <h2 className="home-page__section-title">Ваш <span className="home-page__section-title-accent">старт</span> в IT-карьере и найме</h2>
+                    <div className="home-page__section-heading-note">
+                      <p className="home-page__section-subtext">Выберите Вашу <span className="home-page__section-title-accent">роль</span></p>
+                    </div>
+                  </div>
+                  <div className="home-page__cta-grid">
+                    <article className="home-page__cta-card">
+                      <h3 className="home-page__cta-title">Я ищу <span className="home-page__section-title-accent">работу</span></h3>
+                      <p className="home-page__cta-text">
+                        Найдите вакансию, стажировку или менторскую программу и постройте карьеру в IT
+                      </p>
+                      <div className="home-page__cta-actions">
+                        <Button type="button" variant="primary" fullWidth onClick={() => navigate("/register?role=applicant")}>
+                          Регистрация соискателя
+                        </Button>
+                        <Button type="button" variant="primary-outline" fullWidth onClick={() => navigate("/login")}>
+                          Войти
+                        </Button>
+                      </div>
+                    </article>
+
+                    <article className="home-page__cta-card">
+                      <h3 className="home-page__cta-title">Я ищу <span className="home-page__section-title-accent">сотрудников</span></h3>
+                      <p className="home-page__cta-text">
+                        Опубликуйте возможность и найдите лучших кандидатов для Вашей команды
+                      </p>
+                      <div className="home-page__cta-actions">
+                        <Button type="button" variant="primary" fullWidth onClick={() => navigate("/register?role=employer")}>
+                          Регистрация работодателя
+                        </Button>
+                        <Button type="button" variant="primary-outline" fullWidth onClick={() => navigate("/login")}>
+                          Войти
+                        </Button>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+              )}
             </Container>
           </section>
 

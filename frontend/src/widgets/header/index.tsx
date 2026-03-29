@@ -15,6 +15,7 @@ type HeaderProps = {
   containerClassName?: string;
   profileMenuItems: HeaderProfileMenuItem[];
   theme?: "applicant" | "employer" | "curator";
+  variant?: "default" | "landing";
   city?: string;
   onCityChange?: (city: CitySelection) => void;
   bottomContent?: ReactNode;
@@ -45,6 +46,7 @@ export function Header({
   containerClassName,
   profileMenuItems,
   theme,
+  variant = "default",
   city,
   onCityChange,
   bottomContent,
@@ -72,6 +74,7 @@ export function Header({
         : resolvedTheme === "employer"
           ? "header--employer"
           : undefined;
+  const headerVariantClassName = variant === "landing" ? "header--landing" : undefined;
   const resolvedTopNavigation = topNavigation === undefined ? (
     <nav className="header__nav" aria-label="Основная навигация">
       <a href="/" className="header__nav-link">Главная</a>
@@ -85,7 +88,7 @@ export function Header({
   const brandSubtitle = resolveHeaderBrandSubtitle(resolvedTheme, isAuthenticated);
 
   return (
-    <header className={cn("header", headerRoleClassName)}>
+    <header className={cn("header", headerRoleClassName, headerVariantClassName)}>
       <div className="header__top">
         <Container className={cn(containerClassName, "header__top-container")}>
           <div className="header__brand">
