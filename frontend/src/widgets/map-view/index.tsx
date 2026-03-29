@@ -736,6 +736,7 @@ export function MapView({
                 type="button"
                 className="map-view__details-close"
                 aria-label="Закрыть карточку"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={onCloseDetails}
               >
                 <svg
