@@ -1132,7 +1132,7 @@ export function CuratorManagementPage() {
               loading={bulkRoleMutation.isPending}
               disabled={selectedCurators.length === 0}
             >
-              Добавить
+              Изменить
             </Button>
           </div>
         </div>
