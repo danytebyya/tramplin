@@ -6,6 +6,7 @@ from src.db import get_db
 from src.models import User
 from src.repositories import ModerationRepository
 from src.schemas.moderation import (
+    ContentModerationChecklistUpdateRequest,
     CuratorBulkDeleteRequest,
     CuratorBulkRoleUpdateRequest,
     CuratorCreateRequest,
@@ -177,6 +178,21 @@ def request_content_changes(
     db: Session = Depends(get_db),
 ) -> dict:
     response = ModerationService(ModerationRepository(db)).request_content_changes(
+        current_user,
+        opportunity_id,
+        payload,
+    )
+    return success_response(response.model_dump(mode="json"))
+
+
+@router.patch("/content-items/{opportunity_id}/checklist", status_code=status.HTTP_200_OK)
+def update_content_item_checklist(
+    opportunity_id: str,
+    payload: ContentModerationChecklistUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = ModerationService(ModerationRepository(db)).update_content_item_checklist(
         current_user,
         opportunity_id,
         payload,

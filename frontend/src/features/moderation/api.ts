@@ -150,6 +150,8 @@ export type ContentModerationChecklist = {
   conditions_specified: boolean;
 };
 
+export type ContentModerationChecklistUpdatePayload = ContentModerationChecklist;
+
 export type ContentModerationItem = {
   id: string;
   title: string;
@@ -314,6 +316,17 @@ export async function listCuratorsRequest() {
 
 export async function createCuratorRequest(payload: CuratorCreatePayload) {
   const response = await apiClient.post<{ data?: CuratorManagementItem }>("/moderation/curators", payload);
+  return response.data;
+}
+
+export async function updateContentModerationChecklistRequest(
+  itemId: string,
+  payload: ContentModerationChecklistUpdatePayload,
+) {
+  const response = await apiClient.patch<{ data?: ContentModerationItem }>(
+    `/moderation/content-items/${itemId}/checklist`,
+    payload,
+  );
   return response.data;
 }
 
