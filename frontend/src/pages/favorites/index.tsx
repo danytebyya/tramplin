@@ -17,6 +17,7 @@ import {
   withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
 import { useAuthStore } from "../../features/auth";
+import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
 import { Button, Checkbox, Container, Input, Radio } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
@@ -278,21 +279,6 @@ export function FavoritesPage() {
   }, []);
 
   useEffect(() => {
-    const normalizedSearch = search.trim();
-    if (normalizedSearch === appliedSearch) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setAppliedSearch(normalizedSearch);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [appliedSearch, search]);
-
-  useEffect(() => {
     if (!isFilterOpen && !isSortOpen) {
       return;
     }
@@ -373,7 +359,7 @@ export function FavoritesPage() {
   const [appliedTags, setAppliedTags] = useState<string[]>([]);
 
   const filteredOpportunities = useMemo(() => {
-    const normalizedSearch = normalizeFilterText(appliedSearch);
+    const normalizedSearch = normalizeOpportunitySearchText(appliedSearch);
     const normalizedFormats = appliedFormats
       .map(normalizeFormatOption)
       .filter((item): item is Opportunity["format"] => Boolean(item));
@@ -381,18 +367,7 @@ export function FavoritesPage() {
     const normalizedEmployment = appliedEmployment.map(normalizeEmploymentOption);
 
     return favoriteOpportunities.filter((opportunity) => {
-      const searchableText = [
-        opportunity.title,
-        opportunity.companyName,
-        opportunity.description,
-        opportunity.locationLabel,
-        opportunity.city ?? "",
-        ...opportunity.tags,
-      ]
-        .join(" ")
-        .trim();
-
-      if (normalizedSearch && !normalizeFilterText(searchableText).includes(normalizedSearch)) {
+      if (!matchesOpportunitySearch(opportunity, normalizedSearch)) {
         return false;
       }
 
@@ -617,11 +592,10 @@ export function FavoritesPage() {
               className="input--sm favorites-page__search-input"
               value={search}
               clearable
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  setAppliedSearch(search.trim());
-                }
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setSearch(nextValue);
+                setAppliedSearch(nextValue.trim());
               }}
             />
           </label>

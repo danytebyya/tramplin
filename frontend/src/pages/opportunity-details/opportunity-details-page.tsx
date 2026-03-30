@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
-import locationIcon from "../../assets/icons/location.svg";
 import jobIcon from "../../assets/icons/job.svg";
+import arrowIcon from "../../assets/icons/arrow.svg";
+import locationIcon from "../../assets/icons/location.svg";
+import mailIcon from "../../assets/icons/mail.svg";
 import levelIcon from "../../assets/icons/level.svg";
+import phoneIcon from "../../assets/icons/phone.svg";
+import siteIcon from "../../assets/icons/site.svg";
 import timeIcon from "../../assets/icons/time.svg";
 import {
   listOpportunitiesRequest,
@@ -27,8 +31,8 @@ import {
 } from "../../features/applications";
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { useAuthStore } from "../../features/auth";
-import { resolveAvatarIcon } from "../../shared/lib";
-import { Button, Container } from "../../shared/ui";
+import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import { Button, Container, Modal } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import {
   buildApplicantProfileMenuItems,
@@ -45,6 +49,7 @@ type SuggestedContact = {
   name: string;
   subtitle: string;
   isOnline: boolean;
+  levelLabel: string | null;
   tags: string[];
   city: string;
   salaryLabel: string;
@@ -52,6 +57,24 @@ type SuggestedContact = {
   employmentLabel: string;
   avatarSrc: string;
 };
+
+const RECOMMENDED_CONTACTS_PAGE_SIZE = 2;
+
+function buildPaginationItems(currentPage: number, totalPages: number) {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (currentPage <= 3) {
+    return [1, 2, 3, "ellipsis", totalPages] as const;
+  }
+
+  if (currentPage >= totalPages - 2) {
+    return [1, "ellipsis", totalPages - 2, totalPages - 1, totalPages] as const;
+  }
+
+  return [1, "ellipsis", currentPage, "ellipsis-right", totalPages] as const;
+}
 
 function resolveThemeRole(role: string | null) {
   if (role === "junior") {
@@ -118,19 +141,38 @@ function buildDescriptionSections(description: string) {
 }
 
 function mapSuggestedContact(candidate: OpportunityRecommendationCandidate): SuggestedContact {
+  const [firstTag, ...remainingTags] = candidate.tags;
+  const normalizedLevel = firstTag?.trim().toLowerCase();
+  const isLevelTag = normalizedLevel === "junior" || normalizedLevel === "middle" || normalizedLevel === "senior";
+
   return {
     id: candidate.publicId || candidate.userId,
     userId: candidate.userId,
     name: candidate.displayName,
     subtitle: candidate.subtitle,
     isOnline: candidate.isOnline,
-    tags: candidate.tags,
+    levelLabel: isLevelTag ? firstTag : null,
+    tags: isLevelTag ? remainingTags : candidate.tags,
     city: candidate.city,
     salaryLabel: candidate.salaryLabel,
     formatLabel: candidate.formatLabel,
     employmentLabel: candidate.employmentLabel,
     avatarSrc: resolveAvatarIcon("applicant"),
   };
+}
+
+function resolveSuggestedContactLevelClassName(levelLabel: string | null) {
+  const normalizedLevel = levelLabel?.trim().toLowerCase();
+
+  if (normalizedLevel === "middle") {
+    return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--warning";
+  }
+
+  if (normalizedLevel === "senior") {
+    return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--danger";
+  }
+
+  return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--success";
 }
 
 export function OpportunityDetailsPage() {
@@ -144,7 +186,9 @@ export function OpportunityDetailsPage() {
   const themeRole = resolveThemeRole(role);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
+  const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [recommendedUserIds, setRecommendedUserIds] = useState<string[]>([]);
+  const [recommendedContactsPage, setRecommendedContactsPage] = useState(1);
 
   const opportunitiesQuery = useQuery({
     queryKey: ["opportunities", "feed"],
@@ -240,8 +284,25 @@ export function OpportunityDetailsPage() {
     () => (recommendationCandidatesQuery.data ?? []).map(mapSuggestedContact),
     [recommendationCandidatesQuery.data],
   );
+  const recommendedContactsTotalPages = Math.max(
+    1,
+    Math.ceil(suggestedContacts.length / RECOMMENDED_CONTACTS_PAGE_SIZE),
+  );
+  const recommendedContactsCurrentPage = Math.min(recommendedContactsPage, recommendedContactsTotalPages);
+  const visibleSuggestedContacts = suggestedContacts.slice(
+    (recommendedContactsCurrentPage - 1) * RECOMMENDED_CONTACTS_PAGE_SIZE,
+    recommendedContactsCurrentPage * RECOMMENDED_CONTACTS_PAGE_SIZE,
+  );
+  const recommendedContactsPaginationItems = buildPaginationItems(
+    recommendedContactsCurrentPage,
+    recommendedContactsTotalPages,
+  );
   const shouldShowRecommendationsSection =
     isAuthenticated && (recommendationCandidatesQuery.isPending || suggestedContacts.length > 0);
+
+  useEffect(() => {
+    setRecommendedContactsPage(1);
+  }, [suggestedContacts.length]);
 
   const profileMenuItems = role === "employer"
     ? buildEmployerProfileMenuItems(navigate, {
@@ -296,10 +357,34 @@ export function OpportunityDetailsPage() {
       return;
     }
 
+    if (isApplied) {
+      setIsWithdrawConfirmModalOpen(true);
+      return;
+    }
+
     submitApplicationMutation.mutate({
       targetOpportunityId: opportunity.id,
-      shouldWithdraw: isApplied,
+      shouldWithdraw: false,
     });
+  };
+
+  const handleConfirmWithdraw = () => {
+    if (!opportunity || !canApply || !isAuthenticated || !isApplied) {
+      return;
+    }
+
+    submitApplicationMutation.mutate(
+      {
+        targetOpportunityId: opportunity.id,
+        shouldWithdraw: true,
+      },
+      {
+        onSuccess: async () => {
+          setIsWithdrawConfirmModalOpen(false);
+          await queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] });
+        },
+      },
+    );
   };
 
   const handleRecommend = (targetUserId: string) => {
@@ -361,7 +446,7 @@ export function OpportunityDetailsPage() {
                     <div className="opportunity-details-page__hero-summary">
                       <div className="opportunity-details-page__hero-header">
                         <h1 className="opportunity-details-page__title">{opportunity.title}</h1>
-                        <p className="opportunity-details-page__salary">{opportunity.salaryLabel} в месяц</p>
+                        <p className="opportunity-details-page__salary">{opportunity.salaryLabel}</p>
                         <p className="opportunity-details-page__published">
                           Дата публикации: {formatPublishedAt(opportunity.publishedAt)}
                         </p>
@@ -409,6 +494,41 @@ export function OpportunityDetailsPage() {
                           <p className="opportunity-details-page__description-text">{opportunity.description}</p>
                         )}
                       </div>
+
+                      {canApply ? (
+                        <div className="opportunity-details-page__apply-section">
+                          <Button
+                            type="button"
+                            variant={isApplied ? "danger-outline" : "secondary"}
+                            className={isApplied
+                              ? "opportunity-details-page__apply opportunity-details-page__apply-button opportunity-details-page__apply-button--applied opportunity-details-page__apply--withdraw"
+                              : "opportunity-details-page__apply opportunity-details-page__apply-button"}
+                            onClick={handleApply}
+                            loading={submitApplicationMutation.isPending}
+                          >
+                            <span className="opportunity-details-page__apply-labels" aria-live="polite">
+                              <span
+                                className={
+                                  isApplied
+                                    ? "opportunity-details-page__apply-label opportunity-details-page__apply-label--inactive"
+                                    : "opportunity-details-page__apply-label opportunity-details-page__apply-label--active"
+                                }
+                              >
+                                Откликнуться
+                              </span>
+                              <span
+                                className={
+                                  isApplied
+                                    ? "opportunity-details-page__apply-label opportunity-details-page__apply-label--active"
+                                    : "opportunity-details-page__apply-label opportunity-details-page__apply-label--inactive"
+                                }
+                              >
+                                Отозвать отклик
+                              </span>
+                            </span>
+                          </Button>
+                        </div>
+                      ) : null}
                     </section>
 
                     {shouldShowRecommendationsSection ? (
@@ -419,31 +539,43 @@ export function OpportunityDetailsPage() {
                         ) : null}
 
                         <div className="opportunity-details-page__contacts-grid">
-                          {suggestedContacts.map((contact) => {
+                          {visibleSuggestedContacts.map((contact) => {
                             const isRecommended = recommendedUserIds.includes(contact.userId);
                             const isCurrentTargetLoading =
                               recommendOpportunityMutation.isPending && recommendOpportunityMutation.variables === contact.userId;
 
                             return (
                               <article key={contact.id} className="opportunity-details-page__contact-card">
-                                <span className="opportunity-details-page__contact-id">id: {contact.id.slice(-6)}</span>
-                                <div className="opportunity-details-page__contact-avatar-shell">
-                                  <img src={contact.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar" />
+                                <div className="opportunity-details-page__contact-id-block">
+                                  <span className="opportunity-details-page__contact-id">ID: {contact.id.slice(-6)}</span>
                                 </div>
-                                <h3 className="opportunity-details-page__contact-name">{contact.name}</h3>
-                                <p className="opportunity-details-page__contact-subtitle">{contact.subtitle}</p>
-                                <p className="opportunity-details-page__contact-status">
-                                  <span className={`opportunity-details-page__contact-dot${contact.isOnline ? " opportunity-details-page__contact-dot--online" : ""}`} />
-                                  {contact.isOnline ? "Online" : "Недавно в сети"}
-                                </p>
 
-                                <div className="opportunity-details-page__contact-tags">
-                                  {contact.tags.map((tag) => (
-                                    <span key={`${contact.id}-${tag}`} className="opportunity-details-page__contact-tag">
-                                      {tag}
-                                    </span>
-                                  ))}
+                                <div className="opportunity-details-page__contact-primary">
+                                  <div className="opportunity-details-page__contact-avatar-shell">
+                                    <img src={contact.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar" />
+                                  </div>
+                                  <h3 className="opportunity-details-page__contact-name">{contact.name}</h3>
+                                  <p className="opportunity-details-page__contact-subtitle">{contact.subtitle}</p>
+                                  <p className="opportunity-details-page__contact-status">
+                                    <span className={`opportunity-details-page__contact-dot${contact.isOnline ? " opportunity-details-page__contact-dot--online" : ""}`} />
+                                    {contact.isOnline ? "Online" : "Недавно в сети"}
+                                  </p>
                                 </div>
+
+                                {contact.levelLabel || contact.tags.length > 0 ? (
+                                  <div className="opportunity-details-page__contact-tags">
+                                    {contact.levelLabel ? (
+                                      <span className={resolveSuggestedContactLevelClassName(contact.levelLabel)}>
+                                        {contact.levelLabel}
+                                      </span>
+                                    ) : null}
+                                    {contact.tags.map((tag) => (
+                                      <span key={`${contact.id}-${tag}`} className="opportunity-details-page__contact-tag">
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
 
                                 <div className="opportunity-details-page__contact-meta">
                                   <span className="opportunity-details-page__contact-meta-item">
@@ -479,25 +611,65 @@ export function OpportunityDetailsPage() {
                             );
                           })}
                         </div>
+
+                        {recommendedContactsTotalPages > 1 ? (
+                          <nav className="opportunity-details-page__pagination" aria-label="Пагинация подходящих кандидатов">
+                            <button
+                              type="button"
+                              className="opportunity-details-page__pagination-arrow"
+                              onClick={() => setRecommendedContactsPage((currentValue) => Math.max(1, currentValue - 1))}
+                              disabled={recommendedContactsCurrentPage === 1}
+                              aria-label="Предыдущая страница"
+                            >
+                              <img
+                                src={arrowIcon}
+                                alt=""
+                                aria-hidden="true"
+                                className="opportunity-details-page__pagination-arrow-icon opportunity-details-page__pagination-arrow-icon--prev"
+                              />
+                            </button>
+                            {recommendedContactsPaginationItems.map((item, index) =>
+                              typeof item === "number" ? (
+                                <button
+                                  key={`${item}-${index}`}
+                                  type="button"
+                                  className={
+                                    recommendedContactsCurrentPage === item
+                                      ? "opportunity-details-page__pagination-page opportunity-details-page__pagination-page--active"
+                                      : "opportunity-details-page__pagination-page"
+                                  }
+                                  onClick={() => setRecommendedContactsPage(item)}
+                                >
+                                  {item}
+                                </button>
+                              ) : (
+                                <span key={`${item}-${index}`} className="opportunity-details-page__pagination-ellipsis">
+                                  ...
+                                </span>
+                              ),
+                            )}
+                            <button
+                              type="button"
+                              className="opportunity-details-page__pagination-arrow"
+                              onClick={() => setRecommendedContactsPage((currentValue) => Math.min(recommendedContactsTotalPages, currentValue + 1))}
+                              disabled={recommendedContactsCurrentPage === recommendedContactsTotalPages}
+                              aria-label="Следующая страница"
+                            >
+                              <img
+                                src={arrowIcon}
+                                alt=""
+                                aria-hidden="true"
+                                className="opportunity-details-page__pagination-arrow-icon"
+                              />
+                            </button>
+                          </nav>
+                        ) : null}
                       </section>
                     ) : null}
                   </div>
                 </div>
 
                 <div className="opportunity-details-page__hero-actions">
-                  {canApply ? (
-                    <Button
-                      type="button"
-                      variant={isApplied ? "danger-outline" : "secondary"}
-                      size="md"
-                      className={isApplied ? "opportunity-details-page__apply opportunity-details-page__apply--withdraw" : "opportunity-details-page__apply"}
-                      onClick={handleApply}
-                      loading={submitApplicationMutation.isPending}
-                    >
-                      {isApplied ? "Отозвать отклик" : "Откликнуться"}
-                    </Button>
-                  ) : null}
-
                   <button
                     type="button"
                     className={
@@ -518,39 +690,40 @@ export function OpportunityDetailsPage() {
             <aside className="opportunity-details-page__sidebar">
               <div className="opportunity-details-page__company-card">
                 <p className="opportunity-details-page__company-heading">Организатор</p>
-                <div className="opportunity-details-page__company-logo-placeholder" />
+                {opportunity.companyAvatarUrl ? (
+                  <div className="opportunity-details-page__company-logo">
+                    <img
+                      src={resolveAvatarUrl(opportunity.companyAvatarUrl) ?? opportunity.companyAvatarUrl}
+                      alt={opportunity.companyName}
+                      className="opportunity-details-page__company-logo-image"
+                    />
+                  </div>
+                ) : null}
                 <h2 className="opportunity-details-page__company-name">{opportunity.companyName}</h2>
 
                 {opportunity.companyVerified ? (
                   <span className="opportunity-details-page__company-badge">
-                    <img src={verifiedIcon} alt="" aria-hidden="true" />
                     Верифицировано
+                    <img src={verifiedIcon} alt="" aria-hidden="true" />
                   </span>
                 ) : null}
-
-                <p className="opportunity-details-page__company-rating">
-                  Рейтинг {opportunity.companyRating !== null ? `${opportunity.companyRating}/5` : "4,5/5"}
-                </p>
-                <p className="opportunity-details-page__company-reviews">
-                  {opportunity.companyReviewsCount || 10} отзывов
-                </p>
 
                 <div className="opportunity-details-page__company-contacts">
                   {opportunity.contactEmail ? (
                     <a href={`mailto:${opportunity.contactEmail}`} className="opportunity-details-page__company-contact">
-                      <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
+                      <img src={mailIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
                       {opportunity.contactEmail}
                     </a>
                   ) : null}
                   {opportunity.companyWebsite ? (
                     <a href={opportunity.companyWebsite} target="_blank" rel="noreferrer" className="opportunity-details-page__company-contact">
-                      <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
+                      <img src={siteIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
                       {opportunity.companyWebsite.replace(/^https?:\/\//, "")}
                     </a>
                   ) : null}
                   {opportunity.companyPhone ? (
                     <a href={`tel:${opportunity.companyPhone}`} className="opportunity-details-page__company-contact">
-                      <img src={levelIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
+                      <img src={phoneIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
                       {opportunity.companyPhone}
                     </a>
                   ) : null}
@@ -582,6 +755,38 @@ export function OpportunityDetailsPage() {
       <Footer theme={themeRole} />
 
       <FavoriteAuthModal isOpen={isFavoriteAuthModalOpen} onClose={() => setIsFavoriteAuthModalOpen(false)} />
+      <Modal
+        isOpen={isWithdrawConfirmModalOpen}
+        onClose={() => setIsWithdrawConfirmModalOpen(false)}
+        title="Подтвердите отзыв"
+        panelClassName="opportunity-details-page__confirm-modal"
+      >
+        <div className="opportunity-details-page__confirm-modal-body">
+          <p className="opportunity-details-page__confirm-modal-text">
+            Вы действительно хотите отозвать отклик на эту возможность?
+          </p>
+          <div className="opportunity-details-page__confirm-modal-actions">
+            <Button
+              type="button"
+              variant="danger-outline"
+              size="md"
+              onClick={handleConfirmWithdraw}
+              loading={submitApplicationMutation.isPending}
+            >
+              Отозвать отклик
+            </Button>
+            <Button
+              type="button"
+              variant="primary-outline"
+              size="md"
+              onClick={() => setIsWithdrawConfirmModalOpen(false)}
+              disabled={submitApplicationMutation.isPending}
+            >
+              Отмена
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </main>
   );
 }

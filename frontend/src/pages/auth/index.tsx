@@ -8,8 +8,8 @@ import { z } from "zod";
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import arrowIcon from "../../assets/icons/arrow.svg";
-import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
-import logoSecondaryBlack from "../../assets/icons/logo-secondary-black.svg";
+import logoPrimaryBlack from "../../assets/icons/logo-primary-black-sm.svg";
+import logoSecondaryBlack from "../../assets/icons/logo-secondary-black-sm.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
   applyAuthSession,

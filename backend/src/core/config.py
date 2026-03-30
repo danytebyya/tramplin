@@ -146,12 +146,23 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def apply_default_allowed_origins_for_dev(self) -> "Settings":
-        if self.allowed_origins:
-            return self
-
-        if self.app_env.lower() in {"development", "dev", "local"} or self.app_debug:
+        if not self.allowed_origins and (
+            self.app_env.lower() in {"development", "dev", "local"} or self.app_debug
+        ):
             self.allowed_origins = DEFAULT_DEV_ALLOWED_ORIGINS.copy()
 
+        # Always keep localhost origins available so local frontend can talk to the API
+        # even when ALLOWED_ORIGINS is overridden by a production-like .env.
+        merged_origins: list[str] = []
+        seen_origins: set[str] = set()
+        for origin in [*self.allowed_origins, *DEFAULT_DEV_ALLOWED_ORIGINS]:
+            normalized_origin = origin.strip()
+            if not normalized_origin or normalized_origin in seen_origins:
+                continue
+            seen_origins.add(normalized_origin)
+            merged_origins.append(normalized_origin)
+
+        self.allowed_origins = merged_origins
         return self
 
 

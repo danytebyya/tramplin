@@ -8,6 +8,7 @@ export type Opportunity = {
   employerId: string;
   title: string;
   companyName: string;
+  companyAvatarUrl?: string | null;
   companyVerified: boolean;
   companyRating: number | null;
   companyReviewsCount: number;

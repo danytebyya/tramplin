@@ -1664,8 +1664,8 @@
   }
 
   .map-view__details {
-    top: auto;
-    bottom: 112px;
+    top: calc(var(--map-view-inset) + 110px);
+    bottom: auto;
   }
 
   .map-view__details-content {

@@ -90,6 +90,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   display: flex;
   align-items: center;
   justify-content: center;
+  transform: translateX(-30px);
 }
 
 .auth-page__brand-stage .wave-aura__orb {
@@ -111,8 +112,7 @@ body:has(.auth-page)::-webkit-scrollbar {
 
 .auth-page__brand {
   display: block;
-  width: min(340px, 84vw);
-  max-width: min(340px, 84vw);
+  width: 165px;
   height: auto;
   object-fit: contain;
   filter: drop-shadow(0 18px 44px rgba(37, 99, 235, 0.28));
@@ -611,6 +611,15 @@ body:has(.auth-page)::-webkit-scrollbar {
 }
 
 @media (max-width: 767px) {
+  .auth-page__brand-lockup {
+    transform: translateX(-12px);
+  }
+
+  .auth-page__brand {
+    width: min(220px, 62vw);
+    max-width: min(220px, 62vw);
+  }
+
   .auth-page__content.container.container__auth-page {
     min-height: auto;
     height: auto;

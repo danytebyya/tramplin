@@ -25,6 +25,7 @@ import {
 } from "../../features/applications";
 import { getEmployerAccessState, meRequest, updatePreferredCityRequest, useAuthStore } from "../../features/auth";
 import { ModerationDashboardContent } from "../curator-dashboard";
+import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
 import { Button, Container } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
@@ -121,6 +122,7 @@ export function HomePage() {
   const [mapExpandMode, setMapExpandMode] = useState<"collapsed" | "expanding" | "expanded" | "collapsing">("collapsed");
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? DEFAULT_CITY);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedCityViewport, setSelectedCityViewport] = useState<{
     center: [number, number];
     zoom: number;
@@ -270,12 +272,20 @@ export function HomePage() {
     );
   }, [opportunities]);
   const displayedOpportunities = useMemo(() => {
-    if (selectedCategoryFilter === "all") {
-      return opportunities;
+    const categoryFilteredOpportunities = selectedCategoryFilter === "all"
+      ? opportunities
+      : opportunities.filter((opportunity) => opportunity.kind === selectedCategoryFilter);
+
+    const normalizedQuery = normalizeOpportunitySearchText(searchQuery);
+
+    if (!normalizedQuery) {
+      return categoryFilteredOpportunities;
     }
 
-    return opportunities.filter((opportunity) => opportunity.kind === selectedCategoryFilter);
-  }, [opportunities, selectedCategoryFilter]);
+    return categoryFilteredOpportunities.filter((opportunity) => {
+      return matchesOpportunitySearch(opportunity, normalizedQuery);
+    });
+  }, [opportunities, searchQuery, selectedCategoryFilter]);
   const platformCounts = platformStatsQuery.data ?? {
     companiesCount: 0,
     applicantsCount: 0,
@@ -784,6 +794,8 @@ export function HomePage() {
             categoryNavigation
           )
         }
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       {isModerationRole ? (
@@ -900,7 +912,13 @@ export function HomePage() {
 
                 <div className="home-page__map-shell">
                   <div className={explorerClassName}>
-                    <OpportunityFilters viewMode={viewMode} isMapExpanded={isMapExpandedLayout} onViewModeChange={setViewMode} />
+                    <OpportunityFilters
+                      viewMode={viewMode}
+                      isMapExpanded={isMapExpandedLayout}
+                      searchValue={searchQuery}
+                      onSearchChange={setSearchQuery}
+                      onViewModeChange={setViewMode}
+                    />
 
                     <div
                       className={
@@ -950,6 +968,7 @@ export function HomePage() {
                               appliedOpportunityIds={appliedOpportunityIds}
                               selectedOpportunityId={selectedOpportunityId}
                               selectedCity={selectedCity}
+                              searchQuery={searchQuery}
                               selectedCityViewport={selectedCityViewport}
                               isExpanded={isMapExpanded}
                               isTransitioning={isMapTransitioning}

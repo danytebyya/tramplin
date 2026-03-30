@@ -111,7 +111,7 @@ class OpportunityService:
             work_format=self._resolve_work_format(payload),
             employment_type=self._resolve_employment_type(payload),
             level=self._resolve_level(payload),
-            contact_email=current_user.email or employer.corporate_email,
+            contact_email=employer.corporate_email,
             starts_at=payload.planned_publish_at,
             application_deadline=self._resolve_application_deadline(payload.planned_publish_at),
             event_type=payload.event_type,
@@ -164,7 +164,7 @@ class OpportunityService:
         opportunity.work_format = self._resolve_work_format(payload)
         opportunity.employment_type = self._resolve_employment_type(payload)
         opportunity.level = self._resolve_level(payload)
-        opportunity.contact_email = current_user.email or employer.corporate_email
+        opportunity.contact_email = employer.corporate_email
         opportunity.starts_at = payload.planned_publish_at
         opportunity.application_deadline = self._resolve_application_deadline(payload.planned_publish_at)
         opportunity.event_type = payload.event_type
@@ -312,10 +312,11 @@ class OpportunityService:
             "employer_id": str(opportunity.employer_id),
             "title": opportunity.title,
             "company_name": opportunity.employer.display_name,
+            "company_avatar_url": getattr(opportunity.employer, "avatar_url", None),
             "company_verified": opportunity.employer.verified_at is not None,
             "company_rating": None,
             "company_reviews_count": 0,
-            "contact_email": opportunity.contact_email or opportunity.employer.corporate_email,
+            "contact_email": opportunity.employer.corporate_email,
             "company_website": opportunity.employer.website_url,
             "company_phone": opportunity.employer.phone,
             "salary_label": self._build_salary_label(opportunity),

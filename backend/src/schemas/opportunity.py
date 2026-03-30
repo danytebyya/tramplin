@@ -8,6 +8,7 @@ class OpportunityPublicRead(BaseModel):
     employer_id: str
     title: str
     company_name: str
+    company_avatar_url: str | None = None
     company_verified: bool
     company_rating: float | None = None
     company_reviews_count: int = 0

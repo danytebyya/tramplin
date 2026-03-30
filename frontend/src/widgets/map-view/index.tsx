@@ -21,6 +21,7 @@ import {
   listOpportunityTagCatalogRequest,
 } from "../../features/opportunity/api";
 import { env } from "../../shared/config/env";
+import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
 import { Badge, Button, Checkbox, DateInput, Input } from "../../shared/ui";
 import "../../features/city-selector/city-selector.css";
 import "./map-view.css";
@@ -37,6 +38,7 @@ type MapViewProps = {
   appliedOpportunityIds?: string[];
   selectedOpportunityId: string | null;
   selectedCity: string;
+  searchQuery?: string;
   selectedCityViewport?: {
     center: [number, number];
     zoom: number;
@@ -557,6 +559,7 @@ export function MapView({
   appliedOpportunityIds = [],
   selectedOpportunityId,
   selectedCity,
+  searchQuery = "",
   selectedCityViewport,
   isExpanded,
   isTransitioning,
@@ -667,6 +670,7 @@ export function MapView({
     queryFn: listOpportunityTagCatalogRequest,
   });
   const filteredOpportunities = useMemo(() => {
+    const normalizedSearchQuery = normalizeOpportunitySearchText(searchQuery);
     const normalizedVacancyCity = normalizeFilterText(selectedVacancyCity);
     const normalizedEventCity = normalizeFilterText(selectedEventCity);
     const normalizedMentorCity = normalizeFilterText(selectedMentorCity);
@@ -688,6 +692,10 @@ export function MapView({
     const oneDayMs = 24 * 60 * 60 * 1000;
 
     return opportunities.filter((opportunity) => {
+      if (normalizedSearchQuery && !matchesOpportunitySearch(opportunity, normalizedSearchQuery)) {
+        return false;
+      }
+
       if (!selectedFormat.includes(opportunity.format)) {
         return false;
       }
@@ -958,6 +966,7 @@ export function MapView({
     vacancyRadiusTo,
     vacancySalaryFrom,
     vacancySalaryTo,
+    searchQuery,
   ]);
   const normalizedSelectedCity = normalizeCityValue(selectedCity);
   const cityMatchedOpportunities = useMemo(() => {
@@ -1577,6 +1586,10 @@ export function MapView({
   }, [isExpanded, selectedOpportunity, selectedOpportunityId]);
 
   useEffect(() => {
+    hasAlignedInitialViewportRef.current = false;
+  }, [filteredOpportunities]);
+
+  useEffect(() => {
     if (!mapInstanceRef.current || selectedOpportunity) {
       return;
     }
@@ -1589,6 +1602,13 @@ export function MapView({
 
     if (cityMatchedOpportunities.length > 0) {
       const viewport = getViewportByCoordinates(cityMatchedOpportunities);
+      applyViewport(mapInstanceRef.current, viewport, { duration: 320, shouldUpdateZoom });
+      hasAlignedInitialViewportRef.current = true;
+      return;
+    }
+
+    if (filteredOpportunities.length > 0) {
+      const viewport = getViewportByCoordinates(filteredOpportunities);
       applyViewport(mapInstanceRef.current, viewport, { duration: 320, shouldUpdateZoom });
       hasAlignedInitialViewportRef.current = true;
       return;
@@ -1618,7 +1638,14 @@ export function MapView({
     return () => {
       isActive = false;
     };
-  }, [cityMatchedOpportunities, selectedCity, selectedCityViewport, selectedOpportunity, selectedOpportunityId]);
+  }, [
+    cityMatchedOpportunities,
+    filteredOpportunities,
+    selectedCity,
+    selectedCityViewport,
+    selectedOpportunity,
+    selectedOpportunityId,
+  ]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || selectedOpportunity || filteredOpportunities.length === 0 || hasAlignedInitialViewportRef.current) {
@@ -2543,7 +2570,7 @@ export function MapView({
               className={
                 (() => {
                   const isActive = item.value === "saved"
-                    ? favoriteOpportunityIds.length > 0
+                    ? true
                     : selectedFormat.includes(item.value as Opportunity["format"]);
 
                   return isActive

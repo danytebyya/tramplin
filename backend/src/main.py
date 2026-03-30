@@ -54,6 +54,21 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 chat_reminder_worker = ChatReminderWorker()
 
 
+def _build_cors_headers(request: Request) -> dict[str, str]:
+    origin = request.headers.get("origin", "").strip()
+    if not origin:
+        return {}
+
+    if origin in settings.allowed_origins:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+
+    return {}
+
+
 @app.on_event("startup")
 def bootstrap_staff_accounts() -> None:
     db = SessionLocal()
@@ -110,6 +125,7 @@ def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
         content=error_response(code=exc.code, message=exc.message, details=exc.details),
+        headers=_build_cors_headers(request),
     )
 
 
@@ -142,6 +158,7 @@ def validation_error_handler(request: Request, exc: RequestValidationError) -> J
             message=first_error_message,
             details={"fields": normalized_errors},
         ),
+        headers=_build_cors_headers(request),
     )
 
 
@@ -161,4 +178,5 @@ def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
             message="Внутренняя ошибка сервера",
             details={"exception_type": exc.__class__.__name__} if settings.app_debug else {},
         ),
+        headers=_build_cors_headers(request),
     )

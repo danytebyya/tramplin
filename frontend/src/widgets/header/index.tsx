@@ -5,9 +5,11 @@ import { CitySelection, CitySelector } from "../../features/city-selector";
 import { readAccessTokenPayload, useAuthStore } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
 import { cn } from "../../shared/lib";
-import { Container, Input } from "../../shared/ui";
+import { Container } from "../../shared/ui";
 import logoPrimary from "../../assets/icons/logo-primary.svg";
+import logoPrimarySm from "../../assets/icons/logo-primary-sm.svg";
 import logoSecondary from "../../assets/icons/logo-secondary.svg";
+import logoSecondarySm from "../../assets/icons/logo-secondary-sm.svg";
 import { HeaderProfileMenu, HeaderProfileMenuItem } from "./header-profile-menu";
 import "./header.css";
 
@@ -34,6 +36,8 @@ type HeaderProps = {
   isAuthenticated?: boolean;
   guestActions?: ReactNode;
   showSearch?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
   notificationOnRealtimeMessage?: () => void;
 };
 
@@ -65,6 +69,8 @@ export function Header({
   isAuthenticated = true,
   guestActions,
   showSearch = true,
+  searchValue = "",
+  onSearchChange,
   notificationOnRealtimeMessage,
 }: HeaderProps) {
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -91,10 +97,16 @@ export function Header({
       <a href="/" className="header__nav-link">Главная</a>
     </nav>
   ) : topNavigation;
-  const logoSource =
+  const defaultLogoSource =
     !isAuthenticated || resolvedTheme === "employer" || resolvedTheme === "curator"
       ? logoPrimary
       : logoSecondary;
+  const landingLogoSource = isAuthenticated
+    ? defaultLogoSource
+    : resolvedTheme === "employer" || resolvedTheme === "curator"
+      ? logoPrimarySm
+      : logoSecondarySm;
+  const logoSource = variant === "landing" ? landingLogoSource : defaultLogoSource;
   const brandSubtitle = resolveHeaderBrandSubtitle(resolvedTheme, isAuthenticated);
 
   return (
@@ -114,11 +126,13 @@ export function Header({
             <div className="header__controls">
               {showSearch ? (
                 <label className="header__search" aria-label="Поиск">
-                  <Input
+                  <input
                     type="search"
                     placeholder="Поиск"
                     aria-label="Поиск по платформе"
-                    className="input--sm header__search-input"
+                    className="input input--sm header__search-input"
+                    value={searchValue}
+                    onChange={(event) => onSearchChange?.(event.target.value)}
                   />
                 </label>
               ) : null}

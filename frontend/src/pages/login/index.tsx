@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
-import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
+import logoPrimaryBlack from "../../assets/icons/logo-primary-black-sm.svg";
 import { WaveAuraBackground } from "../../components/WaveAuraBackground/WaveAuraBackground";
 import {
   applyAuthSession,

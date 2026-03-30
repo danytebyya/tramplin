@@ -7,6 +7,8 @@ import "./filters.css";
 type OpportunityFiltersProps = {
   viewMode: "map" | "list";
   isMapExpanded: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
   onViewModeChange: (viewMode: "map" | "list") => void;
 };
 
@@ -64,7 +66,13 @@ const mentorshipDirectionOptions = ["Карьерный рост", "Технич
 const mentorAvailabilityOptions = ["Сейчас свободен", "В течение недели"];
 const mentorExperienceOptions = ["Junior+", "Middle+", "Senior"];
 
-export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }: OpportunityFiltersProps) {
+export function OpportunityFilters({
+  viewMode,
+  isMapExpanded,
+  searchValue = "",
+  onSearchChange,
+  onViewModeChange,
+}: OpportunityFiltersProps) {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [cityQuery, setCityQuery] = useState("");
@@ -220,7 +228,9 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
             <Input
               placeholder="Поиск"
               className="input--secondary input--sm opportunity-filters__search-input"
+              value={searchValue}
               clearable
+              onChange={(event) => onSearchChange?.(event.target.value)}
             />
           </label>
         </div>
