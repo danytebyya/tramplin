@@ -89,6 +89,15 @@ class ModerationService:
                 EmployerVerificationRequestStatus.UNDER_REVIEW,
             }
         ]
+        verification_pending = [
+            request
+            for request in verification_requests
+            if request.status
+            in {
+                EmployerVerificationRequestStatus.PENDING,
+                EmployerVerificationRequestStatus.UNDER_REVIEW,
+            }
+        ]
         opportunity_in_moderation = [
             opportunity
             for opportunity in opportunities
@@ -119,6 +128,8 @@ class ModerationService:
                 ),
                 "reviewed_today": reviewed_today,
                 "curators_online": self.repo.count_online_curators(now),
+                "pending_employer_verifications": len(verification_pending),
+                "pending_content_items": len(opportunity_in_moderation),
             },
             "weekly_activity": weekly_activity,
             "latest_activity": self._build_latest_activity(

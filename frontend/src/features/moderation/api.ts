@@ -5,6 +5,8 @@ export type ModerationDashboardMetricSet = {
   in_queue: number;
   reviewed_today: number;
   curators_online: number;
+  pending_employer_verifications: number;
+  pending_content_items: number;
 };
 
 export type ModerationDashboardDay = {

@@ -46,6 +46,7 @@ export function ModerationDashboardContent({
   footerTheme = "curator",
   showFooter = false,
 }: ModerationDashboardContentProps) {
+  const navigate = useNavigate();
   const dashboardQuery = useQuery({
     queryKey: ["moderation", "dashboard"],
     queryFn: getModerationDashboardRequest,
@@ -83,6 +84,22 @@ export function ModerationDashboardContent({
   const maxDayCount = Math.max(...chartDays.map((item) => item.count), 1);
   const maxCategoryCount = Math.max(...chartCategories.map((item) => item.count), 1);
   const isLoading = dashboardQuery.isPending;
+  const pendingEmployerVerifications = metrics?.pending_employer_verifications ?? 0;
+  const pendingContentItems = metrics?.pending_content_items ?? 0;
+
+  const handleNavigateToReview = () => {
+    if (pendingEmployerVerifications > 0) {
+      navigate("/moderation/employers");
+      return;
+    }
+
+    if (pendingContentItems > 0) {
+      navigate("/moderation/content");
+      return;
+    }
+
+    navigate("/moderation/employers");
+  };
 
   return (
     <section className="curator-dashboard" id="dashboard">
@@ -275,7 +292,7 @@ export function ModerationDashboardContent({
                 )}
               </div>
               <div className="curator-dashboard__urgent-actions">
-                <Button type="button" variant="accent" size="md">
+                <Button type="button" variant="accent" size="md" onClick={handleNavigateToReview}>
                   Перейти к проверке
                 </Button>
               </div>
