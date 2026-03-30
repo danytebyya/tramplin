@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
+import type { BackendApplicationStatus } from "../../features/applications";
 import { Badge, Button } from "../../shared/ui";
 import "./opportunity-list.css";
 
@@ -10,6 +11,7 @@ type OpportunityListProps = {
   opportunities: Opportunity[];
   favoriteOpportunityIds: string[];
   appliedOpportunityIds?: string[];
+  applicationStatusByOpportunityId?: Record<string, BackendApplicationStatus>;
   roleName?: string;
   isLoading?: boolean;
   skeletonCount?: number;
@@ -38,6 +40,7 @@ export function OpportunityList({
   opportunities,
   favoriteOpportunityIds,
   appliedOpportunityIds = [],
+  applicationStatusByOpportunityId = {},
   roleName,
   isLoading = false,
   skeletonCount = 3,
@@ -47,6 +50,22 @@ export function OpportunityList({
 }: OpportunityListProps) {
   const navigate = useNavigate();
   const actionLabel = roleName === "employer" ? "Подробнее" : "Откликнуться";
+
+  const resolveStatusButtonMeta = (status: BackendApplicationStatus | undefined) => {
+    if (status === "withdrawn") {
+      return { label: "Отклик отозван", variant: "secondary-outline" as const };
+    }
+
+    if (status === "rejected") {
+      return { label: "Работодатель отклонил отклик", variant: "danger-outline" as const };
+    }
+
+    if (status === "interview" || status === "offer" || status === "accepted") {
+      return { label: "Работодатель принял отклик", variant: "secondary-outline" as const };
+    }
+
+    return null;
+  };
 
   if (isLoading) {
     return (
@@ -142,6 +161,8 @@ export function OpportunityList({
       {opportunities.map((opportunity) => {
         const isFavorite = favoriteOpportunityIds.includes(opportunity.id);
         const isApplied = appliedOpportunityIds.includes(opportunity.id);
+        const statusButtonMeta = resolveStatusButtonMeta(applicationStatusByOpportunityId[opportunity.id]);
+        const shouldDisableAction = roleName !== "employer" && !isApplied && statusButtonMeta !== null;
 
         return (
           <article
@@ -213,14 +234,28 @@ export function OpportunityList({
                 <div className="opportunity-list__content-actions">
                   <Button
                     type="button"
-                    variant={roleName !== "employer" && isApplied ? "danger-outline" : "secondary"}
+                    variant={
+                      shouldDisableAction
+                        ? statusButtonMeta.variant
+                        : roleName !== "employer" && isApplied
+                          ? "danger-outline"
+                          : "secondary"
+                    }
                     size="sm"
+                    disabled={shouldDisableAction}
                     onClick={(event) => {
                       event.stopPropagation();
+                      if (shouldDisableAction) {
+                        return;
+                      }
                       onApply?.(opportunity.id);
                     }}
                   >
-                    {roleName !== "employer" && isApplied ? "Отозвать отклик" : actionLabel}
+                    {shouldDisableAction
+                      ? statusButtonMeta.label
+                      : roleName !== "employer" && isApplied
+                        ? "Отозвать отклик"
+                        : actionLabel}
                   </Button>
                 </div>
               </div>

@@ -8,6 +8,7 @@ import type { Map as DGisMap } from "@2gis/mapgl/types";
 import { useNavigate } from "react-router-dom";
 import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
+import type { BackendApplicationStatus } from "../../features/applications";
 import {
   AddressSuggestion,
   CitySuggestion,
@@ -36,6 +37,7 @@ type MapViewProps = {
   opportunities: Opportunity[];
   favoriteOpportunityIds: string[];
   appliedOpportunityIds?: string[];
+  applicationStatusByOpportunityId?: Record<string, BackendApplicationStatus>;
   selectedOpportunityId: string | null;
   selectedCity: string;
   searchQuery?: string;
@@ -557,6 +559,7 @@ export function MapView({
   opportunities,
   favoriteOpportunityIds,
   appliedOpportunityIds = [],
+  applicationStatusByOpportunityId = {},
   selectedOpportunityId,
   selectedCity,
   searchQuery = "",
@@ -985,6 +988,19 @@ export function MapView({
   const isSelectedOpportunityApplied = selectedOpportunity
     ? appliedOpportunityIds.includes(selectedOpportunity.id)
     : false;
+  const selectedOpportunityStatus = selectedOpportunity
+    ? applicationStatusByOpportunityId[selectedOpportunity.id]
+    : undefined;
+  const selectedOpportunityStatusMeta =
+    selectedOpportunityStatus === "withdrawn"
+      ? { label: "Отозвано", variant: "secondary-outline" as const }
+      : selectedOpportunityStatus === "rejected"
+      ? { label: "Отклонено", variant: "danger-outline" as const }
+      : selectedOpportunityStatus === "interview" || selectedOpportunityStatus === "offer" || selectedOpportunityStatus === "accepted"
+        ? { label: "Одобрено", variant: "secondary-outline" as const }
+        : null;
+  const shouldDisableSelectedOpportunityApply =
+    roleName !== "employer" && !isSelectedOpportunityApplied && selectedOpportunityStatusMeta !== null;
   const themeVariant = roleName === "applicant" ? "secondary" : roleName === "curator" ? "accent" : "primary";
   const badgeThemeVariant = roleName === "applicant" ? "secondary" : roleName === "curator" ? "info" : "primary";
   const outlineThemeVariant = themeVariant === "secondary" ? "secondary-outline" : themeVariant === "accent" ? "accent-outline" : "primary-outline";
@@ -2494,15 +2510,29 @@ export function MapView({
             <div className="map-view__details-actions">
               <Button
                 type="button"
-                variant={roleName !== "employer" && isSelectedOpportunityApplied ? "danger-outline" : "secondary"}
+                variant={
+                  shouldDisableSelectedOpportunityApply
+                    ? selectedOpportunityStatusMeta.variant
+                    : roleName !== "employer" && isSelectedOpportunityApplied
+                      ? "danger-outline"
+                      : "secondary"
+                }
                 size="sm"
                 className="map-view__details-apply"
+                disabled={shouldDisableSelectedOpportunityApply}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (shouldDisableSelectedOpportunityApply) {
+                    return;
+                  }
                   onApply?.(selectedOpportunity.id);
                 }}
               >
-                {roleName !== "employer" && isSelectedOpportunityApplied ? "Отозвать отклик" : "Откликнуться"}
+                {shouldDisableSelectedOpportunityApply
+                  ? selectedOpportunityStatusMeta.label
+                  : roleName !== "employer" && isSelectedOpportunityApplied
+                    ? "Отозвать отклик"
+                    : "Откликнуться"}
               </Button>
               <button
                 type="button"

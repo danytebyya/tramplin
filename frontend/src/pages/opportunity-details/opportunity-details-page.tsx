@@ -25,7 +25,8 @@ import {
   removeFavoriteOpportunityRequest,
 } from "../../features/favorites";
 import {
-  listMyAppliedOpportunityIdsRequest,
+  BackendApplicationStatus,
+  listMyApplicationsRequest,
   submitOpportunityApplicationRequest,
   withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
@@ -271,8 +272,8 @@ export function OpportunityDetailsPage() {
     staleTime: 60 * 1000,
   });
   const myApplicationsQuery = useQuery({
-    queryKey: ["applications", "mine", "opportunity-ids"],
-    queryFn: listMyAppliedOpportunityIdsRequest,
+    queryKey: ["applications", "mine"],
+    queryFn: listMyApplicationsRequest,
     enabled: isAuthenticated && role === "applicant",
     staleTime: 60 * 1000,
   });
@@ -318,7 +319,7 @@ export function OpportunityDetailsPage() {
         : submitOpportunityApplicationRequest(targetOpportunityId);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] });
+      await queryClient.invalidateQueries({ queryKey: ["applications", "mine"] });
     },
   });
   const recommendOpportunityMutation = useMutation({
@@ -341,9 +342,33 @@ export function OpportunityDetailsPage() {
     [opportunitiesQuery.data, opportunityId],
   );
   const favoriteOpportunityIds = favoritesQuery.data?.data?.items ?? [];
-  const appliedOpportunityIds = myApplicationsQuery.data?.data?.opportunity_ids ?? [];
+  const appliedOpportunityIds = useMemo(
+    () =>
+      (myApplicationsQuery.data?.data?.items ?? [])
+        .filter((item) => item.status !== "rejected" && item.status !== "withdrawn" && item.status !== "canceled")
+        .map((item) => item.opportunity_id),
+    [myApplicationsQuery.data?.data?.items],
+  );
+  const applicationStatusByOpportunityId = useMemo(
+    () =>
+      (myApplicationsQuery.data?.data?.items ?? []).reduce<Record<string, BackendApplicationStatus>>((result, item) => {
+        result[item.opportunity_id] = item.status;
+        return result;
+      }, {}),
+    [myApplicationsQuery.data?.data?.items],
+  );
   const isFavorite = opportunity ? favoriteOpportunityIds.includes(opportunity.id) : false;
   const isApplied = opportunity ? appliedOpportunityIds.includes(opportunity.id) : false;
+  const opportunityStatus = opportunity ? applicationStatusByOpportunityId[opportunity.id] : undefined;
+  const disabledApplyMeta =
+    opportunityStatus === "withdrawn"
+      ? { label: "Отклик отозван", variant: "secondary-outline" as const }
+      : opportunityStatus === "rejected"
+      ? { label: "Работодатель отклонил отклик", variant: "danger-outline" as const }
+      : opportunityStatus === "interview" || opportunityStatus === "offer" || opportunityStatus === "accepted"
+        ? { label: "Работодатель принял отклик", variant: "secondary-outline" as const }
+        : null;
+  const shouldDisableApply = !isApplied && disabledApplyMeta !== null;
   const canApply = role !== "employer" && role !== "curator" && role !== "admin";
   const descriptionSections = useMemo(
     () => (opportunity ? buildDescriptionSections(opportunity.description) : []),
@@ -578,33 +603,47 @@ export function OpportunityDetailsPage() {
                         <div className="opportunity-details-page__apply-section">
                           <Button
                             type="button"
-                            variant={isApplied ? "danger-outline" : "secondary"}
+                            variant={shouldDisableApply ? disabledApplyMeta.variant : isApplied ? "danger-outline" : "secondary"}
                             className={isApplied
                               ? "opportunity-details-page__apply opportunity-details-page__apply-button opportunity-details-page__apply-button--applied opportunity-details-page__apply--withdraw"
                               : "opportunity-details-page__apply opportunity-details-page__apply-button"}
-                            onClick={handleApply}
+                            disabled={shouldDisableApply}
+                            onClick={() => {
+                              if (shouldDisableApply) {
+                                return;
+                              }
+                              handleApply();
+                            }}
                             loading={submitApplicationMutation.isPending}
                           >
-                            <span className="opportunity-details-page__apply-labels" aria-live="polite">
-                              <span
-                                className={
-                                  isApplied
-                                    ? "opportunity-details-page__apply-label opportunity-details-page__apply-label--inactive"
-                                    : "opportunity-details-page__apply-label opportunity-details-page__apply-label--active"
-                                }
-                              >
-                                Откликнуться
+                            {shouldDisableApply ? (
+                              <span className="opportunity-details-page__apply-labels" aria-live="polite">
+                                <span className="opportunity-details-page__apply-label opportunity-details-page__apply-label--active">
+                                  {disabledApplyMeta.label}
+                                </span>
                               </span>
-                              <span
-                                className={
-                                  isApplied
-                                    ? "opportunity-details-page__apply-label opportunity-details-page__apply-label--active"
-                                    : "opportunity-details-page__apply-label opportunity-details-page__apply-label--inactive"
-                                }
-                              >
-                                Отозвать отклик
+                            ) : (
+                              <span className="opportunity-details-page__apply-labels" aria-live="polite">
+                                <span
+                                  className={
+                                    isApplied
+                                      ? "opportunity-details-page__apply-label opportunity-details-page__apply-label--inactive"
+                                      : "opportunity-details-page__apply-label opportunity-details-page__apply-label--active"
+                                  }
+                                >
+                                  Откликнуться
+                                </span>
+                                <span
+                                  className={
+                                    isApplied
+                                      ? "opportunity-details-page__apply-label opportunity-details-page__apply-label--active"
+                                      : "opportunity-details-page__apply-label opportunity-details-page__apply-label--inactive"
+                                  }
+                                >
+                                  Отозвать отклик
+                                </span>
                               </span>
-                            </span>
+                            )}
                           </Button>
                         </div>
                       ) : null}

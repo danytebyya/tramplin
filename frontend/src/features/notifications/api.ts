@@ -1,11 +1,5 @@
 import { apiClient } from "../../shared/api/client";
 import {
-  clearEmployerResponseNotifications,
-  hideEmployerResponseNotification,
-  listEmployerResponseNotifications,
-  markEmployerResponseNotificationAsRead,
-} from "../employer-responses";
-import {
   clearWorkflowNotifications,
   hideWorkflowNotification,
   listWorkflowNotifications,
@@ -52,8 +46,7 @@ export async function listNotificationsRequest() {
   const response = await apiClient.get<NotificationsResponse>("/notifications");
   const apiItems = response.data?.data?.items ?? [];
   const workflowItems = listWorkflowNotifications();
-  const employerResponseItems = listEmployerResponseNotifications();
-  const items = [...workflowItems, ...employerResponseItems, ...apiItems].sort(
+  const items = [...workflowItems, ...apiItems].sort(
     (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
   );
 
@@ -75,10 +68,6 @@ export async function markNotificationAsReadRequest(notificationId: string) {
     return markWorkflowNotificationAsRead(notificationId);
   }
 
-  if (notificationId.startsWith("local-response-notification-")) {
-    return markEmployerResponseNotificationAsRead(notificationId);
-  }
-
   const response = await apiClient.post<NotificationsUnreadCountResponse>(
     `/notifications/${notificationId}/read`,
   );
@@ -90,10 +79,6 @@ export async function hideNotificationRequest(notificationId: string) {
     return hideWorkflowNotification(notificationId);
   }
 
-  if (notificationId.startsWith("local-response-notification-")) {
-    return hideEmployerResponseNotification(notificationId);
-  }
-
   const response = await apiClient.post<NotificationsUnreadCountResponse>(
     `/notifications/${notificationId}/hide`,
   );
@@ -102,7 +87,6 @@ export async function hideNotificationRequest(notificationId: string) {
 
 export async function clearNotificationsRequest() {
   clearWorkflowNotifications();
-  clearEmployerResponseNotifications();
   const response = await apiClient.delete<NotificationsUnreadCountResponse>("/notifications");
   return response.data;
 }

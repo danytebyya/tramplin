@@ -19,7 +19,8 @@ import {
 } from "../../features/favorites";
 import { subscribeOpportunityWorkflow } from "../../features/opportunity-workflow";
 import {
-  listMyAppliedOpportunityIdsRequest,
+  BackendApplicationStatus,
+  listMyApplicationsRequest,
   submitOpportunityApplicationRequest,
   withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
@@ -196,8 +197,8 @@ export function HomePage() {
     staleTime: 60 * 1000,
   });
   const myApplicationsQuery = useQuery({
-    queryKey: ["applications", "mine", "opportunity-ids"],
-    queryFn: listMyAppliedOpportunityIdsRequest,
+    queryKey: ["applications", "mine"],
+    queryFn: listMyApplicationsRequest,
     enabled: isAuthenticated && roleName === "applicant" && !isModerationRole,
     staleTime: 60 * 1000,
   });
@@ -238,7 +239,7 @@ export function HomePage() {
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] }),
+        queryClient.invalidateQueries({ queryKey: ["applications", "mine"] }),
         queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
         queryClient.invalidateQueries({ queryKey: ["notifications"] }),
       ]);
@@ -246,8 +247,19 @@ export function HomePage() {
   });
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
   const appliedOpportunityIds = useMemo(
-    () => myApplicationsQuery.data?.data?.opportunity_ids ?? [],
-    [myApplicationsQuery.data?.data?.opportunity_ids],
+    () =>
+      (myApplicationsQuery.data?.data?.items ?? [])
+        .filter((item) => item.status !== "rejected" && item.status !== "withdrawn" && item.status !== "canceled")
+        .map((item) => item.opportunity_id),
+    [myApplicationsQuery.data?.data?.items],
+  );
+  const applicationStatusByOpportunityId = useMemo(
+    () =>
+      (myApplicationsQuery.data?.data?.items ?? []).reduce<Record<string, BackendApplicationStatus>>((result, item) => {
+        result[item.opportunity_id] = item.status;
+        return result;
+      }, {}),
+    [myApplicationsQuery.data?.data?.items],
   );
   const opportunityStats = useMemo(() => {
     return opportunities.reduce(
@@ -1077,6 +1089,7 @@ export function HomePage() {
                               opportunities={displayedOpportunities}
                               favoriteOpportunityIds={favoriteOpportunityIds}
                               appliedOpportunityIds={appliedOpportunityIds}
+                              applicationStatusByOpportunityId={applicationStatusByOpportunityId}
                               selectedOpportunityId={selectedOpportunityId}
                               selectedCity={selectedCity}
                               searchQuery={searchQuery}
@@ -1106,6 +1119,7 @@ export function HomePage() {
                           opportunities={displayedOpportunities}
                           favoriteOpportunityIds={favoriteOpportunityIds}
                           appliedOpportunityIds={appliedOpportunityIds}
+                          applicationStatusByOpportunityId={applicationStatusByOpportunityId}
                           roleName={roleName}
                           isLoading={isOpportunityDataLoading}
                           onToggleFavorite={handleToggleFavorite}
@@ -1253,15 +1267,19 @@ export function HomePage() {
         title="Подтвердите действие"
         isOpen={pendingWithdrawOpportunityId !== null}
         onClose={() => setPendingWithdrawOpportunityId(null)}
+        panelClassName="home-page__withdraw-modal-panel"
+        titleAccentColor={roleName === "applicant" ? "var(--color-secondary)" : undefined}
       >
-        <div className="settings-page__confirm-delete">
-          <p className="settings-page__confirm-delete-text">
+        <div className="home-page__withdraw-modal">
+          <p className="home-page__withdraw-modal-text">
             Вы уверены, что хотите отозвать отклик?
           </p>
-          <div className="settings-page__confirm-delete-actions">
+          <div className="home-page__withdraw-modal-actions">
             <Button
               type="button"
               variant="secondary-outline"
+              size="md"
+              fullWidth
               onClick={() => setPendingWithdrawOpportunityId(null)}
             >
               Отмена
@@ -1269,6 +1287,8 @@ export function HomePage() {
             <Button
               type="button"
               variant="danger"
+              size="md"
+              fullWidth
               onClick={handleConfirmWithdrawOpportunity}
               loading={submitApplicationMutation.isPending}
             >

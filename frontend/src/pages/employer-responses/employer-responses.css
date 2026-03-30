@@ -216,9 +216,6 @@
   padding: 24px;
 }
 
-.employer-responses-page__response-card .opportunity-details-page__contact-name {
-  font-size: clamp(22px, 1.75vw, 28px);
-}
 
 .employer-responses-page__contact-meta.opportunity-details-page__contact-meta {
   gap: 14px 16px;
@@ -253,6 +250,19 @@
   line-height: var(--type-body-large-line);
 }
 
+.employer-responses-page__status-badge.status {
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
+.employer-responses-page__status-badge--new.status {
+  background: var(--opportunity-details-accent-soft);
+  color: var(--opportunity-details-accent);
+}
+
 .employer-responses-page__status-edit {
   --employer-responses-edit-icon-color: var(--color-text-secondary);
   display: inline-flex;
@@ -280,9 +290,7 @@
 }
 
 .employer-responses-page__status-modal.modal__panel {
-  width: min(100%, 760px);
-  border-radius: 20px;
-  padding: 40px;
+  width: min(500px, calc(100vw - 32px));
 }
 
 .employer-responses-page__status-modal-body {
@@ -296,14 +304,54 @@
   flex-direction: column;
   gap: 4px;
   color: var(--color-text-primary);
-  font-size: var(--type-h3-size);
-  line-height: var(--type-h3-line);
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
 }
 
 .employer-responses-page__status-field {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.employer-responses-page__status-field .date-input {
+  position: relative;
+  z-index: 0;
+}
+
+.employer-responses-page__status-field .date-input--open {
+  z-index: 20;
+}
+
+.employer-responses-page__status-field .date-input__field:not(:placeholder-shown) {
+  color: var(--color-text-primary);
+}
+
+.employer-responses-page__status-field .date-input__popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: auto;
+  z-index: 20;
+  width: max-content;
+  margin-top: 0;
+  justify-content: flex-end;
+}
+
+.employer-responses-page__status-field .date-input__calendar {
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.employer-responses-page__status-field .date-input__calendar-weekday--weekend,
+.employer-responses-page__status-field .date-input__calendar-day--weekend {
+  color: var(--color-text-secondary);
+}
+
+.employer-responses-page__status-field .date-input__calendar-day--today {
+  color: var(--color-primary);
 }
 
 .employer-responses-page__status-field-label {
@@ -315,19 +363,41 @@
 .employer-responses-page__status-radio-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px 28px;
+  gap: 0px 16px;
 }
 
 .employer-responses-page__status-radio {
   display: inline-flex;
   align-items: center;
   gap: 12px;
+  padding: 10px 10px 10px 0;
 }
 
 .employer-responses-page__status-time-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.employer-responses-page__time-input.input {
+  padding-right: 12px;
+}
+
+.employer-responses-page__time-input.input::-webkit-calendar-picker-indicator {
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  margin-right: 2px;
+  opacity: 1;
+  cursor: pointer;
+  filter: invert(49%) sepia(12%) saturate(559%) hue-rotate(176deg) brightness(91%) contrast(89%);
+}
+
+.employer-responses-page__time-input.input:hover::-webkit-calendar-picker-indicator,
+.employer-responses-page__time-input.input:focus::-webkit-calendar-picker-indicator,
+.employer-responses-page__time-input.input:focus-visible::-webkit-calendar-picker-indicator {
+  filter: invert(14%) sepia(15%) saturate(692%) hue-rotate(176deg) brightness(94%) contrast(90%);
 }
 
 .employer-responses-page__status-textarea {
@@ -340,6 +410,13 @@
   color: var(--color-text-primary);
   resize: vertical;
   transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.employer-responses-page__status-textarea--sm {
+  min-height: 80px;
+  padding: 8px 16px;
+  font-size: 16px;
+  line-height: 24px;
 }
 
 .employer-responses-page__status-textarea::placeholder {

@@ -1,8 +1,11 @@
 from datetime import UTC, datetime
+from uuid import UUID
+
+from sqlalchemy import select
 
 from src.core.security import hash_password
 from src.enums import EmployerType, EmployerVerificationRequestStatus, MembershipRole, UserRole, UserStatus
-from src.models import Application, Employer, EmployerMembership, EmployerProfile, Opportunity, User
+from src.models import Application, Employer, EmployerMembership, EmployerProfile, Notification, Opportunity, User
 from src.models.opportunity import ModerationStatus, OpportunityStatus, OpportunityType, WorkFormat
 from src.tests.test_moderation_dashboard import _login
 
@@ -161,6 +164,21 @@ def test_applicant_can_withdraw_application(client, db_session):
     assert list_response.status_code == 200
     assert list_response.json()["data"]["opportunity_ids"] == []
 
+    history_response = client.get(
+        "/api/v1/applications/mine",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+    )
+    assert history_response.status_code == 200
+    assert history_response.json()["data"]["items"][0]["status"] == "withdrawn"
+
+    resubmit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
+    assert resubmit_response.status_code == 409
+    assert resubmit_response.json()["error"]["code"] == "APPLICATION_ALREADY_EXISTS"
+
 
 def test_employer_opportunity_stats_show_real_application_count(client, db_session):
     employer = _create_employer_user(db_session, email="stats-employer@example.com", inn="7707083912")
@@ -184,3 +202,133 @@ def test_employer_opportunity_stats_show_real_application_count(client, db_sessi
     items = list_response.json()["data"]["items"]
     target = next(item for item in items if item["id"] == employer._test_opportunity_id)  # type: ignore[attr-defined]
     assert target["responses_count"] == 1
+
+
+def test_applicant_can_list_real_application_details(client, db_session):
+    employer = _create_employer_user(db_session, email="details-employer@example.com", inn="7707083914")
+    applicant = _create_applicant_user(db_session, email="details-applicant@example.com")
+    applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
+
+    submit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
+    assert submit_response.status_code == 201
+
+    list_response = client.get(
+        "/api/v1/applications/mine",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+    )
+    assert list_response.status_code == 200
+
+    items = list_response.json()["data"]["items"]
+    assert len(items) == 1
+    assert items[0]["opportunity_id"] == employer._test_opportunity_id  # type: ignore[attr-defined]
+    assert items[0]["status"] == "submitted"
+    assert items[0]["employer_comment"] is None
+
+
+def test_employer_can_list_and_update_application_status(client, db_session, monkeypatch):
+    employer = _create_employer_user(db_session, email="review-employer@example.com", inn="7707083915")
+    applicant = _create_applicant_user(db_session, email="review-applicant@example.com")
+    employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
+    applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
+
+    submit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
+    assert submit_response.status_code == 201
+
+    published_events: list[tuple[list[str], dict]] = []
+
+    def fake_publish(user_ids, payload):
+        published_events.append((list(user_ids), payload))
+
+    monkeypatch.setattr("src.realtime.notification_hub.publish_to_users_sync", fake_publish)
+
+    employer_list_response = client.get(
+        "/api/v1/applications/employer",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+    )
+    assert employer_list_response.status_code == 200
+
+    items = employer_list_response.json()["data"]["items"]
+    assert len(items) == 1
+    application_id = items[0]["id"]
+    assert items[0]["status"] == "submitted"
+    assert items[0]["applicant"]["user_id"] is not None
+
+    update_response = client.patch(
+        f"/api/v1/applications/{application_id}/status",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+        json={
+            "status": "accepted",
+            "employer_comment": "Приглашаем на интервью",
+            "interview_date": "2026-04-02T09:00:00+03:00",
+            "interview_start_time": "09:00",
+            "interview_end_time": "10:00",
+            "interview_format": "Онлайн",
+            "meeting_link": "https://example.com/meet",
+            "contact_email": "hr@example.com",
+            "checklist": "Паспорт\nРезюме",
+        },
+    )
+    assert update_response.status_code == 200
+    body = update_response.json()["data"]
+    assert body["status"] == "interview"
+    assert body["employer_comment"] == "Приглашаем на интервью"
+    assert body["interview_start_time"] == "09:00"
+    assert body["applicant"]["display_name"] == "Applicant"
+
+    applicant_list_response = client.get(
+        "/api/v1/applications/mine",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+    )
+    assert applicant_list_response.status_code == 200
+    applicant_items = applicant_list_response.json()["data"]["items"]
+    assert applicant_items[0]["status"] == "interview"
+    assert applicant_items[0]["employer_comment"] == "Приглашаем на интервью"
+    assert applicant_items[0]["meeting_link"] == "https://example.com/meet"
+
+    persisted_notification = db_session.execute(
+        select(Notification).where(Notification.user_id == UUID(str(applicant.id)))
+    ).scalars().all()
+    assert any(item.kind.value == "application" for item in persisted_notification)
+    assert any(str(applicant.id) in user_ids and payload["type"] == "notification_created" for user_ids, payload in published_events)
+
+
+def test_applicant_cannot_withdraw_after_employer_decision_that_locks_flow(client, db_session):
+    employer = _create_employer_user(db_session, email="locked-employer@example.com", inn="7707083916")
+    applicant = _create_applicant_user(db_session, email="locked-applicant@example.com")
+    employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
+    applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
+
+    submit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
+    assert submit_response.status_code == 201
+
+    employer_list_response = client.get(
+        "/api/v1/applications/employer",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+    )
+    application_id = employer_list_response.json()["data"]["items"][0]["id"]
+
+    update_response = client.patch(
+        f"/api/v1/applications/{application_id}/status",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+        json={"status": "accepted"},
+    )
+    assert update_response.status_code == 200
+
+    withdraw_response = client.delete(
+        f"/api/v1/applications/{employer._test_opportunity_id}",  # type: ignore[attr-defined]
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+    )
+    assert withdraw_response.status_code == 409
+    assert withdraw_response.json()["error"]["code"] == "APPLICATION_WITHDRAW_FORBIDDEN"

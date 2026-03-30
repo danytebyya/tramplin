@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate, useNavigationType } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
@@ -15,26 +15,23 @@ import {
 } from "../../features/city-selector";
 import {
   formatEmployerResponseAppliedAt,
-  getEmployerResponseRecord,
-  listEmployerResponseRecords,
-  saveEmployerResponse,
-  subscribeEmployerResponses,
-  type EmployerResponseRecord,
 } from "../../features/employer-responses";
 import {
   getEmployerAccessState,
   resolveEmployerFallbackRoute,
   useAuthStore,
 } from "../../features/auth";
+import {
+  listEmployerApplicationsRequest,
+  updateEmployerApplicationStatusRequest,
+  type ApplicationDetails,
+  type EmployerApplicationUiStatus,
+} from "../../features/applications";
+import { useNotificationsRealtime } from "../../features/notifications";
 import { createApplicantChatRequest, resolveAvatarIcon, updateApplicantChatRequestStatus } from "../../shared/lib";
 import { Button, Checkbox, Container, DateInput, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
-import {
-  EmployerOpportunityItem,
-  listEmployerOpportunitiesRequest,
-} from "../../features/opportunity";
-import { listOpportunityRecommendationCandidatesRequest, type OpportunityRecommendationCandidate } from "../../entities/opportunity/api";
 import "../favorites/favorites.css";
 import "../opportunity-details/opportunity-details.css";
 import "./employer-responses.css";
@@ -43,9 +40,10 @@ type EmployerResponseStatus = "new" | "accepted" | "reserve" | "rejected";
 type EmployerResponseMetricKey = "total" | "new" | "accepted" | "reserve";
 type ResponseSortField = "date" | "name" | "status";
 type ResponseSortDirection = "asc" | "desc";
-type OpportunityKindFilter = "all" | EmployerOpportunityItem["kind"];
+type OpportunityKindFilter = "all" | "vacancy" | "internship" | "event" | "mentorship";
 type GroupSortField = "date" | "title" | "count";
 type ResponseCard = {
+  applicationId: string;
   id: string;
   userId: string;
   publicId: string | null;
@@ -75,7 +73,7 @@ type ResponseGroup = {
   opportunityId: string;
   title: string;
   publishedAt: string | null;
-  kind: EmployerOpportunityItem["kind"];
+  kind: "vacancy" | "internship" | "event" | "mentorship";
   responses: ResponseCard[];
 };
 
@@ -164,17 +162,6 @@ function normalizeText(value: string) {
   return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
 }
 
-function addDays(value: string | null | undefined, days: number) {
-  const baseDate = value ? new Date(value) : new Date();
-  if (Number.isNaN(baseDate.getTime())) {
-    return new Date().toISOString();
-  }
-
-  const nextDate = new Date(baseDate);
-  nextDate.setDate(nextDate.getDate() + days);
-  return nextDate.toISOString();
-}
-
 function buildPaginationItems(currentPage: number, totalPages: number) {
   if (totalPages <= 5) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -189,11 +176,6 @@ function buildPaginationItems(currentPage: number, totalPages: number) {
   }
 
   return [1, "ellipsis", currentPage, "ellipsis-right", totalPages] as const;
-}
-
-function resolveResponseStatus(index: number): EmployerResponseStatus {
-  const sequence: EmployerResponseStatus[] = ["new", "accepted", "reserve", "rejected"];
-  return sequence[index % sequence.length] ?? "new";
 }
 
 function resolveStatusVariant(status: EmployerResponseStatus) {
@@ -228,6 +210,14 @@ function resolveStatusLabel(status: EmployerResponseStatus) {
   return "Новый";
 }
 
+function resolveStatusClassName(status: EmployerResponseStatus) {
+  if (status === "new") {
+    return "employer-responses-page__status-badge employer-responses-page__status-badge--new";
+  }
+
+  return "employer-responses-page__status-badge";
+}
+
 function resolveLevelClassName(levelLabel: string | null) {
   const normalized = levelLabel?.trim().toLowerCase();
 
@@ -242,40 +232,56 @@ function resolveLevelClassName(levelLabel: string | null) {
   return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--success";
 }
 
-function mapCandidateToResponseCard(
-  candidate: OpportunityRecommendationCandidate,
-  opportunity: EmployerOpportunityItem,
-  index: number,
-  savedRecord: EmployerResponseRecord | null,
-): ResponseCard {
-  const [firstTag, ...remainingTags] = candidate.tags;
+function mapBackendStatusToUiStatus(status: ApplicationDetails["status"]): EmployerResponseStatus {
+  if (status === "rejected" || status === "canceled") {
+    return "rejected";
+  }
+
+  if (status === "reserved") {
+    return "reserve";
+  }
+
+  if (status === "interview" || status === "offer" || status === "accepted") {
+    return "accepted";
+  }
+
+  return "new";
+}
+
+function mapApplicationToResponseCard(item: ApplicationDetails): ResponseCard | null {
+  if (!item.applicant) {
+    return null;
+  }
+
+  const [firstTag, ...remainingTags] = item.applicant.tags;
   const normalizedLevel = firstTag?.trim().toLowerCase();
   const isLevelTag = normalizedLevel === "junior" || normalizedLevel === "middle" || normalizedLevel === "senior";
 
   return {
-    id: candidate.publicId || candidate.userId,
-    userId: candidate.userId,
-    publicId: candidate.publicId,
-    name: candidate.displayName,
-    subtitle: candidate.subtitle,
-    isOnline: candidate.isOnline,
+    applicationId: item.id,
+    id: item.applicant.public_id || item.applicant.user_id,
+    userId: item.applicant.user_id,
+    publicId: item.applicant.public_id ?? null,
+    name: item.applicant.display_name,
+    subtitle: item.applicant.subtitle,
+    isOnline: item.applicant.is_online,
     levelLabel: isLevelTag ? firstTag : null,
-    tags: isLevelTag ? remainingTags : candidate.tags,
-    city: candidate.city,
-    salaryLabel: candidate.salaryLabel,
-    formatLabel: candidate.formatLabel,
-    employmentLabel: candidate.employmentLabel,
+    tags: isLevelTag ? remainingTags : item.applicant.tags,
+    city: item.applicant.city,
+    salaryLabel: item.applicant.salary_label,
+    formatLabel: item.applicant.format_label,
+    employmentLabel: item.applicant.employment_label,
     avatarSrc: resolveAvatarIcon("applicant"),
-    status: savedRecord?.status ?? resolveResponseStatus(index),
-    appliedAt: savedRecord?.appliedAt ?? addDays(opportunity.publishedAt, index + 1),
-    interviewDate: savedRecord?.interviewDate ?? null,
-    interviewStartTime: savedRecord?.interviewStartTime ?? null,
-    interviewEndTime: savedRecord?.interviewEndTime ?? null,
-    interviewFormat: savedRecord?.interviewFormat ?? "Онлайн (Яндекс Телемост)",
-    meetingLink: savedRecord?.meetingLink ?? null,
-    contactEmail: savedRecord?.contactEmail ?? null,
-    checklist: savedRecord?.checklist ?? null,
-    employerComment: savedRecord?.employerComment ?? null,
+    status: mapBackendStatusToUiStatus(item.status),
+    appliedAt: item.submitted_at,
+    interviewDate: item.interview_date ?? null,
+    interviewStartTime: item.interview_start_time ?? null,
+    interviewEndTime: item.interview_end_time ?? null,
+    interviewFormat: item.interview_format ?? "Онлайн (Яндекс Телемост)",
+    meetingLink: item.meeting_link ?? null,
+    contactEmail: item.contact_email ?? null,
+    checklist: item.checklist ?? null,
+    employerComment: item.employer_comment ?? null,
   };
 }
 
@@ -313,7 +319,6 @@ export function EmployerResponsesPage() {
   const [isMainSortOpen, setIsMainSortOpen] = useState(false);
   const [mainSortField, setMainSortField] = useState<GroupSortField>("date");
   const [mainSortDirection, setMainSortDirection] = useState<ResponseSortDirection>("desc");
-  const [responseWorkflowVersion, setResponseWorkflowVersion] = useState(0);
   const [editingResponseContext, setEditingResponseContext] = useState<{
     opportunityId: string;
     opportunityTitle: string;
@@ -336,25 +341,41 @@ export function EmployerResponsesPage() {
   const sortRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const employerAccess = getEmployerAccessState(role, accessToken);
 
-  const opportunitiesQuery = useQuery({
-    queryKey: ["employer", "opportunities"],
-    queryFn: listEmployerOpportunitiesRequest,
+  const applicationsQuery = useQuery({
+    queryKey: ["applications", "employer"],
+    queryFn: listEmployerApplicationsRequest,
     enabled: role === "employer",
     staleTime: 30_000,
   });
-
-  const employerOpportunities = opportunitiesQuery.data ?? [];
-  const responseQueries = useQueries({
-    queries: employerOpportunities.map((opportunity) => ({
-      queryKey: ["opportunities", opportunity.id, "recommendation-candidates"],
-      queryFn: () => listOpportunityRecommendationCandidatesRequest(opportunity.id),
-      enabled: role === "employer",
-      staleTime: 30_000,
-    })),
+  const updateStatusMutation = useMutation({
+    mutationFn: ({
+      applicationId,
+      payload,
+    }: {
+      applicationId: string;
+      payload: {
+        status: EmployerApplicationUiStatus;
+        employer_comment?: string | null;
+        interview_date?: string | null;
+        interview_start_time?: string | null;
+        interview_end_time?: string | null;
+        interview_format?: string | null;
+        meeting_link?: string | null;
+        contact_email?: string | null;
+        checklist?: string | null;
+      };
+    }) => updateEmployerApplicationStatusRequest(applicationId, payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["applications", "employer"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+        queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+      ]);
+    },
   });
 
-  const isLoading = opportunitiesQuery.isPending || responseQueries.some((query) => query.isPending);
-  const savedResponseRecords = useMemo(() => listEmployerResponseRecords(), [responseWorkflowVersion]);
+  const employerApplications = applicationsQuery.data?.data?.items ?? [];
+  const isLoading = applicationsQuery.isPending;
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -467,7 +488,18 @@ export function EmployerResponsesPage() {
     };
   }, []);
 
-  useEffect(() => subscribeEmployerResponses(() => setResponseWorkflowVersion((current) => current + 1)), []);
+  useNotificationsRealtime({
+    enabled: role === "employer",
+    onMessage: (payload) => {
+      if (payload?.type !== "notification_created") {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["applications", "employer"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
 
   useEffect(() => {
     if (!openedFilterGroupId && !openedSortGroupId && !isMainFilterOpen && !isMainSortOpen) {
@@ -516,26 +548,40 @@ export function EmployerResponsesPage() {
     setGroupPage(1);
   }, [mainSortDirection, mainSortField, opportunitySearch, selectedKinds]);
 
-  const responseGroups = useMemo<ResponseGroup[]>(() => employerOpportunities.map((opportunity, index) => ({
-    opportunityId: opportunity.id,
-    title: opportunity.title,
-    publishedAt: opportunity.publishedAt,
-    kind: opportunity.kind,
-    responses: (responseQueries[index]?.data ?? []).map((candidate, candidateIndex) =>
-      mapCandidateToResponseCard(
-        candidate,
-        opportunity,
-        candidateIndex,
-        savedResponseRecords.find(
-          (record) => record.opportunityId === opportunity.id && record.applicantUserId === candidate.userId,
-        ) ?? null,
-      ),
-    ),
-  })), [employerOpportunities, responseQueries, savedResponseRecords]);
+  const responseGroups = useMemo<ResponseGroup[]>(() => {
+    const groups = new Map<string, ResponseGroup>();
+
+    employerApplications.forEach((item) => {
+      if (!item.opportunity) {
+        return;
+      }
+
+      const response = mapApplicationToResponseCard(item);
+      if (!response) {
+        return;
+      }
+
+      const existingGroup = groups.get(item.opportunity.id);
+      if (existingGroup) {
+        existingGroup.responses.push(response);
+        return;
+      }
+
+      groups.set(item.opportunity.id, {
+        opportunityId: item.opportunity.id,
+        title: item.opportunity.title,
+        publishedAt: item.opportunity.published_at ?? null,
+        kind: item.opportunity.kind,
+        responses: [response],
+      });
+    });
+
+    return Array.from(groups.values());
+  }, [employerApplications]);
 
   const availableGroups = useMemo(
-    () => responseGroups.filter((group, index) => group.responses.length > 0 || (employerOpportunities[index]?.responsesCount ?? 0) > 0),
-    [employerOpportunities, responseGroups],
+    () => responseGroups.filter((group) => group.responses.length > 0),
+    [responseGroups],
   );
 
   useEffect(() => {
@@ -695,48 +741,45 @@ export function EmployerResponsesPage() {
   };
 
   const openStatusModal = (opportunityId: string, opportunityTitle: string, response: ResponseCard) => {
-    const savedRecord = getEmployerResponseRecord(opportunityId, response.userId);
-
     setEditingResponseContext({
       opportunityId,
       opportunityTitle,
       response,
     });
-    setDraftStatus(savedRecord?.status ?? response.status);
-    setDraftInterviewDate(savedRecord?.interviewDate ?? response.interviewDate ?? "");
-    setDraftInterviewStartTime(savedRecord?.interviewStartTime ?? response.interviewStartTime ?? "");
-    setDraftInterviewEndTime(savedRecord?.interviewEndTime ?? response.interviewEndTime ?? "");
-    setDraftInterviewFormat(savedRecord?.interviewFormat ?? response.interviewFormat ?? "Онлайн (Яндекс Телемост)");
-    setDraftMeetingLink(savedRecord?.meetingLink ?? response.meetingLink ?? "");
-    setDraftContactEmail(savedRecord?.contactEmail ?? response.contactEmail ?? "");
-    setDraftChecklist(savedRecord?.checklist ?? response.checklist ?? "");
-    setDraftComment(savedRecord?.employerComment ?? response.employerComment ?? "");
+    setDraftStatus(response.status);
+    setDraftInterviewDate(response.interviewDate ?? "");
+    setDraftInterviewStartTime(response.interviewStartTime ?? "");
+    setDraftInterviewEndTime(response.interviewEndTime ?? "");
+    setDraftInterviewFormat(response.interviewFormat ?? "Онлайн (Яндекс Телемост)");
+    setDraftMeetingLink(response.meetingLink ?? "");
+    setDraftContactEmail(response.contactEmail ?? "");
+    setDraftChecklist(response.checklist ?? "");
+    setDraftComment(response.employerComment ?? "");
   };
 
   const handleSaveStatus = () => {
-    if (!editingResponseContext) {
+    if (!editingResponseContext || updateStatusMutation.isPending) {
       return;
     }
 
-    saveEmployerResponse({
-      opportunityId: editingResponseContext.opportunityId,
-      opportunityTitle: editingResponseContext.opportunityTitle,
-      applicantUserId: editingResponseContext.response.userId,
-      applicantName: editingResponseContext.response.name,
-      appliedAt: editingResponseContext.response.appliedAt,
-      status: draftStatus,
-      interviewDate: draftStatus === "accepted" ? (draftInterviewDate || null) : null,
-      interviewStartTime: draftStatus === "accepted" ? (draftInterviewStartTime || null) : null,
-      interviewEndTime: draftStatus === "accepted" ? (draftInterviewEndTime || null) : null,
-      interviewFormat: draftStatus === "accepted" ? (draftInterviewFormat.trim() || null) : null,
-      meetingLink: draftStatus === "accepted" ? (draftMeetingLink.trim() || null) : null,
-      contactEmail: draftStatus === "accepted" ? (draftContactEmail.trim() || null) : null,
-      checklist: draftStatus === "accepted" ? (draftChecklist.trim() || null) : null,
-      employerComment: draftComment.trim() || null,
+    updateStatusMutation.mutate({
+      applicationId: editingResponseContext.response.applicationId,
+      payload: {
+        status: draftStatus,
+        employer_comment: draftComment.trim() || null,
+        interview_date: draftStatus === "accepted" ? (draftInterviewDate || null) : null,
+        interview_start_time: draftStatus === "accepted" ? (draftInterviewStartTime || null) : null,
+        interview_end_time: draftStatus === "accepted" ? (draftInterviewEndTime || null) : null,
+        interview_format: draftStatus === "accepted" ? (draftInterviewFormat.trim() || null) : null,
+        meeting_link: draftStatus === "accepted" ? (draftMeetingLink.trim() || null) : null,
+        contact_email: draftStatus === "accepted" ? (draftContactEmail.trim() || null) : null,
+        checklist: draftStatus === "accepted" ? (draftChecklist.trim() || null) : null,
+      },
+    }, {
+      onSuccess: () => {
+        closeStatusModal();
+      },
     });
-
-    void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
-    closeStatusModal();
   };
 
   if (role !== "employer") {
@@ -1185,7 +1228,7 @@ export function EmployerResponsesPage() {
                           {visibleResponses.map((response) => (
                             <article key={`${group.opportunityId}-${response.id}`} className="opportunity-details-page__contact-card employer-responses-page__response-card">
                               <div className="opportunity-details-page__contact-id-block">
-                                <span className="opportunity-details-page__contact-id">id: {response.id.slice(-6)}</span>
+                                <span className="opportunity-details-page__contact-id">ID: {response.id.slice(-6)}</span>
                               </div>
 
                               <div className="opportunity-details-page__contact-primary">
@@ -1238,7 +1281,12 @@ export function EmployerResponsesPage() {
 
                               <div className="employer-responses-page__status-row">
                                 <span className="employer-responses-page__status-label">Статус:</span>
-                                <Status variant={resolveStatusVariant(response.status)}>{resolveStatusLabel(response.status)}</Status>
+                                <Status
+                                  className={resolveStatusClassName(response.status)}
+                                  variant={resolveStatusVariant(response.status)}
+                                >
+                                  {resolveStatusLabel(response.status)}
+                                </Status>
                                 <button
                                   type="button"
                                   className="employer-responses-page__status-edit"
@@ -1418,39 +1466,39 @@ export function EmployerResponsesPage() {
               <>
                 <div className="employer-responses-page__status-field">
                   <span className="employer-responses-page__status-field-label">Назначьте дату собеседования:</span>
-                  <DateInput value={draftInterviewDate} onChange={setDraftInterviewDate} variant="primary" />
+                  <DateInput className="input--sm" value={draftInterviewDate} onChange={setDraftInterviewDate} variant="primary" />
                 </div>
 
                 <div className="employer-responses-page__status-time-grid">
                   <label className="employer-responses-page__status-field">
                     <span className="employer-responses-page__status-field-label">Начало:</span>
-                    <Input type="time" value={draftInterviewStartTime} onChange={(event) => setDraftInterviewStartTime(event.target.value)} />
+                    <Input className="input--sm employer-responses-page__time-input" type="time" value={draftInterviewStartTime} onChange={(event) => setDraftInterviewStartTime(event.target.value)} />
                   </label>
                   <label className="employer-responses-page__status-field">
                     <span className="employer-responses-page__status-field-label">Окончание:</span>
-                    <Input type="time" value={draftInterviewEndTime} onChange={(event) => setDraftInterviewEndTime(event.target.value)} />
+                    <Input className="input--sm employer-responses-page__time-input" type="time" value={draftInterviewEndTime} onChange={(event) => setDraftInterviewEndTime(event.target.value)} />
                   </label>
                 </div>
 
                 <label className="employer-responses-page__status-field">
                   <span className="employer-responses-page__status-field-label">Формат:</span>
-                  <Input value={draftInterviewFormat} onChange={(event) => setDraftInterviewFormat(event.target.value)} />
+                  <Input className="input--sm" value={draftInterviewFormat} onChange={(event) => setDraftInterviewFormat(event.target.value)} />
                 </label>
 
                 <label className="employer-responses-page__status-field">
                   <span className="employer-responses-page__status-field-label">Ссылка:</span>
-                  <Input value={draftMeetingLink} onChange={(event) => setDraftMeetingLink(event.target.value)} />
+                  <Input className="input--sm" value={draftMeetingLink} onChange={(event) => setDraftMeetingLink(event.target.value)} />
                 </label>
 
                 <label className="employer-responses-page__status-field">
                   <span className="employer-responses-page__status-field-label">Контакты:</span>
-                  <Input value={draftContactEmail} onChange={(event) => setDraftContactEmail(event.target.value)} />
+                  <Input className="input--sm" value={draftContactEmail} onChange={(event) => setDraftContactEmail(event.target.value)} />
                 </label>
 
                 <label className="employer-responses-page__status-field">
                   <span className="employer-responses-page__status-field-label">Что взять с собой:</span>
                   <textarea
-                    className="employer-responses-page__status-textarea"
+                    className="employer-responses-page__status-textarea employer-responses-page__status-textarea--sm"
                     placeholder="Каждый пункт с новой строки"
                     value={draftChecklist}
                     onChange={(event) => setDraftChecklist(event.target.value)}
@@ -1462,7 +1510,7 @@ export function EmployerResponsesPage() {
             <label className="employer-responses-page__status-field">
               <span className="employer-responses-page__status-field-label">Комментарий:</span>
               <textarea
-                className="employer-responses-page__status-textarea"
+                className="employer-responses-page__status-textarea employer-responses-page__status-textarea--sm"
                 placeholder="Введите комментарий"
                 value={draftComment}
                 onChange={(event) => setDraftComment(event.target.value)}
@@ -1470,10 +1518,10 @@ export function EmployerResponsesPage() {
             </label>
 
             <div className="employer-responses-page__status-actions">
-              <Button type="button" variant="primary-outline" fullWidth onClick={closeStatusModal}>
+              <Button type="button" variant="primary-outline" size="md" fullWidth onClick={closeStatusModal}>
                 Отменить
               </Button>
-              <Button type="button" variant="primary" fullWidth onClick={handleSaveStatus}>
+              <Button type="button" variant="primary" size="md" fullWidth onClick={handleSaveStatus}>
                 Подтвердить
               </Button>
             </div>

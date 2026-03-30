@@ -8,8 +8,9 @@ import { CitySelection, CitySelector, readSelectedCityCookie, writeSelectedCityC
 import { Opportunity } from "../../entities/opportunity";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
 import {
-  listMyAppliedOpportunityIdsRequest,
+  listMyApplicationsRequest,
   withdrawOpportunityApplicationRequest,
+  type ApplicationDetails,
 } from "../../features/applications";
 import {
   addFavoriteOpportunityRequest,
@@ -17,6 +18,7 @@ import {
   removeFavoriteOpportunityRequest,
 } from "../../features/favorites";
 import { useAuthStore } from "../../features/auth";
+import { useNotificationsRealtime } from "../../features/notifications";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
 import { Badge, Button, Checkbox, Container, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
@@ -26,7 +28,7 @@ import "../settings/settings.css";
 import "./applications.css";
 
 type OpportunityCategoryFilter = "all" | Opportunity["kind"];
-type ApplicantApplicationStatus = "accepted" | "pending" | "reserve" | "rejected";
+type ApplicantApplicationStatus = "accepted" | "pending" | "reserve" | "rejected" | "withdrawn";
 type ApplicationMetricKey = "total" | ApplicantApplicationStatus;
 type ApplicationSortDirection = "asc" | "desc";
 
@@ -37,6 +39,13 @@ type ApplicantApplicationItem = {
   updatedAt: string;
   statusMessage: string;
   employerComment: string | null;
+  interviewDate: string | null;
+  interviewStartTime: string | null;
+  interviewEndTime: string | null;
+  interviewFormat: string | null;
+  meetingLink: string | null;
+  contactEmail: string | null;
+  checklist: string | null;
 };
 
 const metricDefinitions: Array<{ key: ApplicationMetricKey; label: string }> = [
@@ -54,6 +63,7 @@ const applicationStatusOptions: Array<{ value: ApplicantApplicationStatus; label
   { value: "pending", label: "На рассмотрении" },
   { value: "reserve", label: "В резерве" },
   { value: "rejected", label: "Отклонено" },
+  { value: "withdrawn", label: "Отозвано соискателем" },
 ];
 
 const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label: string }> = [
@@ -130,21 +140,21 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function addDays(value: string, days: number) {
-  const nextDate = new Date(value);
-  nextDate.setDate(nextDate.getDate() + days);
-  return nextDate.toISOString();
-}
-
-function addHours(value: string, hours: number) {
-  const nextDate = new Date(value);
-  nextDate.setHours(nextDate.getHours() + hours);
-  return nextDate.toISOString();
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function resolveApplicationStatusMeta(status: ApplicantApplicationStatus) {
   if (status === "accepted") {
     return { label: "Принято", variant: "approved" as const };
+  }
+
+  if (status === "withdrawn") {
+    return { label: "Отозвано соискателем", variant: "rejected" as const };
   }
 
   if (status === "rejected") {
@@ -158,18 +168,71 @@ function resolveApplicationStatusMeta(status: ApplicantApplicationStatus) {
   return { label: "На рассмотрении", variant: "pending-review" as const };
 }
 
-function buildApplicationDetails(opportunity: Opportunity, index: number): ApplicantApplicationItem {
-  const baseDate = opportunity.publishedAt ?? new Date().toISOString();
-  const submittedAt = addDays(baseDate, index + 1);
-  const updatedAt = addHours(submittedAt, 1);
+function resolveApplicantApplicationStatus(record: ApplicationDetails | null): ApplicantApplicationStatus {
+  if (!record) {
+    return "pending";
+  }
+
+  if (record.status === "rejected" || record.status === "canceled") {
+    return "rejected";
+  }
+
+  if (record.status === "withdrawn") {
+    return "withdrawn";
+  }
+
+  if (record.status === "reserved") {
+    return "reserve";
+  }
+
+  if (record.status === "interview" || record.status === "offer" || record.status === "accepted") {
+    return "accepted";
+  }
+
+  return "pending";
+}
+
+function buildApplicationStatusMessage(opportunity: Opportunity, record: ApplicationDetails | null) {
+  if (!record || resolveApplicantApplicationStatus(record) === "pending") {
+    return "Отклик отправлен и ожидает рассмотрения работодателем.";
+  }
+
+  if (resolveApplicantApplicationStatus(record) === "withdrawn") {
+    return "Вы отозвали отклик. Эта запись сохранена в истории, и вы можете подать отклик заново.";
+  }
+
+  if (resolveApplicantApplicationStatus(record) === "accepted") {
+    return `Работодатель пригласил вас на следующий этап по возможности «${opportunity.title}».`;
+  }
+
+  if (resolveApplicantApplicationStatus(record) === "reserve") {
+    return `Ваш отклик по возможности «${opportunity.title}» переведен в резерв.`;
+  }
+
+  return `По отклику на возможность «${opportunity.title}» получен отказ.`;
+}
+
+function buildApplicationDetails(
+  opportunity: Opportunity,
+  responseRecord: ApplicationDetails | null,
+): ApplicantApplicationItem {
+  const submittedAt = responseRecord?.submitted_at ?? opportunity.publishedAt ?? new Date().toISOString();
+  const updatedAt = responseRecord?.status_changed_at ?? submittedAt;
 
   return {
     opportunity,
-    status: "pending",
+    status: resolveApplicantApplicationStatus(responseRecord),
     submittedAt,
     updatedAt,
-    statusMessage: "Отклик отправлен и ожидает рассмотрения работодателем.",
-    employerComment: null,
+    statusMessage: buildApplicationStatusMessage(opportunity, responseRecord),
+    employerComment: responseRecord?.employer_comment ?? null,
+    interviewDate: responseRecord?.interview_date ?? null,
+    interviewStartTime: responseRecord?.interview_start_time ?? null,
+    interviewEndTime: responseRecord?.interview_end_time ?? null,
+    interviewFormat: responseRecord?.interview_format ?? null,
+    meetingLink: responseRecord?.meeting_link ?? null,
+    contactEmail: responseRecord?.contact_email ?? null,
+    checklist: responseRecord?.checklist ?? null,
   };
 }
 
@@ -253,8 +316,8 @@ export function ApplicationsPage() {
     staleTime: 60 * 1000,
   });
   const myApplicationsQuery = useQuery({
-    queryKey: ["applications", "mine", "opportunity-ids"],
-    queryFn: listMyAppliedOpportunityIdsRequest,
+    queryKey: ["applications", "mine"],
+    queryFn: listMyApplicationsRequest,
     enabled: isAuthenticated && isApplicant,
     staleTime: 60 * 1000,
   });
@@ -280,7 +343,7 @@ export function ApplicationsPage() {
     mutationFn: withdrawOpportunityApplicationRequest,
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] }),
+        queryClient.invalidateQueries({ queryKey: ["applications", "mine"] }),
         queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
         queryClient.invalidateQueries({ queryKey: ["notifications"] }),
       ]);
@@ -290,6 +353,19 @@ export function ApplicationsPage() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
+
+  useNotificationsRealtime({
+    enabled: isAuthenticated && isApplicant,
+    onMessage: (payload) => {
+      if (payload?.type !== "notification_created") {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: ["applications", "mine"] });
+    },
+  });
 
   useEffect(() => {
     if (!isFilterOpen && !isSortOpen) {
@@ -326,8 +402,8 @@ export function ApplicationsPage() {
 
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
   const appliedOpportunityIds = useMemo(
-    () => myApplicationsQuery.data?.data?.opportunity_ids ?? [],
-    [myApplicationsQuery.data?.data?.opportunity_ids],
+    () => (myApplicationsQuery.data?.data?.items ?? []).map((item) => item.opportunity_id),
+    [myApplicationsQuery.data?.data?.items],
   );
   const isApplicationsLoading =
     opportunitiesQuery.isPending ||
@@ -339,9 +415,21 @@ export function ApplicationsPage() {
     return (opportunitiesQuery.data ?? []).filter((opportunity) => appliedIds.has(opportunity.id));
   }, [appliedOpportunityIds, opportunitiesQuery.data]);
 
+  const applicationRecordMap = useMemo(
+    () =>
+      (myApplicationsQuery.data?.data?.items ?? []).reduce<Record<string, ApplicationDetails>>((result, item) => {
+        result[item.opportunity_id] = item;
+        return result;
+      }, {}),
+    [myApplicationsQuery.data?.data?.items],
+  );
+
   const applicationItems = useMemo(
-    () => appliedOpportunities.map((opportunity, index) => buildApplicationDetails(opportunity, index)),
-    [appliedOpportunities],
+    () =>
+      appliedOpportunities.map((opportunity) =>
+        buildApplicationDetails(opportunity, applicationRecordMap[opportunity.id] ?? null),
+      ),
+    [appliedOpportunities, applicationRecordMap],
   );
 
   const tagOptions = useMemo(() => {
@@ -448,6 +536,7 @@ export function ApplicationsPage() {
         pending: 0,
         reserve: 0,
         rejected: 0,
+        withdrawn: 0,
       } satisfies Record<ApplicationMetricKey, number>,
     );
   }, [applicationItems]);
@@ -521,7 +610,7 @@ export function ApplicationsPage() {
         setPendingWithdrawOpportunityId(null);
         setExpandedApplicationIds((current) => current.filter((item) => item !== pendingWithdrawOpportunityId));
         await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] }),
+          queryClient.invalidateQueries({ queryKey: ["applications", "mine"] }),
           queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
           queryClient.invalidateQueries({ queryKey: ["notifications"] }),
         ]);
@@ -869,6 +958,7 @@ export function ApplicationsPage() {
               const statusMeta = resolveApplicationStatusMeta(item.status);
               const isFavorite = favoriteOpportunityIds.includes(opportunity.id);
               const isExpanded = expandedApplicationIds.includes(opportunity.id);
+              const canWithdraw = item.status !== "accepted" && item.status !== "rejected" && item.status !== "withdrawn";
 
               return (
                 <article key={opportunity.id} className="applications-page__card">
@@ -1011,6 +1101,48 @@ export function ApplicationsPage() {
                         </p>
                       </section>
 
+                      {item.status === "accepted" && (
+                        <section className="applications-page__detail-section">
+                          <h3 className="applications-page__detail-title">Детали собеседования</h3>
+                          <div className="applications-page__detail-grid">
+                            {item.interviewDate ? <p>Дата: {formatDate(item.interviewDate)}</p> : null}
+                            {item.interviewStartTime && item.interviewEndTime ? (
+                              <p>Время: {item.interviewStartTime} - {item.interviewEndTime}</p>
+                            ) : null}
+                            {item.interviewFormat ? <p>Формат: {item.interviewFormat}</p> : null}
+                            {item.meetingLink ? (
+                              <p>
+                                Ссылка:{" "}
+                                <a
+                                  href={item.meetingLink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="applications-page__detail-link"
+                                >
+                                  Открыть встречу
+                                </a>
+                              </p>
+                            ) : null}
+                            {item.contactEmail ? <p>Контакты: {item.contactEmail}</p> : null}
+                          </div>
+                        </section>
+                      )}
+
+                      {item.checklist ? (
+                        <section className="applications-page__detail-section">
+                          <h3 className="applications-page__detail-title">Что взять с собой</h3>
+                          <ul className="applications-page__detail-list">
+                            {item.checklist
+                              .split(/\n+/)
+                              .map((entry) => entry.trim())
+                              .filter(Boolean)
+                              .map((entry) => (
+                                <li key={`${opportunity.id}-${entry}`}>{entry}</li>
+                              ))}
+                          </ul>
+                        </section>
+                      ) : null}
+
                       <section className="applications-page__meta-row">
                         <div className="applications-page__meta-item">
                           <span className="applications-page__meta-label">Отклик отправлен</span>
@@ -1022,16 +1154,18 @@ export function ApplicationsPage() {
                         </div>
                       </section>
 
-                      <div className="applications-page__detail-actions">
-                        <Button
-                          type="button"
-                          variant="danger-outline"
-                          size="md"
-                          onClick={() => setPendingWithdrawOpportunityId(opportunity.id)}
-                        >
-                          Отозвать отклик
-                        </Button>
-                      </div>
+                      {canWithdraw ? (
+                        <div className="applications-page__detail-actions">
+                          <Button
+                            type="button"
+                            variant="danger-outline"
+                            size="md"
+                            onClick={() => setPendingWithdrawOpportunityId(opportunity.id)}
+                          >
+                            Отозвать отклик
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </article>

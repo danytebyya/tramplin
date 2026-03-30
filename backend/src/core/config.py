@@ -1,8 +1,11 @@
 import json
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 DEFAULT_DEV_ALLOWED_ORIGINS = [
@@ -87,7 +90,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
     smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
     smtp_timeout_seconds: int = Field(default=10, alias="SMTP_TIMEOUT_SECONDS")
-    frontend_base_url: str = Field(default="http://localhost:5173", alias="FRONTEND_BASE_URL")
+    frontend_base_url: str = Field(default="", alias="FRONTEND_BASE_URL")
     chat_unread_email_delay_minutes: int = Field(default=10, alias="CHAT_UNREAD_EMAIL_DELAY_MINUTES")
     chat_unread_notification_cooldown_hours: int = Field(
         default=24,
@@ -122,6 +125,26 @@ class Settings(BaseSettings):
         if normalized_value not in {"log", "smtp"}:
             raise ValueError("EMAIL_TRANSPORT must be either 'log' or 'smtp'")
         return normalized_value
+
+    @field_validator("frontend_base_url", mode="before")
+    @classmethod
+    def resolve_frontend_base_url(cls, value: str | None) -> str:
+        normalized_value = (value or "").strip()
+        if normalized_value:
+            return normalized_value.rstrip("/")
+
+        backend_env_path = BACKEND_DIR / ".env"
+        if backend_env_path.exists():
+            for raw_line in backend_env_path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or not line.startswith("FRONTEND_BASE_URL="):
+                    continue
+                _, resolved_value = line.split("=", maxsplit=1)
+                normalized_resolved_value = resolved_value.strip().strip('"').strip("'")
+                if normalized_resolved_value:
+                    return normalized_resolved_value.rstrip("/")
+
+        return "http://localhost:5173"
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
