@@ -184,7 +184,7 @@
 .seeker-dashboard__form-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 8px;
 }
 
 .seeker-dashboard__field {

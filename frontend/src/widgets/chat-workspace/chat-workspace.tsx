@@ -7,11 +7,13 @@ import arrowIcon from "../../assets/icons/arrow.svg";
 import clipIcon from "../../assets/icons/clip.svg";
 import { useAuthStore } from "../../features/auth";
 import {
+  areChatKeysEqual,
   canUseChatCrypto,
   ChatContact,
   ChatConversation,
   ChatMessage,
   ChatParticipant,
+  clearStoredChatKeyPair,
   createChatConversationRequest,
   deleteChatMessageRequest,
   decryptChatMessage,
@@ -376,25 +378,33 @@ export function ChatWorkspace({
     let isMounted = true;
 
     void (async () => {
-      const storedPair = getStoredChatKeyPair();
+      const storedPair = getStoredChatKeyPair(currentUserId);
       const remotePair = await getMyChatKeyRequest();
+
+      if (
+        storedPair &&
+        remotePair?.privateKeyJwk &&
+        !areChatKeysEqual(storedPair.publicKeyJwk, remotePair.publicKeyJwk)
+      ) {
+        clearStoredChatKeyPair(currentUserId);
+      }
+
       if (!storedPair && remotePair?.publicKeyJwk && !remotePair.privateKeyJwk) {
         return;
       }
 
       const pair =
-        storedPair ??
-        (remotePair?.privateKeyJwk
+        remotePair?.privateKeyJwk
           ? {
               algorithm: remotePair.algorithm,
               publicKeyJwk: remotePair.publicKeyJwk,
               privateKeyJwk: remotePair.privateKeyJwk,
             }
-          : await ensureChatKeyPair());
+          : storedPair ?? (await ensureChatKeyPair(currentUserId));
       if (!isMounted) {
         return;
       }
-      storeChatKeyPair(pair);
+      storeChatKeyPair(pair, currentUserId);
       setKeyPair(pair);
       await upsertMyChatKeyRequest({
         algorithm: pair.algorithm,
@@ -406,7 +416,7 @@ export function ChatWorkspace({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [currentUserId]);
 
   useChatRealtime(() => {
     void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
@@ -929,8 +939,8 @@ export function ChatWorkspace({
     let activeKeyPair = keyPair;
     if (canUseChatCrypto() && !activeKeyPair) {
       try {
-        activeKeyPair = await ensureChatKeyPair();
-        storeChatKeyPair(activeKeyPair);
+        activeKeyPair = await ensureChatKeyPair(currentUserId);
+        storeChatKeyPair(activeKeyPair, currentUserId);
         setKeyPair(activeKeyPair);
         await upsertMyChatKeyRequest({
           algorithm: activeKeyPair.algorithm,

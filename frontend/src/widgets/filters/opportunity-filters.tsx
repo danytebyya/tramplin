@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Button, Input, SegmentedSwitch } from "../../shared/ui";
+import { Input, SegmentedSwitch } from "../../shared/ui";
 import { opportunityViewOptions } from "../../entities/opportunity";
 import "./filters.css";
 
@@ -38,7 +38,6 @@ type FilterGroup = {
   items: string[];
 };
 
-const cityOptions = ["Москва", "Санкт-Петербург", "Казань", "Новосибирск", "Чебоксары"];
 const popularTags = ["Python", "JavaScript", "React", "SQL", "Docker"];
 const skillGroups: FilterGroup[] = [
   {
@@ -94,6 +93,7 @@ export function OpportunityFilters({
   onFilterChange = () => undefined,
   onViewModeChange,
 }: OpportunityFiltersProps) {
+  const [isVacanciesOpen, setIsVacanciesOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [cityQuery, setCityQuery] = useState("");
@@ -149,16 +149,6 @@ export function OpportunityFilters({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const visibleCities = useMemo(() => {
-    const normalizedQuery = cityQuery.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return cityOptions;
-    }
-
-    return cityOptions.filter((city) => city.toLowerCase().includes(normalizedQuery));
-  }, [cityQuery]);
 
   const filteredSkillGroups = useMemo(() => {
     const normalizedQuery = skillQuery.trim().toLowerCase();
@@ -236,7 +226,13 @@ export function OpportunityFilters({
   };
 
   const handleCitySelect = (city: string) => {
+    setCityQuery(city);
     onFilterChange({ ...filterValue, city });
+  };
+
+  const handleCityInputChange = (value: string) => {
+    setCityQuery(value);
+    onFilterChange({ ...filterValue, city: value });
   };
 
   const handleLevelsChange = (option: string) => {
@@ -371,12 +367,32 @@ export function OpportunityFilters({
             >
               <div className="opportunity-filters__group">
                 <div className="opportunity-filters__group-menu">
-                  <div className="opportunity-filters__group-title">Вакансии и стажировки</div>
+                  <button
+                    type="button"
+                    className="opportunity-filters__group-trigger"
+                    onClick={() => setIsVacanciesOpen((current) => !current)}
+                  >
+                    <span className="opportunity-filters__group-title">Вакансии и стажировки</span>
+                    <span
+                      className={
+                        isVacanciesOpen
+                          ? "opportunity-filters__placeholder-arrow opportunity-filters__group-arrow opportunity-filters__placeholder-arrow--open"
+                          : "opportunity-filters__placeholder-arrow opportunity-filters__group-arrow"
+                      }
+                      aria-hidden="true"
+                    />
+                  </button>
                   <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline" onClick={resetAllFilters}>
                     Сбросить
                   </button>
                 </div>
-                <div className="opportunity-filters__group-panel">
+                <div
+                  className={
+                    isVacanciesOpen
+                      ? "opportunity-filters__group-panel"
+                      : "opportunity-filters__group-panel opportunity-filters__group-panel--hidden"
+                  }
+                >
                   <section className="opportunity-filters__panel-section">
                     <div className="opportunity-filters__panel-head">
                       <h3 className="opportunity-filters__panel-title">Город</h3>
@@ -384,29 +400,17 @@ export function OpportunityFilters({
                     <label className="opportunity-filters__search opportunity-filters__search--panel" aria-label="Город">
                       <Input
                         placeholder="Город"
-                        value={cityQuery}
-                        onChange={(event) => setCityQuery(event.target.value)}
+                        value={cityQuery || filterValue.city}
+                        onChange={(event) => handleCityInputChange(event.target.value)}
                         className="input--sm opportunity-filters__search-input"
                         clearable
                       />
                     </label>
-                    <div className="opportunity-filters__city-list" role="listbox" aria-label="Список городов">
-                      {visibleCities.map((city) => (
-                        <button
-                          key={city}
-                          type="button"
-                          className={
-                            city === filterValue.city
-                              ? "opportunity-filters__city-option opportunity-filters__city-option--active"
-                              : "opportunity-filters__city-option"
-                          }
-                          onClick={() => handleCitySelect(city)}
-                        >
-                          {city}
-                        </button>
-                      ))}
-                    </div>
-                    <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">
+                    <button
+                      type="button"
+                      className="opportunity-filters__reset opportunity-filters__reset--inline"
+                      onClick={() => handleCitySelect("")}
+                    >
                       Сбросить
                     </button>
                   </section>
@@ -599,21 +603,26 @@ export function OpportunityFilters({
               </div>
 
               <article className="opportunity-filters__accordion-card">
-                <button
-                  type="button"
-                  className="opportunity-filters__accordion-head"
-                  onClick={() => setExpandedGroups((current) => ({ ...current, events: !current.events }))}
-                >
-                  <span>Мероприятия</span>
-                  <span
-                    className={
-                      expandedGroups.events
-                        ? "opportunity-filters__placeholder-arrow opportunity-filters__placeholder-arrow--open"
-                        : "opportunity-filters__placeholder-arrow"
-                    }
-                    aria-hidden="true"
-                  />
-                </button>
+                <div className="opportunity-filters__group-menu">
+                  <button
+                    type="button"
+                    className="opportunity-filters__group-trigger"
+                    onClick={() => setExpandedGroups((current) => ({ ...current, events: !current.events }))}
+                  >
+                    <span className="opportunity-filters__group-title">Мероприятия</span>
+                    <span
+                      className={
+                        expandedGroups.events
+                          ? "opportunity-filters__placeholder-arrow opportunity-filters__group-arrow opportunity-filters__placeholder-arrow--open"
+                          : "opportunity-filters__placeholder-arrow opportunity-filters__group-arrow"
+                      }
+                      aria-hidden="true"
+                    />
+                  </button>
+                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">
+                    Сбросить
+                  </button>
+                </div>
                 {expandedGroups.events ? (
                   <div className="opportunity-filters__accordion-body">
                     <section className="opportunity-filters__panel-section opportunity-filters__panel-section--card">
@@ -724,21 +733,26 @@ export function OpportunityFilters({
               </article>
 
               <article className="opportunity-filters__accordion-card">
-                <button
-                  type="button"
-                  className="opportunity-filters__accordion-head"
-                  onClick={() => setExpandedGroups((current) => ({ ...current, mentorship: !current.mentorship }))}
-                >
-                  <span>Менторские программы</span>
-                  <span
-                    className={
-                      expandedGroups.mentorship
-                        ? "opportunity-filters__placeholder-arrow opportunity-filters__placeholder-arrow--open"
-                        : "opportunity-filters__placeholder-arrow"
-                    }
-                    aria-hidden="true"
-                  />
-                </button>
+                <div className="opportunity-filters__group-menu">
+                  <button
+                    type="button"
+                    className="opportunity-filters__group-trigger"
+                    onClick={() => setExpandedGroups((current) => ({ ...current, mentorship: !current.mentorship }))}
+                  >
+                    <span className="opportunity-filters__group-title">Менторские программы</span>
+                    <span
+                      className={
+                        expandedGroups.mentorship
+                          ? "opportunity-filters__placeholder-arrow opportunity-filters__group-arrow opportunity-filters__placeholder-arrow--open"
+                          : "opportunity-filters__placeholder-arrow opportunity-filters__group-arrow"
+                      }
+                      aria-hidden="true"
+                    />
+                  </button>
+                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">
+                    Сбросить
+                  </button>
+                </div>
                 {expandedGroups.mentorship ? (
                   <div className="opportunity-filters__accordion-body">
                     <section className="opportunity-filters__panel-section opportunity-filters__panel-section--card">
@@ -888,12 +902,6 @@ export function OpportunityFilters({
                   </div>
                 ) : null}
               </article>
-
-              <div className="opportunity-filters__footer">
-                <Button type="button" variant="secondary" fullWidth>
-                  Показать результаты
-                </Button>
-              </div>
               </div>
             </div>
           </div>

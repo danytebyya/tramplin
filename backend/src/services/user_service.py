@@ -28,6 +28,7 @@ from src.schemas.user import (
     ApplicantDashboardRead,
     ApplicantDashboardStatsRead,
     ApplicantDashboardUpdateRequest,
+    EmployerProfileRead,
     EmployerPublicStatsRead,
     PublicUserProfileRead,
     UserNotificationPreferencesRead,
@@ -180,11 +181,19 @@ class UserService:
             )
 
         user = self.user_repo.get_by_public_id(normalized_public_id, with_profiles=True)
+        if user is None:
+            try:
+                user = self.user_repo.get_by_id(normalized_public_id, with_profiles=True)
+            except (ValueError, TypeError):
+                user = None
+
         if user is None or user.deleted_at is not None:
             raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
 
+        self._register_public_profile_view(user)
+
         payload = {
-            "public_id": normalized_public_id,
+            "public_id": user.public_id or normalized_public_id,
             "display_name": user.display_name,
             "preferred_city": user.preferred_city,
             "role": user.role,
@@ -201,13 +210,38 @@ class UserService:
             payload["applicant_dashboard"] = self.get_applicant_dashboard(user)
         elif user.role == UserRole.EMPLOYER and user.employer_profile is not None:
             active_opportunities_count, responses_count = self._get_employer_public_stats(user.id)
-            payload["employer_profile"] = user.employer_profile
+            employer_profile_payload = EmployerProfileRead.model_validate(
+                user.employer_profile
+            ).model_dump()
+            corporate_email = (user.employer_profile.corporate_email or "").strip().lower()
+            user_email = (user.email or "").strip().lower()
+            if corporate_email and corporate_email == user_email:
+                employer_profile_payload["corporate_email"] = None
+            payload["employer_profile"] = employer_profile_payload
             payload["employer_stats"] = EmployerPublicStatsRead(
                 active_opportunities_count=active_opportunities_count,
                 responses_count=responses_count,
             )
 
         return PublicUserProfileRead.model_validate(payload)
+
+    def _register_public_profile_view(self, user: User) -> None:
+        if user.role == UserRole.APPLICANT and user.applicant_profile is not None:
+            user.applicant_profile.profile_views_count = (
+                user.applicant_profile.profile_views_count or 0
+            ) + 1
+            self.db.add(user.applicant_profile)
+            self.db.commit()
+            self.db.refresh(user.applicant_profile)
+            return
+
+        if user.role == UserRole.EMPLOYER and user.employer_profile is not None:
+            user.employer_profile.profile_views_count = (
+                user.employer_profile.profile_views_count or 0
+            ) + 1
+            self.db.add(user.employer_profile)
+            self.db.commit()
+            self.db.refresh(user.employer_profile)
 
     def update_applicant_dashboard(
         self,
@@ -362,7 +396,7 @@ class UserService:
         current_user_with_profiles.password_hash = "deleted"
 
     def _get_employer_public_stats(self, user_id: str | UUID) -> tuple[int, int]:
-        active_statuses = ("active", "planned")
+        active_statuses = ("active", "scheduled")
         active_opportunities_count = self.db.execute(
             select(func.count(Opportunity.id)).where(
                 Opportunity.created_by_user_id == UUID(str(user_id)),

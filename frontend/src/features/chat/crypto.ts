@@ -40,33 +40,55 @@ function toBufferSource(value: Uint8Array) {
   return new Uint8Array(value);
 }
 
-function readStoredKeyPair(): StoredKeyPair | null {
+function getChatKeyStorageKey(scope?: string | null) {
+  return scope ? `${CHAT_CRYPTO_STORAGE_KEY}:${scope}` : CHAT_CRYPTO_STORAGE_KEY;
+}
+
+function readStoredKeyPair(scope?: string | null): StoredKeyPair | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const rawValue = window.localStorage.getItem(CHAT_CRYPTO_STORAGE_KEY);
-  if (!rawValue) {
+  const rawValue = window.localStorage.getItem(getChatKeyStorageKey(scope));
+  const fallbackValue = scope ? window.localStorage.getItem(CHAT_CRYPTO_STORAGE_KEY) : null;
+  const valueToParse = rawValue ?? fallbackValue;
+  if (!valueToParse) {
     return null;
   }
 
   try {
-    return JSON.parse(rawValue) as StoredKeyPair;
+    return JSON.parse(valueToParse) as StoredKeyPair;
   } catch {
     return null;
   }
 }
 
-function writeStoredKeyPair(value: StoredKeyPair) {
-  window.localStorage.setItem(CHAT_CRYPTO_STORAGE_KEY, JSON.stringify(value));
+function writeStoredKeyPair(value: StoredKeyPair, scope?: string | null) {
+  window.localStorage.setItem(getChatKeyStorageKey(scope), JSON.stringify(value));
 }
 
-export function getStoredChatKeyPair() {
-  return readStoredKeyPair();
+export function clearStoredChatKeyPair(scope?: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(getChatKeyStorageKey(scope));
 }
 
-export function storeChatKeyPair(value: StoredKeyPair) {
-  writeStoredKeyPair(value);
+export function getStoredChatKeyPair(scope?: string | null) {
+  return readStoredKeyPair(scope);
+}
+
+export function storeChatKeyPair(value: StoredKeyPair, scope?: string | null) {
+  writeStoredKeyPair(value, scope);
+}
+
+export function areChatKeysEqual(left?: JsonWebKey | null, right?: JsonWebKey | null) {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 async function importPrivateKey(privateKeyJwk: JsonWebKey) {
@@ -118,8 +140,8 @@ async function deriveEncryptionKey(privateKeyJwk: JsonWebKey, publicKeyJwk: Json
   );
 }
 
-export async function ensureChatKeyPair() {
-  const stored = readStoredKeyPair();
+export async function ensureChatKeyPair(scope?: string | null) {
+  const stored = readStoredKeyPair(scope);
   if (stored) {
     return stored;
   }
@@ -144,7 +166,7 @@ export async function ensureChatKeyPair() {
     publicKeyJwk,
     privateKeyJwk,
   };
-  writeStoredKeyPair(nextValue);
+  writeStoredKeyPair(nextValue, scope);
   return nextValue;
 }
 

@@ -12,7 +12,16 @@ import {
   switchAccountContextRequest,
   useAuthStore,
 } from "../../features/auth";
-import { canUseChatCrypto, ensureChatKeyPair, getMyChatKeyRequest, getStoredChatKeyPair, storeChatKeyPair, upsertMyChatKeyRequest } from "../../features/chat";
+import {
+  areChatKeysEqual,
+  canUseChatCrypto,
+  clearStoredChatKeyPair,
+  ensureChatKeyPair,
+  getMyChatKeyRequest,
+  getStoredChatKeyPair,
+  storeChatKeyPair,
+  upsertMyChatKeyRequest,
+} from "../../features/chat";
 import { useNotificationsRealtime } from "../../features/notifications";
 import { usePresenceRealtime } from "../../features/presence";
 
@@ -30,6 +39,25 @@ const SESSION_ACTIVITY_EVENTS: Array<keyof WindowEventMap> = [
 const SESSION_ACTIVE_WINDOW_MS = 15 * 60 * 1000;
 const SESSION_REFRESH_BUFFER_MS = 60 * 1000;
 const SESSION_VALIDATION_INTERVAL_MS = 15 * 1000;
+
+function readAccessTokenSubject(token: string | null) {
+  if (!token || typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decodedPayload = window.atob(normalizedPayload);
+    return (JSON.parse(decodedPayload) as { sub?: string }).sub ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function AuthSessionBootstrap() {
   const navigate = useNavigate();
@@ -241,33 +269,42 @@ function ChatKeyBootstrap() {
     }
 
     let isCancelled = false;
+    const currentUserId = readAccessTokenSubject(accessToken);
 
     void (async () => {
       if (!canUseChatCrypto()) {
         return;
       }
 
-      const storedPair = getStoredChatKeyPair();
+      const storedPair = getStoredChatKeyPair(currentUserId);
       const remotePair = await getMyChatKeyRequest();
+
+      if (
+        storedPair &&
+        remotePair?.privateKeyJwk &&
+        !areChatKeysEqual(storedPair.publicKeyJwk, remotePair.publicKeyJwk)
+      ) {
+        clearStoredChatKeyPair(currentUserId);
+      }
+
       if (!storedPair && remotePair?.publicKeyJwk && !remotePair.privateKeyJwk) {
         return;
       }
 
       const pair =
-        storedPair ??
-        (remotePair?.privateKeyJwk
+        remotePair?.privateKeyJwk
           ? {
               algorithm: remotePair.algorithm,
               publicKeyJwk: remotePair.publicKeyJwk,
               privateKeyJwk: remotePair.privateKeyJwk,
             }
-          : await ensureChatKeyPair());
+          : storedPair ?? (await ensureChatKeyPair(currentUserId));
 
       if (isCancelled) {
         return;
       }
 
-      storeChatKeyPair(pair);
+      storeChatKeyPair(pair, currentUserId);
 
       await upsertMyChatKeyRequest({
         algorithm: pair.algorithm,

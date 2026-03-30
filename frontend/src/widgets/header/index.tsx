@@ -99,11 +99,14 @@ export function Header({
   ) : topNavigation;
   const isPrimaryTheme = resolvedTheme === "employer" || resolvedTheme === "curator";
   const defaultLogoSource = isPrimaryTheme ? logoPrimary : logoSecondary;
-  const landingLogoSource = isAuthenticated
-    ? defaultLogoSource
-    : logoPrimarySm;
+  const landingLogoSource = resolvedTheme === "employer" || resolvedTheme === "curator"
+    ? logoPrimarySm
+    : logoSecondarySm;
   const logoSource = variant === "landing" ? landingLogoSource : defaultLogoSource;
-  const brandSubtitle = resolveHeaderBrandSubtitle(resolvedTheme, isAuthenticated);
+  const brandSubtitle =
+    variant === "landing" && (resolvedTheme === "applicant" || resolvedTheme === "employer")
+      ? null
+      : resolveHeaderBrandSubtitle(resolvedTheme, isAuthenticated);
 
   return (
     <header className={cn("header", headerRoleClassName, headerVariantClassName)}>

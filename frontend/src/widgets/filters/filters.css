@@ -183,7 +183,7 @@
 }
 
 .opportunity-filters__reset {
-  display: none;
+  display: inline-flex;
   border: none;
   background: transparent;
   color: var(--home-accent, var(--color-secondary));
@@ -195,7 +195,6 @@
 }
 
 .opportunity-filters__reset--inline {
-  display: inline-flex;
   align-self: flex-start;
 }
 
@@ -237,11 +236,28 @@
   background: #ffffff;
 }
 
+.opportunity-filters__group-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
 .opportunity-filters__group-title {
   color: var(--color-text-primary);
   font-size: var(--type-body-large-size);
   line-height: var(--type-body-large-line);
   font-weight: 400;
+}
+
+.opportunity-filters__group-arrow {
+  flex: 0 0 16px;
 }
 
 .opportunity-filters__group-panel {
@@ -251,6 +267,26 @@
   padding: 32px;
   border-radius: 8px;
   background: #ffffff;
+  max-height: 10000px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    max-height 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.opportunity-filters__group-panel--hidden {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  margin-top: -2px;
+  pointer-events: none;
+  transform: translateY(-12px);
 }
 
 .opportunity-filters__popover--compact {
@@ -485,24 +521,6 @@
   padding: 32px;
   border-radius: 8px;
   background: #ffffff;
-}
-
-.opportunity-filters__accordion-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  width: 100%;
-  padding: 16px;
-  border: none;
-  border-radius: 8px;
-  background: #ffffff;
-  color: var(--color-text-primary);
-  font-size: var(--type-body-large-size);
-  line-height: var(--type-body-large-line);
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
 }
 
 .opportunity-filters__checkbox-grid {

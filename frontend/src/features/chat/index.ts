@@ -13,7 +13,9 @@ export {
 } from "./api";
 export type { ChatContact, ChatConversation, ChatKey, ChatMessage, ChatParticipant } from "./api";
 export {
+  areChatKeysEqual,
   canUseChatCrypto,
+  clearStoredChatKeyPair,
   decryptChatMessage,
   encryptChatMessage,
   ensureChatKeyPair,

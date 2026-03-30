@@ -1,15 +1,24 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
 import verifiedIcon from "../../assets/icons/verified.svg";
+import { listOpportunitiesRequest } from "../../entities/opportunity/api";
+import {
+  CitySelection,
+  readSelectedCityCookie,
+  writeSelectedCityCookie,
+} from "../../features/city-selector";
 import {
   buildApplicantProfileMenuItems,
   buildEmployerProfileMenuItems,
   Header,
 } from "../../widgets/header";
 import { Footer } from "../../widgets/footer";
+import { OpportunityFilters } from "../../widgets/filters";
+import { MapView } from "../../widgets/map-view";
+import { OpportunityList } from "../../widgets/opportunity-list";
 import {
   getEmployerAccessState,
   publicUserProfileRequest,
@@ -38,7 +47,7 @@ type ApplicantViewState = {
     university: string;
     studyCourse: string;
     graduationYear: string;
-    level: SeekerLevel;
+    level: SeekerLevel | "";
     hardSkills: string[];
     softSkills: string[];
     languages: string[];
@@ -88,6 +97,10 @@ type ApplicantViewState = {
 
 function normalizeStringArray(value?: string[] | null) {
   return (value ?? []).map((item) => item.trim()).filter(Boolean);
+}
+
+function normalizeStringValue(value?: string | null) {
+  return value?.trim() ?? "";
 }
 
 function mapProject(item: ApplicantDashboardProject) {
@@ -145,7 +158,7 @@ function buildApplicantViewState(
       university: profile?.university?.trim() ?? "",
       studyCourse: profile?.study_course ? String(profile.study_course) : "",
       graduationYear: profile?.graduation_year ? String(profile.graduation_year) : "",
-      level: ((profile?.level?.trim() as SeekerLevel | undefined) || "Junior"),
+      level: (profile?.level?.trim() as SeekerLevel | undefined) ?? "",
       hardSkills: normalizeStringArray(profile?.hard_skills),
       softSkills: normalizeStringArray(profile?.soft_skills),
       languages: normalizeStringArray(profile?.languages),
@@ -275,16 +288,16 @@ function resolveLevelStatusVariant(level: SeekerLevel) {
 }
 
 function renderExternalLink(label: string, value: string, fallback: string) {
+  if (!value) {
+    return null;
+  }
+
   return (
     <div className="seeker-dashboard__link-block" key={label}>
       <span className="seeker-dashboard__link-label">{label}</span>
-      {value ? (
-        <a href={value} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
-          {formatLinkLabel(value, fallback)}
-        </a>
-      ) : (
-        <span className="public-profile-page__muted-value">Не указано</span>
-      )}
+      <a href={value} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
+        {formatLinkLabel(value, fallback)}
+      </a>
     </div>
   );
 }
@@ -292,16 +305,20 @@ function renderExternalLink(label: string, value: string, fallback: string) {
 export function PublicProfilePage() {
   const { publicId } = useParams();
   const navigate = useNavigate();
+  const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
+  const [selectedEmployerOpportunityId, setSelectedEmployerOpportunityId] = useState<string | null>(null);
+  const [employerOpportunityViewMode, setEmployerOpportunityViewMode] = useState<"map" | "list">("map");
   const accessToken = useAuthStore((state) => state.accessToken);
-  const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
   const activeRole = readAccessTokenPayload(accessToken)?.active_role ?? role;
-  const isAuthenticated = Boolean(accessToken || refreshToken);
   const employerAccess = getEmployerAccessState(role, accessToken);
   const profileMenuItems =
     activeRole === "employer"
       ? buildEmployerProfileMenuItems(navigate, employerAccess)
       : buildApplicantProfileMenuItems(navigate);
+  const fallbackHeaderTheme = activeRole === "employer" ? "employer" : "applicant";
+  const fallbackHeaderContainerClassName =
+    fallbackHeaderTheme === "employer" ? "employer-dashboard__header-container" : "home-page__container";
 
   const profileQuery = useQuery({
     queryKey: ["public-profile", publicId],
@@ -316,6 +333,12 @@ export function PublicProfilePage() {
   });
 
   const profile = profileQuery.data?.data;
+  const employerOpportunitiesQuery = useQuery({
+    queryKey: ["public-profile", "employer-opportunities", publicId],
+    queryFn: listOpportunitiesRequest,
+    enabled: profile?.role === "employer",
+    staleTime: 60_000,
+  });
   const applicantState = useMemo(() => {
     if (!profile?.public_id || !profile?.display_name || profile.role !== "applicant") {
       return null;
@@ -330,6 +353,15 @@ export function PublicProfilePage() {
     );
   }, [profile]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [publicId]);
+
+  const handleCityChange = (nextCity: CitySelection) => {
+    setSelectedCity(nextCity.name);
+    writeSelectedCityCookie(nextCity.name);
+  };
+
   if (!publicId) {
     return <Navigate to="/" replace />;
   }
@@ -337,11 +369,17 @@ export function PublicProfilePage() {
   if (profileQuery.isError) {
     return (
       <main className="public-profile-page public-profile-page--error">
-        <Header profileMenuItems={profileMenuItems} theme="applicant" isAuthenticated={isAuthenticated} showSearch={false} />
+        <Header
+          containerClassName={fallbackHeaderContainerClassName}
+          profileMenuItems={profileMenuItems}
+          theme={fallbackHeaderTheme}
+          city={selectedCity}
+          onCityChange={handleCityChange}
+        />
         <Container className="public-profile-page__status-container">
           <div className="public-profile-page__status-card">
-            <h1 className="public-profile-page__status-title">Профиль не найден</h1>
-            <p className="public-profile-page__status-text">Проверьте идентификатор профиля или попробуйте открыть его позже.</p>
+            <h1 className="public-profile-page__status-title">Профиль временно недоступен</h1>
+            <p className="public-profile-page__status-text">Не удалось открыть страницу профиля. Попробуйте обновить страницу или открыть профиль чуть позже.</p>
             <Link to="/" className="public-profile-page__status-link">Вернуться на главную</Link>
           </div>
         </Container>
@@ -353,7 +391,13 @@ export function PublicProfilePage() {
   if (profileQuery.isPending || !profile) {
     return (
       <main className="public-profile-page">
-        <Header profileMenuItems={profileMenuItems} theme="applicant" isAuthenticated={isAuthenticated} showSearch={false} />
+        <Header
+          containerClassName={fallbackHeaderContainerClassName}
+          profileMenuItems={profileMenuItems}
+          theme={fallbackHeaderTheme}
+          city={selectedCity}
+          onCityChange={handleCityChange}
+        />
         <Container className="public-profile-page__status-container">
           <div className="public-profile-page__status-card">
             <h1 className="public-profile-page__status-title">Загружаем профиль</h1>
@@ -366,299 +410,344 @@ export function PublicProfilePage() {
   }
 
   if (profile.role === "applicant" && applicantState) {
-    const completion = calculateApplicantProfileCompletion(applicantState);
+    const hasCareerInterests = Boolean(
+      applicantState.profile.desiredSalaryFrom ||
+      applicantState.profile.preferredLocation ||
+      applicantState.profile.employmentTypes.length > 0 ||
+      applicantState.profile.workFormats.length > 0,
+    );
+    const hasPortfolioSection = Boolean(
+      applicantState.profile.about ||
+      applicantState.profile.level ||
+      applicantState.profile.hardSkills.length > 0 ||
+      applicantState.profile.softSkills.length > 0 ||
+      applicantState.profile.languages.length > 0 ||
+      applicantState.profile.githubUrl ||
+      applicantState.profile.gitlabUrl ||
+      applicantState.profile.bitbucketUrl ||
+      applicantState.profile.linkedinUrl ||
+      applicantState.profile.portfolioUrl ||
+      applicantState.profile.habrUrl ||
+      applicantState.profile.resumeUrl,
+    );
 
     return (
       <main className="seeker-dashboard public-profile-page public-profile-page--applicant">
         <Header
+          containerClassName="home-page__container"
           profileMenuItems={profileMenuItems}
           theme="applicant"
-          isAuthenticated={isAuthenticated}
-          showSearch={false}
-          bottomContent={null}
+          city={selectedCity}
+          onCityChange={handleCityChange}
         />
 
         <Container className="seeker-dashboard__container">
-          <section className="seeker-dashboard__hero">
-            <div className="seeker-dashboard__hero-grid">
-              <section className="seeker-dashboard__profile-card">
-                <div className="seeker-dashboard__profile-card-head">
-                  <div className="seeker-dashboard__identity-block">
-                    <div className="seeker-dashboard__avatar-shell">
+          <section className="seeker-dashboard__profile">
+            <div className="seeker-dashboard__profile-grid">
+              <section className="seeker-dashboard__form-panel">
+                <div className="seeker-dashboard__identity">
+                  <p className="seeker-dashboard__profile-id">{`ID:${applicantState.publicId}`}</p>
+                  <div className="seeker-dashboard__avatar-block">
+                    <span className="seeker-dashboard__avatar-shell">
                       <img src={resolveAvatarIcon("applicant")} alt="" aria-hidden="true" className="seeker-dashboard__avatar-image" />
-                    </div>
-                    <div className="seeker-dashboard__identity-copy">
-                      <p className="seeker-dashboard__profile-id">ID: {applicantState.publicId}</p>
-                      <h1 className="seeker-dashboard__profile-name">{applicantState.displayName}</h1>
-                      <p className="public-profile-page__presence">
-                        <span className={`public-profile-page__presence-dot${applicantState.isOnline ? " public-profile-page__presence-dot--online" : ""}`} />
-                        {applicantState.isOnline ? "Online" : "Недавно в сети"}
-                      </p>
-                    </div>
+                    </span>
+                    <h1 className="public-profile-page__company-name">{applicantState.displayName}</h1>
+                    <p className="public-profile-page__presence">
+                      <span className={`public-profile-page__presence-dot${applicantState.isOnline ? " public-profile-page__presence-dot--online" : ""}`} />
+                      {applicantState.isOnline ? "Online" : "Недавно в сети"}
+                    </p>
                   </div>
                 </div>
 
-                <div className="seeker-dashboard__profile-grid">
-                  <div className="seeker-dashboard__field">
-                    <span className="seeker-dashboard__field-label">Университет</span>
-                    <p className="seeker-dashboard__paragraph">{applicantState.profile.university || "Не указан"}</p>
-                  </div>
-                  <div className="seeker-dashboard__field">
-                    <span className="seeker-dashboard__field-label">Курс</span>
-                    <p className="seeker-dashboard__paragraph">{applicantState.profile.studyCourse || "Не указан"}</p>
-                  </div>
-                  <div className="seeker-dashboard__field">
-                    <span className="seeker-dashboard__field-label">Год выпуска</span>
-                    <p className="seeker-dashboard__paragraph">{applicantState.profile.graduationYear || "Не указан"}</p>
-                  </div>
-                  <div className="seeker-dashboard__field">
-                    <span className="seeker-dashboard__field-label">Город</span>
-                    <p className="seeker-dashboard__paragraph">{applicantState.preferredCity || "Не указан"}</p>
-                  </div>
+                <div className="seeker-dashboard__form-grid">
+                  {applicantState.profile.university ? (
+                    <div className="seeker-dashboard__field">
+                      <span className="seeker-dashboard__field-label">ВУЗ</span>
+                      <p className="seeker-dashboard__paragraph">{applicantState.profile.university}</p>
+                    </div>
+                  ) : null}
+                  {applicantState.profile.studyCourse ? (
+                    <div className="seeker-dashboard__field">
+                      <span className="seeker-dashboard__field-label">Курс</span>
+                      <p className="seeker-dashboard__paragraph">{applicantState.profile.studyCourse}</p>
+                    </div>
+                  ) : null}
+                  {applicantState.profile.graduationYear ? (
+                    <div className="seeker-dashboard__field">
+                      <span className="seeker-dashboard__field-label">Год выпуска</span>
+                      <p className="seeker-dashboard__paragraph">{applicantState.profile.graduationYear}</p>
+                    </div>
+                  ) : null}
+                  {applicantState.preferredCity ? (
+                    <div className="seeker-dashboard__field">
+                      <span className="seeker-dashboard__field-label">Город</span>
+                      <p className="seeker-dashboard__paragraph">{applicantState.preferredCity}</p>
+                    </div>
+                  ) : null}
                 </div>
               </section>
 
               <aside className="seeker-dashboard__summary-column">
-                <article className="seeker-dashboard__summary-card">
-                  <div className="seeker-dashboard__summary-progress-head">
-                    <p className="seeker-dashboard__summary-title">{`Профиль заполнен на ${completion}%`}</p>
-                    <div className="seeker-dashboard__progress">
-                      <span className="seeker-dashboard__progress-bar" style={{ width: `${Math.min(Math.max(completion, 6), 100)}%` }} />
+                {hasCareerInterests ? (
+                  <article className="seeker-dashboard__summary-card">
+                    <div className="seeker-dashboard__summary-head">
+                      <h2 className="seeker-dashboard__summary-section-title">
+                        Карьерные <span className="seeker-dashboard__summary-section-title-accent">интересы</span>
+                      </h2>
                     </div>
-                  </div>
-                  <dl className="seeker-dashboard__metrics">
-                    <div className="seeker-dashboard__metric-row">
-                      <dt>Просмотров профиля:</dt>
-                      <dd>{applicantState.stats.profileViewsCount}</dd>
+                    <div className="seeker-dashboard__interest-list">
+                      {applicantState.profile.desiredSalaryFrom ? (
+                        <div className="seeker-dashboard__interest-card">
+                          <span className="seeker-dashboard__interest-label">Ожидаемая зарплата</span>
+                          <strong className="seeker-dashboard__interest-value">{formatSalary(applicantState.profile.desiredSalaryFrom)}</strong>
+                        </div>
+                      ) : null}
+                      {applicantState.profile.preferredLocation ? (
+                        <div className="seeker-dashboard__interest-card">
+                          <span className="seeker-dashboard__interest-label">Предпочитаемая локация</span>
+                          <strong className="seeker-dashboard__interest-value">{applicantState.profile.preferredLocation}</strong>
+                        </div>
+                      ) : null}
+                      {applicantState.profile.employmentTypes.length > 0 ? (
+                        <div className="seeker-dashboard__interest-card">
+                          <span className="seeker-dashboard__interest-label">Тип занятости</span>
+                          <strong className="seeker-dashboard__interest-value">{applicantState.profile.employmentTypes.join(", ")}</strong>
+                        </div>
+                      ) : null}
+                      {applicantState.profile.workFormats.length > 0 ? (
+                        <div className="seeker-dashboard__interest-card">
+                          <span className="seeker-dashboard__interest-label">Формат работы</span>
+                          <strong className="seeker-dashboard__interest-value">{applicantState.profile.workFormats.join(", ")}</strong>
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="seeker-dashboard__metric-row">
-                      <dt>Отправлено откликов:</dt>
-                      <dd>{applicantState.stats.applicationsCount}</dd>
-                    </div>
-                    <div className="seeker-dashboard__metric-row">
-                      <dt>Получено ответов:</dt>
-                      <dd>{applicantState.stats.responsesCount}</dd>
-                    </div>
-                    <div className="seeker-dashboard__metric-row">
-                      <dt>Приглашений:</dt>
-                      <dd>{applicantState.stats.invitationsCount}</dd>
-                    </div>
-                    <div className="seeker-dashboard__metric-row">
-                      <dt>Рекомендаций:</dt>
-                      <dd>{applicantState.stats.recommendationsCount}</dd>
-                    </div>
-                  </dl>
-                </article>
-
-                <article className="seeker-dashboard__summary-card">
-                  <div className="seeker-dashboard__summary-head">
-                    <h2 className="seeker-dashboard__summary-section-title">
-                      Карьерные <span className="seeker-dashboard__summary-section-title-accent">интересы</span>
-                    </h2>
-                  </div>
-                  <div className="seeker-dashboard__interest-list">
-                    <div className="seeker-dashboard__interest-card">
-                      <span className="seeker-dashboard__interest-label">Ожидаемая зарплата</span>
-                      <strong className="seeker-dashboard__interest-value">{formatSalary(applicantState.profile.desiredSalaryFrom)}</strong>
-                    </div>
-                    <div className="seeker-dashboard__interest-card">
-                      <span className="seeker-dashboard__interest-label">Предпочитаемая локация</span>
-                      <strong className="seeker-dashboard__interest-value">{applicantState.profile.preferredLocation || "Не указана"}</strong>
-                    </div>
-                    <div className="seeker-dashboard__interest-card">
-                      <span className="seeker-dashboard__interest-label">Тип занятости</span>
-                      <strong className="seeker-dashboard__interest-value">{applicantState.profile.employmentTypes.join(", ") || "Не указано"}</strong>
-                    </div>
-                    <div className="seeker-dashboard__interest-card">
-                      <span className="seeker-dashboard__interest-label">Формат работы</span>
-                      <strong className="seeker-dashboard__interest-value">{applicantState.profile.workFormats.join(", ") || "Не указано"}</strong>
-                    </div>
-                  </div>
-                </article>
+                  </article>
+                ) : null}
               </aside>
             </div>
           </section>
 
-          <section className="seeker-dashboard__section">
-            <h2 className="seeker-dashboard__section-title">Портфолио</h2>
-            <div className="seeker-dashboard__portfolio-grid">
-              <article className="seeker-dashboard__content-card seeker-dashboard__content-card--links">
-                <div className="seeker-dashboard__content-card-head">
-                  <h3 className="seeker-dashboard__content-card-title">О себе</h3>
-                </div>
-                <div className="seeker-dashboard__content-card-body">
-                  {applicantState.profile.about ? (
-                    applicantState.profile.about.split(/\n+/).map((paragraph) => (
-                      <p key={paragraph} className="seeker-dashboard__paragraph">{paragraph}</p>
-                    ))
-                  ) : (
-                    <p className="seeker-dashboard__paragraph">Пока ничего не добавлено.</p>
-                  )}
-                </div>
-              </article>
+          {hasPortfolioSection ? (
+            <section className="seeker-dashboard__section">
+              <h2 className="seeker-dashboard__section-title">Портфолио</h2>
+              <div className="seeker-dashboard__portfolio-grid">
+                {applicantState.profile.about ? (
+                  <article className="seeker-dashboard__content-card seeker-dashboard__content-card--links">
+                    <div className="seeker-dashboard__content-card-head">
+                      <h3 className="seeker-dashboard__content-card-title">О себе</h3>
+                    </div>
+                    <div className="seeker-dashboard__content-card-body">
+                      {applicantState.profile.about.split(/\n+/).map((paragraph) => (
+                        <p key={paragraph} className="seeker-dashboard__paragraph">{paragraph}</p>
+                      ))}
+                    </div>
+                  </article>
+                ) : null}
 
-              <article className="seeker-dashboard__content-card">
-                <div className="seeker-dashboard__content-card-head">
-                  <h3 className="seeker-dashboard__content-card-title">Навыки</h3>
-                </div>
-                <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
-                  <div className="seeker-dashboard__skill-group">
-                    <span className="seeker-dashboard__skill-title">Уровень</span>
-                    <Badge variant={resolveLevelStatusVariant(applicantState.profile.level)} className="seeker-dashboard__level-badge">
-                      {applicantState.profile.level}
-                    </Badge>
-                  </div>
-                  <div className="seeker-dashboard__skill-group">
-                    <span className="seeker-dashboard__skill-title">Hard skills</span>
-                    <div className="seeker-dashboard__tag-list">
-                      {applicantState.profile.hardSkills.length > 0 ? applicantState.profile.hardSkills.map((item) => (
-                        <Badge key={item} variant="secondary">{item}</Badge>
-                      )) : <span className="public-profile-page__muted-value">Не указаны</span>}
+                {(applicantState.profile.level ||
+                  applicantState.profile.hardSkills.length > 0 ||
+                  applicantState.profile.softSkills.length > 0 ||
+                  applicantState.profile.languages.length > 0) ? (
+                  <article className="seeker-dashboard__content-card">
+                    <div className="seeker-dashboard__content-card-head">
+                      <h3 className="seeker-dashboard__content-card-title">Навыки</h3>
                     </div>
-                  </div>
-                  <div className="seeker-dashboard__skill-group">
-                    <span className="seeker-dashboard__skill-title">Soft skills</span>
-                    <div className="seeker-dashboard__tag-list">
-                      {applicantState.profile.softSkills.length > 0 ? applicantState.profile.softSkills.map((item) => (
-                        <Badge key={item} variant="secondary">{item}</Badge>
-                      )) : <span className="public-profile-page__muted-value">Не указаны</span>}
+                    <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
+                      {applicantState.profile.level ? (
+                        <div className="seeker-dashboard__skill-group">
+                          <span className="seeker-dashboard__skill-title">Уровень</span>
+                          <Badge variant={resolveLevelStatusVariant(applicantState.profile.level)} className="seeker-dashboard__level-badge">
+                            {applicantState.profile.level}
+                          </Badge>
+                        </div>
+                      ) : null}
+                      {applicantState.profile.hardSkills.length > 0 ? (
+                        <div className="seeker-dashboard__skill-group">
+                          <span className="seeker-dashboard__skill-title">Hard skills</span>
+                          <div className="seeker-dashboard__tag-list">
+                            {applicantState.profile.hardSkills.map((item) => (
+                              <Badge key={item} variant="secondary">{item}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {applicantState.profile.softSkills.length > 0 ? (
+                        <div className="seeker-dashboard__skill-group">
+                          <span className="seeker-dashboard__skill-title">Soft skills</span>
+                          <div className="seeker-dashboard__tag-list">
+                            {applicantState.profile.softSkills.map((item) => (
+                              <Badge key={item} variant="secondary">{item}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {applicantState.profile.languages.length > 0 ? (
+                        <div className="seeker-dashboard__skill-group">
+                          <span className="seeker-dashboard__skill-title">Языки</span>
+                          <div className="seeker-dashboard__tag-list">
+                            {applicantState.profile.languages.map((item) => (
+                              <Badge key={item} variant="secondary">{item}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                  <div className="seeker-dashboard__skill-group">
-                    <span className="seeker-dashboard__skill-title">Языки</span>
-                    <div className="seeker-dashboard__tag-list">
-                      {applicantState.profile.languages.length > 0 ? applicantState.profile.languages.map((item) => (
-                        <Badge key={item} variant="secondary">{item}</Badge>
-                      )) : <span className="public-profile-page__muted-value">Не указаны</span>}
-                    </div>
-                  </div>
-                </div>
-              </article>
+                  </article>
+                ) : null}
 
-              <article className="seeker-dashboard__content-card">
-                <div className="seeker-dashboard__content-card-head">
-                  <h3 className="seeker-dashboard__content-card-title">Ссылки на репозитории</h3>
-                </div>
-                <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
-                  {renderExternalLink("GitHub", applicantState.profile.githubUrl, "github.com")}
-                  {renderExternalLink("GitLab", applicantState.profile.gitlabUrl, "gitlab.com")}
-                  {renderExternalLink("Bitbucket", applicantState.profile.bitbucketUrl, "bitbucket.org")}
-                  {renderExternalLink("LinkedIn", applicantState.profile.linkedinUrl, "linkedin.com")}
-                  {renderExternalLink("Портфолио", applicantState.profile.portfolioUrl, "portfolio.example")}
-                  {renderExternalLink("Хабр", applicantState.profile.habrUrl, "habr.com")}
-                  {renderExternalLink("Резюме", applicantState.profile.resumeUrl, "resume.example")}
-                </div>
-              </article>
-            </div>
-          </section>
+                {(applicantState.profile.githubUrl ||
+                  applicantState.profile.gitlabUrl ||
+                  applicantState.profile.bitbucketUrl ||
+                  applicantState.profile.linkedinUrl ||
+                  applicantState.profile.portfolioUrl ||
+                  applicantState.profile.habrUrl ||
+                  applicantState.profile.resumeUrl) ? (
+                  <article className="seeker-dashboard__content-card">
+                    <div className="seeker-dashboard__content-card-head">
+                      <h3 className="seeker-dashboard__content-card-title">Ссылки на репозитории</h3>
+                    </div>
+                    <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
+                      {renderExternalLink("GitHub", applicantState.profile.githubUrl, "github.com")}
+                      {renderExternalLink("GitLab", applicantState.profile.gitlabUrl, "gitlab.com")}
+                      {renderExternalLink("Bitbucket", applicantState.profile.bitbucketUrl, "bitbucket.org")}
+                      {renderExternalLink("LinkedIn", applicantState.profile.linkedinUrl, "linkedin.com")}
+                      {renderExternalLink("Портфолио", applicantState.profile.portfolioUrl, "portfolio.example")}
+                      {renderExternalLink("Хабр", applicantState.profile.habrUrl, "habr.com")}
+                      {renderExternalLink("Резюме", applicantState.profile.resumeUrl, "resume.example")}
+                    </div>
+                  </article>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
           <section className="seeker-dashboard__section seeker-dashboard__section--combined">
-            <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
-              <div className="seeker-dashboard__collection-section">
-                <h2 className="seeker-dashboard__section-title">Опыт проектов</h2>
-              </div>
-              <div className="seeker-dashboard__collection-grid">
-                {applicantState.projects.length > 0 ? applicantState.projects.map((project) => (
+            {applicantState.projects.length > 0 ? (
+              <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
+                <div className="seeker-dashboard__collection-section">
+                  <h2 className="seeker-dashboard__section-title">Опыт проектов</h2>
+                </div>
+                <div className="seeker-dashboard__collection-grid">
+                  {applicantState.projects.map((project) => (
                   <article key={project.id} className="seeker-dashboard__collection-card">
                     <div className="seeker-dashboard__collection-card-head">
                       <h3 className="seeker-dashboard__collection-card-title">{project.title}</h3>
                     </div>
                     <div className="seeker-dashboard__collection-card-body">
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Описание:</span>
-                        <p className="seeker-dashboard__paragraph">{project.description || "Не указано"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Технологии:</span>
-                        <p className="seeker-dashboard__paragraph">{project.technologies || "Не указаны"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Период:</span>
-                        <p className="seeker-dashboard__paragraph">{project.periodLabel || "Не указан"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Роль:</span>
-                        <p className="seeker-dashboard__paragraph">{project.roleName || "Не указана"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
-                        {project.repositoryUrl ? (
+                      {project.description ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Описание:</span>
+                          <p className="seeker-dashboard__paragraph">{project.description}</p>
+                        </div>
+                      ) : null}
+                      {project.technologies ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Технологии:</span>
+                          <p className="seeker-dashboard__paragraph">{project.technologies}</p>
+                        </div>
+                      ) : null}
+                      {project.periodLabel ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Период:</span>
+                          <p className="seeker-dashboard__paragraph">{project.periodLabel}</p>
+                        </div>
+                      ) : null}
+                      {project.roleName ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Роль:</span>
+                          <p className="seeker-dashboard__paragraph">{project.roleName}</p>
+                        </div>
+                      ) : null}
+                      {project.repositoryUrl ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
                           <a href={project.repositoryUrl} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
                             {project.repositoryUrl}
                           </a>
-                        ) : (
-                          <span className="public-profile-page__muted-value">Не указана</span>
-                        )}
-                      </div>
+                        </div>
+                      ) : null}
                     </div>
                   </article>
-                )) : <p className="public-profile-page__empty-block">Проекты не добавлены.</p>}
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
 
-            <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
-              <div className="seeker-dashboard__collection-section">
-                <h2 className="seeker-dashboard__section-title">Достижения</h2>
-              </div>
-              <div className="seeker-dashboard__collection-grid">
-                {applicantState.achievements.length > 0 ? applicantState.achievements.map((item) => (
+            {applicantState.achievements.length > 0 ? (
+              <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
+                <div className="seeker-dashboard__collection-section">
+                  <h2 className="seeker-dashboard__section-title">Достижения</h2>
+                </div>
+                <div className="seeker-dashboard__collection-grid">
+                  {applicantState.achievements.map((item) => (
                   <article key={item.id} className="seeker-dashboard__collection-card">
                     <div className="seeker-dashboard__collection-card-head">
                       <h3 className="seeker-dashboard__collection-card-title">{item.title}</h3>
                     </div>
                     <div className="seeker-dashboard__collection-card-body">
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Мероприятие:</span>
-                        <p className="seeker-dashboard__paragraph">{item.eventName || "Не указано"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Проект:</span>
-                        <p className="seeker-dashboard__paragraph">{item.projectName || "Не указан"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Награда:</span>
-                        <p className="seeker-dashboard__paragraph">{item.award || "Не указана"}</p>
-                      </div>
+                      {item.eventName ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Мероприятие:</span>
+                          <p className="seeker-dashboard__paragraph">{item.eventName}</p>
+                        </div>
+                      ) : null}
+                      {item.projectName ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Проект:</span>
+                          <p className="seeker-dashboard__paragraph">{item.projectName}</p>
+                        </div>
+                      ) : null}
+                      {item.award ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Награда:</span>
+                          <p className="seeker-dashboard__paragraph">{item.award}</p>
+                        </div>
+                      ) : null}
                     </div>
                   </article>
-                )) : <p className="public-profile-page__empty-block">Достижения не добавлены.</p>}
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
 
-            <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
-              <div className="seeker-dashboard__collection-section">
-                <h2 className="seeker-dashboard__section-title">Сертификаты</h2>
-              </div>
-              <div className="seeker-dashboard__collection-grid">
-                {applicantState.certificates.length > 0 ? applicantState.certificates.map((item) => (
+            {applicantState.certificates.length > 0 ? (
+              <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
+                <div className="seeker-dashboard__collection-section">
+                  <h2 className="seeker-dashboard__section-title">Сертификаты</h2>
+                </div>
+                <div className="seeker-dashboard__collection-grid">
+                  {applicantState.certificates.map((item) => (
                   <article key={item.id} className="seeker-dashboard__collection-card">
                     <div className="seeker-dashboard__collection-card-head">
                       <h3 className="seeker-dashboard__collection-card-title">{item.title}</h3>
                     </div>
                     <div className="seeker-dashboard__collection-card-body">
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Организация:</span>
-                        <p className="seeker-dashboard__paragraph">{item.organizationName || "Не указана"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Дата:</span>
-                        <p className="seeker-dashboard__paragraph">{item.issuedAt || "Не указана"}</p>
-                      </div>
-                      <div className="seeker-dashboard__collection-card-detail">
-                        <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
-                        {item.credentialUrl ? (
+                      {item.organizationName ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Организация:</span>
+                          <p className="seeker-dashboard__paragraph">{item.organizationName}</p>
+                        </div>
+                      ) : null}
+                      {item.issuedAt ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Дата:</span>
+                          <p className="seeker-dashboard__paragraph">{item.issuedAt}</p>
+                        </div>
+                      ) : null}
+                      {item.credentialUrl ? (
+                        <div className="seeker-dashboard__collection-card-detail">
+                          <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
                           <a href={item.credentialUrl} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
                             {item.credentialUrl}
                           </a>
-                        ) : (
-                          <span className="public-profile-page__muted-value">Не указана</span>
-                        )}
-                      </div>
+                        </div>
+                      ) : null}
                     </div>
                   </article>
-                )) : <p className="public-profile-page__empty-block">Сертификаты не добавлены.</p>}
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
           </section>
         </Container>
 
@@ -671,30 +760,28 @@ export function PublicProfilePage() {
   const employerStats = profile.employer_stats;
   const verificationStatus = employerProfile?.verification_status;
   const theme = profile.role === "employer" ? "employer" : "applicant";
-  const profileCompletionFields = [
-    employerProfile?.company_name,
-    employerProfile?.inn,
-    employerProfile?.corporate_email,
-    employerProfile?.short_description,
-    employerProfile?.organization_size,
-    employerProfile?.foundation_year ? String(employerProfile.foundation_year) : "",
-    employerProfile?.website,
-    employerProfile?.social_link,
-    employerProfile?.office_addresses?.some((item) => item.trim()),
-    employerProfile?.activity_areas?.some((item) => item.trim()),
-  ];
-  const employerCompletion = Math.round(
-    (profileCompletionFields.filter((item) => typeof item === "string" ? Boolean(item.trim()) : Boolean(item)).length / profileCompletionFields.length) * 100,
+  const employerOfficeAddresses = normalizeStringArray(employerProfile?.office_addresses);
+  const employerActivityAreas = normalizeStringArray(employerProfile?.activity_areas);
+  const employerCorporateEmail = normalizeStringValue(employerProfile?.corporate_email);
+  const employerWebsite = normalizeStringValue(employerProfile?.website);
+  const employerPhone = normalizeStringValue(employerProfile?.phone);
+  const employerSocialLink = normalizeStringValue(employerProfile?.social_link);
+  const employerMaxLink = normalizeStringValue(employerProfile?.max_link);
+  const employerRutubeLink = normalizeStringValue(employerProfile?.rutube_link);
+  const employerShortDescription = normalizeStringValue(employerProfile?.short_description);
+  const employerOrganizationSize = normalizeStringValue(employerProfile?.organization_size);
+  const employerVisibleOpportunities = (employerOpportunitiesQuery.data ?? []).filter(
+    (item) => normalizeStringValue(item.employerPublicId) === profile.public_id,
   );
 
   return (
     <main className="employer-dashboard public-profile-page public-profile-page--employer">
       <Header
+        containerClassName="employer-dashboard__header-container"
         profileMenuItems={profileMenuItems}
         theme={theme}
-        isAuthenticated={isAuthenticated}
-        showSearch={false}
-        bottomContent={null}
+        city={selectedCity}
+        onCityChange={handleCityChange}
       />
 
       <Container className="employer-dashboard__container">
@@ -711,122 +798,99 @@ export function PublicProfilePage() {
                     className="employer-dashboard__avatar-image"
                   />
                 </div>
+                <h1 className="public-profile-page__company-name">
+                  {employerProfile?.company_name || profile.display_name || "Не указано"}
+                </h1>
               </div>
             </div>
 
             <div className="employer-dashboard__form-grid">
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">Наименование компании</span>
-                <p className="public-profile-page__field-value">{employerProfile?.company_name || profile.display_name || "Не указано"}</p>
-              </div>
+              {employerShortDescription ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">Краткое описание</span>
+                  <p className="public-profile-page__field-value public-profile-page__field-value--multiline">{employerShortDescription}</p>
+                </div>
+              ) : null}
 
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">Краткое описание</span>
-                <p className="public-profile-page__field-value public-profile-page__field-value--multiline">{employerProfile?.short_description || "Не указано"}</p>
-              </div>
-
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">Адреса офисов</span>
-                <div className="employer-dashboard__office-list">
-                  {(employerProfile?.office_addresses ?? []).length > 0 ? (
-                    employerProfile?.office_addresses?.map((address, index) => (
+              {employerOfficeAddresses.length > 0 ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">Адреса офисов</span>
+                  <div className="employer-dashboard__office-list">
+                    {employerOfficeAddresses.map((address, index) => (
                       <div key={`${address}-${index}`} className="employer-dashboard__office-item">
                         <p className="public-profile-page__field-value">{address}</p>
                       </div>
-                    ))
-                  ) : (
-                    <p className="public-profile-page__muted-value">Не указаны</p>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">Сфера деятельности</span>
-                <div className="employer-dashboard__office-list">
-                  {(employerProfile?.activity_areas ?? []).length > 0 ? (
-                    employerProfile?.activity_areas?.map((area, index) => (
+              {employerActivityAreas.length > 0 ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">Сфера деятельности</span>
+                  <div className="employer-dashboard__office-list">
+                    {employerActivityAreas.map((area, index) => (
                       <div key={`${area}-${index}`} className="employer-dashboard__office-item">
                         <p className="public-profile-page__field-value">{area}</p>
                       </div>
-                    ))
-                  ) : (
-                    <p className="public-profile-page__muted-value">Не указана</p>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">Корпоративная почта</span>
-                <p className="public-profile-page__field-value">{employerProfile?.corporate_email || "Не указана"}</p>
-              </div>
+              {employerCorporateEmail ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">Корпоративная почта</span>
+                  <p className="public-profile-page__field-value">{employerCorporateEmail}</p>
+                </div>
+              ) : null}
 
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">Сайт</span>
-                {employerProfile?.website ? (
-                  <a href={employerProfile.website} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
-                    {employerProfile.website}
+              {employerPhone ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">Телефон</span>
+                  <p className="public-profile-page__field-value">{employerPhone}</p>
+                </div>
+              ) : null}
+
+              {employerWebsite ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">Сайт</span>
+                  <a href={employerWebsite} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
+                    {employerWebsite}
                   </a>
-                ) : (
-                  <p className="public-profile-page__muted-value">Не указан</p>
-                )}
-              </div>
+                </div>
+              ) : null}
 
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">VK</span>
-                {employerProfile?.social_link ? (
-                  <a href={employerProfile.social_link} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
-                    {employerProfile.social_link}
+              {employerSocialLink ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">VK</span>
+                  <a href={employerSocialLink} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
+                    {employerSocialLink}
                   </a>
-                ) : (
-                  <p className="public-profile-page__muted-value">Не указан</p>
-                )}
-              </div>
+                </div>
+              ) : null}
 
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">MAX</span>
-                {employerProfile?.max_link ? (
-                  <a href={employerProfile.max_link} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
-                    {employerProfile.max_link}
+              {employerMaxLink ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">MAX</span>
+                  <a href={employerMaxLink} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
+                    {employerMaxLink}
                   </a>
-                ) : (
-                  <p className="public-profile-page__muted-value">Не указан</p>
-                )}
-              </div>
+                </div>
+              ) : null}
 
-              <div className="employer-dashboard__field">
-                <span className="employer-dashboard__field-label">RUTUBE</span>
-                {employerProfile?.rutube_link ? (
-                  <a href={employerProfile.rutube_link} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
-                    {employerProfile.rutube_link}
+              {employerRutubeLink ? (
+                <div className="employer-dashboard__field">
+                  <span className="employer-dashboard__field-label">RUTUBE</span>
+                  <a href={employerRutubeLink} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
+                    {employerRutubeLink}
                   </a>
-                ) : (
-                  <p className="public-profile-page__muted-value">Не указан</p>
-                )}
-              </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
           <aside className="employer-dashboard__summary">
-            <article className="employer-dashboard__summary-card employer-dashboard__summary-card--progress">
-              <div className="employer-dashboard__summary-progress-head">
-                <p className="employer-dashboard__summary-heading">Профиль заполнен на {employerCompletion}%</p>
-                <div className="employer-dashboard__progress-track" aria-hidden="true">
-                  <span className="employer-dashboard__progress-value" style={{ width: `${Math.min(Math.max(employerCompletion, 6), 100)}%` }} />
-                </div>
-              </div>
-              <div className="employer-dashboard__summary-progress-meta">
-                <div className="employer-dashboard__summary-progress-item">
-                  <p className="employer-dashboard__summary-meta">Просмотров профиля: {employerProfile?.profile_views_count ?? 0}</p>
-                </div>
-                <div className="employer-dashboard__summary-progress-item">
-                  <p className="employer-dashboard__summary-meta">Размещено возможностей: {employerStats?.active_opportunities_count ?? 0}</p>
-                </div>
-                <div className="employer-dashboard__summary-progress-item">
-                  <p className="employer-dashboard__summary-meta">Получено откликов: {employerStats?.responses_count ?? 0}</p>
-                </div>
-              </div>
-            </article>
-
             <article className="employer-dashboard__summary-card">
               <p className="employer-dashboard__summary-label">Статус:</p>
               <div className="employer-dashboard__status-row">
@@ -839,25 +903,91 @@ export function PublicProfilePage() {
               </div>
             </article>
 
-            <article className="employer-dashboard__summary-card">
-              <p className="employer-dashboard__summary-label">ИНН:</p>
-              <strong className="employer-dashboard__summary-value">{employerProfile?.inn || "Не указан"}</strong>
-            </article>
+            {normalizeStringValue(employerProfile?.inn) ? (
+              <article className="employer-dashboard__summary-card">
+                <p className="employer-dashboard__summary-label">ИНН:</p>
+                <strong className="employer-dashboard__summary-value">{employerProfile?.inn}</strong>
+              </article>
+            ) : null}
 
-            <article className="employer-dashboard__summary-card">
-              <p className="employer-dashboard__summary-label">Размер организации:</p>
-              <div className="employer-dashboard__summary-value-row">
-                <strong className="employer-dashboard__summary-value">{employerProfile?.organization_size?.trim() || "Не указано"}</strong>
-              </div>
-            </article>
+            {employerOrganizationSize ? (
+              <article className="employer-dashboard__summary-card">
+                <p className="employer-dashboard__summary-label">Размер организации:</p>
+                <div className="employer-dashboard__summary-value-row">
+                  <strong className="employer-dashboard__summary-value">{employerOrganizationSize}</strong>
+                </div>
+              </article>
+            ) : null}
 
-            <article className="employer-dashboard__summary-card">
-              <p className="employer-dashboard__summary-label">Год основания:</p>
-              <div className="employer-dashboard__summary-value-row">
-                <strong className="employer-dashboard__summary-value">{employerProfile?.foundation_year ? String(employerProfile.foundation_year) : "Не указан"}</strong>
-              </div>
-            </article>
+            {employerProfile?.foundation_year ? (
+              <article className="employer-dashboard__summary-card">
+                <p className="employer-dashboard__summary-label">Год основания:</p>
+                <div className="employer-dashboard__summary-value-row">
+                  <strong className="employer-dashboard__summary-value">{String(employerProfile.foundation_year)}</strong>
+                </div>
+              </article>
+            ) : null}
           </aside>
+        </section>
+
+        <section className="employer-dashboard__opportunities">
+          <h2 className="employer-dashboard__opportunities-title">
+            <span className="employer-dashboard__opportunities-title-accent">Возможности</span> от организации
+          </h2>
+
+          <div className="employer-dashboard__opportunities-shell">
+            <OpportunityFilters
+              viewMode={employerOpportunityViewMode}
+              isMapExpanded={false}
+              onViewModeChange={setEmployerOpportunityViewMode}
+            />
+
+            <div className="employer-dashboard__opportunities-content">
+              <div
+                className={
+                  employerOpportunityViewMode === "map"
+                    ? "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--active"
+                    : "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--hidden"
+                }
+                aria-hidden={employerOpportunityViewMode !== "map"}
+              >
+                <div className="employer-dashboard__opportunities-map">
+                  <MapView
+                    opportunities={employerVisibleOpportunities}
+                    favoriteOpportunityIds={[]}
+                    selectedOpportunityId={selectedEmployerOpportunityId}
+                    selectedCity={normalizeStringValue(profile.preferred_city) || selectedCity}
+                    selectedCityViewport={null}
+                    isExpanded={false}
+                    isTransitioning={false}
+                    roleName="employer"
+                    onSelectOpportunity={setSelectedEmployerOpportunityId}
+                    onToggleFavorite={() => undefined}
+                    onSelectCity={() => undefined}
+                    onCloseDetails={() => setSelectedEmployerOpportunityId(null)}
+                    onToggleExpand={() => undefined}
+                    onApply={(opportunityId) => navigate(`/opportunities/${encodeURIComponent(opportunityId)}`)}
+                  />
+                </div>
+              </div>
+              <div
+                className={
+                  employerOpportunityViewMode === "list"
+                    ? "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--active"
+                    : "employer-dashboard__opportunities-panel employer-dashboard__opportunities-panel--hidden"
+                }
+                aria-hidden={employerOpportunityViewMode !== "list"}
+              >
+                <OpportunityList
+                  opportunities={employerVisibleOpportunities}
+                  favoriteOpportunityIds={[]}
+                  roleName="employer"
+                  onToggleFavorite={() => undefined}
+                  onApply={(opportunityId) => navigate(`/opportunities/${encodeURIComponent(opportunityId)}`)}
+                />
+              </div>
+            </div>
+          </div>
         </section>
       </Container>
 
