@@ -1066,6 +1066,18 @@
   line-height: var(--type-body-small-line);
 }
 
+.map-view__details-company-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.map-view__details-company-button:hover {
+  text-decoration: underline;
+}
+
 .map-view__details-verified-icon {
   display: inline-flex;
   align-items: center;

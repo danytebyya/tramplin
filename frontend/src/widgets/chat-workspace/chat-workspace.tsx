@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import clipIcon from "../../assets/icons/clip.svg";
@@ -299,6 +300,7 @@ export function ChatWorkspace({
   emptyText,
   preferredEmployerId = null,
 }: ChatWorkspaceProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const accessToken = useAuthStore((state) => state.accessToken);
   const isHydrated = useAuthStore((state) => state.isHydrated);
@@ -321,6 +323,14 @@ export function ChatWorkspace({
   const hasRestoredActiveConversationRef = useRef(false);
   const deferredSearchValue = useDeferredValue(searchValue);
   const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
+
+  const openPublicProfile = (publicId: string | null | undefined) => {
+    if (!publicId) {
+      return;
+    }
+
+    navigate(`/profiles/${publicId}`);
+  };
 
   useEffect(() => {
     setLocalNotes(readStoredNotes(currentUserId, currentRole ?? null));
@@ -1176,7 +1186,28 @@ export function ChatWorkspace({
                     <ChatAvatar displayName={item.displayName} role={item.role} avatarUrl={item.avatarUrl} />
                     <span className="chat-workspace__list-content">
                       <span className="chat-workspace__list-main">
-                        <span className="chat-workspace__list-name">{counterpartTitle}</span>
+                        {item.publicId ? (
+                          <span
+                            role="link"
+                            tabIndex={0}
+                            className="chat-workspace__list-name chat-workspace__list-name--link"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openPublicProfile(item.publicId);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                openPublicProfile(item.publicId);
+                              }
+                            }}
+                          >
+                            {counterpartTitle}
+                          </span>
+                        ) : (
+                          <span className="chat-workspace__list-name">{counterpartTitle}</span>
+                        )}
                         <span className="chat-workspace__presence-row">
                           <span className={`chat-workspace__status${item.isOnline ? " chat-workspace__status--online" : ""}`} />
                           <span className="chat-workspace__presence-text">
@@ -1236,7 +1267,28 @@ export function ChatWorkspace({
                     />
                     <span className="chat-workspace__list-content">
                       <span className="chat-workspace__list-main">
-                        <span className="chat-workspace__list-name">{counterpartTitle}</span>
+                        {item.counterpart.publicId ? (
+                          <span
+                            role="link"
+                            tabIndex={0}
+                            className="chat-workspace__list-name chat-workspace__list-name--link"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openPublicProfile(item.counterpart.publicId);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                openPublicProfile(item.counterpart.publicId);
+                              }
+                            }}
+                          >
+                            {counterpartTitle}
+                          </span>
+                        ) : (
+                          <span className="chat-workspace__list-name">{counterpartTitle}</span>
+                        )}
                         <span className="chat-workspace__presence-row">
                           <span
                             className={`chat-workspace__status${item.counterpart.isOnline ? " chat-workspace__status--online" : ""}`}
@@ -1274,7 +1326,17 @@ export function ChatWorkspace({
                     avatarUrl={activeCounterpart.avatarUrl}
                   />
                   <div>
-                    <h2 className="chat-workspace__thread-name">{activeCounterpartTitle}</h2>
+                    {activeCounterpart.publicId ? (
+                      <button
+                        type="button"
+                        className="chat-workspace__thread-name chat-workspace__thread-name-button"
+                        onClick={() => openPublicProfile(activeCounterpart.publicId)}
+                      >
+                        {activeCounterpartTitle}
+                      </button>
+                    ) : (
+                      <h2 className="chat-workspace__thread-name">{activeCounterpartTitle}</h2>
+                    )}
                     <p className="chat-workspace__thread-meta">
                       <span className={`chat-workspace__status${activeCounterpart.isOnline ? " chat-workspace__status--online" : ""}`} />
                       <span>

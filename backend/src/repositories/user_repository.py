@@ -24,6 +24,12 @@ class UserRepository:
             stmt = self._with_profiles(stmt)
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_by_public_id(self, public_id: str, *, with_profiles: bool = True) -> User | None:
+        stmt = select(User).where(User.public_id == public_id)
+        if with_profiles:
+            stmt = self._with_profiles(stmt)
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def list_applicant_recommendation_candidates(
         self,
         *,

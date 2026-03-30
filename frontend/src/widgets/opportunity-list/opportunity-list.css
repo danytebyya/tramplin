@@ -172,6 +172,18 @@
   font-weight: 400;
 }
 
+.opportunity-list__company-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.opportunity-list__company-button:hover {
+  text-decoration: underline;
+}
+
 .opportunity-list__verified-icon {
   display: inline-flex;
   align-items: center;

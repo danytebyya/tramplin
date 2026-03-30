@@ -31,7 +31,30 @@
 }
 
 .header--landing .header__brand {
+  grid-column: 1 / span 2;
+  display: flex;
+  align-items: center;
   justify-self: start;
+  width: max-content;
+  max-width: 100%;
+}
+
+.header--landing .header__brand-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 56px;
+  line-height: 0;
+  width: fit-content;
+}
+
+.header--landing .header__logo-badge {
+  width: 36px;
+  height: 46px;
+  max-width: none;
+  object-fit: contain;
+  object-position: center;
+  align-self: center;
 }
 
 .header--landing .header__bottom {

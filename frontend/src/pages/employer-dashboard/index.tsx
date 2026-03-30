@@ -150,12 +150,14 @@ function mapEmployerOpportunityToFeedOpportunity(
   item: import("../../features/opportunity").EmployerOpportunityItem,
   options: {
     employerId: string;
+    employerPublicId: string | null;
     companyVerified: boolean;
   },
 ): Opportunity {
   return {
     id: item.id,
     employerId: options.employerId,
+    employerPublicId: options.employerPublicId,
     title: item.title,
     companyName: item.companyName,
     companyVerified: options.companyVerified,
@@ -282,6 +284,7 @@ export function EmployerDashboardPage() {
   const preferredCity = meQuery.data?.data?.user?.preferred_city?.trim() || selectedCity;
   const opportunities = employerOpportunitiesQuery.data ?? [];
   const employerId = employerProfile?.inn?.trim() || meQuery.data?.data?.user?.id || "current-employer";
+  const normalizedEmployerPublicId = employerPublicId ?? null;
   const activeOpportunitiesCount = opportunities.filter((item) => item.status === "active").length;
   const responsesCount = opportunities.reduce((total, item) => total + item.responsesCount, 0);
   const visibleEmployerOpportunities = useMemo(
@@ -293,10 +296,11 @@ export function EmployerDashboardPage() {
       visibleEmployerOpportunities.map((item) =>
         mapEmployerOpportunityToFeedOpportunity(item, {
           employerId,
+          employerPublicId: normalizedEmployerPublicId,
           companyVerified: isVerified,
         }),
       ),
-    [employerId, isVerified, visibleEmployerOpportunities],
+    [employerId, isVerified, normalizedEmployerPublicId, visibleEmployerOpportunities],
   );
   const filteredEmployerFeedOpportunities = mappedEmployerFeedOpportunities;
   const profileCompletionFields = [

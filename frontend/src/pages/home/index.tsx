@@ -28,6 +28,7 @@ import { ModerationDashboardContent } from "../curator-dashboard";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
 import { Button, Container } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
+import type { OpportunityToolbarFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
 import {
   buildApplicantProfileMenuItems,
@@ -123,6 +124,13 @@ export function HomePage() {
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? DEFAULT_CITY);
   const [searchQuery, setSearchQuery] = useState("");
+  const [toolbarFilters, setToolbarFilters] = useState<OpportunityToolbarFilters>({
+    city: "",
+    levels: [],
+    formats: [],
+    employment: [],
+    sort: "newest",
+  });
   const [selectedCityViewport, setSelectedCityViewport] = useState<{
     center: [number, number];
     zoom: number;
@@ -277,15 +285,80 @@ export function HomePage() {
       : opportunities.filter((opportunity) => opportunity.kind === selectedCategoryFilter);
 
     const normalizedQuery = normalizeOpportunitySearchText(searchQuery);
+    const normalizedFilterCity = toolbarFilters.city.trim().toLocaleLowerCase("ru-RU");
+    const normalizeFormatLabel = (format: Opportunity["format"]) =>
+      format === "office" ? "Офлайн" : format === "hybrid" ? "Гибрид" : "Удалённо";
 
-    if (!normalizedQuery) {
-      return categoryFilteredOpportunities;
+    const parseSalaryRank = (salaryLabel: string) => {
+      const numbers = salaryLabel.match(/\d+(?:[\s.,]\d+)*/g) ?? [];
+      const parsed = numbers
+        .map((item) => Number(item.replace(/\s+/g, "").replace(",", ".")))
+        .filter((item) => Number.isFinite(item));
+
+      if (parsed.length === 0) {
+        return 0;
+      }
+
+      return Math.max(...parsed);
+    };
+
+    const filteredItems = categoryFilteredOpportunities.filter((opportunity) => {
+      if (normalizedQuery && !matchesOpportunitySearch(opportunity, normalizedQuery)) {
+        return false;
+      }
+
+      if (
+        normalizedFilterCity &&
+        !`${opportunity.city ?? ""} ${opportunity.locationLabel}`.toLocaleLowerCase("ru-RU").includes(normalizedFilterCity)
+      ) {
+        return false;
+      }
+
+      if (toolbarFilters.levels.length > 0 && !toolbarFilters.levels.includes(opportunity.levelLabel)) {
+        return false;
+      }
+
+      if (
+        toolbarFilters.formats.length > 0 &&
+        !toolbarFilters.formats.includes(normalizeFormatLabel(opportunity.format))
+      ) {
+        return false;
+      }
+
+      if (
+        toolbarFilters.employment.length > 0 &&
+        !toolbarFilters.employment.includes(opportunity.employmentLabel)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const sortedItems = [...filteredItems];
+
+    if (toolbarFilters.sort === "salary_desc") {
+      sortedItems.sort((left, right) => parseSalaryRank(right.salaryLabel) - parseSalaryRank(left.salaryLabel));
+      return sortedItems;
     }
 
-    return categoryFilteredOpportunities.filter((opportunity) => {
-      return matchesOpportunitySearch(opportunity, normalizedQuery);
+    if (toolbarFilters.sort === "relevance") {
+      sortedItems.sort((left, right) => {
+        const leftScore = Number(left.companyVerified) + left.tags.length;
+        const rightScore = Number(right.companyVerified) + right.tags.length;
+        return rightScore - leftScore;
+      });
+      return sortedItems;
+    }
+
+    sortedItems.sort((left, right) => {
+      const leftTime = left.publishedAt ? Date.parse(left.publishedAt) : 0;
+      const rightTime = right.publishedAt ? Date.parse(right.publishedAt) : 0;
+      return rightTime - leftTime;
     });
-  }, [opportunities, searchQuery, selectedCategoryFilter]);
+
+    return sortedItems;
+  }, [opportunities, searchQuery, selectedCategoryFilter, toolbarFilters]);
   const platformCounts = platformStatsQuery.data ?? {
     companiesCount: 0,
     applicantsCount: 0,
@@ -917,6 +990,8 @@ export function HomePage() {
                       isMapExpanded={isMapExpandedLayout}
                       searchValue={searchQuery}
                       onSearchChange={setSearchQuery}
+                      filterValue={toolbarFilters}
+                      onFilterChange={setToolbarFilters}
                       onViewModeChange={setViewMode}
                     />
 

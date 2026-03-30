@@ -23,10 +23,13 @@ from src.models import (
     UserNotificationPreference,
 )
 from src.repositories.user_repository import UserRepository
+from src.realtime import presence_hub
 from src.schemas.user import (
     ApplicantDashboardRead,
     ApplicantDashboardStatsRead,
     ApplicantDashboardUpdateRequest,
+    EmployerPublicStatsRead,
+    PublicUserProfileRead,
     UserNotificationPreferencesRead,
     UserNotificationPreferencesUpdateRequest,
     UserUpdateRequest,
@@ -166,6 +169,45 @@ class UserService:
                 ],
             }
         )
+
+    def get_public_profile(self, public_id: str) -> PublicUserProfileRead:
+        normalized_public_id = public_id.strip()
+        if not normalized_public_id:
+            raise AppError(
+                code="USER_PUBLIC_ID_REQUIRED",
+                message="Нужно указать публичный идентификатор профиля.",
+                status_code=400,
+            )
+
+        user = self.user_repo.get_by_public_id(normalized_public_id, with_profiles=True)
+        if user is None or user.deleted_at is not None:
+            raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
+
+        payload = {
+            "public_id": normalized_public_id,
+            "display_name": user.display_name,
+            "preferred_city": user.preferred_city,
+            "role": user.role,
+            "presence": {
+                "is_online": presence_hub.is_user_online(user.id),
+                "last_seen_at": user.last_seen_at,
+            },
+            "applicant_dashboard": None,
+            "employer_profile": None,
+            "employer_stats": None,
+        }
+
+        if user.role == UserRole.APPLICANT:
+            payload["applicant_dashboard"] = self.get_applicant_dashboard(user)
+        elif user.role == UserRole.EMPLOYER and user.employer_profile is not None:
+            active_opportunities_count, responses_count = self._get_employer_public_stats(user.id)
+            payload["employer_profile"] = user.employer_profile
+            payload["employer_stats"] = EmployerPublicStatsRead(
+                active_opportunities_count=active_opportunities_count,
+                responses_count=responses_count,
+            )
+
+        return PublicUserProfileRead.model_validate(payload)
 
     def update_applicant_dashboard(
         self,
@@ -318,6 +360,26 @@ class UserService:
         current_user_with_profiles.email = f"deleted-{current_user.id}@deleted.local"
         current_user_with_profiles.display_name = "Удаленный аккаунт"
         current_user_with_profiles.password_hash = "deleted"
+
+    def _get_employer_public_stats(self, user_id: str | UUID) -> tuple[int, int]:
+        active_statuses = ("active", "planned")
+        active_opportunities_count = self.db.execute(
+            select(func.count(Opportunity.id)).where(
+                Opportunity.created_by_user_id == UUID(str(user_id)),
+                Opportunity.deleted_at.is_(None),
+                Opportunity.business_status.in_(active_statuses),
+            )
+        ).scalar_one()
+        responses_count = self.db.execute(
+            select(func.count(Application.id)).join(
+                Opportunity,
+                Application.opportunity_id == Opportunity.id,
+            ).where(
+                Opportunity.created_by_user_id == UUID(str(user_id)),
+                Opportunity.deleted_at.is_(None),
+            )
+        ).scalar_one()
+        return active_opportunities_count or 0, responses_count or 0
         current_user_with_profiles.preferred_city = None
         current_user_with_profiles.status = UserStatus.ARCHIVED
         current_user_with_profiles.deleted_at = now

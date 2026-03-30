@@ -43,6 +43,12 @@ def read_me(current_user: User = Depends(get_current_user)) -> dict:
     return success_response({"user": serialize_user(current_user)})
 
 
+@router.get("/public/{public_id}", status_code=status.HTTP_200_OK)
+def read_public_profile(public_id: str, db: Session = Depends(get_db)) -> dict:
+    payload = UserService(db).get_public_profile(public_id)
+    return success_response(payload.model_dump(mode="json"))
+
+
 @router.put("/me", status_code=status.HTTP_200_OK)
 def update_me(
     payload: UserUpdateRequest,

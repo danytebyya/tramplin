@@ -97,15 +97,11 @@ export function Header({
       <a href="/" className="header__nav-link">Главная</a>
     </nav>
   ) : topNavigation;
-  const defaultLogoSource =
-    !isAuthenticated || resolvedTheme === "employer" || resolvedTheme === "curator"
-      ? logoPrimary
-      : logoSecondary;
+  const isPrimaryTheme = resolvedTheme === "employer" || resolvedTheme === "curator";
+  const defaultLogoSource = isPrimaryTheme ? logoPrimary : logoSecondary;
   const landingLogoSource = isAuthenticated
     ? defaultLogoSource
-    : resolvedTheme === "employer" || resolvedTheme === "curator"
-      ? logoPrimarySm
-      : logoSecondarySm;
+    : logoPrimarySm;
   const logoSource = variant === "landing" ? landingLogoSource : defaultLogoSource;
   const brandSubtitle = resolveHeaderBrandSubtitle(resolvedTheme, isAuthenticated);
 

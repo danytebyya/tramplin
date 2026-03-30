@@ -6,6 +6,7 @@ export type OpportunityModerationStatus = "pending_review" | "approved" | "rejec
 export type Opportunity = {
   id: string;
   employerId: string;
+  employerPublicId?: string | null;
   title: string;
   companyName: string;
   companyAvatarUrl?: string | null;

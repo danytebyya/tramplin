@@ -5,6 +5,7 @@ import type { Opportunity } from "./index";
 type OpportunityApiItem = {
   id: string;
   employer_id: string;
+  employer_public_id?: string | null;
   title: string;
   company_name: string;
   company_avatar_url?: string | null;
@@ -127,6 +128,7 @@ export async function listOpportunitiesRequest(): Promise<Opportunity[]> {
     .map((item) => ({
       id: item.id,
       employerId: item.employer_id,
+      employerPublicId: item.employer_public_id ?? null,
       title: item.title,
       companyName: item.company_name,
       companyAvatarUrl: item.company_avatar_url ?? null,

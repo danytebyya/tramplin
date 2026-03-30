@@ -209,6 +209,25 @@ export type ApplicantDashboardResponse = {
   };
 };
 
+export type PublicUserProfileResponse = {
+  data?: {
+    public_id?: string;
+    display_name?: string;
+    preferred_city?: string | null;
+    role?: "applicant" | "employer";
+    presence?: {
+      is_online?: boolean;
+      last_seen_at?: string | null;
+    };
+    applicant_dashboard?: ApplicantDashboardResponse["data"] | null;
+    employer_profile?: NonNullable<NonNullable<MeResponse["data"]>["user"]>["employer_profile"];
+    employer_stats?: {
+      active_opportunities_count?: number;
+      responses_count?: number;
+    } | null;
+  };
+};
+
 export type AuthSessionItem = {
   id: string;
   user_agent?: string | null;
@@ -321,6 +340,11 @@ export async function updatePreferredCityRequest(preferredCity: string) {
 
 export async function applicantDashboardRequest() {
   const response = await apiClient.get<ApplicantDashboardResponse>("/users/me/applicant-dashboard");
+  return response.data;
+}
+
+export async function publicUserProfileRequest(publicId: string) {
+  const response = await apiClient.get<PublicUserProfileResponse>(`/users/public/${publicId}`);
   return response.data;
 }
 

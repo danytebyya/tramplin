@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 class OpportunityPublicRead(BaseModel):
     id: str
     employer_id: str
+    employer_public_id: str | None = None
     title: str
     company_name: str
     company_avatar_url: str | None = None

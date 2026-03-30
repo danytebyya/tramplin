@@ -48,6 +48,20 @@ export function OpportunityList({
     navigate(`/opportunities/${opportunityId}`);
   };
 
+  const openEmployerProfile = (opportunity: Opportunity) => {
+    if (opportunity.employerPublicId) {
+      navigate(`/profiles/${opportunity.employerPublicId}`);
+      return;
+    }
+
+    if (onWrite) {
+      onWrite(opportunity);
+      return;
+    }
+
+    openOpportunity(opportunity.id);
+  };
+
   const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>, opportunityId: string) => {
     if (event.key !== "Enter" && event.key !== " ") {
       return;
@@ -150,7 +164,20 @@ export function OpportunityList({
               <div className="opportunity-list__company-block">
                 <div className="opportunity-list__company-row">
                   <div className="opportunity-list__company-header">
-                    <p className="opportunity-list__company">{opportunity.companyName}</p>
+                    {opportunity.employerPublicId ? (
+                      <button
+                        type="button"
+                        className="opportunity-list__company opportunity-list__company-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEmployerProfile(opportunity);
+                        }}
+                      >
+                        {opportunity.companyName}
+                      </button>
+                    ) : (
+                      <p className="opportunity-list__company">{opportunity.companyName}</p>
+                    )}
                     {opportunity.companyVerified ? (
                       <span className="opportunity-list__verified-icon" aria-hidden="true">
                         <img src={verifiedIcon} alt="" aria-hidden="true" className="opportunity-list__verified-icon-image" />
@@ -172,7 +199,15 @@ export function OpportunityList({
               </div>
 
               <div className="opportunity-list__actions">
-                <Button type="button" variant="secondary-outline" size="sm">
+                <Button
+                  type="button"
+                  variant="secondary-outline"
+                  size="sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openEmployerProfile(opportunity);
+                  }}
+                >
                   Показать контакты
                 </Button>
                 <Button

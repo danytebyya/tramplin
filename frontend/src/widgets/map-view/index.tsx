@@ -577,6 +577,8 @@ export function MapView({
   const clustererRef = useRef<Clusterer | null>(null);
   const hasAlignedInitialViewportRef = useRef(false);
   const previousSelectedOpportunityIdRef = useRef<string | null>(null);
+  const preservedViewportRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
+  const shouldRestoreViewportAfterCloseRef = useRef(false);
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
   const onCloseDetailsRef = useRef(onCloseDetails);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -1594,6 +1596,15 @@ export function MapView({
       return;
     }
 
+    if (shouldRestoreViewportAfterCloseRef.current && preservedViewportRef.current) {
+      const nextViewport = preservedViewportRef.current;
+      shouldRestoreViewportAfterCloseRef.current = false;
+      preservedViewportRef.current = null;
+      mapInstanceRef.current.setCenter(nextViewport.center, { duration: 0 });
+      mapInstanceRef.current.setZoom(nextViewport.zoom, { duration: 0 });
+      return;
+    }
+
     const shouldUpdateZoom = !hasAlignedInitialViewportRef.current;
 
     if (previousSelectedOpportunityIdRef.current && !selectedOpportunityId) {
@@ -2400,9 +2411,20 @@ export function MapView({
                 type="button"
                 className="map-view__details-close"
                 aria-label="Закрыть карточку"
-                onMouseDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (mapInstanceRef.current) {
+                    const center = mapInstanceRef.current.getCenter();
+                    preservedViewportRef.current = {
+                      center: [center[0], center[1]],
+                      zoom: mapInstanceRef.current.getZoom(),
+                    };
+                    shouldRestoreViewportAfterCloseRef.current = true;
+                  }
                   onCloseDetails();
                 }}
               >
@@ -2418,7 +2440,21 @@ export function MapView({
 
             <div className="map-view__details-group">
               <div className="map-view__details-company-row">
-                <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
+                {selectedOpportunity.employerPublicId ? (
+                  <button
+                    type="button"
+                    className="map-view__details-company map-view__details-company-button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate(`/profiles/${selectedOpportunity.employerPublicId}`);
+                    }}
+                  >
+                    {selectedOpportunity.companyName}
+                  </button>
+                ) : (
+                  <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
+                )}
                 {selectedOpportunity.companyVerified ? (
                   <span className="map-view__details-verified-icon" aria-hidden="true">
                     <img

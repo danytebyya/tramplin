@@ -1,0 +1,76 @@
+.public-profile-page__status-container {
+  min-height: 56vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.public-profile-page__status-card {
+  width: min(100%, 560px);
+  padding: 32px;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
+}
+
+.public-profile-page__status-title {
+  margin: 0 0 12px;
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.public-profile-page__status-text {
+  margin: 0;
+  color: #516173;
+}
+
+.public-profile-page__status-link {
+  display: inline-flex;
+  margin-top: 18px;
+  color: #0f766e;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.public-profile-page__presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #516173;
+}
+
+.public-profile-page__presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.public-profile-page__presence-dot--online {
+  background: #16a34a;
+}
+
+.public-profile-page__muted-value {
+  color: #6b7280;
+}
+
+.public-profile-page__empty-block {
+  margin: 0;
+  color: #6b7280;
+}
+
+.public-profile-page__field-value {
+  margin: 0;
+  color: #122033;
+  font-weight: 500;
+}
+
+.public-profile-page__field-value--multiline {
+  white-space: pre-wrap;
+}
+
+.public-profile-page__verified-icon {
+  width: 20px;
+  height: 20px;
+}

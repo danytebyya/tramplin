@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
@@ -15,6 +15,10 @@ export function EmployerChatPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const employerAccess = getEmployerAccessState(role, accessToken);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
 
   if (role !== "employer") {
     return <Navigate to="/" replace />;

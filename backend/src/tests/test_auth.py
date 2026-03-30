@@ -1035,6 +1035,107 @@ def test_update_applicant_dashboard(client, db_session):
     assert len(body["projects"]) == 1
 
 
+def test_read_public_applicant_profile(client, db_session):
+    code = _request_code(client, db_session, "public-applicant@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "public-applicant@example.com",
+            "display_name": "Public Applicant",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Public Applicant"},
+        },
+    )
+    assert register_response.status_code == 201
+    public_id = register_response.json()["data"]["user"]["public_id"]
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "public-applicant@example.com", "password": "StrongPass123"},
+    )
+    access_token = login_response.json()["data"]["access_token"]
+
+    client.put(
+        "/api/v1/users/me/applicant-dashboard",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "full_name": "Иван Иванов",
+            "about": "Frontend developer",
+            "hard_skills": ["React", "TypeScript"],
+            "projects": [
+                {
+                    "title": "Portfolio",
+                    "description": "Personal site",
+                    "technologies": "React, TypeScript",
+                    "period_label": "2026",
+                    "role_name": "Frontend",
+                    "repository_url": "https://github.com/test/portfolio",
+                }
+            ],
+        },
+    )
+
+    response = client.get(f"/api/v1/users/public/{public_id}")
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["public_id"] == public_id
+    assert payload["role"] == "applicant"
+    assert payload["applicant_dashboard"]["profile"]["about"] == "Frontend developer"
+    assert payload["applicant_dashboard"]["projects"][0]["title"] == "Portfolio"
+    assert payload["employer_profile"] is None
+
+
+def test_read_public_employer_profile(client, db_session):
+    code = _request_code(client, db_session, "public-employer@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "public-employer@example.com",
+            "display_name": "Public Employer",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "employer",
+        },
+    )
+    assert register_response.status_code == 201
+    public_id = register_response.json()["data"]["user"]["public_id"]
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "public-employer@example.com", "password": "StrongPass123"},
+    )
+    access_token = login_response.json()["data"]["access_token"]
+
+    profile_response = client.put(
+        "/api/v1/companies/profile",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "employer_type": "company",
+            "company_name": "Трамплин",
+            "inn": "1234567890",
+            "short_description": "Карьерная платформа",
+            "website": "https://tramplin.example",
+            "social_link": "https://vk.com/tramplin",
+            "office_addresses": ["Чебоксары"],
+            "activity_areas": ["IT"],
+            "organization_size": "50-100",
+            "foundation_year": 2020,
+        },
+    )
+    assert profile_response.status_code == 200
+
+    response = client.get(f"/api/v1/users/public/{public_id}")
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["public_id"] == public_id
+    assert payload["role"] == "employer"
+    assert payload["employer_profile"]["company_name"] == "Трамплин"
+    assert payload["employer_stats"]["active_opportunities_count"] == 0
+    assert payload["applicant_dashboard"] is None
+
+
 def test_login_rate_limit(client, db_session):
     code = _request_code(client, db_session, "limited-login@example.com")
     register_payload = {

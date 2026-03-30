@@ -298,6 +298,14 @@
   white-space: nowrap;
 }
 
+.chat-workspace__list-name--link {
+  cursor: pointer;
+}
+
+.chat-workspace__list-name--link:hover {
+  text-decoration: underline;
+}
+
 .chat-workspace__presence-row {
   display: flex;
   align-items: center;
@@ -393,12 +401,31 @@
   min-width: 0;
 }
 
+.chat-workspace__thread-title-group > div {
+  min-width: 0;
+}
+
 .chat-workspace__thread-name {
   margin: 0;
   color: var(--color-text-primary);
   font-size: var(--type-body-large-size);
   line-height: var(--type-body-large-line);
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-workspace__thread-name-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chat-workspace__thread-name-button:hover {
+  text-decoration: underline;
 }
 
 .chat-workspace__thread-meta {
@@ -409,6 +436,10 @@
   color: var(--color-text-secondary);
   font-size: var(--type-body-small-size);
   line-height: var(--type-body-small-line);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-workspace__thread-company {
@@ -416,6 +447,9 @@
   color: var(--color-text-tertiary);
   font-size: 14px;
   line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-workspace__messages {

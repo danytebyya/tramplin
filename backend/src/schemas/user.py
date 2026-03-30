@@ -211,6 +211,11 @@ class EmployerProfileRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EmployerPublicStatsRead(BaseModel):
+    active_opportunities_count: int = 0
+    responses_count: int = 0
+
+
 class CuratorProfileRead(BaseModel):
     full_name: str | None = None
     model_config = {"from_attributes": True}
@@ -236,6 +241,17 @@ class UserRead(BaseModel):
     curator_profile: CuratorProfileRead | None = None
 
     model_config = {"from_attributes": True}
+
+
+class PublicUserProfileRead(BaseModel):
+    public_id: str
+    display_name: str
+    preferred_city: str | None = None
+    role: UserRole
+    presence: UserPresenceRead
+    applicant_dashboard: ApplicantDashboardRead | None = None
+    employer_profile: EmployerProfileRead | None = None
+    employer_stats: EmployerPublicStatsRead | None = None
 
 
 class UserPreferredCityUpdateRequest(BaseModel):

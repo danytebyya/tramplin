@@ -18,6 +18,7 @@ import { HomePage } from "../../pages/home";
 import { OpportunityManagementPage } from "../../pages/opportunity-management";
 import { OpportunityDetailsPage } from "../../pages/opportunity-details";
 import { NetworkingPage } from "../../pages/networking";
+import { PublicProfilePage } from "../../pages/public-profile";
 import { SettingsPage } from "../../pages/settings";
 import { SeekerDashboardPage } from "../../pages/seeker-dashboard";
 import { UiKitPage } from "../../pages/ui-kit";
@@ -337,6 +338,14 @@ export function AppRouter() {
         element={
           <EmployerRestrictedPublicRoute>
             <OpportunityDetailsPage />
+          </EmployerRestrictedPublicRoute>
+        }
+      />
+      <Route
+        path="/profiles/:publicId"
+        element={
+          <EmployerRestrictedPublicRoute>
+            <PublicProfilePage />
           </EmployerRestrictedPublicRoute>
         }
       />

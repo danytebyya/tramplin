@@ -554,7 +554,15 @@ export function OpportunityDetailsPage() {
                                   <div className="opportunity-details-page__contact-avatar-shell">
                                     <img src={contact.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar" />
                                   </div>
-                                  <h3 className="opportunity-details-page__contact-name">{contact.name}</h3>
+                                  <h3 className="opportunity-details-page__contact-name">
+                                    {contact.id ? (
+                                      <Link to={`/profiles/${contact.id}`} className="opportunity-details-page__contact-link">
+                                        {contact.name}
+                                      </Link>
+                                    ) : (
+                                      contact.name
+                                    )}
+                                  </h3>
                                   <p className="opportunity-details-page__contact-subtitle">{contact.subtitle}</p>
                                   <p className="opportunity-details-page__contact-status">
                                     <span className={`opportunity-details-page__contact-dot${contact.isOnline ? " opportunity-details-page__contact-dot--online" : ""}`} />
@@ -699,7 +707,13 @@ export function OpportunityDetailsPage() {
                     />
                   </div>
                 ) : null}
-                <h2 className="opportunity-details-page__company-name">{opportunity.companyName}</h2>
+                {opportunity.employerPublicId ? (
+                  <Link to={`/profiles/${opportunity.employerPublicId}`} className="opportunity-details-page__company-name-link">
+                    <h2 className="opportunity-details-page__company-name">{opportunity.companyName}</h2>
+                  </Link>
+                ) : (
+                  <h2 className="opportunity-details-page__company-name">{opportunity.companyName}</h2>
+                )}
 
                 {opportunity.companyVerified ? (
                   <span className="opportunity-details-page__company-badge">
@@ -743,7 +757,17 @@ export function OpportunityDetailsPage() {
                   </Link>
                 </div>
 
-                <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`)}>
+                <Button
+                  type="button"
+                  variant="secondary-outline"
+                  size="md"
+                  fullWidth
+                  onClick={() =>
+                    opportunity.employerPublicId
+                      ? navigate(`/profiles/${opportunity.employerPublicId}`)
+                      : navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`)
+                  }
+                >
                   Подробнее
                 </Button>
               </div>

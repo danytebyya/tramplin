@@ -307,9 +307,15 @@ class OpportunityService:
         active_until = self._normalize_datetime(opportunity.application_deadline)
         published_at = self._normalize_datetime(opportunity.published_at)
 
+        employer_public_id = None
+        if opportunity.employer.created_by is not None:
+            employer_owner = self.repo.db.get(User, opportunity.employer.created_by)
+            employer_public_id = employer_owner.public_id if employer_owner is not None else None
+
         return {
             "id": str(opportunity.id),
             "employer_id": str(opportunity.employer_id),
+            "employer_public_id": employer_public_id,
             "title": opportunity.title,
             "company_name": opportunity.employer.display_name,
             "company_avatar_url": getattr(opportunity.employer, "avatar_url", None),
