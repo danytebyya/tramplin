@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { getEmployerAccessState, resolveEmployerFallbackRoute, useAuthStore } from "../../features/auth";
@@ -11,10 +11,12 @@ import "./employer-chat.css";
 
 export function EmployerChatPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const employerAccess = getEmployerAccessState(role, accessToken);
+  const preferredRecipientUserId = searchParams.get("recipient");
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -60,7 +62,11 @@ export function EmployerChatPage() {
               Управление возможностями
             </button>
           ) : null}
-          {employerAccess.canReviewResponses ? <button type="button" className="employer-chat-page__tab">Отклики</button> : null}
+          {employerAccess.canReviewResponses ? (
+            <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/employer/responses")}>
+              Отклики
+            </button>
+          ) : null}
           <button type="button" className="employer-chat-page__tab employer-chat-page__tab--active">
             Чат
           </button>
@@ -73,6 +79,7 @@ export function EmployerChatPage() {
           title="Чат"
           emptyTitle="Пока нет активного чата"
           emptyText="Выберите существующий диалог слева или найдите соискателя через поиск сверху."
+          preferredRecipientUserId={preferredRecipientUserId}
         />
       </Container>
 

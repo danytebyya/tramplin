@@ -1356,7 +1356,11 @@ export function OpportunityManagementPage() {
           <button type="button" className="opportunity-management-page__tab opportunity-management-page__tab--active">
             Управление возможностями
           </button>
-          {employerAccess.canReviewResponses ? <button type="button" className="opportunity-management-page__tab">Отклики</button> : null}
+          {employerAccess.canReviewResponses ? (
+            <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/employer/responses")}>
+              Отклики
+            </button>
+          ) : null}
           {employerAccess.canAccessChat ? (
             <button
               type="button"
@@ -1710,56 +1714,58 @@ export function OpportunityManagementPage() {
               ))}
             </section>
 
-            <nav className="opportunity-management-page__pagination" aria-label="Пагинация">
-              <button
-                type="button"
-                className="opportunity-management-page__pagination-arrow"
-                onClick={() => setPage((currentValue) => Math.max(1, currentValue - 1))}
-                disabled={currentPage === 1}
-                aria-label="Предыдущая страница"
-              >
-                <img
-                  src={arrowIcon}
-                  alt=""
-                  aria-hidden="true"
-                  className="opportunity-management-page__pagination-arrow-icon opportunity-management-page__pagination-arrow-icon--prev"
-                />
-              </button>
-              {paginationItems.map((item, index) =>
-                typeof item === "number" ? (
-                  <button
-                    key={`${item}-${index}`}
-                    type="button"
-                    className={
-                      currentPage === item
-                        ? "opportunity-management-page__pagination-page opportunity-management-page__pagination-page--active"
-                        : "opportunity-management-page__pagination-page"
-                    }
-                    onClick={() => setPage(item)}
-                  >
-                    {item}
-                  </button>
-                ) : (
-                  <span key={`${item}-${index}`} className="opportunity-management-page__pagination-ellipsis">
-                    ...
-                  </span>
-                ),
-              )}
-              <button
-                type="button"
-                className="opportunity-management-page__pagination-arrow"
-                onClick={() => setPage((currentValue) => Math.min(totalPages, currentValue + 1))}
-                disabled={currentPage === totalPages}
-                aria-label="Следующая страница"
-              >
-                <img
-                  src={arrowIcon}
-                  alt=""
-                  aria-hidden="true"
-                  className="opportunity-management-page__pagination-arrow-icon"
-                />
-              </button>
-            </nav>
+            {totalPages > 1 ? (
+              <nav className="opportunity-management-page__pagination" aria-label="Пагинация">
+                <button
+                  type="button"
+                  className="opportunity-management-page__pagination-arrow"
+                  onClick={() => setPage((currentValue) => Math.max(1, currentValue - 1))}
+                  disabled={currentPage === 1}
+                  aria-label="Предыдущая страница"
+                >
+                  <img
+                    src={arrowIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="opportunity-management-page__pagination-arrow-icon opportunity-management-page__pagination-arrow-icon--prev"
+                  />
+                </button>
+                {paginationItems.map((item, index) =>
+                  typeof item === "number" ? (
+                    <button
+                      key={`${item}-${index}`}
+                      type="button"
+                      className={
+                        currentPage === item
+                          ? "opportunity-management-page__pagination-page opportunity-management-page__pagination-page--active"
+                          : "opportunity-management-page__pagination-page"
+                      }
+                      onClick={() => setPage(item)}
+                    >
+                      {item}
+                    </button>
+                  ) : (
+                    <span key={`${item}-${index}`} className="opportunity-management-page__pagination-ellipsis">
+                      ...
+                    </span>
+                  ),
+                )}
+                <button
+                  type="button"
+                  className="opportunity-management-page__pagination-arrow"
+                  onClick={() => setPage((currentValue) => Math.min(totalPages, currentValue + 1))}
+                  disabled={currentPage === totalPages}
+                  aria-label="Следующая страница"
+                >
+                  <img
+                    src={arrowIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="opportunity-management-page__pagination-arrow-icon"
+                  />
+                </button>
+              </nav>
+            ) : null}
           </>
         ) : (
           <section className="opportunity-management-page__empty" aria-live="polite">

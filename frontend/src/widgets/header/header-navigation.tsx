@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 
 type EmployerHeaderNavigationProps = {
-  currentPage: "dashboard" | "opportunities" | "chat" | "settings";
+  currentPage: "dashboard" | "opportunities" | "responses" | "chat" | "settings";
 };
 
 export function EmployerHeaderNavigation({ currentPage }: EmployerHeaderNavigationProps) {
@@ -20,9 +20,12 @@ export function EmployerHeaderNavigation({ currentPage }: EmployerHeaderNavigati
       >
         Управление возможностями
       </NavLink>
-      <span className="header__category-link" aria-disabled="true">
+      <NavLink
+        to="/employer/responses"
+        className={currentPage === "responses" ? "header__category-link active" : "header__category-link"}
+      >
         Отклики
-      </span>
+      </NavLink>
       <NavLink
         to="/employer/chat"
         className={currentPage === "chat" ? "header__category-link active" : "header__category-link"}

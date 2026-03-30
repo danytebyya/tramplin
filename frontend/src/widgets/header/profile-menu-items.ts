@@ -36,7 +36,7 @@ export function buildEmployerProfileMenuItems(
   }
 
   if (access.canReviewResponses) {
-    items.push({ label: "Отклики" });
+    items.push({ label: "Отклики", onClick: () => navigate("/employer/responses") });
   }
 
   if (access.canAccessChat) {

@@ -55,6 +55,7 @@ type ChatWorkspaceProps = {
   emptyTitle: string;
   emptyText: string;
   preferredEmployerId?: string | null;
+  preferredRecipientUserId?: string | null;
 };
 
 type ConversationListItem = {
@@ -314,6 +315,7 @@ export function ChatWorkspace({
   emptyTitle,
   emptyText,
   preferredEmployerId = null,
+  preferredRecipientUserId = null,
 }: ChatWorkspaceProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -339,6 +341,8 @@ export function ChatWorkspace({
   const [privacyVersion, setPrivacyVersion] = useState(0);
   const [chatRequestVersion, setChatRequestVersion] = useState(0);
   const hasRestoredActiveConversationRef = useRef(false);
+  const appliedPreferredEmployerIdRef = useRef<string | null>(null);
+  const appliedPreferredRecipientUserIdRef = useRef<string | null>(null);
   const deferredSearchValue = useDeferredValue(searchValue);
   const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
 
@@ -362,6 +366,14 @@ export function ChatWorkspace({
     hasRestoredActiveConversationRef.current = false;
   }, [currentRole, currentUserId]);
 
+  useEffect(() => {
+    appliedPreferredEmployerIdRef.current = null;
+  }, [preferredEmployerId]);
+
+  useEffect(() => {
+    appliedPreferredRecipientUserIdRef.current = null;
+  }, [preferredRecipientUserId]);
+
   useEffect(() => subscribeApplicantPrivacy(() => setPrivacyVersion((current) => current + 1)), []);
   useEffect(() => subscribeApplicantChatRequests(() => setChatRequestVersion((current) => current + 1)), []);
 
@@ -381,13 +393,16 @@ export function ChatWorkspace({
 
   const normalizedSearchValue = deferredSearchValue.trim();
   const searchQuery = useQuery({
-    queryKey: ["chat", "search", normalizedSearchValue, preferredEmployerId ?? ""],
+    queryKey: ["chat", "search", normalizedSearchValue, preferredEmployerId ?? "", preferredRecipientUserId ?? ""],
     queryFn: () =>
       searchChatContactsRequest({
         query: normalizedSearchValue,
         employerId: preferredEmployerId,
       }),
-    enabled: isHydrated && Boolean(accessToken) && (Boolean(normalizedSearchValue) || Boolean(preferredEmployerId)),
+    enabled:
+      isHydrated &&
+      Boolean(accessToken) &&
+      (Boolean(normalizedSearchValue) || Boolean(preferredEmployerId) || Boolean(preferredRecipientUserId)),
     staleTime: 5_000,
     refetchOnMount: "always",
     refetchOnWindowFocus: false,
@@ -665,7 +680,19 @@ export function ChatWorkspace({
   }, [activeConversationId, currentRole, currentUserId]);
 
   useEffect(() => {
-    if (!preferredEmployerId || normalizedSearchValue || activeConversationId || activeDraftContact) {
+    if (
+      !preferredEmployerId ||
+      normalizedSearchValue ||
+      appliedPreferredEmployerIdRef.current === preferredEmployerId
+    ) {
+      return;
+    }
+
+    const existingConversation = visibleConversations.find((item) => item.counterpart.companyId === preferredEmployerId);
+    if (existingConversation) {
+      appliedPreferredEmployerIdRef.current = preferredEmployerId;
+      setActiveConversationId(existingConversation.id);
+      setActiveDraftContact(null);
       return;
     }
 
@@ -674,6 +701,7 @@ export function ChatWorkspace({
       return;
     }
 
+    appliedPreferredEmployerIdRef.current = preferredEmployerId;
     const existingConversationId = resolveExistingConversationId(preferredContact);
     if (existingConversationId) {
       setActiveConversationId(existingConversationId);
@@ -683,11 +711,48 @@ export function ChatWorkspace({
 
     setActiveDraftContact(preferredContact);
   }, [
-    activeConversationId,
-    activeDraftContact,
     normalizedSearchValue,
     preferredEmployerId,
     searchResults,
+    visibleConversations,
+  ]);
+
+  useEffect(() => {
+    if (
+      !preferredRecipientUserId ||
+      normalizedSearchValue ||
+      appliedPreferredRecipientUserIdRef.current === preferredRecipientUserId
+    ) {
+      return;
+    }
+
+    const existingConversation = visibleConversations.find((item) => item.counterpart.userId === preferredRecipientUserId);
+    if (existingConversation) {
+      appliedPreferredRecipientUserIdRef.current = preferredRecipientUserId;
+      setActiveConversationId(existingConversation.id);
+      setActiveDraftContact(null);
+      return;
+    }
+
+    const preferredContact = searchResults.find((item) => item.userId === preferredRecipientUserId);
+    if (!preferredContact) {
+      return;
+    }
+
+    appliedPreferredRecipientUserIdRef.current = preferredRecipientUserId;
+    const existingConversationId = resolveExistingConversationId(preferredContact);
+    if (existingConversationId) {
+      setActiveConversationId(existingConversationId);
+      setActiveDraftContact(null);
+      return;
+    }
+
+    setActiveDraftContact(preferredContact);
+  }, [
+    normalizedSearchValue,
+    preferredRecipientUserId,
+    searchResults,
+    visibleConversations,
   ]);
 
   useEffect(() => {

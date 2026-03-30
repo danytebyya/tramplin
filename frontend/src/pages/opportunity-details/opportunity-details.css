@@ -727,6 +727,7 @@
 .opportunity-details-page__contact-meta-item {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   min-width: 0;
   font-size: var(--type-body-small-size);
@@ -738,10 +739,6 @@
   height: 16px;
   flex: 0 0 16px;
   opacity: 0.8;
-}
-
-.opportunity-details-page__contact-card .button {
-  margin-top: 14px;
 }
 
 .opportunity-details-page__state {

@@ -14,6 +14,7 @@ import {
   removeSelectedCityCookie,
   writeSelectedCityCookie,
 } from "../../features/city-selector";
+import { getAppOrigin, resolveAppUrl } from "../../shared/config/env";
 import {
   AuthSessionListResponse,
   NotificationPreferenceGroup,
@@ -293,7 +294,7 @@ function resolvePublicSettingsTabs(role: string | null, employerAccess: ReturnTy
     return [
       ...(employerAccess.canManageCompanyProfile ? [{ label: "Профиль компании", to: "/dashboard/employer" }] : []),
       ...(employerAccess.canManageOpportunities ? [{ label: "Управление возможностями", to: "/employer/opportunities" }] : []),
-      ...(employerAccess.canReviewResponses ? [{ label: "Отклики" }] : []),
+      ...(employerAccess.canReviewResponses ? [{ label: "Отклики", to: "/employer/responses" }] : []),
       ...(employerAccess.canAccessChat ? [{ label: "Чат", to: "/employer/chat" }] : []),
       { label: "Настройки", to: "/settings", isCurrent: true },
     ];
@@ -326,6 +327,27 @@ function resolveEmployerStaffRoleLabel(role: string) {
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeInvitationUrl(invitationUrl?: string | null) {
+  const normalizedUrl = invitationUrl?.trim();
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedUrl, getAppOrigin());
+    const inviteToken = parsedUrl.searchParams.get("invite_token");
+    const mode = parsedUrl.searchParams.get("mode") ?? "accept-company-invite";
+
+    if (inviteToken) {
+      return resolveAppUrl(`/settings?mode=${encodeURIComponent(mode)}&invite_token=${encodeURIComponent(inviteToken)}`);
+    }
+
+    return resolveAppUrl(`${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`);
+  } catch {
+    return resolveAppUrl(normalizedUrl);
+  }
 }
 
 type EmployerStaffPermissionState = {
@@ -721,7 +743,7 @@ export function SettingsPage() {
       setInviteEmailServerError(null);
     },
     onSuccess: (response) => {
-      const invitationUrl = response?.data?.invitation_url ?? null;
+      const invitationUrl = normalizeInvitationUrl(response?.data?.invitation_url);
       setLatestInvitationUrl(invitationUrl);
       setInviteEmail("");
       setInviteEmailServerError(null);
@@ -1062,6 +1084,7 @@ export function SettingsPage() {
       .filter((item) => item.status !== "expired" && isFutureDate(item.expires_at))
       .map((item) => ({
         ...item,
+        invitation_url: normalizeInvitationUrl(item.invitation_url),
         roleLabel: resolveEmployerStaffRoleLabel(item.role),
         permissions: (item.permissions ?? []).map(resolveEmployerStaffPermissionLabel),
         invitedAtLabel: formatDate(item.invited_at),

@@ -11,6 +11,7 @@ import { CuratorManagementPage } from "../../pages/curator-management";
 import { EmployerDashboardPage } from "../../pages/employer-dashboard";
 import { EmployerChatPage } from "../../pages/employer-chat";
 import { EmployerOnboardingPage } from "../../pages/employer-onboarding";
+import { EmployerResponsesPage } from "../../pages/employer-responses";
 import { EmployerVerificationPage } from "../../pages/employer-verification";
 import { FavoritesPage } from "../../pages/favorites";
 import { LoginPage } from "../../pages/login";
@@ -291,6 +292,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <EmployerChatPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/employer/responses"
+        element={
+          <ProtectedRoute>
+            <EmployerResponsesPage />
           </ProtectedRoute>
         }
       />

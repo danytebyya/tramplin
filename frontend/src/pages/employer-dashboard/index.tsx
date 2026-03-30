@@ -719,7 +719,11 @@ export function EmployerDashboardPage() {
               Управление возможностями
             </button>
           ) : null}
-          {employerAccess.canReviewResponses ? <button type="button" className="employer-dashboard__tab">Отклики</button> : null}
+          {employerAccess.canReviewResponses ? (
+            <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/employer/responses")}>
+              Отклики
+            </button>
+          ) : null}
           {employerAccess.canAccessChat ? (
             <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/employer/chat")}>
               Чат
