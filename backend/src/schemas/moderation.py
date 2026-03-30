@@ -170,3 +170,42 @@ class CuratorBulkRoleUpdateRequest(BaseModel):
             raise ValueError("Нужно выбрать хотя бы одного куратора")
 
         return list(dict.fromkeys(normalized_ids))
+
+
+class CuratorUpdateRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=180)
+    email: EmailStr
+    password: str | None = Field(default=None, min_length=8, max_length=10)
+    role: str = Field(pattern="^(admin|curator|junior)$")
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        normalized_value = value.strip()
+        if len(normalized_value) < 2:
+            raise ValueError("РџРѕР»РЅРѕРµ РёРјСЏ РґРѕР»Р¶РЅРѕ СЃРѕРґРµСЂР¶Р°С‚СЊ РЅРµ РјРµРЅРµРµ 2 СЃРёРјРІРѕР»РѕРІ")
+        return normalized_value
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: EmailStr) -> str:
+        return str(value).lower().strip()
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized_value = value.strip()
+        if len(normalized_value) == 0:
+            return None
+        if len(normalized_value) < 8:
+            raise ValueError("РџР°СЂРѕР»СЊ РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ РЅРµ РјРµРЅРµРµ 8 СЃРёРјРІРѕР»РѕРІ")
+        if normalized_value.lower() == normalized_value or normalized_value.upper() == normalized_value:
+            raise ValueError("РџР°СЂРѕР»СЊ РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ СЃРёРјРІРѕР»С‹ РІ СЂР°Р·РЅРѕРј СЂРµРіРёСЃС‚СЂРµ")
+        if not any(character.isdigit() for character in normalized_value):
+            raise ValueError("РџР°СЂРѕР»СЊ РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ С…РѕС‚СЏ Р±С‹ РѕРґРЅСѓ С†РёС„СЂСѓ")
+        if not any(("a" <= character.lower() <= "z") for character in normalized_value):
+            raise ValueError("РџР°СЂРѕР»СЊ РґРѕР»Р¶РµРЅ СЃРѕРґРµСЂР¶Р°С‚СЊ Р»Р°С‚РёРЅСЃРєРёРµ Р±СѓРєРІС‹")
+        return normalized_value

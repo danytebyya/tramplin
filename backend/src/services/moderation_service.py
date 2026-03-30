@@ -25,6 +25,7 @@ from src.schemas.moderation import (
     CuratorManagementItemRead,
     CuratorManagementListResponse,
     CuratorManagementMetricsRead,
+    CuratorUpdateRequest,
     EmployerVerificationDocumentRead,
     EmployerVerificationRequestListResponse,
     EmployerVerificationRequestRead,
@@ -421,6 +422,86 @@ class ModerationService:
             )
             for curator_id in payload.curator_ids
         ]
+
+    def update_curator(
+        self,
+        current_user: User,
+        curator_id: str,
+        payload: CuratorUpdateRequest,
+    ) -> CuratorManagementItemRead:
+        if current_user.role != UserRole.ADMIN:
+            raise AppError(
+                code="MODERATION_FORBIDDEN",
+                message="РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РїСЂР°РІ РґР»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ РєСѓСЂР°С‚РѕСЂР°РјРё",
+                status_code=403,
+            )
+
+        curator = self.repo.get_curator_by_id(curator_id)
+        if curator is None or curator.role not in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}:
+            raise AppError(
+                code="CURATOR_NOT_FOUND",
+                message="РќРµ СѓРґР°Р»РѕСЃСЊ РЅР°Р№С‚Рё РєСѓСЂР°С‚РѕСЂР°.",
+                status_code=404,
+            )
+
+        if str(curator.id) == str(current_user.id):
+            raise AppError(
+                code="SELF_EDIT_FORBIDDEN",
+                message="Нельзя редактировать собственную учетную запись куратора.",
+                status_code=409,
+            )
+
+        existing_user = self.repo.get_user_by_email(payload.email)
+        if existing_user is not None and str(existing_user.id) != str(curator.id):
+            raise AppError(
+                code="USER_EMAIL_ALREADY_EXISTS",
+                message="РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃ С‚Р°РєРёРј email СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓРµС‚.",
+                status_code=409,
+            )
+
+        next_role = (
+            UserRole.ADMIN
+            if payload.role == "admin"
+            else UserRole.JUNIOR if payload.role == "junior" else UserRole.CURATOR
+        )
+
+        curator.display_name = payload.full_name
+        curator.email = payload.email
+        curator.role = next_role
+        if payload.password is not None:
+            curator.password_hash = hash_password(payload.password)
+        if curator.curator_profile is None:
+            curator.curator_profile = CuratorProfile(full_name=payload.full_name)
+        else:
+            curator.curator_profile.full_name = payload.full_name
+        self.repo.db.add(curator)
+
+        try:
+            self.repo.db.commit()
+        except (ProgrammingError, DataError) as error:
+            self.repo.db.rollback()
+            if payload.role == "junior":
+                raise AppError(
+                    code="JUNIOR_ROLE_NOT_AVAILABLE",
+                    message="Р РѕР»СЊ Junior РµС‰С‘ РЅРµ Р°РєС‚РёРІРёСЂРѕРІР°РЅР° РІ Р±Р°Р·Рµ РґР°РЅРЅС‹С…. РЎРЅР°С‡Р°Р»Р° РїСЂРёРјРµРЅРёС‚Рµ РјРёРіСЂР°С†РёСЋ.",
+                    status_code=409,
+                ) from error
+            raise
+
+        self.repo.db.refresh(curator)
+        return CuratorManagementItemRead(
+            id=str(curator.id),
+            full_name=(
+                curator.curator_profile.full_name
+                if curator.curator_profile is not None and curator.curator_profile.full_name
+                else curator.display_name
+            ),
+            email=curator.email,
+            role=payload.role,
+            reviewed_today=0,
+            status="offline",
+            last_activity_at=None,
+        )
 
     def list_employer_verification_requests(
         self,
