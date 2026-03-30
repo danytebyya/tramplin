@@ -3,13 +3,13 @@ from dataclasses import dataclass
 import logging
 
 from sqlalchemy.exc import DataError, ProgrammingError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
-from src.enums import EmployerVerificationStatus, UserRole
+from src.enums import EmployerVerificationStatus, UserRole, UserStatus
 from src.enums.notifications import NotificationKind, NotificationSeverity
 from src.enums.statuses import EmployerVerificationRequestStatus
-from src.models import User
+from src.models import AuthLoginEvent, CuratorProfile, Notification, RefreshSession, User
 from src.models.opportunity import ModerationStatus, OpportunityStatus, OpportunityType, WorkFormat
 from src.repositories import ModerationRepository
 from src.core.security import hash_password
@@ -20,6 +20,7 @@ from src.schemas.moderation import (
     ContentModerationKindCountRead,
     ContentModerationListResponse,
     ContentModerationMetricsRead,
+    CuratorBulkDeleteRequest,
     CuratorBulkRoleUpdateRequest,
     CuratorCreateRequest,
     CuratorManagementItemRead,
@@ -502,6 +503,97 @@ class ModerationService:
             status="offline",
             last_activity_at=None,
         )
+
+    def delete_curator(self, current_user: User, curator_id: str) -> None:
+        if current_user.role != UserRole.ADMIN:
+            raise AppError(
+                code="MODERATION_FORBIDDEN",
+                message="Недостаточно прав для управления кураторами",
+                status_code=403,
+            )
+
+        curator = self.repo.get_curator_by_id(curator_id)
+        if curator is None or curator.role not in {UserRole.JUNIOR, UserRole.CURATOR}:
+            raise AppError(
+                code="CURATOR_NOT_FOUND",
+                message="Не удалось найти куратора.",
+                status_code=404,
+            )
+
+        if str(curator.id) == str(current_user.id):
+            raise AppError(
+                code="SELF_DELETE_FORBIDDEN",
+                message="Нельзя удалить собственную учетную запись куратора.",
+                status_code=409,
+            )
+
+        self._archive_curator(curator)
+
+    def delete_curators(self, current_user: User, payload: CuratorBulkDeleteRequest) -> None:
+        if current_user.role != UserRole.ADMIN:
+            raise AppError(
+                code="MODERATION_FORBIDDEN",
+                message="Недостаточно прав для управления кураторами",
+                status_code=403,
+            )
+
+        curators = self.repo.list_curators_by_ids(payload.curator_ids)
+        curator_by_id = {str(curator.id): curator for curator in curators}
+        missing_ids = [curator_id for curator_id in payload.curator_ids if curator_id not in curator_by_id]
+
+        if missing_ids:
+            raise AppError(
+                code="CURATOR_NOT_FOUND",
+                message="Не удалось найти одного или нескольких кураторов.",
+                status_code=404,
+            )
+
+        for curator in curators:
+            if curator.role not in {UserRole.JUNIOR, UserRole.CURATOR}:
+                raise AppError(
+                    code="CURATOR_DELETE_FORBIDDEN",
+                    message="Можно удалить только кураторов с ролями Junior и Middle.",
+                    status_code=409,
+                )
+            if str(curator.id) == str(current_user.id):
+                raise AppError(
+                    code="SELF_DELETE_FORBIDDEN",
+                    message="Нельзя удалить собственную учетную запись куратора.",
+                    status_code=409,
+                )
+
+        for curator_id in payload.curator_ids:
+            self._archive_curator(curator_by_id[curator_id], commit=False)
+
+        self.repo.db.commit()
+
+    def _archive_curator(self, curator: User, *, commit: bool = True) -> None:
+        now = datetime.now(UTC)
+
+        self.repo.db.execute(delete(Notification).where(Notification.user_id == curator.id))
+        self.repo.db.execute(delete(UserNotificationPreference).where(UserNotificationPreference.user_id == curator.id))
+        self.repo.db.execute(delete(RefreshSession).where(RefreshSession.user_id == curator.id))
+        self.repo.db.execute(delete(AuthLoginEvent).where(AuthLoginEvent.user_id == curator.id))
+
+        if curator.curator_profile is None:
+            curator_with_profile = self.repo.get_curator_by_id(str(curator.id))
+            curator_profile = curator_with_profile.curator_profile if curator_with_profile is not None else None
+        else:
+            curator_profile = curator.curator_profile
+
+        if curator_profile is not None:
+            self.repo.db.delete(curator_profile)
+
+        curator.email = f"deleted-{curator.id}@deleted.local"
+        curator.display_name = "Удаленный аккаунт"
+        curator.password_hash = "deleted"
+        curator.preferred_city = None
+        curator.status = UserStatus.ARCHIVED
+        curator.deleted_at = now
+        self.repo.db.add(curator)
+
+        if commit:
+            self.repo.db.commit()
 
     def list_employer_verification_requests(
         self,

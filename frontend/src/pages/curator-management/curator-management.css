@@ -307,6 +307,13 @@
   line-height: var(--type-caption-line);
 }
 
+.curator-management-page__delete-warning {
+  margin: 0;
+  color: #EF4444;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
 .curator-management-page__modal-role-options {
   display: flex;
   flex-wrap: wrap;
@@ -379,15 +386,15 @@
 
 .curator-management-page__modal-action {
   min-width: 0;
+  flex: 1 1 0;
 }
 
 .curator-management-page__modal-action--cancel {
-  width: 140px;
-  flex: 0 0 140px;
+  width: auto;
 }
 
 .curator-management-page__modal-action--submit {
-  flex: 1 1 auto;
+  flex: 1 1 0;
 }
 
 .curator-management-page__filters,

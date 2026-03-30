@@ -11,6 +11,8 @@ import {
   createCuratorRequest,
   CuratorManagementResponse,
   listCuratorsRequest,
+  deleteCuratorRequest,
+  deleteCuratorsRequest,
   updateCuratorRequest,
   updateCuratorRolesRequest,
 } from "../../features/moderation";
@@ -257,7 +259,10 @@ export function CuratorManagementPage() {
   const [isCreateCuratorModalOpen, setIsCreateCuratorModalOpen] = useState(false);
   const [isBulkRoleModalOpen, setIsBulkRoleModalOpen] = useState(false);
   const [isEditCuratorModalOpen, setIsEditCuratorModalOpen] = useState(false);
+  const [isDeleteCuratorModalOpen, setIsDeleteCuratorModalOpen] = useState(false);
+  const [isBulkDeleteCuratorsModalOpen, setIsBulkDeleteCuratorsModalOpen] = useState(false);
   const [editingCuratorId, setEditingCuratorId] = useState<string | null>(null);
+  const [deletingCuratorId, setDeletingCuratorId] = useState<string | null>(null);
   const [newCuratorName, setNewCuratorName] = useState("");
   const [newCuratorEmail, setNewCuratorEmail] = useState("");
   const [newCuratorPassword, setNewCuratorPassword] = useState("");
@@ -270,6 +275,8 @@ export function CuratorManagementPage() {
   const [createCuratorError, setCreateCuratorError] = useState<string | null>(null);
   const [bulkRoleError, setBulkRoleError] = useState<string | null>(null);
   const [editCuratorError, setEditCuratorError] = useState<string | null>(null);
+  const [deleteCuratorError, setDeleteCuratorError] = useState<string | null>(null);
+  const [bulkDeleteCuratorError, setBulkDeleteCuratorError] = useState<string | null>(null);
 
   const meQuery = useQuery({
     queryKey: ["auth", "me"],
@@ -337,6 +344,38 @@ export function CuratorManagementPage() {
     onError: (error: any) => {
       setEditCuratorError(
         error?.response?.data?.error?.message ?? "Не удалось сохранить изменения куратора. Попробуйте ещё раз.",
+      );
+    },
+  });
+  const deleteCuratorMutation = useMutation({
+    mutationFn: deleteCuratorRequest,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["moderation", "curators"],
+      });
+      setDeleteCuratorError(null);
+      setDeletingCuratorId(null);
+      setIsDeleteCuratorModalOpen(false);
+    },
+    onError: (error: any) => {
+      setDeleteCuratorError(
+        error?.response?.data?.error?.message ?? "Не удалось удалить куратора. Попробуйте ещё раз.",
+      );
+    },
+  });
+  const bulkDeleteCuratorsMutation = useMutation({
+    mutationFn: deleteCuratorsRequest,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["moderation", "curators"],
+      });
+      setBulkDeleteCuratorError(null);
+      setSelectedIds([]);
+      setIsBulkDeleteCuratorsModalOpen(false);
+    },
+    onError: (error: any) => {
+      setBulkDeleteCuratorError(
+        error?.response?.data?.error?.message ?? "Не удалось удалить выбранных кураторов. Попробуйте ещё раз.",
       );
     },
   });
@@ -492,6 +531,13 @@ export function CuratorManagementPage() {
     const items = curatorsQuery.data?.data?.items ?? [];
     return items.find((item) => item.id === editingCuratorId) ?? null;
   }, [curatorsQuery.data, editingCuratorId]);
+  const deletingCurator = useMemo(() => {
+    const items = curatorsQuery.data?.data?.items ?? [];
+    return items.find((item) => item.id === deletingCuratorId) ?? null;
+  }, [curatorsQuery.data, deletingCuratorId]);
+  const bulkDeletingCurators = useMemo(() => {
+    return selectedCurators.filter((item) => item.id !== currentUserId && item.role !== "admin");
+  }, [currentUserId, selectedCurators]);
   const shouldShowEditRoleDowngradeNote =
     editingCurator !== null && getRoleRank(editCuratorRole) < getRoleRank(editingCurator.role);
 
@@ -686,6 +732,58 @@ export function CuratorManagementPage() {
     });
   };
 
+  const handleDeleteCuratorModalClose = () => {
+    if (deleteCuratorMutation.isPending) {
+      return;
+    }
+
+    setIsDeleteCuratorModalOpen(false);
+    setDeletingCuratorId(null);
+    setDeleteCuratorError(null);
+  };
+
+  const handleBulkDeleteCuratorsModalClose = () => {
+    if (bulkDeleteCuratorsMutation.isPending) {
+      return;
+    }
+
+    setIsBulkDeleteCuratorsModalOpen(false);
+    setBulkDeleteCuratorError(null);
+  };
+
+  const handleDeleteCuratorOpen = (curator: {
+    id: string;
+    role: CuratorRole;
+  }) => {
+    if ((currentUserId && curator.id === currentUserId) || curator.role === "admin") {
+      return;
+    }
+
+    setDeletingCuratorId(curator.id);
+    setDeleteCuratorError(null);
+    setIsDeleteCuratorModalOpen(true);
+  };
+
+  const handleDeleteCuratorSubmit = () => {
+    if (!deletingCuratorId) {
+      return;
+    }
+
+    setDeleteCuratorError(null);
+    deleteCuratorMutation.mutate(deletingCuratorId);
+  };
+
+  const handleBulkDeleteCuratorsSubmit = () => {
+    if (bulkDeletingCurators.length === 0) {
+      return;
+    }
+
+    setBulkDeleteCuratorError(null);
+    bulkDeleteCuratorsMutation.mutate({
+      curator_ids: bulkDeletingCurators.map((curator) => curator.id),
+    });
+  };
+
   useEffect(() => {
     setSelectedIds([]);
   }, [safePage, appliedRoles, appliedSearch, appliedSortDirection, appliedSortField, appliedStatuses]);
@@ -693,6 +791,7 @@ export function CuratorManagementPage() {
   useEffect(() => {
     if (selectedIds.length === 0) {
       setIsBulkRoleModalOpen(false);
+      setIsBulkDeleteCuratorsModalOpen(false);
     }
   }, [selectedIds.length]);
 
@@ -989,6 +1088,10 @@ export function CuratorManagementPage() {
                 variant="danger"
                 size="md"
                 className="curator-management-page__bulk-bar-button"
+                onClick={() => {
+                  setBulkDeleteCuratorError(null);
+                  setIsBulkDeleteCuratorsModalOpen(true);
+                }}
               >
                 Удалить кураторов
               </Button>
@@ -1068,7 +1171,7 @@ export function CuratorManagementPage() {
                               aria-label={`Удалить ${item.full_name}`}
                               disabled={isSeniorCurator}
                             >
-                              <img src={deleteIcon} alt="" aria-hidden="true" />
+                              <img src={deleteIcon} alt="" aria-hidden="true" onClick={() => handleDeleteCuratorOpen(item)} />
                             </button>
                           </div>
                         </div>
@@ -1138,6 +1241,118 @@ export function CuratorManagementPage() {
           ) : null}
         </section>
       </Container>
+
+      <Modal
+        isOpen={isDeleteCuratorModalOpen}
+        onClose={handleDeleteCuratorModalClose}
+        title="Удалить куратора"
+        panelClassName="curator-management-page__modal-panel curator-management-page__bulk-role-modal-panel curator-management-page__edit-curator-modal-panel"
+        titleAccentColor="var(--color-accent)"
+      >
+        <div className="curator-management-page__bulk-role-modal">
+          <p className="curator-management-page__bulk-role-count">Вы уверены, что хотите удалить куратора?</p>
+          <p className="curator-management-page__delete-warning">Это действие нельзя отменить</p>
+          <p className="curator-management-page__bulk-role-count">Будет удален:</p>
+
+          {deletingCurator ? (
+            <ul className="curator-management-page__bulk-role-list">
+              <li className="curator-management-page__bulk-role-item">
+                <p className="curator-management-page__bulk-role-line">
+                  <span className="curator-management-page__bulk-role-label">ФИО:</span> {deletingCurator.full_name}
+                </p>
+                <p className="curator-management-page__bulk-role-line">
+                  <span className="curator-management-page__bulk-role-label">E-mail:</span> {deletingCurator.email}
+                </p>
+                <p className="curator-management-page__bulk-role-line">
+                  <span className="curator-management-page__bulk-role-label">Роль:</span> {resolveRoleMeta(deletingCurator.role).label}
+                </p>
+              </li>
+            </ul>
+          ) : null}
+
+          {deleteCuratorError ? <p className="curator-management-page__modal-error">{deleteCuratorError}</p> : null}
+
+          <div className="curator-management-page__modal-actions">
+            <Button
+              type="button"
+              variant="accent"
+              size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--submit"
+              onClick={handleDeleteCuratorModalClose}
+              disabled={deleteCuratorMutation.isPending}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="danger-outline"
+              size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--submit"
+              onClick={handleDeleteCuratorSubmit}
+              loading={deleteCuratorMutation.isPending}
+              disabled={!deletingCurator}
+            >
+              Удалить куратора
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isBulkDeleteCuratorsModalOpen}
+        onClose={handleBulkDeleteCuratorsModalClose}
+        title="Удалить кураторов"
+        panelClassName="curator-management-page__modal-panel curator-management-page__bulk-role-modal-panel curator-management-page__edit-curator-modal-panel"
+        titleAccentColor="var(--color-accent)"
+      >
+        <div className="curator-management-page__bulk-role-modal">
+          <p className="curator-management-page__bulk-role-count">Вы уверены, что хотите удалить выбранных кураторов?</p>
+          <p className="curator-management-page__delete-warning">Это действие нельзя отменить</p>
+          <p className="curator-management-page__bulk-role-count">Будут удалены:</p>
+
+          <ul className="curator-management-page__bulk-role-list">
+            {bulkDeletingCurators.map((curator) => (
+              <li key={curator.id} className="curator-management-page__bulk-role-item">
+                <p className="curator-management-page__bulk-role-line">
+                  <span className="curator-management-page__bulk-role-label">ФИО:</span> {curator.full_name}
+                </p>
+                <p className="curator-management-page__bulk-role-line">
+                  <span className="curator-management-page__bulk-role-label">E-mail:</span> {curator.email}
+                </p>
+                <p className="curator-management-page__bulk-role-line">
+                  <span className="curator-management-page__bulk-role-label">Роль:</span> {resolveRoleMeta(curator.role).label}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          {bulkDeleteCuratorError ? <p className="curator-management-page__modal-error">{bulkDeleteCuratorError}</p> : null}
+
+          <div className="curator-management-page__modal-actions">
+            <Button
+              type="button"
+              variant="accent"
+              size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--submit"
+              onClick={handleBulkDeleteCuratorsModalClose}
+              disabled={bulkDeleteCuratorsMutation.isPending}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="danger-outline"
+              size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--submit"
+              onClick={handleBulkDeleteCuratorsSubmit}
+              loading={bulkDeleteCuratorsMutation.isPending}
+              disabled={bulkDeletingCurators.length === 0}
+            >
+              Удалить кураторов
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isEditCuratorModalOpen}
@@ -1252,7 +1467,7 @@ export function CuratorManagementPage() {
                 (editCuratorPassword.trim().length > 0 && editCuratorPassword.trim().length < 8)
               }
             >
-              Сохранить изменения
+              Сохранить
             </Button>
           </div>
         </div>

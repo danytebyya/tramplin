@@ -172,6 +172,25 @@ class CuratorBulkRoleUpdateRequest(BaseModel):
         return list(dict.fromkeys(normalized_ids))
 
 
+class CuratorBulkDeleteRequest(BaseModel):
+    curator_ids: list[str] = Field(min_length=1)
+
+    @field_validator("curator_ids")
+    @classmethod
+    def validate_curator_ids(cls, value: list[str]) -> list[str]:
+        normalized_ids = []
+
+        for item in value:
+            normalized_item = item.strip()
+            if normalized_item:
+                normalized_ids.append(normalized_item)
+
+        if not normalized_ids:
+            raise ValueError("Нужно выбрать хотя бы одного куратора")
+
+        return list(dict.fromkeys(normalized_ids))
+
+
 class CuratorUpdateRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=180)
     email: EmailStr
