@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import { getModerationAccessState, meRequest, performLogout, useAuthStore } from "../../features/auth";
 import { getModerationDashboardRequest } from "../../features/moderation";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Container, Status } from "../../shared/ui";
@@ -47,6 +47,8 @@ export function ModerationDashboardContent({
   showFooter = false,
 }: ModerationDashboardContentProps) {
   const navigate = useNavigate();
+  const role = useAuthStore((state) => state.role);
+  const moderationAccess = getModerationAccessState(role);
   const dashboardQuery = useQuery({
     queryKey: ["moderation", "dashboard"],
     queryFn: getModerationDashboardRequest,
@@ -88,17 +90,17 @@ export function ModerationDashboardContent({
   const pendingContentItems = metrics?.pending_content_items ?? 0;
 
   const handleNavigateToReview = () => {
-    if (pendingEmployerVerifications > 0) {
+    if (moderationAccess.canAccessEmployerVerification && pendingEmployerVerifications > 0) {
       navigate("/moderation/employers");
       return;
     }
 
-    if (pendingContentItems > 0) {
+    if (moderationAccess.canAccessContentModeration && pendingContentItems > 0) {
       navigate("/moderation/content");
       return;
     }
 
-    navigate("/moderation/employers");
+    navigate(moderationAccess.canAccessEmployerVerification ? "/moderation/employers" : "/moderation/content");
   };
 
   return (
@@ -311,8 +313,9 @@ export function CuratorDashboardPage() {
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
+  const moderationAccess = getModerationAccessState(role);
   const isAdmin = role === "admin";
-  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
+  const isModerationRole = moderationAccess.isModerationRole;
   const themeRole = isAdmin ? "admin" : "curator";
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);

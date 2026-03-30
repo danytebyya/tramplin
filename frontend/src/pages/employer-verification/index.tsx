@@ -8,6 +8,7 @@ import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import {
+  getModerationAccessState,
   meRequest,
   performLogout,
   useAuthStore,
@@ -530,8 +531,10 @@ export function EmployerVerificationPage() {
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
+  const moderationAccess = getModerationAccessState(role);
   const isAdmin = role === "admin";
-  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
+  const isModerationRole = moderationAccess.isModerationRole;
+  const canAccessEmployerVerification = moderationAccess.canAccessEmployerVerification;
   const themeRole = role === "admin" ? "admin" : "curator";
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -592,7 +595,7 @@ export function EmployerVerificationPage() {
         page,
         pageSize: PAGE_SIZE,
       }),
-    enabled: isAuthenticated && isModerationRole,
+    enabled: isAuthenticated && canAccessEmployerVerification,
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
@@ -835,8 +838,8 @@ export function EmployerVerificationPage() {
     bulkActionMutation.isPending;
   const isTableLoading = verificationRequestsQuery.isPending;
 
-  if (!isModerationRole) {
-    return <Navigate to="/" replace />;
+  if (!canAccessEmployerVerification) {
+    return <Navigate to={isModerationRole ? "/moderation/content" : "/"} replace />;
   }
 
   const clearProfileMenuCloseTimeout = () => {

@@ -20,10 +20,12 @@ export { AccountActions } from "./account-actions";
 export { LogoutButton } from "./logout-button";
 export {
   getEmployerAccessState,
+  getModerationAccessState,
   readAccessTokenPayload,
   resolveEmployerFallbackRoute,
+  resolveModerationFallbackRoute,
 } from "./permissions";
-export type { EmployerAccessState, EmployerPermissionKey } from "./permissions";
+export type { EmployerAccessState, EmployerPermissionKey, ModerationAccessState } from "./permissions";
 
 export type RegisterPayload = {
   email: string;

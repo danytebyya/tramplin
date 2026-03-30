@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from src.enums import EmployerType, EmployerVerificationRequestStatus
+from src.enums import EmployerType, EmployerVerificationRequestStatus, UserRole
 from src.models import Employer, Opportunity
 from src.models.opportunity import ModerationStatus, OpportunityStatus, OpportunityType, WorkFormat
 from src.tests.test_moderation_dashboard import _create_curator, _login
@@ -72,6 +72,23 @@ def test_list_content_moderation_items_returns_payload(client, db_session):
         item["status"] for item in payload["items"]
     }
     assert payload["items"][-1]["status"] == "approved"
+
+
+def test_list_content_moderation_items_is_available_for_junior(client, db_session):
+    junior = _create_curator(
+        db_session,
+        email="junior-content-moderation@example.com",
+        role=UserRole.JUNIOR,
+    )
+    access_token = _login(client, email=junior.email, password="CuratorPass123")
+    _create_content_item(db_session, title="Junior content item")
+
+    response = client.get(
+        "/api/v1/moderation/content-items",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_content_moderation_actions_update_status(client, db_session):

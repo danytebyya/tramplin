@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom";
 
+import { getModerationAccessState, useAuthStore } from "../../features/auth";
+
 type EmployerHeaderNavigationProps = {
   currentPage: "dashboard" | "opportunities" | "responses" | "chat" | "settings";
 };
@@ -48,6 +50,12 @@ type CuratorHeaderNavigationProps = {
 };
 
 export function CuratorHeaderNavigation({ isAdmin = false, currentPage }: CuratorHeaderNavigationProps) {
+  const role = useAuthStore((state) => state.role);
+  const moderationAccess = getModerationAccessState(role);
+  const canAccessEmployerVerification = moderationAccess.canAccessEmployerVerification;
+  const canAccessContentModeration = moderationAccess.canAccessContentModeration;
+  const canManageCurators = isAdmin && moderationAccess.canManageCurators;
+
   return (
     <nav className="header__categories header__categories--curator" aria-label="Навигация куратора">
       <NavLink
@@ -56,19 +64,23 @@ export function CuratorHeaderNavigation({ isAdmin = false, currentPage }: Curato
       >
         Дашборд
       </NavLink>
-      <NavLink
-        to="/moderation/employers"
-        className={currentPage === "employers" ? "header__category-link active" : "header__category-link"}
-      >
-        Верификация работодателей
-      </NavLink>
-      <NavLink
-        to="/moderation/content"
-        className={currentPage === "content" ? "header__category-link active" : "header__category-link"}
-      >
-        Модерация контента
-      </NavLink>
-      {isAdmin ? (
+      {canAccessEmployerVerification ? (
+        <NavLink
+          to="/moderation/employers"
+          className={currentPage === "employers" ? "header__category-link active" : "header__category-link"}
+        >
+          Верификация работодателей
+        </NavLink>
+      ) : null}
+      {canAccessContentModeration ? (
+        <NavLink
+          to="/moderation/content"
+          className={currentPage === "content" ? "header__category-link active" : "header__category-link"}
+        >
+          Модерация контента
+        </NavLink>
+      ) : null}
+      {canManageCurators ? (
         <NavLink
           to="/moderation/curators"
           className={currentPage === "curators" ? "header__category-link active" : "header__category-link"}

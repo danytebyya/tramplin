@@ -39,21 +39,20 @@ const curatorRoleDescriptions: Record<CuratorRole, ReactNode> = {
     <div className="curator-management-page__modal-role-description">
       <p className="curator-management-page__modal-role-description-title">Права:</p>
       <ul className="curator-management-page__modal-role-description-list">
-        <li>Просмотр заявок на верификацию компаний</li>
-        <li>Первичная проверка документов (ИНН, сайт, соцсети)</li>
-        <li>Модерация вакансий (базовая проверка по чеклисту)</li>
-        <li>Запрос дополнительной информации у работодателя</li>
+        <li>Модерация контента и публикаций по чеклисту</li>
+        <li>Проверка вакансий, стажировок, мероприятий и менторских программ</li>
+        <li>Запрос правок по публикациям и отклонение контента</li>
         <li>Просмотр своего дашборда (статистика, задачи)</li>
         <li>Настройки профиля и уведомлений</li>
       </ul>
       <p className="curator-management-page__modal-role-description-title">Не может:</p>
       <ul className="curator-management-page__modal-role-description-list">
-        <li>Одобрять/отклонять компании самостоятельно (только отправлять на проверку Middle/Senior)</li>
-        <li>Модерировать стажировки, мероприятия, менторские программы</li>
+        <li>Верифицировать работодателей и работать с их заявками</li>
+        <li>Управлять другими кураторами</li>
       </ul>
       <p className="curator-management-page__modal-role-description-title">Не имеет доступа:</p>
       <ul className="curator-management-page__modal-role-description-list">
-        <li>К управлению другими кураторами</li>
+        <li>К верификации работодателей</li>
         <li>К аналитике и логам платформы</li>
       </ul>
     </div>

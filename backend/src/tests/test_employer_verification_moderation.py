@@ -100,7 +100,7 @@ def test_list_employer_verification_requests_returns_pending_requests(client, db
     assert body["items"][0]["documents"][0]["file_name"] == "registration.pdf"
 
 
-def test_list_employer_verification_requests_is_available_for_junior(client, db_session):
+def test_list_employer_verification_requests_is_forbidden_for_junior(client, db_session):
     junior_token = _register_moderator(
         client,
         db_session,
@@ -120,7 +120,8 @@ def test_list_employer_verification_requests_is_available_for_junior(client, db_
         headers={"Authorization": f"Bearer {junior_token}"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "MODERATION_FORBIDDEN"
 
 
 def test_new_verification_request_creates_curator_notification(client, db_session):

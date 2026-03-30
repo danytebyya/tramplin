@@ -25,6 +25,13 @@ export type EmployerAccessState = {
   canAccessChat: boolean;
 };
 
+export type ModerationAccessState = {
+  isModerationRole: boolean;
+  canAccessEmployerVerification: boolean;
+  canAccessContentModeration: boolean;
+  canManageCurators: boolean;
+};
+
 export function readAccessTokenPayload(token: string | null) {
   if (!token || typeof window === "undefined") {
     return null;
@@ -88,4 +95,27 @@ export function resolveEmployerFallbackRoute(access: EmployerAccessState) {
   }
 
   return "/settings";
+}
+
+export function getModerationAccessState(role: AuthRole | null): ModerationAccessState {
+  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
+
+  return {
+    isModerationRole,
+    canAccessEmployerVerification: role === "curator" || role === "admin",
+    canAccessContentModeration: role === "junior" || role === "curator" || role === "admin",
+    canManageCurators: role === "admin",
+  };
+}
+
+export function resolveModerationFallbackRoute(access: ModerationAccessState) {
+  if (access.canAccessContentModeration) {
+    return "/moderation/content";
+  }
+
+  if (access.isModerationRole) {
+    return "/dashboard/curator";
+  }
+
+  return "/";
 }

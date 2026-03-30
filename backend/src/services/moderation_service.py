@@ -617,7 +617,7 @@ class ModerationService:
         page: int,
         page_size: int,
     ) -> EmployerVerificationRequestListResponse:
-        self._ensure_moderation_access(current_user)
+        self._ensure_employer_verification_access(current_user)
         requests = self.repo.list_verification_requests()
         employer_profiles = self.repo.list_employer_profiles()
         profile_by_inn = {profile.inn: profile for profile in employer_profiles}
@@ -689,7 +689,7 @@ class ModerationService:
         page: int,
         page_size: int,
     ) -> ContentModerationListResponse:
-        self._ensure_moderation_access(current_user)
+        self._ensure_content_moderation_access(current_user)
         opportunities = self.repo.list_opportunities()
         now = datetime.now(UTC)
         moderation_settings = self._get_or_create_settings()
@@ -809,7 +809,7 @@ class ModerationService:
         opportunity_id: str,
         payload: EmployerVerificationReviewRequest,
     ) -> ContentModerationItemRead:
-        self._ensure_moderation_access(current_user)
+        self._ensure_content_moderation_access(current_user)
         opportunity = self._get_opportunity_or_raise(opportunity_id)
         opportunity.moderation_status = ModerationStatus.APPROVED
         starts_at = (
@@ -851,7 +851,7 @@ class ModerationService:
         opportunity_id: str,
         payload: EmployerVerificationReviewRequest,
     ) -> ContentModerationItemRead:
-        self._ensure_moderation_access(current_user)
+        self._ensure_content_moderation_access(current_user)
         opportunity = self._get_opportunity_or_raise(opportunity_id)
         opportunity.moderation_status = ModerationStatus.REJECTED
         opportunity.moderated_by_user_id = current_user.id
@@ -876,7 +876,7 @@ class ModerationService:
         opportunity_id: str,
         payload: EmployerVerificationReviewRequest,
     ) -> ContentModerationItemRead:
-        self._ensure_moderation_access(current_user)
+        self._ensure_content_moderation_access(current_user)
         opportunity = self._get_opportunity_or_raise(opportunity_id)
         opportunity.moderation_status = ModerationStatus.HIDDEN
         opportunity.moderated_by_user_id = current_user.id
@@ -901,7 +901,7 @@ class ModerationService:
         opportunity_id: str,
         payload: ContentModerationChecklistUpdateRequest,
     ) -> ContentModerationItemRead:
-        self._ensure_moderation_access(current_user)
+        self._ensure_content_moderation_access(current_user)
         opportunity = self._get_opportunity_or_raise(opportunity_id)
         opportunity.checklist_salary_specified = payload.salary_specified
         opportunity.checklist_requirements_completed = payload.requirements_completed
@@ -919,7 +919,7 @@ class ModerationService:
         request_id: str,
         payload: EmployerVerificationReviewRequest,
     ) -> EmployerVerificationRequestRead:
-        self._ensure_moderation_access(current_user)
+        self._ensure_employer_verification_access(current_user)
         verification_request = self._get_verification_request_or_raise(request_id)
         verification_request.status = EmployerVerificationRequestStatus.APPROVED
         verification_request.reviewed_by = current_user.id
@@ -949,7 +949,7 @@ class ModerationService:
         request_id: str,
         payload: EmployerVerificationReviewRequest,
     ) -> EmployerVerificationRequestRead:
-        self._ensure_moderation_access(current_user)
+        self._ensure_employer_verification_access(current_user)
         verification_request = self._get_verification_request_or_raise(request_id)
         resolved_moderator_comment = self._resolve_rejection_comment(payload.moderator_comment)
         verification_request.status = EmployerVerificationRequestStatus.REJECTED
@@ -980,7 +980,7 @@ class ModerationService:
         request_id: str,
         payload: EmployerVerificationReviewRequest,
     ) -> EmployerVerificationRequestRead:
-        self._ensure_moderation_access(current_user)
+        self._ensure_employer_verification_access(current_user)
         verification_request = self._get_verification_request_or_raise(request_id)
         employer_profile = self._get_employer_profile_by_inn(verification_request.inn)
         resolved_moderator_comment = self._resolve_request_changes_comment(payload.moderator_comment)
@@ -1602,6 +1602,19 @@ class ModerationService:
                 status_code=403,
             )
 
+    @classmethod
+    def _ensure_content_moderation_access(cls, current_user: User) -> None:
+        cls._ensure_moderation_access(current_user)
+
+    @staticmethod
+    def _ensure_employer_verification_access(current_user: User) -> None:
+        if current_user.role not in {UserRole.CURATOR, UserRole.ADMIN}:
+            raise AppError(
+                code="MODERATION_FORBIDDEN",
+                message="Недостаточно прав для верификации работодателей",
+                status_code=403,
+            )
+
     def db_commit(self) -> None:
         self.repo.db.commit()
 
@@ -2053,4 +2066,3 @@ class ModerationService:
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
-

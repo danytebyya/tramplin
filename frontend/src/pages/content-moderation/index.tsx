@@ -5,7 +5,7 @@ import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import editIcon from "../../assets/icons/edit.svg";
-import { meRequest, performLogout, useAuthStore } from "../../features/auth";
+import { getModerationAccessState, meRequest, performLogout, useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
 import {
   approveContentModerationItemRequest,
@@ -141,8 +141,10 @@ export function ContentModerationPage() {
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
+  const moderationAccess = getModerationAccessState(role);
   const isAdmin = role === "admin";
-  const isModerationRole = role === "junior" || role === "curator" || role === "admin";
+  const isModerationRole = moderationAccess.isModerationRole;
+  const canAccessContentModeration = moderationAccess.canAccessContentModeration;
   const themeRole = isAdmin ? "admin" : "curator";
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -188,13 +190,13 @@ export function ContentModerationPage() {
         page,
         pageSize: PAGE_SIZE,
       }),
-    enabled: isAuthenticated && isModerationRole,
+    enabled: isAuthenticated && canAccessContentModeration,
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
   });
 
   useNotificationsRealtime({
-    enabled: isAuthenticated && isModerationRole,
+    enabled: isAuthenticated && canAccessContentModeration,
     onMessage: (payload) => {
       if (payload?.type !== "content_moderation_updated") {
         return;
@@ -506,8 +508,8 @@ export function ContentModerationPage() {
     };
   }, [contentQuery.data?.data?.metrics]);
 
-  if (!isModerationRole) {
-    return <Navigate to="/" replace />;
+  if (!canAccessContentModeration) {
+    return <Navigate to={moderationAccess.isModerationRole ? "/dashboard/curator" : "/"} replace />;
   }
 
   const clearProfileMenuCloseTimeout = () => {
