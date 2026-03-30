@@ -18,7 +18,7 @@ import {
 } from "../../features/applications";
 import { useAuthStore } from "../../features/auth";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
-import { Button, Checkbox, Container, Input, Radio } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, Modal, Radio } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import { OpportunityList } from "../../widgets/opportunity-list";
@@ -61,7 +61,7 @@ const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label:
 
 const applicantTabs: Array<{ label: string; to?: string; isCurrent?: boolean }> = [
   { label: "Профиль", to: "/dashboard/applicant" },
-  { label: "Мои отклики" },
+  { label: "Мои отклики", to: "/applications" },
   { label: "Избранное", to: "/favorites", isCurrent: true },
   { label: "Нетворкинг", to: "/networking" },
   { label: "Настройки", to: "/settings" },
@@ -220,6 +220,7 @@ export function FavoritesPage() {
   const [appliedSortField, setAppliedSortField] = useState<FavoriteSortField>("published");
   const [selectedSortDirection, setSelectedSortDirection] = useState<FavoriteSortDirection>("desc");
   const [appliedSortDirection, setAppliedSortDirection] = useState<FavoriteSortDirection>("desc");
+  const [pendingWithdrawOpportunityId, setPendingWithdrawOpportunityId] = useState<string | null>(null);
 
   const opportunitiesQuery = useQuery({
     queryKey: ["opportunities", "feed"],
@@ -274,6 +275,41 @@ export function FavoritesPage() {
     },
   });
 
+  const handleApplyOpportunity = (opportunityId: string) => {
+    if (submitApplicationMutation.isPending) {
+      return;
+    }
+
+    if (appliedOpportunityIds.includes(opportunityId)) {
+      setPendingWithdrawOpportunityId(opportunityId);
+      return;
+    }
+
+    submitApplicationMutation.mutate({
+      opportunityId,
+      shouldWithdraw: false,
+    });
+  };
+
+  const handleConfirmWithdrawOpportunity = () => {
+    if (!pendingWithdrawOpportunityId || submitApplicationMutation.isPending) {
+      return;
+    }
+
+    submitApplicationMutation.mutate(
+      {
+        opportunityId: pendingWithdrawOpportunityId,
+        shouldWithdraw: true,
+      },
+      {
+        onSuccess: async () => {
+          setPendingWithdrawOpportunityId(null);
+          await queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] });
+        },
+      },
+    );
+  };
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
@@ -312,6 +348,10 @@ export function FavoritesPage() {
   }, [isFilterOpen, isSortOpen]);
 
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
+  const isFavoritesLoading =
+    opportunitiesQuery.isPending ||
+    favoriteOpportunitiesQuery.isPending ||
+    myApplicationsQuery.isPending;
   const favoriteOpportunities = useMemo(() => {
     const favoriteIds = new Set(favoriteOpportunityIds);
     return (opportunitiesQuery.data ?? []).filter((opportunity) => favoriteIds.has(opportunity.id));
@@ -578,8 +618,17 @@ export function FavoritesPage() {
         <section className="favorites-page__metrics" aria-label="Статистика избранного">
           {favoriteMetricDefinitions.map((metric) => (
             <article key={metric.key} className="favorites-page__metric-card">
-              <span className="favorites-page__metric-label">{metric.label}</span>
-              <strong className="favorites-page__metric-value">{formatCount(stats[metric.key])}</strong>
+              {isFavoritesLoading ? (
+                <>
+                  <span className="favorites-page__skeleton favorites-page__skeleton--metric-label" />
+                  <span className="favorites-page__skeleton favorites-page__skeleton--metric-value" />
+                </>
+              ) : (
+                <>
+                  <span className="favorites-page__metric-label">{metric.label}</span>
+                  <strong className="favorites-page__metric-value">{formatCount(stats[metric.key])}</strong>
+                </>
+              )}
             </article>
           ))}
         </section>
@@ -611,7 +660,9 @@ export function FavoritesPage() {
                   setIsSortOpen(false);
                   setIsFilterOpen((current) => !current);
                 }}
-              />
+              >
+                <span className="favorites-page__icon favorites-page__icon--filter" aria-hidden="true" />
+              </button>
 
               {isFilterOpen ? (
                 <div className="favorites-page__popover">
@@ -901,7 +952,18 @@ export function FavoritesPage() {
           </div>
         </section>
 
-        {sortedOpportunities.length > 0 ? (
+        {isFavoritesLoading ? (
+          <OpportunityList
+            opportunities={[]}
+            favoriteOpportunityIds={[]}
+            appliedOpportunityIds={[]}
+            roleName="applicant"
+            isLoading
+            skeletonCount={4}
+            onToggleFavorite={() => undefined}
+            onApply={() => undefined}
+          />
+        ) : sortedOpportunities.length > 0 ? (
           <OpportunityList
             opportunities={sortedOpportunities}
             favoriteOpportunityIds={favoriteOpportunityIds}
@@ -911,12 +973,7 @@ export function FavoritesPage() {
               const shouldFavorite = !favoriteOpportunityIds.includes(opportunityId);
               favoriteOpportunityMutation.mutate({ opportunityId, shouldFavorite });
             }}
-            onApply={(opportunityId) =>
-              submitApplicationMutation.mutate({
-                opportunityId,
-                shouldWithdraw: appliedOpportunityIds.includes(opportunityId),
-              })
-            }
+            onApply={handleApplyOpportunity}
           />
         ) : (
           <section className="favorites-page__empty">
@@ -934,6 +991,34 @@ export function FavoritesPage() {
           </section>
         )}
       </Container>
+      <Modal
+        title="Подтвердите действие"
+        isOpen={pendingWithdrawOpportunityId !== null}
+        onClose={() => setPendingWithdrawOpportunityId(null)}
+      >
+        <div className="settings-page__confirm-delete">
+          <p className="settings-page__confirm-delete-text">
+            Вы уверены, что хотите отозвать отклик?
+          </p>
+          <div className="settings-page__confirm-delete-actions">
+            <Button
+              type="button"
+              variant="secondary-outline"
+              onClick={() => setPendingWithdrawOpportunityId(null)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleConfirmWithdrawOpportunity}
+              loading={submitApplicationMutation.isPending}
+            >
+              Отозвать отклик
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Footer theme={themeRole} />
     </main>

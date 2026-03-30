@@ -17,10 +17,12 @@ import {
 } from "../../widgets/header";
 import { Footer } from "../../widgets/footer";
 import { OpportunityFilters } from "../../widgets/filters";
+import { BackNavigation } from "../../widgets/back-navigation";
 import { MapView } from "../../widgets/map-view";
 import { OpportunityList } from "../../widgets/opportunity-list";
 import {
   getEmployerAccessState,
+  meRequest,
   publicUserProfileRequest,
   readAccessTokenPayload,
   useAuthStore,
@@ -29,7 +31,13 @@ import {
   type ApplicantDashboardProject,
   type ApplicantDashboardResponse,
 } from "../../features/auth";
-import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import {
+  canViewerAccessApplicantProfile,
+  canViewerSeeApplicantResume,
+  getApplicantPrivacySettings,
+  resolveAvatarIcon,
+  resolveAvatarUrl,
+} from "../../shared/lib";
 import { Badge, Container } from "../../shared/ui";
 import "../seeker-dashboard/seeker-dashboard.css";
 import "../employer-dashboard/employer-dashboard.css";
@@ -302,6 +310,45 @@ function renderExternalLink(label: string, value: string, fallback: string) {
   );
 }
 
+function PublicProfileSkeleton() {
+  return (
+    <Container className="public-profile-page__status-container public-profile-page__status-container--loading">
+      <div className="public-profile-page__skeleton-layout" aria-hidden="true">
+        <section className="public-profile-page__skeleton-card public-profile-page__skeleton-card--main">
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--avatar" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--title" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--subtitle" />
+          <div className="public-profile-page__skeleton-grid">
+            <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
+            <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
+            <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
+            <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
+          </div>
+        </section>
+        <aside className="public-profile-page__skeleton-card public-profile-page__skeleton-card--side">
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--section-title" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--field public-profile-page__skeleton--field-wide" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--field public-profile-page__skeleton--field-wide" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
+        </aside>
+        <section className="public-profile-page__skeleton-card public-profile-page__skeleton-card--full">
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--section-title" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--line" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--line" />
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--line public-profile-page__skeleton--line-short" />
+        </section>
+        <section className="public-profile-page__skeleton-card public-profile-page__skeleton-card--full">
+          <span className="public-profile-page__skeleton public-profile-page__skeleton--section-title" />
+          <div className="public-profile-page__skeleton-opportunities">
+            <span className="public-profile-page__skeleton public-profile-page__skeleton--opportunity" />
+            <span className="public-profile-page__skeleton public-profile-page__skeleton--opportunity" />
+          </div>
+        </section>
+      </div>
+    </Container>
+  );
+}
+
 export function PublicProfilePage() {
   const { publicId } = useParams();
   const navigate = useNavigate();
@@ -331,8 +378,31 @@ export function PublicProfilePage() {
     enabled: Boolean(publicId),
     retry: false,
   });
+  const meQuery = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: meRequest,
+    enabled: Boolean(accessToken),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const profile = profileQuery.data?.data;
+  const privacySettings = useMemo(
+    () =>
+      getApplicantPrivacySettings({
+        publicId: profile?.public_id,
+      }),
+    [profile?.public_id],
+  );
+  const isOwner = Boolean(
+    profile?.public_id &&
+      meQuery.data?.data?.user?.public_id &&
+      profile.public_id === meQuery.data.data.user.public_id,
+  );
+  const canAccessApplicantProfile = canViewerAccessApplicantProfile({
+    settings: privacySettings,
+    isAuthenticated: Boolean(accessToken),
+    isOwner,
+  });
   const employerOpportunitiesQuery = useQuery({
     queryKey: ["public-profile", "employer-opportunities", publicId],
     queryFn: listOpportunitiesRequest,
@@ -376,6 +446,7 @@ export function PublicProfilePage() {
           city={selectedCity}
           onCityChange={handleCityChange}
         />
+        <BackNavigation />
         <Container className="public-profile-page__status-container">
           <div className="public-profile-page__status-card">
             <h1 className="public-profile-page__status-title">Профиль временно недоступен</h1>
@@ -398,10 +469,31 @@ export function PublicProfilePage() {
           city={selectedCity}
           onCityChange={handleCityChange}
         />
+        <BackNavigation />
+        <PublicProfileSkeleton />
+        <Footer theme="applicant" />
+      </main>
+    );
+  }
+
+  if (profile.role === "applicant" && !canAccessApplicantProfile) {
+    return (
+      <main className="public-profile-page public-profile-page--error">
+        <Header
+          containerClassName={fallbackHeaderContainerClassName}
+          profileMenuItems={profileMenuItems}
+          theme={fallbackHeaderTheme}
+          city={selectedCity}
+          onCityChange={handleCityChange}
+        />
+        <BackNavigation />
         <Container className="public-profile-page__status-container">
           <div className="public-profile-page__status-card">
-            <h1 className="public-profile-page__status-title">Загружаем профиль</h1>
-            <p className="public-profile-page__status-text">Подготавливаем данные соискателя или работодателя.</p>
+            <h1 className="public-profile-page__status-title">Профиль скрыт</h1>
+            <p className="public-profile-page__status-text">
+              Этот соискатель ограничил видимость профиля в настройках приватности.
+            </p>
+            <Link to="/" className="public-profile-page__status-link">Вернуться на главную</Link>
           </div>
         </Container>
         <Footer theme="applicant" />
@@ -416,6 +508,11 @@ export function PublicProfilePage() {
       applicantState.profile.employmentTypes.length > 0 ||
       applicantState.profile.workFormats.length > 0,
     );
+    const canShowResume = canViewerSeeApplicantResume({
+      settings: privacySettings,
+      isAuthenticated: Boolean(accessToken),
+      isOwner,
+    });
     const hasPortfolioSection = Boolean(
       applicantState.profile.about ||
       applicantState.profile.level ||
@@ -428,7 +525,7 @@ export function PublicProfilePage() {
       applicantState.profile.linkedinUrl ||
       applicantState.profile.portfolioUrl ||
       applicantState.profile.habrUrl ||
-      applicantState.profile.resumeUrl,
+      (canShowResume && applicantState.profile.resumeUrl),
     );
 
     return (
@@ -441,6 +538,7 @@ export function PublicProfilePage() {
           onCityChange={handleCityChange}
         />
 
+        <BackNavigation />
         <Container className="seeker-dashboard__container">
           <section className="seeker-dashboard__profile">
             <div className="seeker-dashboard__profile-grid">
@@ -613,7 +711,9 @@ export function PublicProfilePage() {
                       {renderExternalLink("LinkedIn", applicantState.profile.linkedinUrl, "linkedin.com")}
                       {renderExternalLink("Портфолио", applicantState.profile.portfolioUrl, "portfolio.example")}
                       {renderExternalLink("Хабр", applicantState.profile.habrUrl, "habr.com")}
-                      {renderExternalLink("Резюме", applicantState.profile.resumeUrl, "resume.example")}
+                      {canShowResume
+                        ? renderExternalLink("Резюме", applicantState.profile.resumeUrl, "resume.example")
+                        : null}
                     </div>
                   </article>
                 ) : null}
@@ -784,6 +884,7 @@ export function PublicProfilePage() {
         onCityChange={handleCityChange}
       />
 
+      <BackNavigation />
       <Container className="employer-dashboard__container">
         <section className="employer-dashboard__profile-grid">
           <div className="employer-dashboard__form-panel">
@@ -982,6 +1083,7 @@ export function PublicProfilePage() {
                   opportunities={employerVisibleOpportunities}
                   favoriteOpportunityIds={[]}
                   roleName="employer"
+                  isLoading={employerOpportunitiesQuery.isPending}
                   onToggleFavorite={() => undefined}
                   onApply={(opportunityId) => navigate(`/opportunities/${encodeURIComponent(opportunityId)}`)}
                 />

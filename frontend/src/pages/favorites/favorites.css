@@ -107,10 +107,44 @@
   font-weight: 500;
 }
 
+.favorites-page__skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.favorites-page__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.72) 50%, transparent 100%);
+  animation: favorites-page-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.favorites-page__skeleton--metric-label {
+  width: 92px;
+  height: 18px;
+}
+
+.favorites-page__skeleton--metric-value {
+  width: 56px;
+  height: 40px;
+  border-radius: 12px;
+}
+
 .favorites-page__toolbar {
   display: flex;
   align-items: stretch;
   gap: 16px;
+}
+
+@keyframes favorites-page-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .favorites-page__search {
@@ -180,9 +214,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 50px;
+  gap: 8px;
+  min-width: 50px;
   height: 40px;
-  padding: 0;
+  padding: 0 14px;
   border: none;
   border-radius: 8px;
   background: var(--color-bg-primary);
@@ -207,6 +242,7 @@
 .favorites-page__icon {
   width: 18px;
   height: 18px;
+  flex: 0 0 18px;
   background-color: var(--favorites-icon-color);
   mask-repeat: no-repeat;
   mask-position: center;
@@ -223,23 +259,15 @@
   -webkit-mask-image: url("../../assets/icons/sorting.svg");
 }
 
-.favorites-page__icon--ascending {
-  transform: rotate(180deg);
-}
-
-.favorites-page__icon-button--filter::before {
-  content: "";
+.favorites-page__icon--filter {
   width: 17px;
   height: 17px;
-  background-color: var(--favorites-icon-color);
   mask-image: url("../../assets/icons/filter.svg");
-  mask-repeat: no-repeat;
-  mask-position: center;
-  mask-size: contain;
   -webkit-mask-image: url("../../assets/icons/filter.svg");
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  -webkit-mask-size: contain;
+}
+
+.favorites-page__icon--ascending {
+  transform: rotate(180deg);
 }
 
 .favorites-page__popover {

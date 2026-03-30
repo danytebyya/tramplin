@@ -24,6 +24,7 @@ import {
   isPlaintextChatMessage,
   listChatConversationsRequest,
   listChatMessagesRequest,
+  migrateLegacyStoredChatKeyPair,
   markChatConversationReadRequest,
   searchChatContactsRequest,
   sendChatMessageRequest,
@@ -32,7 +33,19 @@ import {
   upsertMyChatKeyRequest,
   useChatRealtime,
 } from "../../features/chat";
-import { abbreviateLegalEntityName, formatPresenceStatus, resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import {
+  abbreviateLegalEntityName,
+  canViewerAccessApplicantProfile,
+  createApplicantChatRequest,
+  formatPresenceStatus,
+  getApplicantChatRequest,
+  getApplicantPrivacySettings,
+  subscribeApplicantChatRequests,
+  subscribeApplicantPrivacy,
+  resolveAvatarIcon,
+  resolveAvatarUrl,
+  updateApplicantChatRequestStatus,
+} from "../../shared/lib";
 import { Button, Input } from "../../shared/ui";
 import "./chat-workspace.css";
 
@@ -308,6 +321,7 @@ export function ChatWorkspace({
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const currentRole = useAuthStore((state) => state.role);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -322,6 +336,8 @@ export function ChatWorkspace({
   const [composerError, setComposerError] = useState<string | null>(null);
   const [localNotes, setLocalNotes] = useState<LocalNoteRecord[]>([]);
   const [systemWelcomeAt, setSystemWelcomeAt] = useState(() => new Date().toISOString());
+  const [privacyVersion, setPrivacyVersion] = useState(0);
+  const [chatRequestVersion, setChatRequestVersion] = useState(0);
   const hasRestoredActiveConversationRef = useRef(false);
   const deferredSearchValue = useDeferredValue(searchValue);
   const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
@@ -345,6 +361,9 @@ export function ChatWorkspace({
   useEffect(() => {
     hasRestoredActiveConversationRef.current = false;
   }, [currentRole, currentUserId]);
+
+  useEffect(() => subscribeApplicantPrivacy(() => setPrivacyVersion((current) => current + 1)), []);
+  useEffect(() => subscribeApplicantChatRequests(() => setChatRequestVersion((current) => current + 1)), []);
 
   const persistLocalNotes = (nextNotes: LocalNoteRecord[]) => {
     setLocalNotes(nextNotes);
@@ -375,11 +394,17 @@ export function ChatWorkspace({
   });
 
   useEffect(() => {
+    if (!isHydrated || !accessToken || !currentUserId || !canUseChatCrypto()) {
+      return;
+    }
+
     let isMounted = true;
 
     void (async () => {
-      const storedPair = getStoredChatKeyPair(currentUserId);
       const remotePair = await getMyChatKeyRequest();
+      let storedPair =
+        migrateLegacyStoredChatKeyPair(currentUserId, remotePair?.publicKeyJwk) ??
+        getStoredChatKeyPair(currentUserId);
 
       if (
         storedPair &&
@@ -387,6 +412,7 @@ export function ChatWorkspace({
         !areChatKeysEqual(storedPair.publicKeyJwk, remotePair.publicKeyJwk)
       ) {
         clearStoredChatKeyPair(currentUserId);
+        storedPair = null;
       }
 
       if (!storedPair && remotePair?.publicKeyJwk && !remotePair.privateKeyJwk) {
@@ -416,7 +442,7 @@ export function ChatWorkspace({
     return () => {
       isMounted = false;
     };
-  }, [currentUserId]);
+  }, [accessToken, currentUserId, isHydrated]);
 
   useChatRealtime(() => {
     void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
@@ -425,17 +451,48 @@ export function ChatWorkspace({
   });
 
   const conversations = conversationsQuery.data ?? EMPTY_CONVERSATIONS;
-  const searchResults = searchQuery.data ?? EMPTY_CONTACTS;
+  const visibleConversations = useMemo(
+    () =>
+      conversations.filter((item) => {
+        if (item.counterpart.role !== "applicant") {
+          return true;
+        }
+
+        return canViewerAccessApplicantProfile({
+          settings: getApplicantPrivacySettings({
+            userId: item.counterpart.userId,
+            publicId: item.counterpart.publicId,
+          }),
+          isAuthenticated: Boolean(accessToken),
+          isOwner: item.counterpart.userId === currentUserId,
+        });
+      }),
+    [accessToken, conversations, currentUserId, privacyVersion],
+  );
+  const searchResults = useMemo(
+    () =>
+      (searchQuery.data ?? EMPTY_CONTACTS).filter((item) =>
+        canViewerAccessApplicantProfile({
+          settings: getApplicantPrivacySettings({
+            userId: item.userId,
+            publicId: item.publicId,
+          }),
+          isAuthenticated: Boolean(accessToken),
+          isOwner: item.userId === currentUserId,
+        }),
+      ),
+    [accessToken, currentUserId, privacyVersion, searchQuery.data],
+  );
   const isConversationListLoading = conversationsQuery.isLoading;
   const isSearchLoading = searchQuery.isLoading;
 
   const conversationMap = useMemo(
     () =>
-      conversations.reduce<Record<string, ChatConversation>>((result, item) => {
+      visibleConversations.reduce<Record<string, ChatConversation>>((result, item) => {
         result[item.id] = item;
         return result;
       }, {}),
-    [conversations],
+    [visibleConversations],
   );
 
   const messagesQuery = useQuery({
@@ -531,7 +588,7 @@ export function ChatWorkspace({
   const conversationItems = useMemo<ConversationListItem[]>(
     () => [
       systemConversationItem,
-      ...conversations.map((item) => ({
+      ...visibleConversations.map((item) => ({
         id: item.id,
         counterpart: item.counterpart,
         unreadCount: item.unreadCount,
@@ -539,7 +596,7 @@ export function ChatWorkspace({
         updatedAt: item.updatedAt,
       })),
     ],
-    [conversations, decryptedPreviewMap, systemConversationItem],
+    [decryptedPreviewMap, systemConversationItem, visibleConversations],
   );
 
   const resolveExistingConversationId = (contact: Pick<ChatContact, "conversationId" | "userId" | "publicId" | "employerId" | "role">) => {
@@ -547,7 +604,7 @@ export function ChatWorkspace({
       return contact.conversationId;
     }
 
-    const matchedConversation = conversations.find((item) => {
+    const matchedConversation = visibleConversations.find((item) => {
       if (item.counterpart.userId === contact.userId) {
         return true;
       }
@@ -679,6 +736,53 @@ export function ChatWorkspace({
       lastSeenAt: activeDraftContact.lastSeenAt,
     };
   }, [activeConversation, activeDraftContact, activeSystemConversation, systemCounterpart]);
+  const isEmployerApplicantPair = Boolean(
+    !activeSystemConversation &&
+      activeCounterpart &&
+      (
+        (currentRole === "employer" && activeCounterpart.role === "applicant") ||
+        (currentRole === "applicant" && activeCounterpart.role === "employer")
+      ),
+  );
+  const didApplicantInitiateConversation = useMemo(() => {
+    if (!isEmployerApplicantPair || activeMessages.length === 0 || !currentRole || !activeCounterpart) {
+      return false;
+    }
+
+    const firstMessage = activeMessages[0];
+    return currentRole === "applicant" ? firstMessage.isOwn : !firstMessage.isOwn;
+  }, [activeCounterpart, activeMessages, currentRole, isEmployerApplicantPair]);
+  const applicantChatRequest = useMemo(
+    () =>
+      isEmployerApplicantPair && activeCounterpart
+        ? getApplicantChatRequest(currentUserId, activeCounterpart.userId)
+        : null,
+    [activeCounterpart, chatRequestVersion, currentUserId, isEmployerApplicantPair],
+  );
+  const requiresEmployerApplicantApproval = Boolean(isEmployerApplicantPair && !didApplicantInitiateConversation);
+  const isApplicantChatRequestRecipient = Boolean(
+    applicantChatRequest && currentUserId && applicantChatRequest.recipientUserId === currentUserId,
+  );
+  const isApplicantChatRequestRequester = Boolean(
+    applicantChatRequest && currentUserId && applicantChatRequest.requesterUserId === currentUserId,
+  );
+  const isApplicantChatPending = applicantChatRequest?.status === "pending";
+  const isApplicantChatRejected = applicantChatRequest?.status === "rejected";
+  const isApplicantChatRestricted = Boolean(
+    requiresEmployerApplicantApproval && (isApplicantChatRejected || isApplicantChatPending),
+  );
+
+  useEffect(() => {
+    if (!applicantChatRequest || applicantChatRequest.status !== "pending" || !didApplicantInitiateConversation) {
+      return;
+    }
+
+    updateApplicantChatRequestStatus({
+      requesterUserId: applicantChatRequest.requesterUserId,
+      recipientUserId: applicantChatRequest.recipientUserId,
+      status: "accepted",
+    });
+  }, [applicantChatRequest, didApplicantInitiateConversation]);
 
   useEffect(() => {
     let isMounted = true;
@@ -831,6 +935,25 @@ export function ChatWorkspace({
     container.scrollTop = container.scrollHeight;
   }, [activeConversationId, messageDayGroups.length, activeMessages.length, systemMessages.length]);
 
+  useEffect(() => {
+    if (!editingMessageId) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const input = composerInputRef.current;
+      if (!input) {
+        return;
+      }
+
+      input.focus();
+      const caretPosition = input.value.length;
+      input.setSelectionRange(caretPosition, caretPosition);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [editingMessageId]);
+
   const handleSelectConversation = (conversationId: string) => {
     setEditingMessageId(null);
     setMessageDraft("");
@@ -903,6 +1026,21 @@ export function ChatWorkspace({
 
   const handleSendMessage = async () => {
     if (!activeCounterpart || isSendingMessage) {
+      return;
+    }
+
+    if (isApplicantChatRejected) {
+      setComposerError("Этот запрос на общение отклонён. Отправка сообщений недоступна.");
+      return;
+    }
+
+    if (isApplicantChatPending && !isApplicantChatRequestRecipient) {
+      setComposerError("Сообщение уже отправлено. Дождитесь ответа от собеседника.");
+      return;
+    }
+
+    if (isApplicantChatPending && isApplicantChatRequestRecipient) {
+      setComposerError("Сначала примите или отклоните запрос на общение.");
       return;
     }
 
@@ -1108,6 +1246,19 @@ export function ChatWorkspace({
         ...currentValue,
         [sentMessage.conversationId]: trimmedMessage,
       }));
+      if (
+        currentRole === "employer" &&
+        activeCounterpart.role === "applicant" &&
+        !applicantChatRequest &&
+        !didApplicantInitiateConversation &&
+        currentUserId
+      ) {
+        createApplicantChatRequest({
+          requesterUserId: currentUserId,
+          recipientUserId: activeCounterpart.userId,
+        });
+        setChatRequestVersion((current) => current + 1);
+      }
       void queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "messages", sentMessage.conversationId] });
       void queryClient.invalidateQueries({ queryKey: ["chat", "search"] });
@@ -1129,6 +1280,33 @@ export function ChatWorkspace({
   const showSearchResults = Boolean(normalizedSearchValue);
   const activeCounterpartTitle = activeCounterpart ? resolveParticipantTitle(activeCounterpart) : null;
   const visibleMessages = activeSystemConversation ? systemMessages : activeMessages;
+  const handleAcceptApplicantChatRequest = () => {
+    if (!applicantChatRequest || !isApplicantChatRequestRecipient) {
+      return;
+    }
+
+    updateApplicantChatRequestStatus({
+      requesterUserId: applicantChatRequest.requesterUserId,
+      recipientUserId: applicantChatRequest.recipientUserId,
+      status: "accepted",
+    });
+    setChatRequestVersion((current) => current + 1);
+    setComposerError(null);
+  };
+
+  const handleRejectApplicantChatRequest = () => {
+    if (!applicantChatRequest || !isApplicantChatRequestRecipient) {
+      return;
+    }
+
+    updateApplicantChatRequestStatus({
+      requesterUserId: applicantChatRequest.requesterUserId,
+      recipientUserId: applicantChatRequest.recipientUserId,
+      status: "rejected",
+    });
+    setChatRequestVersion((current) => current + 1);
+    setComposerError("Запрос на общение отклонён.");
+  };
 
   return (
     <section
@@ -1460,6 +1638,45 @@ export function ChatWorkspace({
               </div>
 
               <div className="chat-workspace__composer">
+                {isApplicantChatPending && isApplicantChatRequestRecipient ? (
+                  <div className="chat-workspace__request-banner">
+                    <p className="chat-workspace__request-banner-text">
+                      Работодатель хочет начать общение с вами. Одобрите запрос, чтобы открыть чат, или отклоните его.
+                    </p>
+                    <div className="chat-workspace__request-banner-actions">
+                      <Button
+                        type="button"
+                        variant="secondary-outline"
+                        size="sm"
+                        onClick={handleRejectApplicantChatRequest}
+                      >
+                        Отклонить
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleAcceptApplicantChatRequest}
+                      >
+                        Одобрить
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                {isApplicantChatPending && isApplicantChatRequestRequester ? (
+                  <div className="chat-workspace__request-banner chat-workspace__request-banner--muted">
+                    <p className="chat-workspace__request-banner-text">
+                      Дождитесь подтверждения запроса, чтобы начать общение.
+                    </p>
+                  </div>
+                ) : null}
+                {isApplicantChatRejected ? (
+                  <div className="chat-workspace__request-banner chat-workspace__request-banner--danger">
+                    <p className="chat-workspace__request-banner-text">
+                      Запрос на общение отклонён. Отправка новых сообщений заблокирована.
+                    </p>
+                  </div>
+                ) : null}
                 {editingMessageId ? (
                   <div className="chat-workspace__composer-editing">
                     <div className="chat-workspace__composer-editing-copy">
@@ -1479,19 +1696,35 @@ export function ChatWorkspace({
                     <img src={clipIcon} alt="" aria-hidden="true" className="chat-workspace__composer-attach-icon" />
                   </button>
                   <Input
+                    ref={composerInputRef}
                     type="text"
                     className="chat-workspace__composer-input input--sm"
-                    placeholder="Сообщение..."
+                    placeholder={
+                      isApplicantChatRejected
+                        ? "Переписка недоступна"
+                        : isApplicantChatPending && isApplicantChatRequestRequester
+                          ? "Ожидайте ответа собеседника"
+                          : isApplicantChatPending && isApplicantChatRequestRecipient
+                            ? "Сначала примите или отклоните запрос"
+                            : "Сообщение..."
+                    }
                     value={messageDraft}
                     onChange={(event) => setMessageDraft(event.target.value)}
                     onKeyDown={(event) => {
-                      if (event.key !== "Enter" || event.nativeEvent.isComposing || messagesQuery.isFetching || isSendingMessage) {
+                      if (
+                        event.key !== "Enter" ||
+                        event.nativeEvent.isComposing ||
+                        messagesQuery.isFetching ||
+                        isSendingMessage ||
+                        isApplicantChatRestricted
+                      ) {
                         return;
                       }
                       event.preventDefault();
                       void handleSendMessage();
                     }}
                     clearable={false}
+                    disabled={isApplicantChatRestricted}
                   />
                   <Button
                     type="button"
@@ -1500,7 +1733,7 @@ export function ChatWorkspace({
                     className="chat-workspace__composer-send"
                     onClick={() => void handleSendMessage()}
                     aria-label="Отправить сообщение"
-                    disabled={!messageDraft.trim() || isSendingMessage}
+                    disabled={!messageDraft.trim() || isSendingMessage || isApplicantChatRestricted}
                     loading={isSendingMessage}
                   >
                     <img src={arrowIcon} alt="" aria-hidden="true" className="chat-workspace__composer-send-icon" />

@@ -44,20 +44,22 @@ function getChatKeyStorageKey(scope?: string | null) {
   return scope ? `${CHAT_CRYPTO_STORAGE_KEY}:${scope}` : CHAT_CRYPTO_STORAGE_KEY;
 }
 
+function readLegacyStoredKeyPair() {
+  return readStoredKeyPair(null);
+}
+
 function readStoredKeyPair(scope?: string | null): StoredKeyPair | null {
   if (typeof window === "undefined") {
     return null;
   }
 
   const rawValue = window.localStorage.getItem(getChatKeyStorageKey(scope));
-  const fallbackValue = scope ? window.localStorage.getItem(CHAT_CRYPTO_STORAGE_KEY) : null;
-  const valueToParse = rawValue ?? fallbackValue;
-  if (!valueToParse) {
+  if (!rawValue) {
     return null;
   }
 
   try {
-    return JSON.parse(valueToParse) as StoredKeyPair;
+    return JSON.parse(rawValue) as StoredKeyPair;
   } catch {
     return null;
   }
@@ -73,6 +75,35 @@ export function clearStoredChatKeyPair(scope?: string | null) {
   }
 
   window.localStorage.removeItem(getChatKeyStorageKey(scope));
+}
+
+export function migrateLegacyStoredChatKeyPair(scope: string, expectedPublicKeyJwk?: JsonWebKey | null) {
+  if (typeof window === "undefined" || !scope) {
+    return null;
+  }
+
+  const scopedStorageKey = getChatKeyStorageKey(scope);
+  const legacyStorageKey = getChatKeyStorageKey();
+  const scopedRawValue = window.localStorage.getItem(scopedStorageKey);
+
+  if (scopedRawValue) {
+    window.localStorage.removeItem(legacyStorageKey);
+    return readStoredKeyPair(scope);
+  }
+
+  const legacyPair = readLegacyStoredKeyPair();
+  if (!legacyPair) {
+    return null;
+  }
+
+  if (expectedPublicKeyJwk && !areChatKeysEqual(legacyPair.publicKeyJwk, expectedPublicKeyJwk)) {
+    window.localStorage.removeItem(legacyStorageKey);
+    return null;
+  }
+
+  writeStoredKeyPair(legacyPair, scope);
+  window.localStorage.removeItem(legacyStorageKey);
+  return legacyPair;
 }
 
 export function getStoredChatKeyPair(scope?: string | null) {

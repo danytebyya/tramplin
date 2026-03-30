@@ -13,7 +13,7 @@ export function buildModerationProfileMenuItems(): HeaderProfileMenuItem[] {
 export function buildApplicantProfileMenuItems(navigate: NavigateFunction): HeaderProfileMenuItem[] {
   return [
     { label: "Профиль", onClick: () => navigate("/dashboard/applicant") },
-    { label: "Мои отклики" },
+    { label: "Мои отклики", onClick: () => navigate("/applications") },
     { label: "Избранное", onClick: () => navigate("/favorites") },
     { label: "Нетворкинг", onClick: () => navigate("/networking") },
     { label: "Настройки", onClick: () => navigate("/settings") },

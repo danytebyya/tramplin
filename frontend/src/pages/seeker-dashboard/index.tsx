@@ -1618,7 +1618,9 @@ export function SeekerDashboardPage() {
           <button type="button" className="seeker-dashboard__tab seeker-dashboard__tab--active">
             Профиль
           </button>
-          <button type="button" className="seeker-dashboard__tab">Мои отклики</button>
+          <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/applications")}>
+            Мои отклики
+          </button>
           <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/favorites")}>
             Избранное
           </button>

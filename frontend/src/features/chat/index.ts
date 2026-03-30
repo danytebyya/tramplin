@@ -21,6 +21,7 @@ export {
   ensureChatKeyPair,
   getStoredChatKeyPair,
   isPlaintextChatMessage,
+  migrateLegacyStoredChatKeyPair,
   storeChatKeyPair,
 } from "./crypto";
 export { useChatRealtime } from "./realtime";

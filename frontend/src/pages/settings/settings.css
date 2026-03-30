@@ -169,6 +169,17 @@
   font-weight: 500;
 }
 
+.settings-page__split-headings {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: end;
+}
+
+.settings-page__split-headings .settings-page__section-title {
+  text-align: left;
+}
+
 .settings-page__section-actions {
   display: flex;
 }
@@ -193,6 +204,10 @@
 
 .settings-page__panel--notification {
   min-height: 170px;
+}
+
+.settings-page__panel--notification-wide {
+  min-width: 0;
 }
 
 .settings-page__panel-header {
@@ -226,6 +241,11 @@
   padding-top: 8px;
 }
 
+.settings-page__radio-list,
+.settings-page__radio-row {
+  display: flex;
+}
+
 .settings-page__panel-actions {
   display: flex;
   flex-direction: column;
@@ -245,6 +265,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
   gap: 24px;
+}
+
+.settings-page__notification-grid--applicant {
+  grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1fr);
 }
 
 .settings-page__notification-grid .settings-page__panel,
@@ -733,7 +757,6 @@
 .settings-page__checkbox-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .settings-page__checkbox-row {
@@ -741,6 +764,18 @@
   align-items: flex-start;
   gap: 8px;
   cursor: pointer;
+  padding: 10px 10px 10px 0;
+}
+
+.settings-page__radio-list {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-page__radio-row {
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 0;
 }
 
 .settings-page__checkbox-label {
@@ -1083,7 +1118,12 @@
 @media (max-width: 959px) {
   .settings-page__grid,
   .settings-page__notification-grid,
-  .settings-page__summary-grid {
+  .settings-page__summary-grid,
+  .settings-page__split-headings {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-page__notification-grid--applicant {
     grid-template-columns: 1fr;
   }
 }

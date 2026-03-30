@@ -46,7 +46,7 @@ export function NetworkingPage() {
           <button type="button" className="settings-page__tab" onClick={() => navigate("/dashboard/applicant")}>
             Профиль
           </button>
-          <button type="button" className="settings-page__tab">
+          <button type="button" className="settings-page__tab" onClick={() => navigate("/applications")}>
             Мои отклики
           </button>
           <button type="button" className="settings-page__tab" onClick={() => navigate("/favorites")}>

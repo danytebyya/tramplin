@@ -51,8 +51,13 @@ import {
   listEmployerStaff,
   listEmployerStaffInvitations,
 } from "../../features/company-verification";
+import {
+  DEFAULT_APPLICANT_PRIVACY_SETTINGS,
+  getApplicantPrivacySettings,
+  saveApplicantPrivacySettings,
+} from "../../shared/lib";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
-import { Button, Checkbox, Container, Input, Modal, Status } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import {
   buildApplicantProfileMenuItems,
@@ -69,6 +74,8 @@ type NotificationPreference = {
   label: string;
   enabled: boolean;
 };
+
+type ApplicantProfileVisibility = "public" | "authorized" | "hidden";
 
 type SettingsTabItem = {
   label: string;
@@ -294,7 +301,7 @@ function resolvePublicSettingsTabs(role: string | null, employerAccess: ReturnTy
 
   return [
     { label: "Профиль", to: "/dashboard/applicant" },
-    { label: "Мои отклики" },
+    { label: "Мои отклики", to: "/applications" },
     { label: "Избранное", to: "/favorites" },
     { label: "Нетворкинг", to: "/networking" },
     { label: "Настройки", to: "/settings", isCurrent: true },
@@ -620,6 +627,10 @@ export function SettingsPage() {
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(() => buildNotificationPreferences(undefined, role));
   const [pushNotifications, setPushNotifications] = useState(() => buildNotificationPreferences(undefined, role));
+  const [profileVisibility, setProfileVisibility] = useState<ApplicantProfileVisibility>(
+    DEFAULT_APPLICANT_PRIVACY_SETTINGS.profileVisibility,
+  );
+  const [isResumeVisible, setIsResumeVisible] = useState(DEFAULT_APPLICANT_PRIVACY_SETTINGS.showResume);
   const [vacancyReviewHours, setVacancyReviewHours] = useState("24");
   const [internshipReviewHours, setInternshipReviewHours] = useState("24");
   const [eventReviewHours, setEventReviewHours] = useState("24");
@@ -893,6 +904,20 @@ export function SettingsPage() {
   }, [notificationPreferencesQuery.data, role]);
 
   useEffect(() => {
+    if (!isApplicant) {
+      return;
+    }
+
+    const privacySettings = getApplicantPrivacySettings({
+      userId: user?.id,
+      publicId: user?.public_id,
+    });
+
+    setProfileVisibility(privacySettings.profileVisibility);
+    setIsResumeVisible(privacySettings.showResume);
+  }, [isApplicant, user?.id, user?.public_id]);
+
+  useEffect(() => {
     const settings = moderationSettingsQuery.data?.data;
     if (!settings) {
       return;
@@ -952,6 +977,25 @@ export function SettingsPage() {
       display_name: fullName.trim(),
       email: email.trim(),
     });
+  };
+
+  const handleApplicantPrivacySave = () => {
+    if (!user?.id && !user?.public_id) {
+      return;
+    }
+
+    saveApplicantPrivacySettings(
+      {
+        userId: user?.id,
+        publicId: user?.public_id,
+      },
+      {
+        profileVisibility,
+        showResume: isResumeVisible,
+      },
+    );
+    setProfileSuccess("Изменения сохранены.");
+    setProfileError(null);
   };
 
   const handleModerationSettingsSave = () => {
@@ -2009,36 +2053,117 @@ export function SettingsPage() {
         ) : null}
 
         <section className="settings-page__section">
-          <h2 className="settings-page__section-title">Уведомления</h2>
-          <div className="settings-page__notification-grid">
-            <div className="settings-page__panel settings-page__panel--notification">
-              <div className="settings-page__panel-header">
-                <h3 className="settings-page__panel-title">E-mail уведомления</h3>
+          {isApplicant ? (
+            <>
+              <div className="settings-page__split-headings">
+                <h2 className="settings-page__section-title">Настройки приватности</h2>
+                <h2 className="settings-page__section-title">Уведомления</h2>
               </div>
-              <div className="settings-page__panel-body settings-page__panel-body--notification">
-                <div className="settings-page__checkbox-list">
-                  {renderNotificationItems(visibleEmailNotifications, toggleEmailNotification, "email")}
+              <div className="settings-page__notification-grid settings-page__notification-grid--applicant">
+              <div className="settings-page__panel settings-page__panel--notification settings-page__panel--notification-wide">
+                <div className="settings-page__panel-body settings-page__panel-body--notification">
+                  <div className="settings-page__group">
+                    <h4 className="settings-page__group-title">Видимость профиля</h4>
+                    <div className="settings-page__radio-list">
+                      <label className="settings-page__radio-row">
+                        <Radio
+                          checked={profileVisibility === "public"}
+                          onChange={() => setProfileVisibility("public")}
+                          variant="secondary"
+                          name="applicant-privacy-visibility"
+                        />
+                        <span className="settings-page__checkbox-label">Видят все</span>
+                      </label>
+                      <label className="settings-page__radio-row">
+                        <Radio
+                          checked={profileVisibility === "authorized"}
+                          onChange={() => setProfileVisibility("authorized")}
+                          variant="secondary"
+                          name="applicant-privacy-visibility"
+                        />
+                        <span className="settings-page__checkbox-label">Видят авторизованные пользователи</span>
+                      </label>
+                      <label className="settings-page__radio-row">
+                        <Radio
+                          checked={profileVisibility === "hidden"}
+                          onChange={() => setProfileVisibility("hidden")}
+                          variant="secondary"
+                          name="applicant-privacy-visibility"
+                        />
+                        <span className="settings-page__checkbox-label">Полностью скрыт</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="settings-page__group">
+                    <h4 className="settings-page__group-title">Видимость резюме</h4>
+                    <label className="settings-page__checkbox-row">
+                      <Checkbox
+                        variant={checkboxVariant}
+                        checked={isResumeVisible}
+                        onChange={() => setIsResumeVisible((current) => !current)}
+                      />
+                      <span className="settings-page__checkbox-label">Показывать резюме другим пользователям</span>
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="settings-page__panel settings-page__panel--notification">
-              <div className="settings-page__panel-header">
-                <h3 className="settings-page__panel-title">Push-уведомления</h3>
-              </div>
-              <div className="settings-page__panel-body settings-page__panel-body--notification">
-                <div className="settings-page__checkbox-list">
-                  {renderNotificationItems(visiblePushNotifications, togglePushNotification, "push")}
+              <div className="settings-page__panel settings-page__panel--notification">
+                <div className="settings-page__panel-body settings-page__panel-body--notification">
+                  <div className="settings-page__group">
+                    <h4 className="settings-page__group-title">E-mail уведомления</h4>
+                    <div className="settings-page__checkbox-list">
+                      {renderNotificationItems(visibleEmailNotifications, toggleEmailNotification, "email")}
+                    </div>
+                  </div>
+                  <div className="settings-page__group">
+                    <h4 className="settings-page__group-title">Push-уведомления</h4>
+                    <div className="settings-page__checkbox-list">
+                      {renderNotificationItems(visiblePushNotifications, togglePushNotification, "push")}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="settings-page__section-title">Уведомления</h2>
+              <div className="settings-page__notification-grid">
+                <div className="settings-page__panel settings-page__panel--notification">
+                  <div className="settings-page__panel-header">
+                    <h3 className="settings-page__panel-title">E-mail уведомления</h3>
+                  </div>
+                  <div className="settings-page__panel-body settings-page__panel-body--notification">
+                    <div className="settings-page__checkbox-list">
+                      {renderNotificationItems(visibleEmailNotifications, toggleEmailNotification, "email")}
+                    </div>
+                  </div>
+                </div>
+                <div className="settings-page__panel settings-page__panel--notification">
+                  <div className="settings-page__panel-header">
+                    <h3 className="settings-page__panel-title">Push-уведомления</h3>
+                  </div>
+                  <div className="settings-page__panel-body settings-page__panel-body--notification">
+                    <div className="settings-page__checkbox-list">
+                      {renderNotificationItems(visiblePushNotifications, togglePushNotification, "push")}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
           <div className="settings-page__section-actions">
             <Button
               type="button"
               variant={actionVariant}
               size="md"
               loading={updateNotificationPreferencesMutation.isPending}
-              onClick={handleNotificationPreferencesSave}
+              onClick={() => {
+                handleNotificationPreferencesSave();
+                if (isApplicant) {
+                  handleApplicantPrivacySave();
+                }
+              }}
             >
               Сохранить настройки
             </Button>

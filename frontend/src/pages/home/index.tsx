@@ -26,7 +26,7 @@ import {
 import { getEmployerAccessState, meRequest, updatePreferredCityRequest, useAuthStore } from "../../features/auth";
 import { ModerationDashboardContent } from "../curator-dashboard";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
-import { Button, Container } from "../../shared/ui";
+import { Button, Container, Modal } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import type { OpportunityToolbarFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
@@ -138,6 +138,7 @@ export function HomePage() {
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
   const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
+  const [pendingWithdrawOpportunityId, setPendingWithdrawOpportunityId] = useState<string | null>(null);
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
   const mapPanelLiveRef = useRef<HTMLDivElement | null>(null);
   const mapPanelProxyContentRef = useRef<HTMLDivElement | null>(null);
@@ -168,12 +169,13 @@ export function HomePage() {
   const isMapTransitioning = mapExpandMode === "expanding" || mapExpandMode === "collapsing";
   const isMapCollapsing = mapExpandMode === "collapsing";
   const employerAccess = getEmployerAccessState(role, accessToken);
-  const { data: opportunities = [] } = useQuery({
+  const opportunitiesQuery = useQuery({
     queryKey: ["opportunities", "feed"],
     queryFn: listOpportunitiesRequest,
     enabled: !isModerationRole,
     staleTime: 5 * 60 * 1000,
   });
+  const opportunities = opportunitiesQuery.data ?? [];
   const platformStatsQuery = useQuery({
     queryKey: ["platform", "stats"],
     queryFn: getPlatformStatsRequest,
@@ -419,6 +421,8 @@ export function HomePage() {
     { value: formatPlatformCount(platformCounts.eventsCount), label: "мероприятий" },
     { value: formatPlatformCount(platformCounts.mentorshipsCount), label: "менторов" },
   ];
+  const isOpportunityDataLoading = !isModerationRole && opportunitiesQuery.isPending;
+  const isPlatformStatsLoading = !isModerationRole && (platformStatsQuery.isPending || opportunitiesQuery.isPending);
   const landingTheme =
     roleName === "applicant"
       ? "applicant"
@@ -758,10 +762,38 @@ export function HomePage() {
       return;
     }
 
+    if (appliedOpportunityIds.includes(opportunityId)) {
+      setPendingWithdrawOpportunityId(opportunityId);
+      return;
+    }
+
     submitApplicationMutation.mutate({
       opportunityId,
-      shouldWithdraw: appliedOpportunityIds.includes(opportunityId),
+      shouldWithdraw: false,
     });
+  };
+
+  const handleConfirmWithdrawOpportunity = () => {
+    if (!pendingWithdrawOpportunityId || submitApplicationMutation.isPending) {
+      return;
+    }
+
+    submitApplicationMutation.mutate(
+      {
+        opportunityId: pendingWithdrawOpportunityId,
+        shouldWithdraw: true,
+      },
+      {
+        onSuccess: async () => {
+          setPendingWithdrawOpportunityId(null);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["applications", "mine", "opportunity-ids"] }),
+            queryClient.invalidateQueries({ queryKey: ["notifications", "feed"] }),
+            queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+          ]);
+        },
+      },
+    );
   };
 
   const handleWriteToEmployer = (opportunity: Opportunity) => {
@@ -913,22 +945,26 @@ export function HomePage() {
                       </Button>
                     </div>
                     <div className="home-page__hero-stats" aria-label="Статистика платформы">
-                      <article className="home-page__stat-card">
-                        <span className="home-page__stat-value">{opportunityStats.vacancies}</span>
-                        <span className="home-page__stat-label">вакансий</span>
-                      </article>
-                      <article className="home-page__stat-card">
-                        <span className="home-page__stat-value">{opportunityStats.internships}</span>
-                        <span className="home-page__stat-label">стажировок</span>
-                      </article>
-                      <article className="home-page__stat-card">
-                        <span className="home-page__stat-value">{opportunityStats.events}</span>
-                        <span className="home-page__stat-label">мероприятий</span>
-                      </article>
-                      <article className="home-page__stat-card">
-                        <span className="home-page__stat-value">{opportunityStats.mentorships}</span>
-                        <span className="home-page__stat-label">менторских программ</span>
-                      </article>
+                      {[
+                        { value: opportunityStats.vacancies, label: "вакансий" },
+                        { value: opportunityStats.internships, label: "стажировок" },
+                        { value: opportunityStats.events, label: "мероприятий" },
+                        { value: opportunityStats.mentorships, label: "менторских программ" },
+                      ].map((stat) => (
+                        <article key={stat.label} className="home-page__stat-card">
+                          {isOpportunityDataLoading ? (
+                            <>
+                              <span className="home-page__skeleton home-page__skeleton--hero-value" />
+                              <span className="home-page__skeleton home-page__skeleton--hero-label" />
+                            </>
+                          ) : (
+                            <>
+                              <span className="home-page__stat-value">{stat.value}</span>
+                              <span className="home-page__stat-label">{stat.label}</span>
+                            </>
+                          )}
+                        </article>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1071,6 +1107,7 @@ export function HomePage() {
                           favoriteOpportunityIds={favoriteOpportunityIds}
                           appliedOpportunityIds={appliedOpportunityIds}
                           roleName={roleName}
+                          isLoading={isOpportunityDataLoading}
                           onToggleFavorite={handleToggleFavorite}
                           onApply={handleApplyOpportunity}
                           onWrite={handleWriteToEmployer}
@@ -1135,8 +1172,17 @@ export function HomePage() {
                           : "home-page__number-card"
                       }
                     >
-                      <span className="home-page__number-value">{stat.value}</span>
-                      <span className="home-page__number-label">{stat.label}</span>
+                      {isPlatformStatsLoading ? (
+                        <>
+                          <span className="home-page__skeleton home-page__skeleton--number-value" />
+                          <span className="home-page__skeleton home-page__skeleton--number-label" />
+                        </>
+                      ) : (
+                        <>
+                          <span className="home-page__number-value">{stat.value}</span>
+                          <span className="home-page__number-label">{stat.label}</span>
+                        </>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -1203,6 +1249,34 @@ export function HomePage() {
         isOpen={isFavoriteAuthModalOpen}
         onClose={() => setIsFavoriteAuthModalOpen(false)}
       />
+      <Modal
+        title="Подтвердите действие"
+        isOpen={pendingWithdrawOpportunityId !== null}
+        onClose={() => setPendingWithdrawOpportunityId(null)}
+      >
+        <div className="settings-page__confirm-delete">
+          <p className="settings-page__confirm-delete-text">
+            Вы уверены, что хотите отозвать отклик?
+          </p>
+          <div className="settings-page__confirm-delete-actions">
+            <Button
+              type="button"
+              variant="secondary-outline"
+              onClick={() => setPendingWithdrawOpportunityId(null)}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={handleConfirmWithdrawOpportunity}
+              loading={submitApplicationMutation.isPending}
+            >
+              Отозвать отклик
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Footer
         theme={

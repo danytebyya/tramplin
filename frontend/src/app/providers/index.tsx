@@ -19,6 +19,7 @@ import {
   ensureChatKeyPair,
   getMyChatKeyRequest,
   getStoredChatKeyPair,
+  migrateLegacyStoredChatKeyPair,
   storeChatKeyPair,
   upsertMyChatKeyRequest,
 } from "../../features/chat";
@@ -276,8 +277,11 @@ function ChatKeyBootstrap() {
         return;
       }
 
-      const storedPair = getStoredChatKeyPair(currentUserId);
       const remotePair = await getMyChatKeyRequest();
+      let storedPair =
+        (currentUserId
+          ? migrateLegacyStoredChatKeyPair(currentUserId, remotePair?.publicKeyJwk)
+          : null) ?? getStoredChatKeyPair(currentUserId);
 
       if (
         storedPair &&
@@ -285,6 +289,7 @@ function ChatKeyBootstrap() {
         !areChatKeysEqual(storedPair.publicKeyJwk, remotePair.publicKeyJwk)
       ) {
         clearStoredChatKeyPair(currentUserId);
+        storedPair = null;
       }
 
       if (!storedPair && remotePair?.publicKeyJwk && !remotePair.privateKeyJwk) {

@@ -20,9 +20,8 @@
     transform 180ms ease;
 }
 
-.opportunity-list__card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+.opportunity-list__card--skeleton {
+  cursor: default;
 }
 
 .opportunity-list__card:focus-visible {
@@ -247,6 +246,100 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.opportunity-list__skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.opportunity-list__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.72) 50%, transparent 100%);
+  animation: opportunity-list-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.opportunity-list__skeleton--title {
+  width: min(420px, 100%);
+  height: 32px;
+}
+
+.opportunity-list__skeleton--favorite,
+.opportunity-list__skeleton--verified {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+}
+
+.opportunity-list__skeleton--kind {
+  width: 96px;
+  height: 18px;
+  margin-top: 6px;
+}
+
+.opportunity-list__skeleton--price {
+  width: 168px;
+  height: 22px;
+}
+
+.opportunity-list__skeleton--meta {
+  width: 220px;
+  height: 16px;
+}
+
+.opportunity-list__skeleton--meta-short {
+  width: 160px;
+}
+
+.opportunity-list__skeleton--tag {
+  width: 94px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.opportunity-list__skeleton--tag-wide {
+  width: 128px;
+}
+
+.opportunity-list__skeleton--text {
+  width: 100%;
+  height: 14px;
+}
+
+.opportunity-list__skeleton--text-short {
+  width: 74%;
+}
+
+.opportunity-list__skeleton--button {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.opportunity-list__skeleton--company {
+  width: 148px;
+  height: 20px;
+}
+
+.opportunity-list__skeleton--rating {
+  width: 112px;
+  height: 16px;
+}
+
+.opportunity-list__skeleton--rating-short {
+  width: 84px;
+}
+
+@keyframes opportunity-list-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 @media (max-width: 1023px) {

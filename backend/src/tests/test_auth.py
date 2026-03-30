@@ -1086,6 +1086,13 @@ def test_read_public_applicant_profile(client, db_session):
     assert payload["applicant_dashboard"]["projects"][0]["title"] == "Portfolio"
     assert payload["employer_profile"] is None
 
+    me_response = client.get(
+        "/api/v1/users/me/applicant-dashboard",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert me_response.status_code == 200
+    assert me_response.json()["data"]["stats"]["profile_views_count"] == 1
+
 
 def test_read_public_employer_profile(client, db_session):
     code = _request_code(client, db_session, "public-employer@example.com")
@@ -1134,6 +1141,13 @@ def test_read_public_employer_profile(client, db_session):
     assert payload["employer_profile"]["company_name"] == "Трамплин"
     assert payload["employer_stats"]["active_opportunities_count"] == 0
     assert payload["applicant_dashboard"] is None
+
+    me_response = client.get(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert me_response.status_code == 200
+    assert me_response.json()["data"]["user"]["employer_profile"]["profile_views_count"] == 1
 
 
 def test_login_rate_limit(client, db_session):

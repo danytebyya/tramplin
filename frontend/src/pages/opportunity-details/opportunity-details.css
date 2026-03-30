@@ -32,6 +32,10 @@
   align-items: start;
 }
 
+.opportunity-details-page__layout--skeleton {
+  pointer-events: none;
+}
+
 .opportunity-details-page__main {
   padding: 0;
   overflow: visible;
@@ -257,6 +261,108 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.opportunity-details-page__skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.opportunity-details-page__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.72) 50%, transparent 100%);
+  animation: opportunity-details-skeleton-shimmer 1.45s ease-in-out infinite;
+}
+
+.opportunity-details-page__skeleton--title {
+  width: min(480px, 100%);
+  height: 44px;
+}
+
+.opportunity-details-page__skeleton--salary {
+  width: 210px;
+  height: 34px;
+}
+
+.opportunity-details-page__skeleton--section-title {
+  width: 160px;
+  height: 30px;
+}
+
+.opportunity-details-page__skeleton--line {
+  width: 100%;
+  height: 16px;
+}
+
+.opportunity-details-page__skeleton--line-short,
+.opportunity-details-page__skeleton--text-short {
+  width: 72%;
+}
+
+.opportunity-details-page__skeleton--text {
+  width: 100%;
+  height: 15px;
+}
+
+.opportunity-details-page__skeleton--meta {
+  width: 160px;
+  height: 40px;
+}
+
+.opportunity-details-page__skeleton--tag {
+  width: 96px;
+  height: 36px;
+  border-radius: 999px;
+}
+
+.opportunity-details-page__skeleton--tag-wide {
+  width: 132px;
+}
+
+.opportunity-details-page__skeleton--button {
+  width: 100%;
+  height: 42px;
+  border-radius: 8px;
+}
+
+.opportunity-details-page__skeleton--favorite-button {
+  width: 180px;
+  height: 22px;
+  margin-left: auto;
+}
+
+.opportunity-details-page__skeleton--company-heading {
+  width: 104px;
+  height: 16px;
+}
+
+.opportunity-details-page__skeleton--company-logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+}
+
+.opportunity-details-page__skeleton--company-name {
+  width: 100%;
+  height: 30px;
+}
+
+.opportunity-details-page__skeleton--company-badge {
+  width: 140px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+@keyframes opportunity-details-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .opportunity-details-page__description-section {

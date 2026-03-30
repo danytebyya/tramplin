@@ -31,8 +31,14 @@ import {
 } from "../../features/applications";
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { useAuthStore } from "../../features/auth";
-import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import {
+  canViewerAccessApplicantProfile,
+  getApplicantPrivacySettings,
+  resolveAvatarIcon,
+  resolveAvatarUrl,
+} from "../../shared/lib";
 import { Button, Container, Modal } from "../../shared/ui";
+import { BackNavigation } from "../../widgets/back-navigation";
 import { Footer } from "../../widgets/footer";
 import {
   buildApplicantProfileMenuItems,
@@ -175,6 +181,69 @@ function resolveSuggestedContactLevelClassName(levelLabel: string | null) {
   return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--success";
 }
 
+function OpportunityDetailsSkeleton() {
+  return (
+    <section className="opportunity-details-page__layout opportunity-details-page__layout--skeleton" aria-hidden="true">
+      <div className="opportunity-details-page__main">
+        <div className="opportunity-details-page__hero">
+          <div className="opportunity-details-page__hero-copy">
+            <div className="opportunity-details-page__content">
+              <div className="opportunity-details-page__hero-summary">
+                <div className="opportunity-details-page__hero-header">
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--title" />
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--salary" />
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--line" />
+                  <div className="opportunity-details-page__meta">
+                    <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--meta" />
+                    <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--meta" />
+                    <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--meta" />
+                  </div>
+                </div>
+                <div className="opportunity-details-page__tags">
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--tag" />
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--tag" />
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--tag opportunity-details-page__skeleton--tag-wide" />
+                </div>
+              </div>
+
+              <section className="opportunity-details-page__section">
+                <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--section-title" />
+                <div className="opportunity-details-page__description">
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--text" />
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--text" />
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--text opportunity-details-page__skeleton--text-short" />
+                </div>
+                <div className="opportunity-details-page__apply-section">
+                  <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--button" />
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div className="opportunity-details-page__hero-actions">
+            <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--favorite-button" />
+          </div>
+        </div>
+      </div>
+
+      <aside className="opportunity-details-page__sidebar">
+        <div className="opportunity-details-page__company-card">
+          <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--company-heading" />
+          <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--company-logo" />
+          <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--company-name" />
+          <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--company-badge" />
+          <div className="opportunity-details-page__company-contacts">
+            <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--line" />
+            <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--line" />
+            <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--line opportunity-details-page__skeleton--line-short" />
+          </div>
+          <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--button" />
+        </div>
+      </aside>
+    </section>
+  );
+}
+
 export function OpportunityDetailsPage() {
   const { opportunityId } = useParams();
   const navigate = useNavigate();
@@ -281,8 +350,19 @@ export function OpportunityDetailsPage() {
     [opportunity],
   );
   const suggestedContacts = useMemo(
-    () => (recommendationCandidatesQuery.data ?? []).map(mapSuggestedContact),
-    [recommendationCandidatesQuery.data],
+    () =>
+      (recommendationCandidatesQuery.data ?? [])
+        .map(mapSuggestedContact)
+        .filter((contact) =>
+          canViewerAccessApplicantProfile({
+            settings: getApplicantPrivacySettings({
+              publicId: contact.id !== contact.userId ? contact.id : null,
+              userId: contact.userId,
+            }),
+            isAuthenticated,
+          }),
+        ),
+    [isAuthenticated, recommendationCandidatesQuery.data],
   );
   const recommendedContactsTotalPages = Math.max(
     1,
@@ -421,11 +501,10 @@ export function OpportunityDetailsPage() {
         }
       />
 
+      <BackNavigation />
       <Container className="opportunity-details-page__container">
         {!opportunity && opportunitiesQuery.isPending ? (
-          <section className="opportunity-details-page__state">
-            <h1 className="opportunity-details-page__state-title">Загружаем возможность</h1>
-          </section>
+          <OpportunityDetailsSkeleton />
         ) : null}
 
         {!opportunity && !opportunitiesQuery.isPending ? (

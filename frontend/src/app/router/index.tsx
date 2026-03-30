@@ -4,6 +4,7 @@ import { ReactElement } from "react";
 
 import { isCompanyInviteReturnTo, meRequest, persistCompanyInviteReturnTo, readCompanyInviteReturnTo, useAuthStore } from "../../features/auth";
 import { AuthPage } from "../../pages/auth";
+import { ApplicationsPage } from "../../pages/applications";
 import { ContentModerationPage } from "../../pages/content-moderation";
 import { CuratorDashboardPage } from "../../pages/curator-dashboard";
 import { CuratorManagementPage } from "../../pages/curator-management";
@@ -322,6 +323,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute>
             <SeekerDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/applications"
+        element={
+          <ProtectedRoute>
+            <ApplicationsPage />
           </ProtectedRoute>
         }
       />

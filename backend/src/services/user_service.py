@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from src.utils.errors import AppError
 from src.models import User
@@ -14,6 +14,7 @@ from src.models import (
     ApplicationStatus,
     AuthLoginEvent,
     Employer,
+    EmployerProfile,
     EmployerMembership,
     EmployerStaffInvitation,
     FavoriteOpportunity,
@@ -227,19 +228,31 @@ class UserService:
 
     def _register_public_profile_view(self, user: User) -> None:
         if user.role == UserRole.APPLICANT and user.applicant_profile is not None:
-            user.applicant_profile.profile_views_count = (
-                user.applicant_profile.profile_views_count or 0
-            ) + 1
-            self.db.add(user.applicant_profile)
+            self.db.execute(
+                update(ApplicantProfile)
+                .where(ApplicantProfile.user_id == user.id)
+                .values(
+                    profile_views_count=func.coalesce(
+                        ApplicantProfile.profile_views_count, 0
+                    )
+                    + 1
+                )
+            )
             self.db.commit()
             self.db.refresh(user.applicant_profile)
             return
 
         if user.role == UserRole.EMPLOYER and user.employer_profile is not None:
-            user.employer_profile.profile_views_count = (
-                user.employer_profile.profile_views_count or 0
-            ) + 1
-            self.db.add(user.employer_profile)
+            self.db.execute(
+                update(EmployerProfile)
+                .where(EmployerProfile.user_id == user.id)
+                .values(
+                    profile_views_count=func.coalesce(
+                        EmployerProfile.profile_views_count, 0
+                    )
+                    + 1
+                )
+            )
             self.db.commit()
             self.db.refresh(user.employer_profile)
 

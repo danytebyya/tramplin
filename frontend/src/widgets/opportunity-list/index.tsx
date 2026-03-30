@@ -11,6 +11,8 @@ type OpportunityListProps = {
   favoriteOpportunityIds: string[];
   appliedOpportunityIds?: string[];
   roleName?: string;
+  isLoading?: boolean;
+  skeletonCount?: number;
   onToggleFavorite: (opportunityId: string) => void;
   onApply?: (opportunityId: string) => void;
   onWrite?: (opportunity: Opportunity) => void;
@@ -37,12 +39,76 @@ export function OpportunityList({
   favoriteOpportunityIds,
   appliedOpportunityIds = [],
   roleName,
+  isLoading = false,
+  skeletonCount = 3,
   onToggleFavorite,
   onApply,
   onWrite,
 }: OpportunityListProps) {
   const navigate = useNavigate();
   const actionLabel = roleName === "employer" ? "Подробнее" : "Откликнуться";
+
+  if (isLoading) {
+    return (
+      <section className="opportunity-list" aria-label="Список возможностей">
+        {Array.from({ length: skeletonCount }, (_, index) => (
+          <article key={`opportunity-skeleton-${index}`} className="opportunity-list__card opportunity-list__card--skeleton" aria-hidden="true">
+            <div className="opportunity-list__content">
+              <div className="opportunity-list__title-block">
+                <div className="opportunity-list__title-row">
+                  <span className="opportunity-list__skeleton opportunity-list__skeleton--title" />
+                  <span className="opportunity-list__skeleton opportunity-list__skeleton--favorite" />
+                </div>
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--kind" />
+              </div>
+
+              <div className="opportunity-list__summary">
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--price" />
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--meta" />
+              </div>
+
+              <div className="opportunity-list__tags">
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--tag" />
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--tag" />
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--tag opportunity-list__skeleton--tag-wide" />
+              </div>
+
+              <div className="opportunity-list__details-block">
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--meta" />
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--meta opportunity-list__skeleton--meta-short" />
+              </div>
+
+              <div className="opportunity-list__description-block">
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--text" />
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--text opportunity-list__skeleton--text-short" />
+                <div className="opportunity-list__content-actions">
+                  <span className="opportunity-list__skeleton opportunity-list__skeleton--button" />
+                </div>
+              </div>
+            </div>
+
+            <div className="opportunity-list__side">
+              <div className="opportunity-list__company-block">
+                <div className="opportunity-list__company-header">
+                  <span className="opportunity-list__skeleton opportunity-list__skeleton--company" />
+                  <span className="opportunity-list__skeleton opportunity-list__skeleton--verified" />
+                </div>
+                <div className="opportunity-list__rating-block">
+                  <span className="opportunity-list__skeleton opportunity-list__skeleton--rating" />
+                  <span className="opportunity-list__skeleton opportunity-list__skeleton--rating opportunity-list__skeleton--rating-short" />
+                </div>
+              </div>
+
+              <div className="opportunity-list__actions">
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--button" />
+                <span className="opportunity-list__skeleton opportunity-list__skeleton--button" />
+              </div>
+            </div>
+          </article>
+        ))}
+      </section>
+    );
+  }
 
   const openOpportunity = (opportunityId: string) => {
     navigate(`/opportunities/${opportunityId}`);

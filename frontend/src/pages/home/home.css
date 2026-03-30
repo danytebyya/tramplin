@@ -228,6 +228,33 @@ body.home-page--map-floating {
   line-height: var(--type-h3-line);
 }
 
+.home-page__skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.home-page__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.72) 50%, transparent 100%);
+  animation: home-page-skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.home-page__skeleton--hero-value {
+  width: 62px;
+  height: 28px;
+}
+
+.home-page__skeleton--hero-label {
+  width: 126px;
+  height: 24px;
+}
+
 .home-page__explorer {
   grid-column: 1 / -1;
   width: 100%;
@@ -254,6 +281,24 @@ body.home-page--map-floating {
   box-shadow: none;
   backdrop-filter: blur(16px);
   overflow: hidden;
+}
+
+.home-page__skeleton--number-value {
+  width: 118px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+.home-page__skeleton--number-label {
+  width: 96px;
+  height: 18px;
+  border-radius: 999px;
+}
+
+@keyframes home-page-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .home-page__explorer-content {
