@@ -209,7 +209,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         )}
         onFocus={handleFocus}
         onChange={handleInput}
-        onInput={props.onInput}
+        onInput={undefined}
         onCopy={handleCopy}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
