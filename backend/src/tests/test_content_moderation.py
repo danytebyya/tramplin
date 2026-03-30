@@ -105,3 +105,35 @@ def test_content_moderation_actions_update_status(client, db_session):
     )
     assert reject_response.status_code == 200
     assert reject_response.json()["data"]["status"] == "rejected"
+
+
+def test_content_moderation_checklist_updates_are_persisted(client, db_session):
+    curator = _create_curator(db_session, email="content-moderation-checklist@example.com")
+    access_token = _login(client, email=curator.email, password="CuratorPass123")
+    opportunity = _create_content_item(db_session, title="Checklist content")
+
+    response = client.patch(
+        f"/api/v1/moderation/content-items/{opportunity.id}/checklist",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "salary_specified": False,
+            "requirements_completed": False,
+            "responsibilities_completed": True,
+            "conditions_specified": True,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["checklist"] == {
+        "salary_specified": False,
+        "requirements_completed": False,
+        "responsibilities_completed": True,
+        "conditions_specified": True,
+    }
+
+    db_session.refresh(opportunity)
+    assert opportunity.checklist_salary_specified is False
+    assert opportunity.checklist_requirements_completed is False
+    assert opportunity.checklist_responsibilities_completed is True
+    assert opportunity.checklist_conditions_specified is True

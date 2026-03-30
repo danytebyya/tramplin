@@ -69,6 +69,13 @@ class ContentModerationChecklistRead(BaseModel):
     conditions_specified: bool
 
 
+class ContentModerationChecklistUpdateRequest(BaseModel):
+    salary_specified: bool
+    requirements_completed: bool
+    responsibilities_completed: bool
+    conditions_specified: bool
+
+
 class ContentModerationItemRead(BaseModel):
     id: str
     title: str

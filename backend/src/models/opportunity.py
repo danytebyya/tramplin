@@ -199,6 +199,10 @@ class Opportunity(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     mentor_experience: Mapped[str | None] = mapped_column(String(120), nullable=True)
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    checklist_salary_specified: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    checklist_requirements_completed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    checklist_responsibilities_completed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    checklist_conditions_specified: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     moderation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 

@@ -13,12 +13,14 @@ export {
   rejectEmployerVerificationRequest,
   requestContentModerationChangesRequest,
   requestEmployerVerificationChanges,
+  updateContentModerationChecklistRequest,
   updateCuratorRequest,
   updateCuratorRolesRequest,
   updateModerationSettingsRequest,
 } from "./api";
 export type {
   ContentModerationChecklist,
+  ContentModerationChecklistUpdatePayload,
   ContentModerationItem,
   ContentModerationKind,
   ContentModerationKindCounts,

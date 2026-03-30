@@ -9,6 +9,7 @@ import { meRequest, performLogout, useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
 import {
   approveContentModerationItemRequest,
+  ContentModerationChecklist,
   ContentModerationItem,
   ContentModerationKind,
   ContentModerationListResponse,
@@ -16,6 +17,7 @@ import {
   listContentModerationItemsRequest,
   rejectContentModerationItemRequest,
   requestContentModerationChangesRequest,
+  updateContentModerationChecklistRequest,
 } from "../../features/moderation";
 import { Button, Checkbox, Container, Input, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
@@ -290,6 +292,30 @@ export function ContentModerationPage() {
     setSelectedIds((current) => current.filter((id) => !itemIds.includes(id)));
   };
 
+  const applyChecklistOptimisticUpdate = (itemId: string, checklist: ContentModerationChecklist) => {
+    queryClient.setQueryData<ContentModerationListResponse | undefined>(contentQueryKey, (current) => {
+      const currentItems = current?.data?.items;
+      if (!currentItems || !current?.data) {
+        return current;
+      }
+
+      return {
+        ...current,
+        data: {
+          ...current.data,
+          items: currentItems.map((item) =>
+            item.id === itemId
+              ? {
+                  ...item,
+                  checklist,
+                }
+              : item,
+          ),
+        },
+      };
+    });
+  };
+
   const createReviewMutationHandlers = (nextStatus: ContentModerationStatus) => ({
     onMutate: async ({ itemId, comment }: { itemId: string; comment: string }) => {
       setReviewError(null);
@@ -400,6 +426,42 @@ export function ContentModerationPage() {
     },
   });
 
+  const updateChecklistMutation = useMutation({
+    mutationFn: async ({
+      itemId,
+      checklist,
+    }: {
+      itemId: string;
+      checklist: ContentModerationChecklist;
+    }) => updateContentModerationChecklistRequest(itemId, checklist),
+    onMutate: async ({
+      itemId,
+      checklist,
+    }: {
+      itemId: string;
+      checklist: ContentModerationChecklist;
+    }) => {
+      setReviewError(null);
+      await queryClient.cancelQueries({ queryKey: contentQueryKey });
+      const previousData = queryClient.getQueryData<ContentModerationListResponse | undefined>(contentQueryKey);
+      applyChecklistOptimisticUpdate(itemId, checklist);
+      return { previousData };
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["moderation", "content-items"] });
+    },
+    onError: (
+      error,
+      _variables,
+      context: { previousData?: ContentModerationListResponse } | undefined,
+    ) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(contentQueryKey, context.previousData);
+      }
+      handleMutationError(error);
+    },
+  });
+
   const items = contentQuery.data?.data?.items ?? [];
   const sortedItems = useMemo(() => {
     return [...items].sort((left, right) => {
@@ -423,7 +485,8 @@ export function ContentModerationPage() {
     approveMutation.isPending ||
     rejectMutation.isPending ||
     requestChangesMutation.isPending ||
-    bulkActionMutation.isPending;
+    bulkActionMutation.isPending ||
+    updateChecklistMutation.isPending;
   const isTableLoading = contentQuery.isPending;
   const counts = useMemo(() => {
     return {
@@ -560,6 +623,20 @@ export function ContentModerationPage() {
 
   const handleRequestChanges = (itemId: string) => {
     requestChangesMutation.mutate({ itemId, comment: moderatorComment });
+  };
+
+  const handleChecklistChange = (
+    itemId: string,
+    currentChecklist: ContentModerationChecklist,
+    field: keyof ContentModerationChecklist,
+  ) => {
+    updateChecklistMutation.mutate({
+      itemId,
+      checklist: {
+        ...currentChecklist,
+        [field]: !currentChecklist[field],
+      },
+    });
   };
 
   const handleBulkAction = (action: "request-changes" | "reject" | "approve") => {
@@ -963,9 +1040,9 @@ export function ContentModerationPage() {
                                     ["Требования заполнены", item.checklist.requirements_completed],
                                     ["Обязанности описаны", item.checklist.responsibilities_completed],
                                     ["Условия указаны", item.checklist.conditions_specified],
-                                  ].map(([label, checked]) => (
+                                  ].map(([label, checked], index) => (
                                     <label key={String(label)} className="content-moderation-page__checklist-item">
-                                      <Checkbox checked={Boolean(checked)} onChange={() => undefined} variant="accent" disabled />
+                                      <Checkbox checked={Boolean(checked)} onChange={() => handleChecklistChange(item.id, item.checklist, (["salary_specified", "requirements_completed", "responsibilities_completed", "conditions_specified"] as const)[index])} variant="accent" disabled={updateChecklistMutation.isPending} />
                                       <span>{label}</span>
                                     </label>
                                   ))}

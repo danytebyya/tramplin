@@ -15,6 +15,7 @@ from src.repositories import ModerationRepository
 from src.core.security import hash_password
 from src.models import UserNotificationPreference
 from src.schemas.moderation import (
+    ContentModerationChecklistUpdateRequest,
     ContentModerationChecklistRead,
     ContentModerationItemRead,
     ContentModerationKindCountRead,
@@ -892,6 +893,24 @@ class ModerationService:
             severity=NotificationSeverity.WARNING,
         )
         self.repo.db.commit()
+        return self._serialize_content_moderation_item(opportunity)
+
+    def update_content_item_checklist(
+        self,
+        current_user: User,
+        opportunity_id: str,
+        payload: ContentModerationChecklistUpdateRequest,
+    ) -> ContentModerationItemRead:
+        self._ensure_moderation_access(current_user)
+        opportunity = self._get_opportunity_or_raise(opportunity_id)
+        opportunity.checklist_salary_specified = payload.salary_specified
+        opportunity.checklist_requirements_completed = payload.requirements_completed
+        opportunity.checklist_responsibilities_completed = payload.responsibilities_completed
+        opportunity.checklist_conditions_specified = payload.conditions_specified
+        self.repo.db.add(opportunity)
+        self.repo.db.commit()
+        self.repo.db.refresh(opportunity)
+        self._publish_content_item_updated(opportunity)
         return self._serialize_content_moderation_item(opportunity)
 
     def approve_employer_verification_request(
@@ -1879,10 +1898,18 @@ class ModerationService:
         priority = self._serialize_content_priority_value(opportunity.moderation_status)
 
         checklist = ContentModerationChecklistRead(
-            salary_specified=salary_label != "По договоренности",
-            requirements_completed=len(opportunity.description.strip()) >= 40,
-            responsibilities_completed=len(opportunity.short_description.strip()) >= 20,
-            conditions_specified=bool(opportunity.contact_email or opportunity.location_id or opportunity.work_format),
+            salary_specified=opportunity.checklist_salary_specified
+            if opportunity.checklist_salary_specified is not None
+            else salary_label != 'По договоренности',
+            requirements_completed=opportunity.checklist_requirements_completed
+            if opportunity.checklist_requirements_completed is not None
+            else len(opportunity.description.strip()) >= 40,
+            responsibilities_completed=opportunity.checklist_responsibilities_completed
+            if opportunity.checklist_responsibilities_completed is not None
+            else len(opportunity.short_description.strip()) >= 20,
+            conditions_specified=opportunity.checklist_conditions_specified
+            if opportunity.checklist_conditions_specified is not None
+            else bool(opportunity.contact_email or opportunity.location_id or opportunity.work_format),
         )
 
         return ContentModerationItemRead(
@@ -2026,3 +2053,4 @@ class ModerationService:
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
+
