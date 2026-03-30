@@ -210,6 +210,14 @@ class ModerationRepository:
         stmt = select(User).where(func.lower(User.email) == email.lower())
         return self.db.execute(stmt).scalar_one_or_none()
 
+    def get_curator_by_id(self, curator_id: str) -> User | None:
+        stmt = (
+            select(User)
+            .options(selectinload(User.curator_profile))
+            .where(User.id == UUID(curator_id))
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def create_curator(
         self,
         *,

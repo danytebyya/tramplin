@@ -310,6 +310,109 @@ def test_curator_management_allows_admin_to_bulk_update_roles(client, db_session
     assert second_curator.role == UserRole.ADMIN
 
 
+def test_curator_management_allows_admin_to_update_curator(client, db_session):
+    admin = _create_curator(
+        db_session,
+        email="edit-curator-admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    curator = _create_curator(db_session, email="edit-curator@example.com", role=UserRole.CURATOR)
+    access_token = _login(client, email=admin.email, password="CuratorPass123")
+
+    response = client.patch(
+        f"/api/v1/moderation/curators/{curator.id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "full_name": "Edited Curator",
+            "email": "edited-curator@example.com",
+            "password": "Edited123A",
+            "role": "junior",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]
+    assert payload["full_name"] == "Edited Curator"
+    assert payload["email"] == "edited-curator@example.com"
+    assert payload["role"] == "junior"
+
+    db_session.refresh(curator)
+    assert curator.display_name == "Edited Curator"
+    assert curator.email == "edited-curator@example.com"
+    assert curator.role == UserRole.JUNIOR
+    assert curator.curator_profile is not None
+    assert curator.curator_profile.full_name == "Edited Curator"
+
+
+def test_curator_management_forbids_admin_to_edit_self(client, db_session):
+    admin = _create_curator(
+        db_session,
+        email="self-edit-admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    access_token = _login(client, email=admin.email, password="CuratorPass123")
+
+    response = client.patch(
+        f"/api/v1/moderation/curators/{admin.id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "full_name": "Updated Admin",
+            "email": "updated-admin@example.com",
+            "role": "admin",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "SELF_EDIT_FORBIDDEN"
+
+
+def test_curator_management_allows_admin_to_delete_curator(client, db_session):
+    admin = _create_curator(
+        db_session,
+        email="delete-curator-admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    curator = _create_curator(db_session, email="delete-curator@example.com", role=UserRole.CURATOR)
+    access_token = _login(client, email=admin.email, password="CuratorPass123")
+
+    response = client.delete(
+        f"/api/v1/moderation/curators/{curator.id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+
+    db_session.refresh(curator)
+    assert curator.deleted_at is not None
+    assert curator.role == UserRole.CURATOR
+
+
+def test_curator_management_allows_admin_to_bulk_delete_curators(client, db_session):
+    admin = _create_curator(
+        db_session,
+        email="bulk-delete-admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    first_curator = _create_curator(db_session, email="bulk-delete-first@example.com", role=UserRole.CURATOR)
+    second_curator = _create_curator(db_session, email="bulk-delete-second@example.com", role=UserRole.JUNIOR)
+    access_token = _login(client, email=admin.email, password="CuratorPass123")
+
+    response = client.post(
+        "/api/v1/moderation/curators/delete",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "curator_ids": [str(first_curator.id), str(second_curator.id)],
+        },
+    )
+
+    assert response.status_code == 200
+
+    db_session.refresh(first_curator)
+    db_session.refresh(second_curator)
+    assert first_curator.deleted_at is not None
+    assert second_curator.deleted_at is not None
+
+
 def test_junior_can_open_moderation_dashboard(client, db_session):
     junior = _create_curator(
         db_session,

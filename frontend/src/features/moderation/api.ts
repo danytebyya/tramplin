@@ -95,6 +95,17 @@ export type CuratorBulkRoleUpdatePayload = {
   role: "admin" | "curator" | "junior";
 };
 
+export type CuratorUpdatePayload = {
+  full_name: string;
+  email: string;
+  password?: string;
+  role: "admin" | "curator" | "junior";
+};
+
+export type CuratorBulkDeletePayload = {
+  curator_ids: string[];
+};
+
 export type ModerationSettings = {
   vacancy_review_hours: number;
   internship_review_hours: number;
@@ -309,6 +320,24 @@ export async function updateCuratorRolesRequest(payload: CuratorBulkRoleUpdatePa
     "/moderation/curators/role",
     payload,
   );
+  return response.data;
+}
+
+export async function updateCuratorRequest(curatorId: string, payload: CuratorUpdatePayload) {
+  const response = await apiClient.patch<{ data?: CuratorManagementItem }>(
+    `/moderation/curators/${curatorId}`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function deleteCuratorRequest(curatorId: string) {
+  const response = await apiClient.delete<{ data?: { deleted?: boolean } }>(`/moderation/curators/${curatorId}`);
+  return response.data;
+}
+
+export async function deleteCuratorsRequest(payload: CuratorBulkDeletePayload) {
+  const response = await apiClient.post<{ data?: { deleted?: boolean } }>("/moderation/curators/delete", payload);
   return response.data;
 }
 

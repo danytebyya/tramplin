@@ -3,7 +3,7 @@ import { MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } f
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { renderAsync } from "docx-preview";
 import { getDocument, GlobalWorkerOptions, VerbosityLevel } from "pdfjs-dist";
-import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import PdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?worker";
 import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
@@ -129,7 +129,7 @@ function resolveDocumentUrl(fileUrl: string | null) {
   return fileUrl;
 }
 
-GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+GlobalWorkerOptions.workerPort = new PdfWorker();
 
 type DocumentPreviewProps = {
   fileName: string;
