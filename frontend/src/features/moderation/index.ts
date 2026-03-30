@@ -11,6 +11,7 @@ export {
   rejectEmployerVerificationRequest,
   requestContentModerationChangesRequest,
   requestEmployerVerificationChanges,
+  updateCuratorRolesRequest,
   updateModerationSettingsRequest,
 } from "./api";
 export type {
@@ -22,6 +23,7 @@ export type {
   ContentModerationListResponse,
   ContentModerationMetrics,
   ContentModerationStatus,
+  CuratorBulkRoleUpdatePayload,
   CuratorCreatePayload,
   CuratorManagementItem,
   CuratorManagementMetrics,

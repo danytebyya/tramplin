@@ -20,6 +20,7 @@ from src.schemas.moderation import (
     ContentModerationKindCountRead,
     ContentModerationListResponse,
     ContentModerationMetricsRead,
+    CuratorBulkRoleUpdateRequest,
     CuratorCreateRequest,
     CuratorManagementItemRead,
     CuratorManagementListResponse,
@@ -340,6 +341,86 @@ class ModerationService:
             status="offline",
             last_activity_at=None,
         )
+
+    def update_curator_roles(
+        self,
+        current_user: User,
+        payload: CuratorBulkRoleUpdateRequest,
+    ) -> list[CuratorManagementItemRead]:
+        if current_user.role != UserRole.ADMIN:
+            raise AppError(
+                code="MODERATION_FORBIDDEN",
+                message="Недостаточно прав для управления кураторами",
+                status_code=403,
+            )
+
+        next_role = (
+            UserRole.ADMIN
+            if payload.role == "admin"
+            else UserRole.JUNIOR if payload.role == "junior" else UserRole.CURATOR
+        )
+        curators = self.repo.list_curators_by_ids(payload.curator_ids)
+        curator_by_id = {str(curator.id): curator for curator in curators}
+        missing_ids = [curator_id for curator_id in payload.curator_ids if curator_id not in curator_by_id]
+
+        if missing_ids:
+            raise AppError(
+                code="CURATOR_NOT_FOUND",
+                message="Не удалось найти одного или нескольких кураторов.",
+                status_code=404,
+            )
+
+        for curator in curators:
+            if curator.role not in {UserRole.JUNIOR, UserRole.CURATOR, UserRole.ADMIN}:
+                raise AppError(
+                    code="CURATOR_NOT_FOUND",
+                    message="Не удалось найти одного или нескольких кураторов.",
+                    status_code=404,
+                )
+            if str(curator.id) == str(current_user.id) and next_role != UserRole.ADMIN:
+                raise AppError(
+                    code="SELF_DEMOTION_FORBIDDEN",
+                    message="Нельзя понизить собственную роль администратора.",
+                    status_code=409,
+                )
+
+        for curator_id in payload.curator_ids:
+            curator = curator_by_id[curator_id]
+            curator.role = next_role
+            self.repo.db.add(curator)
+
+        try:
+            self.repo.db.commit()
+        except (ProgrammingError, DataError) as error:
+            self.repo.db.rollback()
+            if payload.role == "junior":
+                raise AppError(
+                    code="JUNIOR_ROLE_NOT_AVAILABLE",
+                    message="Роль Junior ещё не активирована в базе данных. Сначала примените миграцию.",
+                    status_code=409,
+                ) from error
+            raise
+
+        updated_curators = self.repo.list_curators_by_ids(payload.curator_ids)
+        updated_by_id = {str(curator.id): curator for curator in updated_curators}
+
+        return [
+            CuratorManagementItemRead(
+                id=curator_id,
+                full_name=(
+                    updated_by_id[curator_id].curator_profile.full_name
+                    if updated_by_id[curator_id].curator_profile is not None
+                    and updated_by_id[curator_id].curator_profile.full_name
+                    else updated_by_id[curator_id].display_name
+                ),
+                email=updated_by_id[curator_id].email,
+                role=payload.role,
+                reviewed_today=0,
+                status="offline",
+                last_activity_at=None,
+            )
+            for curator_id in payload.curator_ids
+        ]
 
     def list_employer_verification_requests(
         self,

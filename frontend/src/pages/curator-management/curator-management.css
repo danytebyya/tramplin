@@ -219,6 +219,10 @@
   width: min(100%, 660px);
 }
 
+.curator-management-page__bulk-role-modal-panel.modal__panel {
+  width: min(100%, 500px);
+}
+
 .curator-management-page__modal-form {
   display: flex;
   flex-direction: column;
@@ -239,8 +243,68 @@
   margin-left: 15px;
 }
 
+.curator-management-page__modal-label--flush {
+  margin-left: 0;
+}
+
 .curator-management-page__modal-input.input {
   width: 100%;
+}
+
+.curator-management-page__bulk-role-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.curator-management-page__bulk-role-count {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
+.curator-management-page__bulk-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.curator-management-page__bulk-role-item {
+  position: relative;
+  padding-left: 14px;
+}
+
+.curator-management-page__bulk-role-item::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #F8995E;
+}
+
+.curator-management-page__bulk-role-line {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+}
+
+.curator-management-page__bulk-role-label {
+  font-weight: 500;
+}
+
+.curator-management-page__bulk-role-note {
+  margin: -8px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
 }
 
 .curator-management-page__modal-role-options {

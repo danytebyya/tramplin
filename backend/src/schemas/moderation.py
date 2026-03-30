@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from src.enums.statuses import EmployerVerificationRequestStatus
@@ -152,3 +150,23 @@ class CuratorCreateRequest(BaseModel):
         if not any(("a" <= character.lower() <= "z") for character in normalized_value):
             raise ValueError("Пароль должен содержать латинские буквы")
         return normalized_value
+
+
+class CuratorBulkRoleUpdateRequest(BaseModel):
+    curator_ids: list[str] = Field(min_length=1)
+    role: str = Field(pattern="^(admin|curator|junior)$")
+
+    @field_validator("curator_ids")
+    @classmethod
+    def validate_curator_ids(cls, value: list[str]) -> list[str]:
+        normalized_ids = []
+
+        for item in value:
+            normalized_item = item.strip()
+            if normalized_item:
+                normalized_ids.append(normalized_item)
+
+        if not normalized_ids:
+            raise ValueError("Нужно выбрать хотя бы одного куратора")
+
+        return list(dict.fromkeys(normalized_ids))

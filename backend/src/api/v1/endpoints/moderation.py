@@ -5,7 +5,11 @@ from src.api.deps.auth import get_current_user
 from src.db import get_db
 from src.models import User
 from src.repositories import ModerationRepository
-from src.schemas.moderation import CuratorCreateRequest, EmployerVerificationReviewRequest
+from src.schemas.moderation import (
+    CuratorBulkRoleUpdateRequest,
+    CuratorCreateRequest,
+    EmployerVerificationReviewRequest,
+)
 from src.schemas.user import ModerationSettingsUpdateRequest
 from src.services import ModerationService
 from src.utils.responses import success_response
@@ -39,6 +43,16 @@ def create_curator(
 ) -> dict:
     response = ModerationService(ModerationRepository(db)).create_curator(current_user, payload)
     return success_response(response.model_dump(mode="json"))
+
+
+@router.patch("/curators/role", status_code=status.HTTP_200_OK)
+def update_curator_roles(
+    payload: CuratorBulkRoleUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = ModerationService(ModerationRepository(db)).update_curator_roles(current_user, payload)
+    return success_response({"items": [item.model_dump(mode="json") for item in response]})
 
 
 @router.get("/settings", status_code=status.HTTP_200_OK)

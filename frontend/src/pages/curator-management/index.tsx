@@ -11,6 +11,7 @@ import {
   createCuratorRequest,
   CuratorManagementResponse,
   listCuratorsRequest,
+  updateCuratorRolesRequest,
 } from "../../features/moderation";
 import { Button, Checkbox, Container, InfoTooltip, Input, Modal, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
@@ -241,11 +242,14 @@ export function CuratorManagementPage() {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreateCuratorModalOpen, setIsCreateCuratorModalOpen] = useState(false);
+  const [isBulkRoleModalOpen, setIsBulkRoleModalOpen] = useState(false);
   const [newCuratorName, setNewCuratorName] = useState("");
   const [newCuratorEmail, setNewCuratorEmail] = useState("");
   const [newCuratorPassword, setNewCuratorPassword] = useState("");
   const [newCuratorRole, setNewCuratorRole] = useState<"admin" | "curator" | "junior">("curator");
+  const [bulkRoleValue, setBulkRoleValue] = useState<CuratorRole>("junior");
   const [createCuratorError, setCreateCuratorError] = useState<string | null>(null);
+  const [bulkRoleError, setBulkRoleError] = useState<string | null>(null);
 
   useQuery({
     queryKey: ["auth", "me"],
@@ -275,6 +279,23 @@ export function CuratorManagementPage() {
     onError: (error: any) => {
       setCreateCuratorError(
         error?.response?.data?.error?.message ?? "Не удалось добавить куратора. Попробуйте ещё раз.",
+      );
+    },
+  });
+  const bulkRoleMutation = useMutation({
+    mutationFn: updateCuratorRolesRequest,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["moderation", "curators"],
+      });
+      setBulkRoleError(null);
+      setSelectedIds([]);
+      setIsBulkRoleModalOpen(false);
+      setBulkRoleValue("junior");
+    },
+    onError: (error: any) => {
+      setBulkRoleError(
+        error?.response?.data?.error?.message ?? "Не удалось изменить роли кураторов. Попробуйте ещё раз.",
       );
     },
   });
@@ -416,6 +437,12 @@ export function CuratorManagementPage() {
   const queuedRequests = metrics?.queued_requests ?? 0;
   const reviewedToday = metrics?.reviewed_today ?? 0;
   const isTableLoading = curatorsQuery.isPending || curatorsQuery.isFetching;
+  const selectedCurators = useMemo(() => {
+    const items = curatorsQuery.data?.data?.items ?? [];
+    const selectedIdSet = new Set(selectedIds);
+
+    return items.filter((item) => selectedIdSet.has(item.id));
+  }, [curatorsQuery.data, selectedIds]);
 
   if (!isAdmin) {
     return <Navigate to="/" replace />;
@@ -540,9 +567,33 @@ export function CuratorManagementPage() {
     });
   };
 
+  const handleBulkRoleModalClose = () => {
+    if (bulkRoleMutation.isPending) {
+      return;
+    }
+
+    setIsBulkRoleModalOpen(false);
+    setBulkRoleValue("junior");
+    setBulkRoleError(null);
+  };
+
+  const handleBulkRoleSubmit = () => {
+    setBulkRoleError(null);
+    bulkRoleMutation.mutate({
+      curator_ids: selectedCurators.map((curator) => curator.id),
+      role: bulkRoleValue,
+    });
+  };
+
   useEffect(() => {
     setSelectedIds([]);
   }, [safePage, appliedRoles, appliedSearch, appliedSortDirection, appliedSortField, appliedStatuses]);
+
+  useEffect(() => {
+    if (selectedIds.length === 0) {
+      setIsBulkRoleModalOpen(false);
+    }
+  }, [selectedIds.length]);
 
   return (
     <main className={`curator-management-page curator-management-page--${themeRole}`}>
@@ -828,6 +879,7 @@ export function CuratorManagementPage() {
                 variant="accent"
                 size="md"
                 className="curator-management-page__bulk-bar-button"
+                onClick={() => setIsBulkRoleModalOpen(true)}
               >
                 Изменить роли
               </Button>
@@ -982,6 +1034,109 @@ export function CuratorManagementPage() {
           ) : null}
         </section>
       </Container>
+
+      <Modal
+        isOpen={isBulkRoleModalOpen}
+        onClose={handleBulkRoleModalClose}
+        title="Изменить роль кураторов"
+        panelClassName="curator-management-page__modal-panel curator-management-page__bulk-role-modal-panel"
+        titleAccentColor="var(--color-accent)"
+      >
+        <div className="curator-management-page__bulk-role-modal">
+          <p className="curator-management-page__bulk-role-count">Выбрано кураторов: {selectedCurators.length}</p>
+
+          <ul className="curator-management-page__bulk-role-list">
+            {selectedCurators.map((curator) => {
+              const roleMeta = resolveRoleMeta(curator.role);
+
+              return (
+                <li key={curator.id} className="curator-management-page__bulk-role-item">
+                  <p className="curator-management-page__bulk-role-line">
+                    <span className="curator-management-page__bulk-role-label">ФИО:</span> {curator.full_name}
+                  </p>
+                  <p className="curator-management-page__bulk-role-line">
+                    <span className="curator-management-page__bulk-role-label">E-mail:</span> {curator.email}
+                  </p>
+                  <p className="curator-management-page__bulk-role-line">
+                    <span className="curator-management-page__bulk-role-label">Роль:</span> {roleMeta.label}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="curator-management-page__modal-field">
+            <span className="curator-management-page__modal-label curator-management-page__modal-label--flush">
+              Новая роль
+            </span>
+            <div className="curator-management-page__modal-role-options">
+              <label className="curator-management-page__modal-role-option">
+                <Radio checked={bulkRoleValue === "junior"} onChange={() => setBulkRoleValue("junior")} variant="accent" />
+                <span className="curator-management-page__modal-role-option-text">
+                  <span>Junior</span>
+                  <InfoTooltip
+                    className="curator-management-page__modal-role-info"
+                    panelClassName="curator-management-page__modal-role-panel"
+                    text={curatorRoleDescriptions.junior}
+                  />
+                </span>
+              </label>
+              <label className="curator-management-page__modal-role-option">
+                <Radio checked={bulkRoleValue === "curator"} onChange={() => setBulkRoleValue("curator")} variant="accent" />
+                <span className="curator-management-page__modal-role-option-text">
+                  <span>Middle</span>
+                  <InfoTooltip
+                    className="curator-management-page__modal-role-info"
+                    panelClassName="curator-management-page__modal-role-panel"
+                    text={curatorRoleDescriptions.curator}
+                  />
+                </span>
+              </label>
+              <label className="curator-management-page__modal-role-option">
+                <Radio checked={bulkRoleValue === "admin"} onChange={() => setBulkRoleValue("admin")} variant="accent" />
+                <span className="curator-management-page__modal-role-option-text">
+                  <span>Senior</span>
+                  <InfoTooltip
+                    className="curator-management-page__modal-role-info"
+                    panelClassName="curator-management-page__modal-role-panel"
+                    text={curatorRoleDescriptions.admin}
+                  />
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <p className="curator-management-page__bulk-role-note">
+            При понижении роли будут отозваны соответствующие права доступа.
+          </p>
+
+          {bulkRoleError ? <p className="curator-management-page__modal-error">{bulkRoleError}</p> : null}
+
+          <div className="curator-management-page__modal-actions">
+            <Button
+              type="button"
+              variant="accent-outline"
+              size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--cancel"
+              onClick={handleBulkRoleModalClose}
+              disabled={bulkRoleMutation.isPending}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant="accent"
+              size="md"
+              className="curator-management-page__modal-action curator-management-page__modal-action--submit"
+              onClick={handleBulkRoleSubmit}
+              loading={bulkRoleMutation.isPending}
+              disabled={selectedCurators.length === 0}
+            >
+              Добавить
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={isCreateCuratorModalOpen}

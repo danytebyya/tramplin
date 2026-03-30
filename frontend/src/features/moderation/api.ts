@@ -90,6 +90,11 @@ export type CuratorCreatePayload = {
   role: "admin" | "curator" | "junior";
 };
 
+export type CuratorBulkRoleUpdatePayload = {
+  curator_ids: string[];
+  role: "admin" | "curator" | "junior";
+};
+
 export type ModerationSettings = {
   vacancy_review_hours: number;
   internship_review_hours: number;
@@ -296,6 +301,14 @@ export async function listCuratorsRequest() {
 
 export async function createCuratorRequest(payload: CuratorCreatePayload) {
   const response = await apiClient.post<{ data?: CuratorManagementItem }>("/moderation/curators", payload);
+  return response.data;
+}
+
+export async function updateCuratorRolesRequest(payload: CuratorBulkRoleUpdatePayload) {
+  const response = await apiClient.patch<{ data?: { items?: CuratorManagementItem[] } }>(
+    "/moderation/curators/role",
+    payload,
+  );
   return response.data;
 }
 

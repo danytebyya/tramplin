@@ -228,3 +228,12 @@ class ModerationRepository:
         )
         self.db.add(curator)
         return curator
+
+    def list_curators_by_ids(self, curator_ids: list[str]) -> list[User]:
+        parsed_ids = [UUID(curator_id) for curator_id in curator_ids]
+        stmt = (
+            select(User)
+            .options(selectinload(User.curator_profile))
+            .where(User.id.in_(parsed_ids))
+        )
+        return list(self.db.execute(stmt).scalars().all())

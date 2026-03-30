@@ -280,6 +280,36 @@ def test_curator_management_allows_admin_to_create_junior(client, db_session):
     assert created_user.role == UserRole.JUNIOR
 
 
+def test_curator_management_allows_admin_to_bulk_update_roles(client, db_session):
+    admin = _create_curator(
+        db_session,
+        email="bulk-role-admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    first_curator = _create_curator(db_session, email="bulk-role-first@example.com", role=UserRole.CURATOR)
+    second_curator = _create_curator(db_session, email="bulk-role-second@example.com", role=UserRole.JUNIOR)
+    access_token = _login(client, email=admin.email, password="CuratorPass123")
+
+    response = client.patch(
+        "/api/v1/moderation/curators/role",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={
+            "curator_ids": [str(first_curator.id), str(second_curator.id)],
+            "role": "admin",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["data"]["items"]
+    assert len(payload) == 2
+    assert all(item["role"] == "admin" for item in payload)
+
+    db_session.refresh(first_curator)
+    db_session.refresh(second_curator)
+    assert first_curator.role == UserRole.ADMIN
+    assert second_curator.role == UserRole.ADMIN
+
+
 def test_junior_can_open_moderation_dashboard(client, db_session):
     junior = _create_curator(
         db_session,
