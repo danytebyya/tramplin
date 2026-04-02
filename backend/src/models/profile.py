@@ -35,6 +35,7 @@ class ApplicantProfile(TimestampMixin, Base):
     bitbucket_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     habr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     profile_views_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recommendations_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

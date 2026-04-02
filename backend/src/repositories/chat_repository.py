@@ -16,6 +16,7 @@ from src.models import (
     EmployerMembership,
     User,
 )
+from src.enums import UserStatus
 
 
 class ChatRepository:
@@ -152,6 +153,8 @@ class ChatRepository:
         conversation_id: str,
         sender_user_id: str,
         sender_role: str,
+        sender_public_key_jwk: dict | None,
+        recipient_public_key_jwk: dict | None,
         ciphertext: str,
         iv: str,
         salt: str,
@@ -160,6 +163,8 @@ class ChatRepository:
             conversation_id=UUID(str(conversation_id)),
             sender_user_id=UUID(str(sender_user_id)),
             sender_role=sender_role,
+            sender_public_key_jwk=sender_public_key_jwk,
+            recipient_public_key_jwk=recipient_public_key_jwk,
             ciphertext=ciphertext,
             iv=iv,
             salt=salt,
@@ -172,7 +177,18 @@ class ChatRepository:
     def get_message(self, message_id: str) -> ChatMessage | None:
         return self.db.get(ChatMessage, UUID(str(message_id)))
 
-    def update_message(self, message: ChatMessage, *, ciphertext: str, iv: str, salt: str) -> ChatMessage:
+    def update_message(
+        self,
+        message: ChatMessage,
+        *,
+        sender_public_key_jwk: dict | None,
+        recipient_public_key_jwk: dict | None,
+        ciphertext: str,
+        iv: str,
+        salt: str,
+    ) -> ChatMessage:
+        message.sender_public_key_jwk = sender_public_key_jwk
+        message.recipient_public_key_jwk = recipient_public_key_jwk
         message.ciphertext = ciphertext
         message.iv = iv
         message.salt = salt
@@ -230,6 +246,8 @@ class ChatRepository:
             .where(
                 applicant_user.role == "applicant",
                 applicant_user.id != UUID(str(exclude_user_id)),
+                applicant_user.deleted_at.is_(None),
+                applicant_user.status == UserStatus.ACTIVE,
                 or_(
                     func.lower(func.coalesce(applicant_user.public_id, "")).contains(query_text.lower()),
                     func.lower(applicant_user.display_name).contains(query_text.lower()),
@@ -258,6 +276,9 @@ class ChatRepository:
             .outerjoin(employer_key, employer_key.user_id == employer_user.id)
             .where(
                 employer_user.role == "employer",
+                employer_user.deleted_at.is_(None),
+                employer_user.status == UserStatus.ACTIVE,
+                Employer.deleted_at.is_(None),
                 or_(
                     func.lower(Employer.display_name).contains(query_text.lower()),
                     func.lower(employer_user.display_name).contains(query_text.lower()),
@@ -285,13 +306,21 @@ class ChatRepository:
             .where(
                 Employer.id == UUID(str(employer_id)),
                 employer_user.role == "employer",
+                employer_user.deleted_at.is_(None),
+                employer_user.status == UserStatus.ACTIVE,
+                Employer.deleted_at.is_(None),
             )
             .order_by(EmployerMembership.is_primary.desc(), employer_user.display_name.asc())
         )
         return self.db.execute(query).all()
 
     def get_user(self, user_id: str) -> User | None:
-        return self.db.get(User, UUID(str(user_id)))
+        query = select(User).where(
+            User.id == UUID(str(user_id)),
+            User.deleted_at.is_(None),
+            User.status == UserStatus.ACTIVE,
+        )
+        return self.db.execute(query).scalar_one_or_none()
 
     def get_applicant_profile(self, user_id: str) -> ApplicantProfile | None:
         query = select(ApplicantProfile).where(ApplicantProfile.user_id == UUID(str(user_id)))

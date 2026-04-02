@@ -35,6 +35,8 @@ from src.schemas.auth import (
     AuthSessionListResponse,
     AuthSessionRead,
     LoginRequest,
+    PasswordChangeRequest,
+    PasswordResetConfirmRequest,
     RegisterRequest,
 )
 from src.services.email_verification_service import EmailVerificationService
@@ -224,26 +226,7 @@ class AuthService:
             )
 
         self._reset_login_failures(normalized_email, normalized_ip)
-
-        refresh_token, refresh_exp, jti = create_refresh_token(subject=str(user.id))
-        access_token, access_exp = create_access_token(
-            subject=str(user.id),
-            role=user.role.value,
-            session_jti=jti,
-            active_role=user.role.value,
-        )
-        refresh_token_fingerprint = self._fingerprint_token(refresh_token)
-
-        session = RefreshSession(
-            user_id=user.id,
-            token_hash=hash_token(refresh_token),
-            jti=jti,
-            user_agent=user_agent,
-            ip_address=ip_address,
-            active_role=user.role,
-            expires_at=refresh_exp,
-        )
-        self.auth_repo.create_session(session)
+        session_payload = self._issue_session_tokens(user, user_agent=user_agent, ip_address=ip_address)
         self._record_login_event(
             user=user,
             email=normalized_email,
@@ -256,22 +239,85 @@ class AuthService:
             "auth.login.success user_id=%s email=%s session_id=%s refresh_fp=%s ip=%s ua=%s",
             user.id,
             normalized_email,
-            session.id,
-            refresh_token_fingerprint,
+            session_payload["session_id"],
+            session_payload["refresh_token_fingerprint"],
             normalized_ip,
             self._normalize_optional_value(user_agent),
         )
 
         return {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
+            "access_token": session_payload["access_token"],
+            "refresh_token": session_payload["refresh_token"],
             "token_type": "bearer",
-            "expires_in": int((access_exp - datetime.now(UTC)).total_seconds()),
+            "expires_in": session_payload["expires_in"],
             "user": user,
             "has_employer_profile": (
                 self.user_repo.has_employer_profile(user.id) if user.role == UserRole.EMPLOYER else False
             ),
         }
+
+    def reset_password(
+        self,
+        payload: PasswordResetConfirmRequest,
+        *,
+        user_agent: str | None,
+        ip_address: str | None,
+    ) -> dict:
+        normalized_email = payload.email.lower()
+        user = self.user_repo.get_by_email(normalized_email, with_profiles=False)
+        if user is None:
+            raise AppError(
+                code="AUTH_EMAIL_NOT_FOUND",
+                message="Аккаунт с такой почтой не найден",
+                status_code=404,
+            )
+
+        self._ensure_password_is_new(user, payload.new_password)
+        EmailVerificationService(self.db, self.user_repo).verify_password_reset_code(
+            normalized_email,
+            payload.code,
+            ip_address=ip_address,
+            consume=True,
+        )
+
+        user.password_hash = hash_password(payload.new_password)
+        self.auth_repo.revoke_all_user_sessions(user.id)
+        session_payload = self._issue_session_tokens(user, user_agent=user_agent, ip_address=ip_address)
+        self._record_login_event(
+            user=user,
+            email=normalized_email,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            is_success=True,
+        )
+        self.db.commit()
+
+        return {
+            "access_token": session_payload["access_token"],
+            "refresh_token": session_payload["refresh_token"],
+            "token_type": "bearer",
+            "expires_in": session_payload["expires_in"],
+            "user": user,
+            "has_employer_profile": (
+                self.user_repo.has_employer_profile(user.id) if user.role == UserRole.EMPLOYER else False
+            ),
+        }
+
+    def change_password(self, current_user: User, payload: PasswordChangeRequest) -> None:
+        user = self.user_repo.get_by_id(current_user.id, with_profiles=False)
+        if user is None:
+            raise AppError(code="AUTH_USER_NOT_FOUND", message="Пользователь не найден", status_code=404)
+
+        if not verify_password(payload.current_password, user.password_hash):
+            raise AppError(
+                code="AUTH_INVALID_CURRENT_PASSWORD",
+                message="Текущий пароль введён неверно",
+                status_code=400,
+            )
+
+        self._ensure_password_is_new(user, payload.new_password)
+        user.password_hash = hash_password(payload.new_password)
+        self.db.commit()
 
     def refresh(self, refresh_token: str, user_agent: str | None, ip_address: str | None) -> dict:
         normalized_ip = self._normalize_ip(ip_address)
@@ -749,6 +795,41 @@ class AuthService:
     def _fingerprint_token(token: str) -> str:
         token_hash = hash_token(token)
         return token_hash[:12]
+
+    def _issue_session_tokens(self, user: User, *, user_agent: str | None, ip_address: str | None) -> dict:
+        refresh_token, refresh_exp, jti = create_refresh_token(subject=str(user.id))
+        access_token, access_exp = create_access_token(
+            subject=str(user.id),
+            role=user.role.value,
+            session_jti=jti,
+            active_role=user.role.value,
+        )
+        session = RefreshSession(
+            user_id=user.id,
+            token_hash=hash_token(refresh_token),
+            jti=jti,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            active_role=user.role,
+            expires_at=refresh_exp,
+        )
+        self.auth_repo.create_session(session)
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_in": int((access_exp - datetime.now(UTC)).total_seconds()),
+            "session_id": session.id,
+            "refresh_token_fingerprint": self._fingerprint_token(refresh_token),
+        }
+
+    @staticmethod
+    def _ensure_password_is_new(user: User, new_password: str) -> None:
+        if verify_password(new_password, user.password_hash):
+            raise AppError(
+                code="AUTH_PASSWORD_REUSE",
+                message="Новый пароль не должен совпадать с текущим",
+                status_code=400,
+            )
 
     def _ensure_email_is_available(self, email: str) -> None:
         if self.user_repo.get_by_email(email):

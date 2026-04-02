@@ -12,8 +12,8 @@
   background: var(--color-bg-primary);
 }
 
-.curator-dashboard-page .header__top-container.container,
-.curator-dashboard-page .header__bottom-container.container {
+.curator-dashboard-page .header__top-shell.page-shell,
+.curator-dashboard-page .header__bottom-shell.page-shell {
   width: min(1080px, 100%);
   padding: 0 24px;
   display: grid;
@@ -44,7 +44,7 @@
   scroll-margin-top: 156px;
 }
 
-.curator-dashboard__container.container {
+.curator-dashboard__shell.page-shell {
   width: 100%;
   max-width: 1080px;
   padding: 0 24px;
@@ -89,9 +89,7 @@
 }
 
 .curator-dashboard__metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
+  --stats-panel-columns: 4;
 }
 
 .curator-dashboard__metric-card,
@@ -103,27 +101,9 @@
 }
 
 .curator-dashboard__metric-card {
-  padding: 32px 26px;
-  gap: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.curator-dashboard__metric-label {
-  color: var(--color-text-primary);
-  font-size: var(--type-body-large-size);
-  line-height: var(--type-body-large-line);
-  text-align: center;
-}
-
-.curator-dashboard__metric-value {
-  display: flex;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  font-size: var(--type-h1-size);
-  line-height: var(--type-h1-line);
-  font-weight: 500;
+  --stats-panel-card-padding: 32px 26px;
+  --stats-panel-card-radius: 8px;
+  --stats-panel-card-justify: space-between;
 }
 
 .curator-dashboard__skeleton {
@@ -205,7 +185,7 @@
   }
 }
 
-.curator-dashboard__week-grid {
+.curator-dashboard__weekly-overview {
   display: grid;
   grid-template-columns: 0.9fr 1.4fr 1.3fr;
   gap: 24px;
@@ -246,7 +226,7 @@
   min-height: 180px;
 }
 
-.curator-dashboard__chart-column {
+.curator-dashboard__chart-day {
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
@@ -284,7 +264,7 @@
   gap: 12px;
 }
 
-.curator-dashboard__category-item {
+.curator-dashboard__category-stat {
   display: grid;
   grid-template-columns: 100px 1fr auto;
   align-items: center;
@@ -318,7 +298,7 @@
   color: var(--color-text-primary);
 }
 
-.curator-dashboard__bottom-grid {
+.curator-dashboard__insights {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -331,7 +311,7 @@
   gap: 16px;
 }
 
-.curator-dashboard__bottom-grid--single {
+.curator-dashboard__insights--single {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -358,7 +338,7 @@
   overflow: hidden;
 }
 
-.curator-dashboard__activity-item {
+.curator-dashboard__activity-entry {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -368,7 +348,7 @@
   display: flex;
 }
 
-.curator-dashboard__activity-content {
+.curator-dashboard__activity-details {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -466,7 +446,7 @@
   align-items: flex-end;
 }
 
-.curator-dashboard__urgent-item {
+.curator-dashboard__urgent-entry {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -483,13 +463,16 @@
 }
 
 @media (max-width: 1180px) {
-  .curator-dashboard__metrics,
-  .curator-dashboard__week-grid,
-  .curator-dashboard__bottom-grid {
+  .curator-dashboard__metrics {
+    --stats-panel-columns: 2;
+  }
+
+  .curator-dashboard__weekly-overview,
+  .curator-dashboard__insights {
     grid-template-columns: 1fr 1fr;
   }
 
-  .curator-dashboard__week-grid > :nth-child(3) {
+  .curator-dashboard__weekly-overview > :nth-child(3) {
     grid-column: 1 / -1;
   }
 }
@@ -499,13 +482,16 @@
     padding: 32px 0 48px;
   }
 
-  .curator-dashboard__metrics,
-  .curator-dashboard__week-grid,
-  .curator-dashboard__bottom-grid {
+  .curator-dashboard__metrics {
+    --stats-panel-columns: 1;
+  }
+
+  .curator-dashboard__weekly-overview,
+  .curator-dashboard__insights {
     grid-template-columns: 1fr;
   }
 
-  .curator-dashboard__category-item {
+  .curator-dashboard__category-stat {
     grid-template-columns: 88px 1fr auto;
   }
 }

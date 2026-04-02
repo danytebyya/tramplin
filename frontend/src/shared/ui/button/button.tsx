@@ -6,6 +6,7 @@ import { cn } from "../../lib";
 type ButtonVariant =
   | "primary"
   | "primary-outline"
+  | "cancel"
   | "ghost"
   | "secondary"
   | "secondary-outline"

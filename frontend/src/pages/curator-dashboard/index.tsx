@@ -105,7 +105,7 @@ export function ModerationDashboardContent({
 
   return (
     <section className="curator-dashboard" id="dashboard">
-      <Container className="curator-dashboard__container">
+      <Container className="curator-dashboard__shell">
         <header className="curator-dashboard__header">
           <h1 className="curator-dashboard__title">Дашборд</h1>
         </header>
@@ -114,19 +114,19 @@ export function ModerationDashboardContent({
           <h2 id="curator-metrics-title" className="curator-dashboard__section-title">
             Ключевые метрики
           </h2>
-          <div className="curator-dashboard__metrics">
+          <div className="curator-dashboard__metrics stats-panel">
             {[
               ["Всего на модерации:", metrics?.total_on_moderation ?? 0],
               ["В очереди:", metrics?.in_queue ?? 0],
               ["Сегодня проверено:", metrics?.reviewed_today ?? 0],
               ["Кураторов онлайн:", metrics?.curators_online ?? 0],
             ].map(([label, value]) => (
-              <article key={label} className="curator-dashboard__metric-card">
-                <span className="curator-dashboard__metric-label">{label}</span>
+              <article key={label} className="curator-dashboard__metric-card stats-panel__card">
+                <span className="curator-dashboard__metric-label stats-panel__label">{label}</span>
                 {isLoading ? (
                   <DashboardSkeleton className="curator-dashboard__skeleton--metric-value" />
                 ) : (
-                  <strong className="curator-dashboard__metric-value">{value}</strong>
+                  <strong className="curator-dashboard__metric-value stats-panel__value">{value}</strong>
                 )}
               </article>
             ))}
@@ -137,7 +137,7 @@ export function ModerationDashboardContent({
           <h2 id="curator-week-title" className="curator-dashboard__section-title">
             Активность за неделю
           </h2>
-          <div className="curator-dashboard__week-grid">
+          <div className="curator-dashboard__weekly-overview">
             <article className="curator-dashboard__week-card">
               <span className="curator-dashboard__week-label">Проверено заявок:</span>
               {isLoading ? (
@@ -152,7 +152,7 @@ export function ModerationDashboardContent({
             <article className="curator-dashboard__week-card">
               <div className="curator-dashboard__chart">
                 {(isLoading ? DEFAULT_WEEK_ACTIVITY_DAYS.map((label) => ({ label, count: 0 })) : chartDays).map((item, index) => (
-                  <div key={item.label} className="curator-dashboard__chart-column">
+                  <div key={item.label} className="curator-dashboard__chart-day">
                     {isLoading ? (
                       <DashboardSkeleton className="curator-dashboard__skeleton--chart-value" />
                     ) : (
@@ -175,7 +175,7 @@ export function ModerationDashboardContent({
             <article className="curator-dashboard__week-card">
               <div className="curator-dashboard__category-list">
                 {(isLoading ? DEFAULT_WEEK_ACTIVITY_CATEGORIES.map((label) => ({ label, count: 0 })) : chartCategories).map((item, index) => (
-                  <div key={item.label} className="curator-dashboard__category-item">
+                  <div key={item.label} className="curator-dashboard__category-stat">
                     <span className="curator-dashboard__category-label">{item.label}</span>
                     <div className="curator-dashboard__category-track">
                       <div
@@ -199,16 +199,16 @@ export function ModerationDashboardContent({
           </div>
         </section>
 
-        <section className="curator-dashboard__bottom-grid">
+        <section className="curator-dashboard__insights">
           <div className="curator-dashboard__bottom-section">
             <h2 className="curator-dashboard__section-title">Последняя активность</h2>
               <article className="curator-dashboard__activity-card">
               <div className="curator-dashboard__activity-list">
                 {isLoading ? (
                   Array.from({ length: MAX_VISIBLE_ACTIVITY_ITEMS }, (_, index) => (
-                    <div key={`activity-skeleton-${index}`} className="curator-dashboard__activity-item">
+                    <div key={`activity-skeleton-${index}`} className="curator-dashboard__activity-entry">
                       <DashboardSkeleton className="curator-dashboard__skeleton--status" />
-                      <div className="curator-dashboard__activity-content">
+                      <div className="curator-dashboard__activity-details">
                         <DashboardSkeleton className="curator-dashboard__skeleton--activity-line" />
                         <DashboardSkeleton className="curator-dashboard__skeleton--activity-time" />
                       </div>
@@ -216,11 +216,11 @@ export function ModerationDashboardContent({
                   ))
                 ) : visibleLatestActivity.length > 0 ? (
                   visibleLatestActivity.map((item) => (
-                    <div key={item.id} className="curator-dashboard__activity-item">
+                    <div key={item.id} className="curator-dashboard__activity-entry">
                       <div className="curator-dashboard__activity-status">
                         <Status variant={item.status_variant}>{item.status_label}</Status>
                       </div>
-                      <div className="curator-dashboard__activity-content">
+                      <div className="curator-dashboard__activity-details">
                         <div className="curator-dashboard__activity-subject-line">
                           <span className="curator-dashboard__activity-subject">
                             {abbreviateLegalEntityName(item.subject)}
@@ -256,7 +256,7 @@ export function ModerationDashboardContent({
                       </div>
                       <div className="curator-dashboard__urgent-list">
                         {Array.from({ length: MAX_VISIBLE_URGENT_ITEMS }, (_, itemIndex) => (
-                          <div key={`urgent-item-skeleton-${groupIndex}-${itemIndex}`} className="curator-dashboard__urgent-item">
+                          <div key={`urgent-item-skeleton-${groupIndex}-${itemIndex}`} className="curator-dashboard__urgent-entry">
                             <DashboardSkeleton className="curator-dashboard__skeleton--urgent-subject" />
                             <DashboardSkeleton className="curator-dashboard__skeleton--urgent-meta" />
                           </div>
@@ -277,7 +277,7 @@ export function ModerationDashboardContent({
                       </div>
                       <div className="curator-dashboard__urgent-list">
                         {group.items.slice(0, MAX_VISIBLE_URGENT_ITEMS).map((item) => (
-                          <div key={item.id} className="curator-dashboard__urgent-item">
+                          <div key={item.id} className="curator-dashboard__urgent-entry">
                             <div className="curator-dashboard__urgent-subject">
                               {abbreviateLegalEntityName(item.subject)}
                             </div>
@@ -416,7 +416,7 @@ export function CuratorDashboardPage() {
   return (
     <main className={`curator-dashboard-page curator-dashboard-page--${themeRole}`}>
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme="curator"
         isAuthenticated={isAuthenticated}

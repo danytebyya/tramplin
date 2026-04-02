@@ -172,8 +172,14 @@ class ChatService:
             str(current_user.id),
             employer_id=scope.employer_id if scope.profile_role == UserRole.EMPLOYER.value else None,
         )
+        items: list[ChatConversationRead] = []
+        for row in rows:
+            counterpart_user_id = self._resolve_counterpart_user_id(conversation=row, current_user=current_user)
+            if self.repo.get_user(counterpart_user_id) is None:
+                continue
+            items.append(self._map_conversation_row(scope=scope, current_user=current_user, conversation=row))
         return ChatConversationListResponse(
-            items=[self._map_conversation_row(scope=scope, current_user=current_user, conversation=row) for row in rows]
+            items=items
         )
 
     def create_conversation(
@@ -259,10 +265,16 @@ class ChatService:
             len(payload.salt),
         )
 
+        sender_key = self.repo.get_user_key(str(current_user.id))
+        recipient_user_id = self._resolve_counterpart_user_id(conversation=conversation, current_user=current_user)
+        recipient_key = self.repo.get_user_key(recipient_user_id)
+
         message = self.repo.create_message(
             conversation_id=str(conversation.id),
             sender_user_id=str(current_user.id),
             sender_role=scope.profile_role,
+            sender_public_key_jwk=sender_key.public_key_jwk if sender_key else None,
+            recipient_public_key_jwk=recipient_key.public_key_jwk if recipient_key else None,
             ciphertext=payload.ciphertext,
             iv=payload.iv,
             salt=payload.salt,
@@ -318,8 +330,14 @@ class ChatService:
         if str(message.sender_user_id) != str(current_user.id):
             raise AppError(code="CHAT_MESSAGE_FORBIDDEN", message="Можно редактировать только свои сообщения", status_code=403)
 
+        sender_key = self.repo.get_user_key(str(current_user.id))
+        recipient_user_id = self._resolve_counterpart_user_id(conversation=conversation, current_user=current_user)
+        recipient_key = self.repo.get_user_key(recipient_user_id)
+
         message = self.repo.update_message(
             message,
+            sender_public_key_jwk=sender_key.public_key_jwk if sender_key else None,
+            recipient_public_key_jwk=recipient_key.public_key_jwk if recipient_key else None,
             ciphertext=payload.ciphertext,
             iv=payload.iv,
             salt=payload.salt,
@@ -495,6 +513,8 @@ class ChatService:
             conversation_id=str(conversation.id),
             sender_user_id=str(message.sender_user_id),
             sender_role=message.sender_role.value if hasattr(message.sender_role, "value") else str(message.sender_role),
+            sender_public_key_jwk=message.sender_public_key_jwk,
+            recipient_public_key_jwk=message.recipient_public_key_jwk,
             ciphertext=message.ciphertext,
             iv=message.iv,
             salt=message.salt,

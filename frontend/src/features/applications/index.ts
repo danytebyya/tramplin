@@ -6,6 +6,7 @@ export {
   updateEmployerApplicationStatusRequest,
   withdrawOpportunityApplicationRequest,
 } from "./api";
+export { WithdrawApplicationModal } from "./withdraw-application-modal";
 
 export type {
   ApplicationDetails,

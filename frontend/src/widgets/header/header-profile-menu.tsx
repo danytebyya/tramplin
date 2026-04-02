@@ -327,8 +327,8 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
             type="button"
             className={
               item.isDanger
-                ? "header__profile-dropdown-item header__profile-dropdown-item--danger"
-                : "header__profile-dropdown-item"
+                ? "header__profile-dropdown-option header__profile-dropdown-option--danger"
+                : "header__profile-dropdown-option"
             }
             role="menuitem"
             onClick={() => {

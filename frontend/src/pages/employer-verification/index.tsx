@@ -335,25 +335,25 @@ function DocumentPreview({
       <img
         src={blobUrl}
         alt={fileName}
-        className="employer-verification-page__document-preview-image"
+        className="company-review-page__document-preview-image"
       />
     );
   }
 
   if (blobUrl && isPdfDocument(mimeType, fileName) && !pdfPreviewFailed) {
-    return <canvas ref={canvasRef} className="employer-verification-page__document-preview-canvas" />;
+    return <canvas ref={canvasRef} className="company-review-page__document-preview-canvas" />;
   }
 
   if (fileBlob && isDocxDocument(mimeType, fileName) && !docxPreviewFailed) {
     return (
-      <div ref={docxHostRef} className="employer-verification-page__document-preview-docx-host">
-        <div ref={docxStageRef} className="employer-verification-page__document-preview-docx-stage" />
+      <div ref={docxHostRef} className="company-review-page__document-preview-docx-host">
+        <div ref={docxStageRef} className="company-review-page__document-preview-docx-stage" />
       </div>
     );
   }
 
   return (
-    <span className="employer-verification-page__document-preview-fallback">
+    <span className="company-review-page__document-preview-fallback">
       {unavailable
         ? isPdfDocument(mimeType, fileName)
           ? "PDF"
@@ -449,7 +449,7 @@ function VerificationDocumentCard({
 
   const content = (
     <>
-      <div className="employer-verification-page__document-preview">
+      <div className="company-review-page__document-preview">
         <DocumentPreview
           fileName={fileName}
           blobUrl={blobUrl}
@@ -458,30 +458,30 @@ function VerificationDocumentCard({
           unavailable={isUnavailable}
         />
       </div>
-      <div className="employer-verification-page__document-meta">
-        <span className="employer-verification-page__document-name">{fileName}</span>
-        <span className="employer-verification-page__document-size">
+      <div className="company-review-page__document-meta">
+        <span className="company-review-page__document-name">{fileName}</span>
+        <span className="company-review-page__document-size">
           ({formatFileSize(fileSize)})
         </span>
         {isLoading ? (
-          <span className="employer-verification-page__document-caption">Загрузка предпросмотра...</span>
+          <span className="company-review-page__document-caption">Загрузка предпросмотра...</span>
         ) : null}
         {isUnavailable ? (
-          <span className="employer-verification-page__document-unavailable">Файл недоступен</span>
+          <span className="company-review-page__document-unavailable">Файл недоступен</span>
         ) : null}
       </div>
     </>
   );
 
   if (!blobUrl || isUnavailable) {
-    return <div className="employer-verification-page__document employer-verification-page__document--disabled">{content}</div>;
+    return <div className="company-review-page__document company-review-page__document--disabled">{content}</div>;
   }
 
   return (
     <a
       href={blobUrl}
       download={fileName}
-      className="employer-verification-page__document"
+      className="company-review-page__document"
     >
       {content}
     </a>
@@ -506,19 +506,19 @@ function buildPageNumbers(currentPage: number, totalPages: number) {
 
 function EmployerVerificationRowSkeleton() {
   return (
-    <article className="employer-verification-page__row employer-verification-page__row--skeleton" aria-hidden="true">
-      <div className="employer-verification-page__row-summary">
-        <div className="employer-verification-page__row-leading">
-          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--checkbox" />
+    <article className="company-review-page__request company-review-page__request--skeleton" aria-hidden="true">
+      <div className="company-review-page__request-summary">
+        <div className="company-review-page__request-select">
+          <span className="company-review-page__skeleton company-review-page__skeleton--mark" />
         </div>
-        <div className="employer-verification-page__row-main">
-          <div className="employer-verification-page__row-company">
-            <span className="employer-verification-page__skeleton employer-verification-page__skeleton--title" />
-            <span className="employer-verification-page__skeleton employer-verification-page__skeleton--actions" />
+        <div className="company-review-page__request-overview">
+          <div className="company-review-page__request-company">
+            <span className="company-review-page__skeleton company-review-page__skeleton--title" />
+            <span className="company-review-page__skeleton company-review-page__skeleton--actions" />
           </div>
-          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--cell" />
-          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--cell" />
-          <span className="employer-verification-page__skeleton employer-verification-page__skeleton--cell" />
+          <span className="company-review-page__skeleton company-review-page__skeleton--cell" />
+          <span className="company-review-page__skeleton company-review-page__skeleton--cell" />
+          <span className="company-review-page__skeleton company-review-page__skeleton--cell" />
         </div>
       </div>
     </article>
@@ -1059,9 +1059,9 @@ export function EmployerVerificationPage() {
   };
 
   return (
-    <main className={`employer-verification-page employer-verification-page--${themeRole}`}>
+    <main className={`company-review-page company-review-page--${themeRole}`}>
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme="curator"
         topNavigation={null}
@@ -1084,22 +1084,22 @@ export function EmployerVerificationPage() {
         bottomContent={<CuratorHeaderNavigation isAdmin={isAdmin} currentPage="employers" />}
       />
 
-      <Container className="employer-verification-page__container">
-        <header className="employer-verification-page__header">
-          <h1 className="employer-verification-page__title">
+      <Container className="company-review-page__shell">
+        <header className="company-review-page__header">
+          <h1 className="company-review-page__title">
             Верификация работодателей ({total})
           </h1>
           {reviewError ? (
-            <p className="employer-verification-page__review-error">{reviewError}</p>
+            <p className="company-review-page__review-error">{reviewError}</p>
           ) : null}
         </header>
 
-        <section className="employer-verification-page__toolbar">
-          <label className="employer-verification-page__search header__search" aria-label="Поиск работодателей">
+        <section className="company-review-page__toolbar">
+          <label className="company-review-page__search header__search" aria-label="Поиск работодателей">
             <Input
               type="search"
               placeholder="Поиск"
-              className="input--sm employer-verification-page__search-input"
+              className="input--sm company-review-page__search-input"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={(event) => {
@@ -1113,11 +1113,11 @@ export function EmployerVerificationPage() {
             />
           </label>
 
-          <div className="employer-verification-page__toolbar-actions">
-            <div ref={filtersRef} className="employer-verification-page__filters">
+          <div className="company-review-page__toolbar-actions">
+            <div ref={filtersRef} className="company-review-page__filters">
               <button
                 type="button"
-                className="employer-verification-page__icon-button employer-verification-page__icon-button--filter"
+                className="company-review-page__icon-button company-review-page__icon-button--filter"
                 aria-label="Фильтры"
                 aria-expanded={isFilterOpen}
                 onClick={() => {
@@ -1127,13 +1127,13 @@ export function EmployerVerificationPage() {
               />
 
               {isFilterOpen ? (
-                <div className="employer-verification-page__filters-popover">
-                  <div className="employer-verification-page__filters-section">
-                    <div className="employer-verification-page__filters-head">
-                      <h2 className="employer-verification-page__filters-title">Фильтры</h2>
+                <div className="company-review-page__filters-popover">
+                  <div className="company-review-page__filters-section">
+                    <div className="company-review-page__filters-head">
+                      <h2 className="company-review-page__filters-title">Фильтры</h2>
                       <button
                         type="button"
-                        className="employer-verification-page__filters-reset"
+                        className="company-review-page__filters-reset"
                         onClick={resetFilters}
                       >
                         Сбросить
@@ -1141,19 +1141,19 @@ export function EmployerVerificationPage() {
                     </div>
                   </div>
 
-                  <div className="employer-verification-page__filters-section">
-                    <div className="employer-verification-page__filters-head">
-                      <h3 className="employer-verification-page__filters-group-title">По статусам</h3>
+                  <div className="company-review-page__filters-section">
+                    <div className="company-review-page__filters-head">
+                      <h3 className="company-review-page__filters-group-title">По статусам</h3>
                       <button
                         type="button"
-                        className="employer-verification-page__filters-reset"
+                        className="company-review-page__filters-reset"
                         onClick={() => setSelectedStatuses(["all"])}
                       >
                         Сбросить
                       </button>
                     </div>
-                    <div className="employer-verification-page__filters-options employer-verification-page__filters-options--checkboxes">
-                      <label className="employer-verification-page__filter-option">
+                    <div className="company-review-page__filters-options company-review-page__filters-options--choices">
+                      <label className="company-review-page__filter-option">
                         <Checkbox
                           checked={selectedStatuses.includes("all")}
                           onChange={() => toggleStatusFilter("all")}
@@ -1162,7 +1162,7 @@ export function EmployerVerificationPage() {
                         <span>Все</span>
                       </label>
                       {statusOptions.map((option) => (
-                        <label key={option.value} className="employer-verification-page__filter-option">
+                        <label key={option.value} className="company-review-page__filter-option">
                           <Checkbox
                             checked={selectedStatuses.includes(option.value)}
                             onChange={() => toggleStatusFilter(option.value)}
@@ -1174,20 +1174,20 @@ export function EmployerVerificationPage() {
                     </div>
                   </div>
 
-                  <div className="employer-verification-page__filters-section">
-                    <div className="employer-verification-page__filters-head">
-                      <h3 className="employer-verification-page__filters-group-title">Период</h3>
+                  <div className="company-review-page__filters-section">
+                    <div className="company-review-page__filters-head">
+                      <h3 className="company-review-page__filters-group-title">Период</h3>
                       <button
                         type="button"
-                        className="employer-verification-page__filters-reset"
+                        className="company-review-page__filters-reset"
                         onClick={() => setSelectedPeriod("all")}
                       >
                         Сбросить
                       </button>
                     </div>
-                    <div className="employer-verification-page__filters-options employer-verification-page__filters-options--radio">
+                    <div className="company-review-page__filters-options company-review-page__filters-options--radio">
                       {periodOptions.map((option) => (
-                        <label key={option.value} className="employer-verification-page__filter-option">
+                        <label key={option.value} className="company-review-page__filter-option">
                           <Radio
                             checked={selectedPeriod === option.value}
                             onChange={() => setSelectedPeriod(option.value)}
@@ -1199,7 +1199,7 @@ export function EmployerVerificationPage() {
                     </div>
                   </div>
 
-                  <div className="employer-verification-page__filters-footer">
+                  <div className="company-review-page__filters-footer">
                     <Button type="button" variant="accent" size="sm" fullWidth onClick={applyFilters}>
                       Показать результаты
                     </Button>
@@ -1217,10 +1217,10 @@ export function EmployerVerificationPage() {
               ) : null}
             </div>
 
-            <div ref={sortingRef} className="employer-verification-page__sorting">
+            <div ref={sortingRef} className="company-review-page__sorting">
               <button
                 type="button"
-                className="employer-verification-page__icon-button employer-verification-page__icon-button--sorting"
+                className="company-review-page__icon-button company-review-page__icon-button--sorting"
                 aria-label="Сортировка"
                 aria-expanded={isSortOpen}
                 onClick={() => {
@@ -1232,20 +1232,20 @@ export function EmployerVerificationPage() {
                   aria-hidden="true"
                   className={
                     appliedSortDirection === "desc"
-                      ? "employer-verification-page__icon employer-verification-page__icon--descending"
-                      : "employer-verification-page__icon employer-verification-page__icon--ascending"
+                      ? "company-review-page__icon company-review-page__icon--descending"
+                      : "company-review-page__icon company-review-page__icon--ascending"
                   }
                 />
               </button>
 
               {isSortOpen ? (
-                <div className="employer-verification-page__sorting-popover">
-                  <div className="employer-verification-page__filters-section">
-                    <div className="employer-verification-page__filters-head">
-                      <h2 className="employer-verification-page__filters-title">Сортировка</h2>
+                <div className="company-review-page__sorting-popover">
+                  <div className="company-review-page__filters-section">
+                    <div className="company-review-page__filters-head">
+                      <h2 className="company-review-page__filters-title">Сортировка</h2>
                       <button
                         type="button"
-                        className="employer-verification-page__filters-reset"
+                        className="company-review-page__filters-reset"
                         onClick={resetSorting}
                       >
                         Сбросить
@@ -1253,10 +1253,10 @@ export function EmployerVerificationPage() {
                     </div>
                   </div>
 
-                  <div className="employer-verification-page__filters-section">
-                    <div className="employer-verification-page__filters-options employer-verification-page__filters-options--radio">
+                  <div className="company-review-page__filters-section">
+                    <div className="company-review-page__filters-options company-review-page__filters-options--radio">
                       {sortFieldOptions.map((option) => (
-                        <label key={option.value} className="employer-verification-page__filter-option">
+                        <label key={option.value} className="company-review-page__filter-option">
                           <Radio
                             checked={selectedSortField === option.value}
                             onChange={() => setSelectedSortField(option.value)}
@@ -1268,9 +1268,9 @@ export function EmployerVerificationPage() {
                     </div>
                   </div>
 
-                  <div className="employer-verification-page__filters-section">
-                    <div className="employer-verification-page__filters-options employer-verification-page__filters-options--radio">
-                      <label className="employer-verification-page__filter-option">
+                  <div className="company-review-page__filters-section">
+                    <div className="company-review-page__filters-options company-review-page__filters-options--radio">
+                      <label className="company-review-page__filter-option">
                         <Radio
                           checked={selectedSortDirection === "desc"}
                           onChange={() => setSelectedSortDirection("desc")}
@@ -1280,7 +1280,7 @@ export function EmployerVerificationPage() {
                           {selectedSortField === "alphabet" ? "Я-А" : "Сначала новые"}
                         </span>
                       </label>
-                      <label className="employer-verification-page__filter-option">
+                      <label className="company-review-page__filter-option">
                         <Radio
                           checked={selectedSortDirection === "asc"}
                           onChange={() => setSelectedSortDirection("asc")}
@@ -1293,7 +1293,7 @@ export function EmployerVerificationPage() {
                     </div>
                   </div>
 
-                  <div className="employer-verification-page__filters-footer">
+                  <div className="company-review-page__filters-footer">
                     <Button type="button" variant="accent" size="sm" fullWidth onClick={applySorting}>
                       Показать результаты
                     </Button>
@@ -1316,23 +1316,23 @@ export function EmployerVerificationPage() {
         <div
           className={
             selectedIds.length > 0
-              ? "employer-verification-page__bulk-bar-shell employer-verification-page__bulk-bar-shell--visible"
-              : "employer-verification-page__bulk-bar-shell"
+              ? "company-review-page__bulk-bar-shell company-review-page__bulk-bar-shell--visible"
+              : "company-review-page__bulk-bar-shell"
           }
           aria-hidden={selectedIds.length === 0}
         >
-          <div className="employer-verification-page__bulk-bar">
-            <div className="employer-verification-page__bulk-bar-selection">
+          <div className="company-review-page__bulk-bar">
+            <div className="company-review-page__bulk-bar-selection">
               <Checkbox checked={selectedIds.length > 0} variant="accent" disabled readOnly />
-              <span className="employer-verification-page__bulk-bar-count">Выбрано: {selectedIds.length}</span>
+              <span className="company-review-page__bulk-bar-count">Выбрано: {selectedIds.length}</span>
             </div>
 
-            <div className="employer-verification-page__bulk-bar-actions">
+            <div className="company-review-page__bulk-bar-actions">
               <Button
                 type="button"
                 variant="accent-outline"
                 size="md"
-                className="employer-verification-page__bulk-bar-button employer-verification-page__bulk-bar-button--request"
+                className="company-review-page__bulk-bar-button company-review-page__bulk-bar-button--request"
                 onClick={() => handleBulkAction("request-changes")}
                 loading={bulkActionMutation.isPending}
                 disabled={anyMutationPending}
@@ -1343,7 +1343,7 @@ export function EmployerVerificationPage() {
                 type="button"
                 variant="danger"
                 size="md"
-                className="employer-verification-page__bulk-bar-button"
+                className="company-review-page__bulk-bar-button"
                 onClick={() => handleBulkAction("reject")}
                 loading={bulkActionMutation.isPending}
                 disabled={anyMutationPending}
@@ -1354,7 +1354,7 @@ export function EmployerVerificationPage() {
                 type="button"
                 variant="success"
                 size="md"
-                className="employer-verification-page__bulk-bar-button"
+                className="company-review-page__bulk-bar-button"
                 onClick={() => handleBulkAction("approve")}
                 loading={bulkActionMutation.isPending}
                 disabled={anyMutationPending}
@@ -1365,18 +1365,18 @@ export function EmployerVerificationPage() {
           </div>
         </div>
 
-        <section className="employer-verification-page__content">
-          <div className="employer-verification-page__table-head">
-            <div className="employer-verification-page__table-cell employer-verification-page__table-cell--check">
+        <section className="company-review-page__requests">
+          <div className="company-review-page__table-head">
+            <div className="company-review-page__table-cell company-review-page__table-cell--check">
               <Checkbox checked={allRowsSelected} onChange={toggleSelectAll} variant="accent" />
             </div>
-            <div className="employer-verification-page__table-cell">Работодатель</div>
-            <div className="employer-verification-page__table-cell">ИНН</div>
-            <div className="employer-verification-page__table-cell">Дата подачи</div>
-            <div className="employer-verification-page__table-cell employer-verification-page__table-cell--status">Статус</div>
+            <div className="company-review-page__table-cell">Работодатель</div>
+            <div className="company-review-page__table-cell">ИНН</div>
+            <div className="company-review-page__table-cell">Дата подачи</div>
+            <div className="company-review-page__table-cell company-review-page__table-cell--status">Статус</div>
           </div>
 
-          <div className="employer-verification-page__rows">
+          <div className="company-review-page__requests">
             {isTableLoading
               ? Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
                   <EmployerVerificationRowSkeleton key={`skeleton-${index}`} />
@@ -1389,19 +1389,19 @@ export function EmployerVerificationPage() {
               return (
                 <article
                   key={item.id}
-                  className="employer-verification-page__row"
+                  className="company-review-page__request"
                   onClick={(event) => handleRowClick(event, item)}
                 >
                   <div
                     className={
                       isExpanded
-                        ? "employer-verification-page__row-summary employer-verification-page__row-summary--expanded"
+                        ? "company-review-page__request-summary company-review-page__request-summary--expanded"
                         : isVerifiedItem
-                          ? "employer-verification-page__row-summary employer-verification-page__row-summary--centered"
-                        : "employer-verification-page__row-summary"
+                          ? "company-review-page__request-summary company-review-page__request-summary--centered"
+                        : "company-review-page__request-summary"
                     }
                   >
-                    <div className="employer-verification-page__row-leading">
+                    <div className="company-review-page__request-select">
                       <Checkbox
                         checked={selectedIds.includes(item.id)}
                         onChange={() => toggleSelectedId(item.id)}
@@ -1410,7 +1410,7 @@ export function EmployerVerificationPage() {
                     </div>
 
                     <div
-                      className="employer-verification-page__row-main"
+                      className="company-review-page__request-overview"
                       role="button"
                       tabIndex={0}
                       onClick={() => handleExpand(item)}
@@ -1421,17 +1421,17 @@ export function EmployerVerificationPage() {
                         }
                       }}
                     >
-                      <div className="employer-verification-page__row-company">
-                        <strong className="employer-verification-page__row-title">
+                      <div className="company-review-page__request-company">
+                        <strong className="company-review-page__request-title">
                           {abbreviateLegalEntityName(item.employer_name)}
                         </strong>
                         {!isExpanded && !isVerifiedItem ? (
-                          <div className="employer-verification-page__row-actions">
+                          <div className="company-review-page__request-actions">
                             <Button
                               type="button"
                               variant="success-ghost"
                               size="sm"
-                              className="employer-verification-page__row-action employer-verification-page__row-action--approve"
+                              className="company-review-page__request-action company-review-page__request-action--approve"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 approveMutation.mutate({ requestId: item.id, comment: "" });
@@ -1441,14 +1441,14 @@ export function EmployerVerificationPage() {
                               <span>Одобрить</span>
                               <span
                                 aria-hidden="true"
-                                className="employer-verification-page__action-icon employer-verification-page__action-icon--approve"
+                                className="company-review-page__action-icon company-review-page__action-icon--approve"
                               />
                             </Button>
                             <Button
                               type="button"
                               variant="danger-ghost"
                               size="sm"
-                              className="employer-verification-page__row-action employer-verification-page__row-action--reject"
+                              className="company-review-page__request-action company-review-page__request-action--reject"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 rejectMutation.mutate({ requestId: item.id, comment: "" });
@@ -1458,15 +1458,15 @@ export function EmployerVerificationPage() {
                               <span>Отклонить</span>
                               <span
                                 aria-hidden="true"
-                                className="employer-verification-page__action-icon employer-verification-page__action-icon--reject"
+                                className="company-review-page__action-icon company-review-page__action-icon--reject"
                               />
                             </Button>
                           </div>
                         ) : null}
                       </div>
-                      <div className="employer-verification-page__row-inn">{item.inn}</div>
-                      <div className="employer-verification-page__row-date">{formatSubmissionDate(item.submitted_at)}</div>
-                      <div className="employer-verification-page__row-status">
+                      <div className="company-review-page__request-inn">{item.inn}</div>
+                      <div className="company-review-page__request-date">{formatSubmissionDate(item.submitted_at)}</div>
+                      <div className="company-review-page__request-status">
                         <Status variant={statusMeta.variant}>{statusMeta.label}</Status>
                       </div>
                     </div>
@@ -1475,29 +1475,29 @@ export function EmployerVerificationPage() {
                   <div
                     className={
                       isExpanded
-                        ? "employer-verification-page__row-details-shell employer-verification-page__row-details-shell--expanded"
-                        : "employer-verification-page__row-details-shell"
+                        ? "company-review-page__request-details-shell company-review-page__request-details-shell--expanded"
+                        : "company-review-page__request-details-shell"
                     }
                     aria-hidden={!isExpanded}
                   >
-                    <div className="employer-verification-page__row-details">
-                      <div className="employer-verification-page__details-grid">
-                        <div className="employer-verification-page__details-column">
-                          <div className="employer-verification-page__detail">
-                            <div className="employer-verification-page__detail-label">Статус</div>
-                            <div className="employer-verification-page__detail-value">
+                    <div className="company-review-page__request-details">
+                      <div className="company-review-page__detail-sections">
+                        <div className="company-review-page__detail-section">
+                          <div className="company-review-page__detail">
+                            <div className="company-review-page__detail-label">Статус</div>
+                            <div className="company-review-page__detail-value">
                               {resolveEmployerTypeLabel(item.employer_type)}
                             </div>
                           </div>
-                          <div className="employer-verification-page__detail">
-                            <div className="employer-verification-page__detail-label">Корпоративная почта</div>
-                            <div className="employer-verification-page__detail-value">
+                          <div className="company-review-page__detail">
+                            <div className="company-review-page__detail-label">Корпоративная почта</div>
+                            <div className="company-review-page__detail-value">
                               {item.corporate_email ?? "Не указано"}
                             </div>
                           </div>
-                          <div className="employer-verification-page__detail">
-                            <div className="employer-verification-page__detail-label">Подтверждающие документы</div>
-                            <div className="employer-verification-page__documents">
+                          <div className="company-review-page__detail">
+                            <div className="company-review-page__detail-label">Подтверждающие документы</div>
+                            <div className="company-review-page__documents">
                               {item.documents.length > 0 ? (
                                 item.documents.map((document) => (
                                   <VerificationDocumentCard
@@ -1509,62 +1509,62 @@ export function EmployerVerificationPage() {
                                   />
                                 ))
                               ) : (
-                                <span className="employer-verification-page__detail-value">Документы не приложены</span>
+                                <span className="company-review-page__detail-value">Документы не приложены</span>
                               )}
                             </div>
                           </div>
                         </div>
 
-                        <div className="employer-verification-page__details-column">
-                          <div className="employer-verification-page__detail">
-                            <div className="employer-verification-page__detail-label">Сайт компании</div>
-                            <div className="employer-verification-page__detail-value">
+                        <div className="company-review-page__detail-section">
+                          <div className="company-review-page__detail">
+                            <div className="company-review-page__detail-label">Сайт компании</div>
+                            <div className="company-review-page__detail-value">
                               {item.website_url ?? "Не указано"}
                             </div>
                           </div>
-                          <div className="employer-verification-page__detail">
-                            <div className="employer-verification-page__detail-label">Соцсеть</div>
-                            <div className="employer-verification-page__detail-value">
+                          <div className="company-review-page__detail">
+                            <div className="company-review-page__detail-label">Соцсеть</div>
+                            <div className="company-review-page__detail-value">
                               {item.social_link ?? "Не указано"}
                             </div>
                           </div>
-                          <div className="employer-verification-page__detail">
-                            <div className="employer-verification-page__detail-label">Телефон</div>
-                            <div className="employer-verification-page__detail-value">
+                          <div className="company-review-page__detail">
+                            <div className="company-review-page__detail-label">Телефон</div>
+                            <div className="company-review-page__detail-value">
                               {item.phone ?? "Не указано"}
                             </div>
                           </div>
                         </div>
 
-                        <div className="employer-verification-page__details-column employer-verification-page__details-column--actions">
-                          <div className="employer-verification-page__detail">
-                            <div className="employer-verification-page__detail-label">Комментарий</div>
+                        <div className="company-review-page__detail-section company-review-page__detail-section--actions">
+                          <div className="company-review-page__detail">
+                            <div className="company-review-page__detail-label">Комментарий</div>
                             <textarea
-                              className="employer-verification-page__comment"
+                              className="company-review-page__comment"
                               value={currentExpandedItem?.id === item.id ? moderatorComment : ""}
                               onChange={(event) => setModeratorComment(event.target.value)}
                               placeholder=""
                             />
                           </div>
                           {!isVerifiedItem ? (
-                            <div className="employer-verification-page__detail-actions employer-verification-page__detail-actions--stacked">
+                            <div className="company-review-page__detail-actions company-review-page__detail-actions--stacked">
                               <Button
                                 type="button"
                                 variant="accent-outline"
                                 size="sm"
-                                className="employer-verification-page__detail-action-request"
+                                className="company-review-page__detail-action-request"
                                 onClick={() => handleRequestChanges(item.id)}
                                 loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
                                 disabled={anyMutationPending}
                               >
                                 Запросить дополнительную информацию
                               </Button>
-                              <div className="employer-verification-page__detail-actions-group">
+                              <div className="company-review-page__detail-actions-group">
                                 <Button
                                   type="button"
                                   variant="danger"
                                   size="sm"
-                                  className="employer-verification-page__decision-button"
+                                  className="company-review-page__decision-button"
                                   onClick={() => handleReject(item.id)}
                                   loading={rejectMutation.isPending && currentExpandedItem?.id === item.id}
                                   disabled={anyMutationPending}
@@ -1575,7 +1575,7 @@ export function EmployerVerificationPage() {
                                   type="button"
                                   variant="success"
                                   size="sm"
-                                  className="employer-verification-page__decision-button"
+                                  className="company-review-page__decision-button"
                                   onClick={() => handleApprove(item.id)}
                                   loading={approveMutation.isPending && currentExpandedItem?.id === item.id}
                                   disabled={anyMutationPending}
@@ -1594,7 +1594,7 @@ export function EmployerVerificationPage() {
             })}
 
             {!isTableLoading && sortedItems.length === 0 ? (
-              <div className="employer-verification-page__empty">
+              <div className="company-review-page__empty">
                 {hasAppliedFilters
                   ? "По выбранным параметрам записи не найдены."
                   : "Заявок на верификацию пока нет."}
@@ -1603,10 +1603,10 @@ export function EmployerVerificationPage() {
           </div>
 
           {!isTableLoading && sortedItems.length > 0 ? (
-            <nav className="employer-verification-page__pagination" aria-label="Пагинация">
+            <nav className="company-review-page__pagination" aria-label="Пагинация">
               <button
                 type="button"
-                className="employer-verification-page__pagination-arrow"
+                className="company-review-page__pager-button"
                 onClick={() => setPage((current) => Math.max(current - 1, 1))}
                 disabled={page === 1}
                 aria-label="Предыдущая страница"
@@ -1615,12 +1615,12 @@ export function EmployerVerificationPage() {
                   src={arrowIcon}
                   alt=""
                   aria-hidden="true"
-                  className="employer-verification-page__pagination-arrow-icon employer-verification-page__pagination-arrow-icon--prev"
+                  className="company-review-page__pager-button-icon company-review-page__pager-button-icon--prev"
                 />
               </button>
               {pageNumbers.map((item, index) =>
                 item === "ellipsis" ? (
-                  <span key={`ellipsis-${index}`} className="employer-verification-page__pagination-ellipsis">
+                  <span key={`ellipsis-${index}`} className="company-review-page__pagination-ellipsis">
                     ...
                   </span>
                 ) : (
@@ -1629,8 +1629,8 @@ export function EmployerVerificationPage() {
                     type="button"
                     className={
                       item === page
-                        ? "employer-verification-page__pagination-page employer-verification-page__pagination-page--active"
-                        : "employer-verification-page__pagination-page"
+                        ? "company-review-page__pagination-page company-review-page__pagination-page--active"
+                        : "company-review-page__pagination-page"
                     }
                     onClick={() => setPage(item)}
                   >
@@ -1640,7 +1640,7 @@ export function EmployerVerificationPage() {
               )}
               <button
                 type="button"
-                className="employer-verification-page__pagination-arrow"
+                className="company-review-page__pager-button"
                 onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
                 disabled={page === totalPages}
                 aria-label="Следующая страница"
@@ -1649,7 +1649,7 @@ export function EmployerVerificationPage() {
                   src={arrowIcon}
                   alt=""
                   aria-hidden="true"
-                  className="employer-verification-page__pagination-arrow-icon"
+                  className="company-review-page__pager-button-icon"
                 />
               </button>
             </nav>

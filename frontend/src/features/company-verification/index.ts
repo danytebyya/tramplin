@@ -140,6 +140,13 @@ export async function uploadEmployerAvatar(file: File) {
   return response.data;
 }
 
+export async function deleteEmployerAvatar() {
+  const response = await apiClient.delete<{ data?: { avatar_url?: string | null } }>("/companies/avatar", {
+    headers: getAuthorizedHeaders(),
+  });
+  return response.data;
+}
+
 export async function uploadEmployerVerificationDocuments(payload: {
   files: File[];
   verificationRequestId?: string;

@@ -273,7 +273,7 @@
     background-color 220ms ease;
 }
 
-.map-view__filter-toggle--collapsed {
+.map-view__filter-toggle--closed {
   width: 52px;
   min-width: 52px;
   height: 52px;
@@ -294,7 +294,7 @@
     color 180ms ease;
 }
 
-.map-view__filter-toggle-content {
+.map-view__filter-summary {
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -316,7 +316,7 @@
     clip-path var(--map-view-toggle-duration) var(--map-view-toggle-easing);
 }
 
-.map-view__filter-toggle-content--collapsed {
+.map-view__filter-summary--closed {
   width: 0;
   max-width: 0;
   padding-left: 0;
@@ -328,7 +328,7 @@
 
 .map-view__filter-toggle-icon,
 .map-view__filter-category-icon,
-.map-view__format-arrow {
+.map-view__format-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -343,7 +343,7 @@
 
 .map-view__filter-toggle-icon::before,
 .map-view__filter-category-icon::before,
-.map-view__format-arrow::before {
+.map-view__format-toggle::before {
   content: "";
   width: 18px;
   height: 8px;
@@ -366,7 +366,7 @@
   transform: rotate(90deg);
 }
 
-.map-view__filter-toggle-icon--collapsed::before {
+.map-view__filter-toggle-icon--closed::before {
   transform: rotate(0deg);
 }
 
@@ -465,7 +465,7 @@
   background-color: #0f172a;
 }
 
-.map-view__filter-category-icon--collapsed::before {
+.map-view__filter-category-icon--closed::before {
   transform: rotate(0deg);
 }
 
@@ -563,13 +563,13 @@
   font-weight: 500;
 }
 
-.map-view__filter-block {
+.map-view__filter-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.map-view__filter-block-head {
+.map-view__filter-heading {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -629,25 +629,25 @@
   padding: 8px 0;
 }
 
-.map-view__filter-range-grid {
+.map-view__range-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.map-view__filter-checkbox-grid {
+.map-view__filter-options {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 16px;
 }
 
-.map-view__filter-checkbox-grid--single {
+.map-view__filter-options--single {
   flex-direction: column;
   flex-wrap: nowrap;
   align-items: flex-start;
 }
 
-.map-view__filter-checkbox-row {
+.map-view__filter-option {
   display: inline-flex;
   gap: 12px;
   padding: 10px 10px 10px 0;
@@ -658,16 +658,16 @@
   cursor: pointer;
 }
 
-.map-view__filter-checkbox-row .checkbox {
+.map-view__filter-option .toggle-mark {
   flex: 0 0 auto;
 }
 
-.map-view__filter-checkbox-row span {
+.map-view__filter-option span {
   min-width: 0;
   flex: 1 1 auto;
 }
 
-.map-view__filter-checkbox-grid--single .map-view__filter-checkbox-row {
+.map-view__filter-options--single .map-view__filter-option {
   width: 100%;
 }
 
@@ -993,8 +993,8 @@
     padding: 16px;
   }
 
-  .map-view__filter-checkbox-grid,
-  .map-view__filter-range-grid {
+  .map-view__filter-options,
+  .map-view__range-fields {
     grid-template-columns: 1fr;
   }
 }
@@ -1053,7 +1053,7 @@
   line-height: var(--type-caption-line);
 }
 
-.map-view__details-company-row {
+.map-view__details-company {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1125,7 +1125,7 @@
   fill: currentColor;
 }
 
-.map-view__details-content {
+.map-view__details-summary {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1245,21 +1245,6 @@
   min-width: 0;
 }
 
-.map-view__details-apply.button.button--secondary {
-  background: var(--map-view-details-accent);
-  border-color: var(--map-view-details-accent);
-}
-
-.map-view__details-apply.button.button--secondary:not(.button--loading):not(:disabled):hover {
-  background: var(--map-view-details-accent-hover);
-  border-color: var(--map-view-details-accent-hover);
-}
-
-.map-view__details-apply.button.button--secondary:not(.button--loading):not(:disabled):active {
-  background: var(--map-view-details-accent-active);
-  border-color: var(--map-view-details-accent-active);
-}
-
 .map-view__expand-button {
   position: absolute;
   top: var(--map-view-inset);
@@ -1363,7 +1348,7 @@
   -webkit-mask-image: url("../../assets/icons/expand.svg");
 }
 
-.map-view__expand-icon--narrow {
+.map-view__expand-icon--compact {
   mask-image: url("../../assets/icons/narrow.svg");
   -webkit-mask-image: url("../../assets/icons/narrow.svg");
 }
@@ -1396,11 +1381,11 @@
     opacity var(--map-view-toggle-fade-duration) var(--map-view-toggle-easing);
 }
 
-.map-view__format-bar--collapsed {
+.map-view__format-bar--closed {
   max-width: 52px;
 }
 
-.map-view__format-arrow {
+.map-view__format-toggle {
   flex: 0 0 52px;
   min-width: 52px;
   min-height: 52px;
@@ -1414,22 +1399,22 @@
     background-color 180ms ease;
 }
 
-.map-view__format-arrow::before {
+.map-view__format-toggle::before {
   background-color: var(--color-text-secondary);
   transform: rotate(90deg);
   transition: transform var(--map-view-toggle-duration) var(--map-view-toggle-easing);
 }
 
-.map-view__format-arrow--expanded::before {
+.map-view__format-toggle--open::before {
   transform: rotate(-90deg);
 }
 
-.map-view__format-bar:hover .map-view__format-arrow::before,
-.map-view__format-arrow:hover::before {
+.map-view__format-bar:hover .map-view__format-toggle::before,
+.map-view__format-toggle:hover::before {
   background-color: var(--color-text-primary);
 }
 
-.map-view__format-content {
+.map-view__format-summary {
   display: inline-flex;
   align-items: center;
   gap: 32px;
@@ -1446,7 +1431,7 @@
     transform var(--map-view-toggle-duration) var(--map-view-toggle-easing);
 }
 
-.map-view__format-content--collapsed {
+.map-view__format-summary--closed {
   max-width: 0;
   padding-left: 0;
   padding-right: 0;
@@ -1549,7 +1534,7 @@
 
 .map-view__leaflet-popup,
 .map-view__leaflet-popup .leaflet-popup-content-wrapper,
-.map-view__leaflet-popup .leaflet-popup-tip-container {
+.map-view__leaflet-popup .leaflet-popup-tip-shell {
   display: none;
 }
 
@@ -1680,7 +1665,7 @@
     bottom: auto;
   }
 
-  .map-view__details-content {
+  .map-view__details-summary {
     grid-template-columns: 1fr;
   }
 
@@ -1740,7 +1725,7 @@
     bottom: calc(var(--map-view-inset) + 64px);
   }
 
-  .map-view__format-arrow {
+  .map-view__format-toggle {
     width: 36px;
     height: 36px;
   }
@@ -1752,7 +1737,7 @@
     line-height: 18px;
   }
 
-  .map-view__format-content {
+  .map-view__format-summary {
     gap: 8px;
   }
 }

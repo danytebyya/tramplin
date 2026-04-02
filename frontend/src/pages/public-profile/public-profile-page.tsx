@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 
-import verifiedIcon from "../../assets/icons/verified.svg";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
 import {
   CitySelection,
@@ -13,6 +12,7 @@ import {
 import {
   buildApplicantProfileMenuItems,
   buildEmployerProfileMenuItems,
+  buildModerationProfileMenuItems,
   Header,
 } from "../../widgets/header";
 import { Footer } from "../../widgets/footer";
@@ -38,12 +38,22 @@ import {
   resolveAvatarIcon,
   resolveAvatarUrl,
 } from "../../shared/lib";
-import { Badge, Container } from "../../shared/ui";
+import { Badge, Button, Container, VerifiedTooltip } from "../../shared/ui";
 import "../seeker-dashboard/seeker-dashboard.css";
 import "../employer-dashboard/employer-dashboard.css";
 import "./public-profile.css";
 
 type SeekerLevel = "Junior" | "Middle" | "Senior";
+
+type PublicProfileReturnState = {
+  restoreScrollY?: number;
+  restoreViewMode?: "list" | "map";
+  returnTo?: {
+    pathname: string;
+    search?: string;
+    hash?: string;
+  };
+};
 
 type ApplicantViewState = {
   publicId: string;
@@ -109,6 +119,34 @@ function normalizeStringArray(value?: string[] | null) {
 
 function normalizeStringValue(value?: string | null) {
   return value?.trim() ?? "";
+}
+
+function resolveViewerTheme(role: string | null | undefined) {
+  if (role === "junior" || role === "curator" || role === "admin") {
+    return "curator";
+  }
+
+  if (role === "employer") {
+    return "employer";
+  }
+
+  if (role === "applicant") {
+    return "applicant";
+  }
+
+  return "employer";
+}
+
+function resolveViewerBadgeVariant(theme: "applicant" | "employer" | "curator") {
+  if (theme === "employer") {
+    return "primary" as const;
+  }
+
+  if (theme === "curator") {
+    return "info" as const;
+  }
+
+  return "secondary" as const;
 }
 
 function mapProject(item: ApplicantDashboardProject) {
@@ -301,7 +339,7 @@ function renderExternalLink(label: string, value: string, fallback: string) {
   }
 
   return (
-    <div className="seeker-dashboard__link-block" key={label}>
+    <div className="seeker-dashboard__link-panel" key={label}>
       <span className="seeker-dashboard__link-label">{label}</span>
       <a href={value} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
         {formatLinkLabel(value, fallback)}
@@ -312,13 +350,13 @@ function renderExternalLink(label: string, value: string, fallback: string) {
 
 function PublicProfileSkeleton() {
   return (
-    <Container className="public-profile-page__status-container public-profile-page__status-container--loading">
-      <div className="public-profile-page__skeleton-layout" aria-hidden="true">
+    <Container className="public-profile-page__status-shell public-profile-page__status-shell--loading">
+      <div className="public-profile-page__skeleton-overview" aria-hidden="true">
         <section className="public-profile-page__skeleton-card public-profile-page__skeleton-card--main">
           <span className="public-profile-page__skeleton public-profile-page__skeleton--avatar" />
           <span className="public-profile-page__skeleton public-profile-page__skeleton--title" />
           <span className="public-profile-page__skeleton public-profile-page__skeleton--subtitle" />
-          <div className="public-profile-page__skeleton-grid">
+          <div className="public-profile-page__skeleton-panels">
             <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
             <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
             <span className="public-profile-page__skeleton public-profile-page__skeleton--field" />
@@ -351,6 +389,7 @@ function PublicProfileSkeleton() {
 
 export function PublicProfilePage() {
   const { publicId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [selectedEmployerOpportunityId, setSelectedEmployerOpportunityId] = useState<string | null>(null);
@@ -358,14 +397,33 @@ export function PublicProfilePage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const role = useAuthStore((state) => state.role);
   const activeRole = readAccessTokenPayload(accessToken)?.active_role ?? role;
+  const isAuthenticated = Boolean(accessToken);
   const employerAccess = getEmployerAccessState(role, accessToken);
   const profileMenuItems =
     activeRole === "employer"
       ? buildEmployerProfileMenuItems(navigate, employerAccess)
-      : buildApplicantProfileMenuItems(navigate);
-  const fallbackHeaderTheme = activeRole === "employer" ? "employer" : "applicant";
-  const fallbackHeaderContainerClassName =
-    fallbackHeaderTheme === "employer" ? "employer-dashboard__header-container" : "home-page__container";
+      : activeRole === "junior" || activeRole === "curator" || activeRole === "admin"
+        ? buildModerationProfileMenuItems()
+        : buildApplicantProfileMenuItems(navigate);
+  const viewerTheme = resolveViewerTheme(activeRole);
+  const viewerBadgeVariant = resolveViewerBadgeVariant(viewerTheme);
+  const fallbackHeaderTheme = viewerTheme;
+  const fallbackHeaderContainerClassName = "home-page__shell";
+  const backNavigationTarget = useMemo(() => {
+    const state = location.state as PublicProfileReturnState | null;
+
+    if (!state?.returnTo?.pathname) {
+      return null;
+    }
+
+    return {
+      to: `${state.returnTo.pathname}${state.returnTo.search ?? ""}${state.returnTo.hash ?? ""}`,
+      state: {
+        restoreScrollY: state.restoreScrollY,
+        restoreViewMode: state.restoreViewMode,
+      },
+    };
+  }, [location.state]);
 
   const profileQuery = useQuery({
     queryKey: ["public-profile", publicId],
@@ -445,16 +503,33 @@ export function PublicProfilePage() {
           theme={fallbackHeaderTheme}
           city={selectedCity}
           onCityChange={handleCityChange}
+          isAuthenticated={isAuthenticated}
+          guestActions={
+            <>
+              <Button
+                type="button"
+                variant="primary-outline"
+                size="md"
+                className="header__action-button header__action-button--login"
+                onClick={() => navigate("/login")}
+              >
+                Вход
+              </Button>
+              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+                Регистрация
+              </Button>
+            </>
+          }
         />
-        <BackNavigation />
-        <Container className="public-profile-page__status-container">
+        <BackNavigation {...backNavigationTarget} />
+        <Container className="public-profile-page__status-shell">
           <div className="public-profile-page__status-card">
             <h1 className="public-profile-page__status-title">Профиль временно недоступен</h1>
             <p className="public-profile-page__status-text">Не удалось открыть страницу профиля. Попробуйте обновить страницу или открыть профиль чуть позже.</p>
             <Link to="/" className="public-profile-page__status-link">Вернуться на главную</Link>
           </div>
         </Container>
-        <Footer theme="applicant" />
+        <Footer theme={viewerTheme} />
       </main>
     );
   }
@@ -468,10 +543,27 @@ export function PublicProfilePage() {
           theme={fallbackHeaderTheme}
           city={selectedCity}
           onCityChange={handleCityChange}
+          isAuthenticated={isAuthenticated}
+          guestActions={
+            <>
+              <Button
+                type="button"
+                variant="primary-outline"
+                size="md"
+                className="header__action-button header__action-button--login"
+                onClick={() => navigate("/login")}
+              >
+                Вход
+              </Button>
+              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+                Регистрация
+              </Button>
+            </>
+          }
         />
-        <BackNavigation />
+        <BackNavigation {...backNavigationTarget} />
         <PublicProfileSkeleton />
-        <Footer theme="applicant" />
+        <Footer theme={viewerTheme} />
       </main>
     );
   }
@@ -485,9 +577,26 @@ export function PublicProfilePage() {
           theme={fallbackHeaderTheme}
           city={selectedCity}
           onCityChange={handleCityChange}
+          isAuthenticated={isAuthenticated}
+          guestActions={
+            <>
+              <Button
+                type="button"
+                variant="primary-outline"
+                size="md"
+                className="header__action-button header__action-button--login"
+                onClick={() => navigate("/login")}
+              >
+                Вход
+              </Button>
+              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+                Регистрация
+              </Button>
+            </>
+          }
         />
-        <BackNavigation />
-        <Container className="public-profile-page__status-container">
+        <BackNavigation {...backNavigationTarget} />
+        <Container className="public-profile-page__status-shell">
           <div className="public-profile-page__status-card">
             <h1 className="public-profile-page__status-title">Профиль скрыт</h1>
             <p className="public-profile-page__status-text">
@@ -496,7 +605,7 @@ export function PublicProfilePage() {
             <Link to="/" className="public-profile-page__status-link">Вернуться на главную</Link>
           </div>
         </Container>
-        <Footer theme="applicant" />
+        <Footer theme={viewerTheme} />
       </main>
     );
   }
@@ -529,23 +638,42 @@ export function PublicProfilePage() {
     );
 
     return (
-      <main className="seeker-dashboard public-profile-page public-profile-page--applicant">
+      <main
+        className={`seeker-dashboard public-profile-page public-profile-page--applicant public-profile-page--viewer-${viewerTheme}`}
+      >
         <Header
-          containerClassName="home-page__container"
+          containerClassName={fallbackHeaderContainerClassName}
           profileMenuItems={profileMenuItems}
-          theme="applicant"
+          theme={viewerTheme}
           city={selectedCity}
           onCityChange={handleCityChange}
+          isAuthenticated={isAuthenticated}
+          guestActions={
+            <>
+              <Button
+                type="button"
+                variant="primary-outline"
+                size="md"
+                className="header__action-button header__action-button--login"
+                onClick={() => navigate("/login")}
+              >
+                Вход
+              </Button>
+              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+                Регистрация
+              </Button>
+            </>
+          }
         />
 
-        <BackNavigation />
-        <Container className="seeker-dashboard__container">
+        <BackNavigation {...backNavigationTarget} />
+        <Container className="seeker-dashboard__shell">
           <section className="seeker-dashboard__profile">
-            <div className="seeker-dashboard__profile-grid">
+            <div className="seeker-dashboard__profile-summary">
               <section className="seeker-dashboard__form-panel">
                 <div className="seeker-dashboard__identity">
                   <p className="seeker-dashboard__profile-id">{`ID:${applicantState.publicId}`}</p>
-                  <div className="seeker-dashboard__avatar-block">
+                  <div className="seeker-dashboard__avatar-panel">
                     <span className="seeker-dashboard__avatar-shell">
                       <img src={resolveAvatarIcon("applicant")} alt="" aria-hidden="true" className="seeker-dashboard__avatar-image" />
                     </span>
@@ -557,7 +685,7 @@ export function PublicProfilePage() {
                   </div>
                 </div>
 
-                <div className="seeker-dashboard__form-grid">
+                <div className="seeker-dashboard__profile-form">
                   {applicantState.profile.university ? (
                     <div className="seeker-dashboard__field">
                       <span className="seeker-dashboard__field-label">ВУЗ</span>
@@ -585,7 +713,7 @@ export function PublicProfilePage() {
                 </div>
               </section>
 
-              <aside className="seeker-dashboard__summary-column">
+              <aside className="seeker-dashboard__summary-panel">
                 {hasCareerInterests ? (
                   <article className="seeker-dashboard__summary-card">
                     <div className="seeker-dashboard__summary-head">
@@ -628,13 +756,13 @@ export function PublicProfilePage() {
           {hasPortfolioSection ? (
             <section className="seeker-dashboard__section">
               <h2 className="seeker-dashboard__section-title">Портфолио</h2>
-              <div className="seeker-dashboard__portfolio-grid">
+              <div className="seeker-dashboard__portfolio-showcase">
                 {applicantState.profile.about ? (
-                  <article className="seeker-dashboard__content-card seeker-dashboard__content-card--links">
-                    <div className="seeker-dashboard__content-card-head">
-                      <h3 className="seeker-dashboard__content-card-title">О себе</h3>
+                  <article className="seeker-dashboard__profile-panel seeker-dashboard__profile-panel--links">
+                    <div className="seeker-dashboard__profile-panel-head">
+                      <h3 className="seeker-dashboard__profile-panel-title">О себе</h3>
                     </div>
-                    <div className="seeker-dashboard__content-card-body">
+                    <div className="seeker-dashboard__profile-panel-body">
                       {applicantState.profile.about.split(/\n+/).map((paragraph) => (
                         <p key={paragraph} className="seeker-dashboard__paragraph">{paragraph}</p>
                       ))}
@@ -646,11 +774,11 @@ export function PublicProfilePage() {
                   applicantState.profile.hardSkills.length > 0 ||
                   applicantState.profile.softSkills.length > 0 ||
                   applicantState.profile.languages.length > 0) ? (
-                  <article className="seeker-dashboard__content-card">
-                    <div className="seeker-dashboard__content-card-head">
-                      <h3 className="seeker-dashboard__content-card-title">Навыки</h3>
+                  <article className="seeker-dashboard__profile-panel">
+                    <div className="seeker-dashboard__profile-panel-head">
+                      <h3 className="seeker-dashboard__profile-panel-title">Навыки</h3>
                     </div>
-                    <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
+                    <div className="seeker-dashboard__profile-panel-body seeker-dashboard__profile-panel-body--stacked">
                       {applicantState.profile.level ? (
                         <div className="seeker-dashboard__skill-group">
                           <span className="seeker-dashboard__skill-title">Уровень</span>
@@ -664,7 +792,7 @@ export function PublicProfilePage() {
                           <span className="seeker-dashboard__skill-title">Hard skills</span>
                           <div className="seeker-dashboard__tag-list">
                             {applicantState.profile.hardSkills.map((item) => (
-                              <Badge key={item} variant="secondary">{item}</Badge>
+                              <Badge key={item} variant={viewerBadgeVariant}>{item}</Badge>
                             ))}
                           </div>
                         </div>
@@ -674,7 +802,7 @@ export function PublicProfilePage() {
                           <span className="seeker-dashboard__skill-title">Soft skills</span>
                           <div className="seeker-dashboard__tag-list">
                             {applicantState.profile.softSkills.map((item) => (
-                              <Badge key={item} variant="secondary">{item}</Badge>
+                              <Badge key={item} variant={viewerBadgeVariant}>{item}</Badge>
                             ))}
                           </div>
                         </div>
@@ -684,7 +812,7 @@ export function PublicProfilePage() {
                           <span className="seeker-dashboard__skill-title">Языки</span>
                           <div className="seeker-dashboard__tag-list">
                             {applicantState.profile.languages.map((item) => (
-                              <Badge key={item} variant="secondary">{item}</Badge>
+                              <Badge key={item} variant={viewerBadgeVariant}>{item}</Badge>
                             ))}
                           </div>
                         </div>
@@ -700,11 +828,11 @@ export function PublicProfilePage() {
                   applicantState.profile.portfolioUrl ||
                   applicantState.profile.habrUrl ||
                   applicantState.profile.resumeUrl) ? (
-                  <article className="seeker-dashboard__content-card">
-                    <div className="seeker-dashboard__content-card-head">
-                      <h3 className="seeker-dashboard__content-card-title">Ссылки на репозитории</h3>
+                  <article className="seeker-dashboard__profile-panel">
+                    <div className="seeker-dashboard__profile-panel-head">
+                      <h3 className="seeker-dashboard__profile-panel-title">Ссылки на репозитории</h3>
                     </div>
-                    <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
+                    <div className="seeker-dashboard__profile-panel-body seeker-dashboard__profile-panel-body--stacked">
                       {renderExternalLink("GitHub", applicantState.profile.githubUrl, "github.com")}
                       {renderExternalLink("GitLab", applicantState.profile.gitlabUrl, "gitlab.com")}
                       {renderExternalLink("Bitbucket", applicantState.profile.bitbucketUrl, "bitbucket.org")}
@@ -723,44 +851,44 @@ export function PublicProfilePage() {
 
           <section className="seeker-dashboard__section seeker-dashboard__section--combined">
             {applicantState.projects.length > 0 ? (
-              <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
-                <div className="seeker-dashboard__collection-section">
+              <div className="seeker-dashboard__portfolio-set seeker-dashboard__portfolio-set--combined">
+                <div className="seeker-dashboard__portfolio-set-section">
                   <h2 className="seeker-dashboard__section-title">Опыт проектов</h2>
                 </div>
-                <div className="seeker-dashboard__collection-grid">
+                <div className="seeker-dashboard__portfolio-set-gallery">
                   {applicantState.projects.map((project) => (
-                  <article key={project.id} className="seeker-dashboard__collection-card">
-                    <div className="seeker-dashboard__collection-card-head">
-                      <h3 className="seeker-dashboard__collection-card-title">{project.title}</h3>
+                  <article key={project.id} className="seeker-dashboard__portfolio-set-entry">
+                    <div className="seeker-dashboard__portfolio-set-entry-head">
+                      <h3 className="seeker-dashboard__portfolio-set-entry-title">{project.title}</h3>
                     </div>
-                    <div className="seeker-dashboard__collection-card-body">
+                    <div className="seeker-dashboard__portfolio-set-entry-body">
                       {project.description ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Описание:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Описание:</span>
                           <p className="seeker-dashboard__paragraph">{project.description}</p>
                         </div>
                       ) : null}
                       {project.technologies ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Технологии:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Технологии:</span>
                           <p className="seeker-dashboard__paragraph">{project.technologies}</p>
                         </div>
                       ) : null}
                       {project.periodLabel ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Период:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Период:</span>
                           <p className="seeker-dashboard__paragraph">{project.periodLabel}</p>
                         </div>
                       ) : null}
                       {project.roleName ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Роль:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Роль:</span>
                           <p className="seeker-dashboard__paragraph">{project.roleName}</p>
                         </div>
                       ) : null}
                       {project.repositoryUrl ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
                           <a href={project.repositoryUrl} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
                             {project.repositoryUrl}
                           </a>
@@ -774,32 +902,32 @@ export function PublicProfilePage() {
             ) : null}
 
             {applicantState.achievements.length > 0 ? (
-              <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
-                <div className="seeker-dashboard__collection-section">
+              <div className="seeker-dashboard__portfolio-set seeker-dashboard__portfolio-set--combined">
+                <div className="seeker-dashboard__portfolio-set-section">
                   <h2 className="seeker-dashboard__section-title">Достижения</h2>
                 </div>
-                <div className="seeker-dashboard__collection-grid">
+                <div className="seeker-dashboard__portfolio-set-gallery">
                   {applicantState.achievements.map((item) => (
-                  <article key={item.id} className="seeker-dashboard__collection-card">
-                    <div className="seeker-dashboard__collection-card-head">
-                      <h3 className="seeker-dashboard__collection-card-title">{item.title}</h3>
+                  <article key={item.id} className="seeker-dashboard__portfolio-set-entry">
+                    <div className="seeker-dashboard__portfolio-set-entry-head">
+                      <h3 className="seeker-dashboard__portfolio-set-entry-title">{item.title}</h3>
                     </div>
-                    <div className="seeker-dashboard__collection-card-body">
+                    <div className="seeker-dashboard__portfolio-set-entry-body">
                       {item.eventName ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Мероприятие:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Мероприятие:</span>
                           <p className="seeker-dashboard__paragraph">{item.eventName}</p>
                         </div>
                       ) : null}
                       {item.projectName ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Проект:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Проект:</span>
                           <p className="seeker-dashboard__paragraph">{item.projectName}</p>
                         </div>
                       ) : null}
                       {item.award ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Награда:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Награда:</span>
                           <p className="seeker-dashboard__paragraph">{item.award}</p>
                         </div>
                       ) : null}
@@ -811,32 +939,32 @@ export function PublicProfilePage() {
             ) : null}
 
             {applicantState.certificates.length > 0 ? (
-              <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
-                <div className="seeker-dashboard__collection-section">
+              <div className="seeker-dashboard__portfolio-set seeker-dashboard__portfolio-set--combined">
+                <div className="seeker-dashboard__portfolio-set-section">
                   <h2 className="seeker-dashboard__section-title">Сертификаты</h2>
                 </div>
-                <div className="seeker-dashboard__collection-grid">
+                <div className="seeker-dashboard__portfolio-set-gallery">
                   {applicantState.certificates.map((item) => (
-                  <article key={item.id} className="seeker-dashboard__collection-card">
-                    <div className="seeker-dashboard__collection-card-head">
-                      <h3 className="seeker-dashboard__collection-card-title">{item.title}</h3>
+                  <article key={item.id} className="seeker-dashboard__portfolio-set-entry">
+                    <div className="seeker-dashboard__portfolio-set-entry-head">
+                      <h3 className="seeker-dashboard__portfolio-set-entry-title">{item.title}</h3>
                     </div>
-                    <div className="seeker-dashboard__collection-card-body">
+                    <div className="seeker-dashboard__portfolio-set-entry-body">
                       {item.organizationName ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Организация:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Организация:</span>
                           <p className="seeker-dashboard__paragraph">{item.organizationName}</p>
                         </div>
                       ) : null}
                       {item.issuedAt ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Дата:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Дата:</span>
                           <p className="seeker-dashboard__paragraph">{item.issuedAt}</p>
                         </div>
                       ) : null}
                       {item.credentialUrl ? (
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
                           <a href={item.credentialUrl} target="_blank" rel="noreferrer" className="seeker-dashboard__link-value">
                             {item.credentialUrl}
                           </a>
@@ -851,7 +979,7 @@ export function PublicProfilePage() {
           </section>
         </Container>
 
-        <Footer theme="applicant" />
+        <Footer theme={viewerTheme} />
       </main>
     );
   }
@@ -859,7 +987,7 @@ export function PublicProfilePage() {
   const employerProfile = profile.employer_profile;
   const employerStats = profile.employer_stats;
   const verificationStatus = employerProfile?.verification_status;
-  const theme = profile.role === "employer" ? "employer" : "applicant";
+  const theme = viewerTheme;
   const employerOfficeAddresses = normalizeStringArray(employerProfile?.office_addresses);
   const employerActivityAreas = normalizeStringArray(employerProfile?.activity_areas);
   const employerCorporateEmail = normalizeStringValue(employerProfile?.corporate_email);
@@ -875,21 +1003,38 @@ export function PublicProfilePage() {
   );
 
   return (
-    <main className="employer-dashboard public-profile-page public-profile-page--employer">
+    <main className={`public-profile-page public-profile-page--employer public-profile-page--viewer-${viewerTheme}`}>
       <Header
-        containerClassName="employer-dashboard__header-container"
+        containerClassName={fallbackHeaderContainerClassName}
         profileMenuItems={profileMenuItems}
         theme={theme}
         city={selectedCity}
         onCityChange={handleCityChange}
+        isAuthenticated={isAuthenticated}
+        guestActions={
+          <>
+            <Button
+              type="button"
+              variant="primary-outline"
+              size="md"
+              className="header__action-button header__action-button--login"
+              onClick={() => navigate("/login")}
+            >
+              Вход
+            </Button>
+            <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+              Регистрация
+            </Button>
+          </>
+        }
       />
 
-      <BackNavigation />
-      <Container className="employer-dashboard__container">
-        <section className="employer-dashboard__profile-grid">
+      <BackNavigation {...backNavigationTarget} />
+      <Container className="employer-dashboard__shell">
+        <section className="employer-dashboard__profile-summary">
           <div className="employer-dashboard__form-panel">
             <div className="employer-dashboard__identity">
-              <div className="employer-dashboard__avatar-block">
+              <div className="employer-dashboard__avatar-panel">
                 {profile.public_id ? <p className="employer-dashboard__profile-id">ID: {profile.public_id}</p> : null}
                 <div className="employer-dashboard__avatar-shell">
                   <img
@@ -905,7 +1050,7 @@ export function PublicProfilePage() {
               </div>
             </div>
 
-            <div className="employer-dashboard__form-grid">
+            <div className="employer-dashboard__profile-form">
               {employerShortDescription ? (
                 <div className="employer-dashboard__field">
                   <span className="employer-dashboard__field-label">Краткое описание</span>
@@ -918,7 +1063,7 @@ export function PublicProfilePage() {
                   <span className="employer-dashboard__field-label">Адреса офисов</span>
                   <div className="employer-dashboard__office-list">
                     {employerOfficeAddresses.map((address, index) => (
-                      <div key={`${address}-${index}`} className="employer-dashboard__office-item">
+                      <div key={`${address}-${index}`} className="employer-dashboard__office-card">
                         <p className="public-profile-page__field-value">{address}</p>
                       </div>
                     ))}
@@ -931,7 +1076,7 @@ export function PublicProfilePage() {
                   <span className="employer-dashboard__field-label">Сфера деятельности</span>
                   <div className="employer-dashboard__office-list">
                     {employerActivityAreas.map((area, index) => (
-                      <div key={`${area}-${index}`} className="employer-dashboard__office-item">
+                      <div key={`${area}-${index}`} className="employer-dashboard__office-card">
                         <p className="public-profile-page__field-value">{area}</p>
                       </div>
                     ))}
@@ -994,12 +1139,12 @@ export function PublicProfilePage() {
           <aside className="employer-dashboard__summary">
             <article className="employer-dashboard__summary-card">
               <p className="employer-dashboard__summary-label">Статус:</p>
-              <div className="employer-dashboard__status-row">
+              <div className="employer-dashboard__status-summary">
                 <strong className={formatVerificationClassName(verificationStatus)}>
                   {formatVerificationLabel(verificationStatus)}
                 </strong>
                 {verificationStatus === "verified" ? (
-                  <img src={verifiedIcon} alt="" aria-hidden="true" className="public-profile-page__verified-icon" />
+                  <VerifiedTooltip className="public-profile-page__verification-tooltip" size="lg" />
                 ) : null}
               </div>
             </article>
@@ -1014,7 +1159,7 @@ export function PublicProfilePage() {
             {employerOrganizationSize ? (
               <article className="employer-dashboard__summary-card">
                 <p className="employer-dashboard__summary-label">Размер организации:</p>
-                <div className="employer-dashboard__summary-value-row">
+                <div className="employer-dashboard__summary-metric">
                   <strong className="employer-dashboard__summary-value">{employerOrganizationSize}</strong>
                 </div>
               </article>
@@ -1023,7 +1168,7 @@ export function PublicProfilePage() {
             {employerProfile?.foundation_year ? (
               <article className="employer-dashboard__summary-card">
                 <p className="employer-dashboard__summary-label">Год основания:</p>
-                <div className="employer-dashboard__summary-value-row">
+                <div className="employer-dashboard__summary-metric">
                   <strong className="employer-dashboard__summary-value">{String(employerProfile.foundation_year)}</strong>
                 </div>
               </article>
@@ -1043,7 +1188,7 @@ export function PublicProfilePage() {
               onViewModeChange={setEmployerOpportunityViewMode}
             />
 
-            <div className="employer-dashboard__opportunities-content">
+            <div className="employer-dashboard__opportunities-summary">
               <div
                 className={
                   employerOpportunityViewMode === "map"
@@ -1093,7 +1238,7 @@ export function PublicProfilePage() {
         </section>
       </Container>
 
-      <Footer theme="employer" />
+      <Footer theme={viewerTheme} />
     </main>
   );
 }

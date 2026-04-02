@@ -108,27 +108,27 @@ function formatSubmissionDateTime(value: string) {
 
 function ContentModerationMetricSkeleton({ label }: { label: string }) {
   return (
-    <article className="content-moderation-page__metric-card" aria-hidden="true">
-      <span className="content-moderation-page__metric-label">{label}</span>
-      <span className="content-moderation-page__skeleton content-moderation-page__skeleton--metric-value" />
+    <article className="moderation-queue-page__metric-card" aria-hidden="true">
+      <span className="moderation-queue-page__metric-label">{label}</span>
+      <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--metric-value" />
     </article>
   );
 }
 
 function ContentModerationRowSkeleton() {
   return (
-    <article className="content-moderation-page__row content-moderation-page__row--skeleton" aria-hidden="true">
-      <div className="content-moderation-page__row-summary">
-        <div className="content-moderation-page__row-leading">
-          <span className="content-moderation-page__skeleton content-moderation-page__skeleton--checkbox" />
+    <article className="moderation-queue-page__submission moderation-queue-page__submission--skeleton" aria-hidden="true">
+      <div className="moderation-queue-page__submission-summary">
+        <div className="moderation-queue-page__submission-select">
+          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--mark" />
         </div>
-        <div className="content-moderation-page__row-main">
-          <span className="content-moderation-page__skeleton content-moderation-page__skeleton--title" />
-          <span className="content-moderation-page__skeleton content-moderation-page__skeleton--cell" />
-          <span className="content-moderation-page__skeleton content-moderation-page__skeleton--cell" />
-          <span className="content-moderation-page__skeleton content-moderation-page__skeleton--cell" />
-          <span className="content-moderation-page__skeleton content-moderation-page__skeleton--badge" />
-          <span className="content-moderation-page__skeleton content-moderation-page__skeleton--actions" />
+        <div className="moderation-queue-page__submission-overview">
+          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--title" />
+          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--cell" />
+          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--cell" />
+          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--cell" />
+          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--badge" />
+          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--actions" />
         </div>
       </div>
     </article>
@@ -650,21 +650,21 @@ export function ContentModerationPage() {
   };
 
   return (
-    <main className={`content-moderation-page content-moderation-page--${themeRole}`}>
+    <main className={`moderation-queue-page moderation-queue-page--${themeRole}`}>
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme="curator"
         topNavigation={null}
         bottomContent={<CuratorHeaderNavigation isAdmin={isAdmin} currentPage="content" />}
       />
 
-      <Container className="content-moderation-page__container">
-        <header className="content-moderation-page__header">
-          <h1 className="content-moderation-page__title">Модерация контента</h1>
+      <Container className="moderation-queue-page__shell">
+        <header className="moderation-queue-page__header">
+          <h1 className="moderation-queue-page__title">Модерация контента</h1>
         </header>
 
-        <section className="content-moderation-page__metrics" aria-label="Статистика модерации контента">
+        <section className="moderation-queue-page__metrics stats-panel" aria-label="Статистика модерации контента">
           {contentQuery.isPending ? (
             <>
               <ContentModerationMetricSkeleton label="Всего на модерации:" />
@@ -674,35 +674,35 @@ export function ContentModerationPage() {
             </>
           ) : (
             <>
-              <article className="content-moderation-page__metric-card">
-                <span className="content-moderation-page__metric-label">Всего на модерации:</span>
-                <strong className="content-moderation-page__metric-value">{metrics?.total_on_moderation ?? 0}</strong>
+              <article className="moderation-queue-page__metric-card stats-panel__card">
+                <span className="moderation-queue-page__metric-label stats-panel__label">Всего на модерации:</span>
+                <strong className="moderation-queue-page__metric-value stats-panel__value">{metrics?.total_on_moderation ?? 0}</strong>
               </article>
-              <article className="content-moderation-page__metric-card">
-                <span className="content-moderation-page__metric-label">В очереди:</span>
-                <strong className="content-moderation-page__metric-value">{metrics?.in_queue ?? 0}</strong>
+              <article className="moderation-queue-page__metric-card stats-panel__card">
+                <span className="moderation-queue-page__metric-label stats-panel__label">В очереди:</span>
+                <strong className="moderation-queue-page__metric-value stats-panel__value">{metrics?.in_queue ?? 0}</strong>
               </article>
-              <article className="content-moderation-page__metric-card">
-                <span className="content-moderation-page__metric-label">Сегодня проверено:</span>
-                <strong className="content-moderation-page__metric-value">{metrics?.reviewed_today ?? 0}</strong>
+              <article className="moderation-queue-page__metric-card stats-panel__card">
+                <span className="moderation-queue-page__metric-label stats-panel__label">Сегодня проверено:</span>
+                <strong className="moderation-queue-page__metric-value stats-panel__value">{metrics?.reviewed_today ?? 0}</strong>
               </article>
-              <article className="content-moderation-page__metric-card">
-                <span className="content-moderation-page__metric-label">Просрочено:</span>
-                <strong className="content-moderation-page__metric-value">{metrics?.overdue ?? 0}</strong>
+              <article className="moderation-queue-page__metric-card stats-panel__card">
+                <span className="moderation-queue-page__metric-label stats-panel__label">Просрочено:</span>
+                <strong className="moderation-queue-page__metric-value stats-panel__value">{metrics?.overdue ?? 0}</strong>
               </article>
             </>
           )}
         </section>
 
-        <div className="content-moderation-page__tabs" role="tablist" aria-label="Типы контента">
+        <div className="moderation-queue-page__tabs" role="tablist" aria-label="Типы контента">
           {tabDefinitions.map((tab) => (
             <button
               key={tab.value}
               type="button"
               className={
                 selectedTab === tab.value
-                  ? "content-moderation-page__tab content-moderation-page__tab--active"
-                  : "content-moderation-page__tab"
+                  ? "moderation-queue-page__tab moderation-queue-page__tab--active"
+                  : "moderation-queue-page__tab"
               }
               onClick={() => {
                 setSelectedTab(tab.value);
@@ -716,22 +716,22 @@ export function ContentModerationPage() {
           ))}
         </div>
 
-        <section className="content-moderation-page__toolbar">
-          <label className="content-moderation-page__search header__search" aria-label="Поиск публикаций">
+        <section className="moderation-queue-page__toolbar">
+          <label className="moderation-queue-page__search header__search" aria-label="Поиск публикаций">
             <Input
               type="search"
               placeholder="Поиск"
-              className="input--sm content-moderation-page__search-input"
+              className="input--sm moderation-queue-page__search-input"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </label>
 
-          <div className="content-moderation-page__toolbar-actions">
-            <div ref={filtersRef} className="content-moderation-page__filters">
+          <div className="moderation-queue-page__toolbar-actions">
+            <div ref={filtersRef} className="moderation-queue-page__filters">
               <button
                 type="button"
-                className="content-moderation-page__icon-button content-moderation-page__icon-button--filter"
+                className="moderation-queue-page__icon-button moderation-queue-page__icon-button--filter"
                 aria-label="Фильтры"
                 aria-expanded={isFilterOpen}
                 onClick={() => {
@@ -741,35 +741,35 @@ export function ContentModerationPage() {
               />
 
               {isFilterOpen ? (
-                <div className="content-moderation-page__filters-popover">
-                  <div className="content-moderation-page__filters-section">
-                    <div className="content-moderation-page__filters-head">
-                      <h2 className="content-moderation-page__filters-title">Фильтры</h2>
-                      <button type="button" className="content-moderation-page__filters-reset" onClick={resetFilters}>
+                <div className="moderation-queue-page__filters-popover">
+                  <div className="moderation-queue-page__filters-section">
+                    <div className="moderation-queue-page__filters-head">
+                      <h2 className="moderation-queue-page__filters-title">Фильтры</h2>
+                      <button type="button" className="moderation-queue-page__filters-reset" onClick={resetFilters}>
                         Сбросить
                       </button>
                     </div>
                   </div>
 
-                  <div className="content-moderation-page__filters-section">
-                    <div className="content-moderation-page__filters-head">
-                      <h3 className="content-moderation-page__filters-group-title">По статусу</h3>
+                  <div className="moderation-queue-page__filters-section">
+                    <div className="moderation-queue-page__filters-head">
+                      <h3 className="moderation-queue-page__filters-group-title">По статусу</h3>
                       <button
                         type="button"
-                        className="content-moderation-page__filters-reset"
+                        className="moderation-queue-page__filters-reset"
                         onClick={() => setSelectedStatuses(["all"])}
                       >
                         Сбросить
                       </button>
                     </div>
 
-                    <div className="content-moderation-page__filters-options content-moderation-page__filters-options--checkboxes">
-                      <label className="content-moderation-page__filter-option">
+                    <div className="moderation-queue-page__filters-options moderation-queue-page__filters-options--choices">
+                      <label className="moderation-queue-page__filter-option">
                         <Checkbox checked={selectedStatuses.includes("all")} onChange={() => toggleFilterValue("all", setSelectedStatuses)} variant="accent" />
                         <span>Все</span>
                       </label>
                       {statusOptions.map((option) => (
-                        <label key={option.value} className="content-moderation-page__filter-option">
+                        <label key={option.value} className="moderation-queue-page__filter-option">
                           <Checkbox
                             checked={selectedStatuses.includes(option.value)}
                             onChange={() => toggleFilterValue(option.value, setSelectedStatuses)}
@@ -781,7 +781,7 @@ export function ContentModerationPage() {
                     </div>
                   </div>
 
-                  <div className="content-moderation-page__filters-footer">
+                  <div className="moderation-queue-page__filters-footer">
                     <Button type="button" variant="accent" size="sm" fullWidth onClick={applyFilters}>
                       Показать результаты
                     </Button>
@@ -793,10 +793,10 @@ export function ContentModerationPage() {
               ) : null}
             </div>
 
-            <div ref={sortingRef} className="content-moderation-page__sorting">
+            <div ref={sortingRef} className="moderation-queue-page__sorting">
               <button
                 type="button"
-                className="content-moderation-page__icon-button content-moderation-page__icon-button--sorting"
+                className="moderation-queue-page__icon-button moderation-queue-page__icon-button--sorting"
                 aria-label="Сортировка"
                 aria-expanded={isSortOpen}
                 onClick={() => {
@@ -807,28 +807,28 @@ export function ContentModerationPage() {
                 <span
                   className={
                     appliedSortDirection === "desc"
-                      ? "content-moderation-page__icon content-moderation-page__icon--descending"
-                      : "content-moderation-page__icon content-moderation-page__icon--ascending"
+                      ? "moderation-queue-page__icon moderation-queue-page__icon--descending"
+                      : "moderation-queue-page__icon moderation-queue-page__icon--ascending"
                   }
                   aria-hidden="true"
                 />
               </button>
 
               {isSortOpen ? (
-                <div className="content-moderation-page__sorting-popover">
-                  <div className="content-moderation-page__filters-section">
-                    <div className="content-moderation-page__filters-head">
-                      <h2 className="content-moderation-page__filters-title">Сортировка</h2>
-                      <button type="button" className="content-moderation-page__filters-reset" onClick={resetSorting}>
+                <div className="moderation-queue-page__sorting-popover">
+                  <div className="moderation-queue-page__filters-section">
+                    <div className="moderation-queue-page__filters-head">
+                      <h2 className="moderation-queue-page__filters-title">Сортировка</h2>
+                      <button type="button" className="moderation-queue-page__filters-reset" onClick={resetSorting}>
                         Сбросить
                       </button>
                     </div>
                   </div>
 
-                  <div className="content-moderation-page__filters-section">
-                    <div className="content-moderation-page__filters-options content-moderation-page__filters-options--radio">
+                  <div className="moderation-queue-page__filters-section">
+                    <div className="moderation-queue-page__filters-options moderation-queue-page__filters-options--radio">
                       {sortFieldOptions.map((option) => (
-                        <label key={option.value} className="content-moderation-page__filter-option">
+                        <label key={option.value} className="moderation-queue-page__filter-option">
                           <Radio
                             checked={selectedSortField === option.value}
                             onChange={() => setSelectedSortField(option.value)}
@@ -840,20 +840,20 @@ export function ContentModerationPage() {
                     </div>
                   </div>
 
-                  <div className="content-moderation-page__filters-section">
-                    <div className="content-moderation-page__filters-options content-moderation-page__filters-options--radio">
-                      <label className="content-moderation-page__filter-option">
+                  <div className="moderation-queue-page__filters-section">
+                    <div className="moderation-queue-page__filters-options moderation-queue-page__filters-options--radio">
+                      <label className="moderation-queue-page__filter-option">
                         <Radio checked={selectedSortDirection === "desc"} onChange={() => setSelectedSortDirection("desc")} variant="accent" />
                         <span>{selectedSortField === "alphabet" ? "Я-А" : "Сначала новые"}</span>
                       </label>
-                      <label className="content-moderation-page__filter-option">
+                      <label className="moderation-queue-page__filter-option">
                         <Radio checked={selectedSortDirection === "asc"} onChange={() => setSelectedSortDirection("asc")} variant="accent" />
                         <span>{selectedSortField === "alphabet" ? "А-Я" : "Сначала старые"}</span>
                       </label>
                     </div>
                   </div>
 
-                  <div className="content-moderation-page__filters-footer">
+                  <div className="moderation-queue-page__filters-footer">
                     <Button type="button" variant="accent" size="sm" fullWidth onClick={applySorting}>
                       Применить
                     </Button>
@@ -870,45 +870,45 @@ export function ContentModerationPage() {
         <div
           className={
             selectedIds.length > 0
-              ? "content-moderation-page__bulk-bar-shell content-moderation-page__bulk-bar-shell--visible"
-              : "content-moderation-page__bulk-bar-shell"
+              ? "moderation-queue-page__bulk-bar-shell moderation-queue-page__bulk-bar-shell--visible"
+              : "moderation-queue-page__bulk-bar-shell"
           }
         >
-          <div className="content-moderation-page__bulk-bar">
-            <div className="content-moderation-page__bulk-bar-selection">
+          <div className="moderation-queue-page__bulk-bar">
+            <div className="moderation-queue-page__bulk-bar-selection">
               <Checkbox checked variant="accent" readOnly />
-              <span className="content-moderation-page__bulk-bar-count">Выбрано: {selectedIds.length}</span>
+              <span className="moderation-queue-page__bulk-bar-count">Выбрано: {selectedIds.length}</span>
             </div>
-            <div className="content-moderation-page__bulk-bar-actions">
-              <Button type="button" variant="accent-outline" size="md" className="content-moderation-page__bulk-bar-button" onClick={() => handleBulkAction("request-changes")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
+            <div className="moderation-queue-page__bulk-bar-actions">
+              <Button type="button" variant="accent-outline" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("request-changes")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
                 Запросить правки
               </Button>
-              <Button type="button" variant="danger" size="md" className="content-moderation-page__bulk-bar-button" onClick={() => handleBulkAction("reject")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
+              <Button type="button" variant="danger" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("reject")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
                 Отклонить
               </Button>
-              <Button type="button" variant="success" size="md" className="content-moderation-page__bulk-bar-button" onClick={() => handleBulkAction("approve")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
+              <Button type="button" variant="success" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("approve")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
                 Одобрить
               </Button>
             </div>
           </div>
         </div>
 
-        {reviewError ? <p className="content-moderation-page__review-error">{reviewError}</p> : null}
+        {reviewError ? <p className="moderation-queue-page__review-error">{reviewError}</p> : null}
 
-        <section className="content-moderation-page__content">
-          <div className="content-moderation-page__table-head">
-            <div className="content-moderation-page__table-cell content-moderation-page__table-cell--check">
+        <section className="moderation-queue-page__records">
+          <div className="moderation-queue-page__table-head">
+            <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--check">
               <Checkbox checked={allRowsSelected} onChange={toggleSelectAll} variant="accent" />
             </div>
-            <div className="content-moderation-page__table-cell content-moderation-page__table-cell--content">Контент</div>
-            <div className="content-moderation-page__table-cell content-moderation-page__table-cell--company">Компания</div>
-            <div className="content-moderation-page__table-cell content-moderation-page__table-cell--author">Автор</div>
-            <div className="content-moderation-page__table-cell content-moderation-page__table-cell--date">Дата</div>
-            <div className="content-moderation-page__table-cell content-moderation-page__table-cell--status">Статус</div>
-            <div className="content-moderation-page__table-cell content-moderation-page__table-cell--actions">Действия</div>
+            <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--subject">Контент</div>
+            <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--company">Компания</div>
+            <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--author">Автор</div>
+            <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--date">Дата</div>
+            <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--status">Статус</div>
+            <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--actions">Действия</div>
           </div>
 
-          <div className="content-moderation-page__rows">
+          <div className="moderation-queue-page__submissions">
             {isTableLoading
               ? Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
                   <ContentModerationRowSkeleton key={`content-skeleton-${index}`} />
@@ -921,28 +921,28 @@ export function ContentModerationPage() {
                   return (
                     <article
                       key={item.id}
-                      className="content-moderation-page__row"
+                      className="moderation-queue-page__submission"
                       onClick={(event) => handleRowClick(event, item)}
                     >
                       <div className={isExpanded
-                        ? "content-moderation-page__row-summary content-moderation-page__row-summary--expanded"
+                        ? "moderation-queue-page__submission-summary moderation-queue-page__submission-summary--expanded"
                         : !canReview
-                          ? "content-moderation-page__row-summary content-moderation-page__row-summary--centered"
-                          : "content-moderation-page__row-summary"}>
-                        <div className="content-moderation-page__row-leading">
+                          ? "moderation-queue-page__submission-summary moderation-queue-page__submission-summary--centered"
+                          : "moderation-queue-page__submission-summary"}>
+                        <div className="moderation-queue-page__submission-select">
                           <Checkbox checked={selectedIds.includes(item.id)} onChange={() => toggleSelectedId(item.id)} variant="accent" />
                         </div>
 
-                        <div className="content-moderation-page__row-main">
-                          <div className="content-moderation-page__row-title-wrap">
-                            <strong className="content-moderation-page__row-title">{item.title}</strong>
+                        <div className="moderation-queue-page__submission-overview">
+                          <div className="moderation-queue-page__submission-heading">
+                            <strong className="moderation-queue-page__submission-title">{item.title}</strong>
                             {!isExpanded && canReview ? (
-                              <div className="content-moderation-page__row-actions-inline">
+                              <div className="moderation-queue-page__submission-actions">
                                 <Button
                                   type="button"
                                   variant="success-ghost"
                                   size="sm"
-                                  className="content-moderation-page__row-action content-moderation-page__row-action--approve"
+                                  className="moderation-queue-page__submission-action moderation-queue-page__submission-action--approve"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     approveMutation.mutate({ itemId: item.id, comment: "" });
@@ -952,14 +952,14 @@ export function ContentModerationPage() {
                                   <span>Одобрить</span>
                                   <span
                                     aria-hidden="true"
-                                    className="content-moderation-page__action-icon content-moderation-page__action-icon--approve"
+                                    className="moderation-queue-page__action-icon moderation-queue-page__action-icon--approve"
                                   />
                                 </Button>
                                 <Button
                                   type="button"
                                   variant="danger-ghost"
                                   size="sm"
-                                  className="content-moderation-page__row-action content-moderation-page__row-action--reject"
+                                  className="moderation-queue-page__submission-action moderation-queue-page__submission-action--reject"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     rejectMutation.mutate({ itemId: item.id, comment: "" });
@@ -969,22 +969,22 @@ export function ContentModerationPage() {
                                   <span>Отклонить</span>
                                   <span
                                     aria-hidden="true"
-                                    className="content-moderation-page__action-icon content-moderation-page__action-icon--reject"
+                                    className="moderation-queue-page__action-icon moderation-queue-page__action-icon--reject"
                                   />
                                 </Button>
                               </div>
                             ) : null}
                           </div>
-                          <div className="content-moderation-page__row-company">{item.company_name}</div>
-                          <div className="content-moderation-page__row-author">{item.author_email ?? "Не указано"}</div>
-                          <div className="content-moderation-page__row-date">{formatSubmissionDate(item.submitted_at)}</div>
-                          <div className="content-moderation-page__row-status">
+                          <div className="moderation-queue-page__submission-company">{item.company_name}</div>
+                          <div className="moderation-queue-page__submission-author">{item.author_email ?? "Не указано"}</div>
+                          <div className="moderation-queue-page__submission-date">{formatSubmissionDate(item.submitted_at)}</div>
+                          <div className="moderation-queue-page__submission-status">
                             <Status variant={statusMeta.variant}>{statusMeta.label}</Status>
                           </div>
-                          <div className="content-moderation-page__row-actions">
+                          <div className="moderation-queue-page__submission-actions-panel">
                             <button
                               type="button"
-                              className="content-moderation-page__action-button"
+                              className="moderation-queue-page__action-button"
                               aria-label={`Открыть ${item.title}`}
                               onClick={() => handleExpand(item)}
                             >
@@ -994,66 +994,66 @@ export function ContentModerationPage() {
                         </div>
                       </div>
 
-                      <div className={isExpanded ? "content-moderation-page__row-details-shell content-moderation-page__row-details-shell--expanded" : "content-moderation-page__row-details-shell"} aria-hidden={!isExpanded}>
-                        <div className="content-moderation-page__row-details">
-                          <div className="content-moderation-page__details-grid">
-                            <div className="content-moderation-page__details-column">
-                              <div className="content-moderation-page__detail">
-                                <div className="content-moderation-page__detail-label">Опубликовано</div>
-                                <div className="content-moderation-page__detail-value">{formatSubmissionDateTime(item.submitted_at)}</div>
+                      <div className={isExpanded ? "moderation-queue-page__submission-details-shell moderation-queue-page__submission-details-shell--expanded" : "moderation-queue-page__submission-details-shell"} aria-hidden={!isExpanded}>
+                        <div className="moderation-queue-page__submission-details">
+                          <div className="moderation-queue-page__details-sections">
+                            <div className="moderation-queue-page__details-section">
+                              <div className="moderation-queue-page__detail">
+                                <div className="moderation-queue-page__detail-label">Опубликовано</div>
+                                <div className="moderation-queue-page__detail-value">{formatSubmissionDateTime(item.submitted_at)}</div>
                               </div>
-                              <div className="content-moderation-page__detail">
-                                <div className="content-moderation-page__detail-label">Зарплата</div>
-                                <div className="content-moderation-page__detail-value">{item.salary_label}</div>
+                              <div className="moderation-queue-page__detail">
+                                <div className="moderation-queue-page__detail-label">Зарплата</div>
+                                <div className="moderation-queue-page__detail-value">{item.salary_label}</div>
                               </div>
-                              <div className="content-moderation-page__detail">
-                                <div className="content-moderation-page__detail-label">Навыки</div>
-                                <div className="content-moderation-page__tags">
+                              <div className="moderation-queue-page__detail">
+                                <div className="moderation-queue-page__detail-label">Навыки</div>
+                                <div className="moderation-queue-page__tags">
                                   {item.tags.length > 0 ? item.tags.map((tag) => (
-                                    <span key={tag} className="content-moderation-page__tag">{tag}</span>
-                                  )) : <span className="content-moderation-page__detail-value">Не указано</span>}
+                                    <span key={tag} className="moderation-queue-page__tag">{tag}</span>
+                                  )) : <span className="moderation-queue-page__detail-value">Не указано</span>}
                                 </div>
                               </div>
-                              <div className="content-moderation-page__detail">
-                                <div className="content-moderation-page__detail-label">Формат</div>
-                                <div className="content-moderation-page__detail-value">{item.format_label}</div>
+                              <div className="moderation-queue-page__detail">
+                                <div className="moderation-queue-page__detail-label">Формат</div>
+                                <div className="moderation-queue-page__detail-value">{item.format_label}</div>
                               </div>
-                              <div className="content-moderation-page__detail">
-                                <div className="content-moderation-page__detail-label">Краткое описание</div>
-                                <div className="content-moderation-page__detail-rich-text">{item.short_description}</div>
+                              <div className="moderation-queue-page__detail">
+                                <div className="moderation-queue-page__detail-label">Краткое описание</div>
+                                <div className="moderation-queue-page__detail-rich-text">{item.short_description}</div>
                               </div>
-                              <div className="content-moderation-page__detail">
-                                <div className="content-moderation-page__detail-label">Описание</div>
-                                <div className="content-moderation-page__detail-rich-text">{item.description}</div>
+                              <div className="moderation-queue-page__detail">
+                                <div className="moderation-queue-page__detail-label">Описание</div>
+                                <div className="moderation-queue-page__detail-rich-text">{item.description}</div>
                               </div>
                             </div>
 
-                            <div className="content-moderation-page__details-column content-moderation-page__details-column--actions">
-                              <div className="content-moderation-page__review-card">
-                                <div className="content-moderation-page__review-title">Проверка: {[
+                            <div className="moderation-queue-page__details-section moderation-queue-page__details-section--actions">
+                              <div className="moderation-queue-page__review-card">
+                                <div className="moderation-queue-page__review-title">Проверка: {[
                                   item.checklist.salary_specified,
                                   item.checklist.requirements_completed,
                                   item.checklist.responsibilities_completed,
                                   item.checklist.conditions_specified,
                                 ].filter(Boolean).length}/4</div>
-                                <div className="content-moderation-page__checklist">
+                                <div className="moderation-queue-page__checklist">
                                   {[
                                     ["Зарплата указана", item.checklist.salary_specified],
                                     ["Требования заполнены", item.checklist.requirements_completed],
                                     ["Обязанности описаны", item.checklist.responsibilities_completed],
                                     ["Условия указаны", item.checklist.conditions_specified],
                                   ].map(([label, checked], index) => (
-                                    <label key={String(label)} className="content-moderation-page__checklist-item">
+                                    <label key={String(label)} className="moderation-queue-page__checklist-option">
                                       <Checkbox checked={Boolean(checked)} onChange={() => handleChecklistChange(item.id, item.checklist, (["salary_specified", "requirements_completed", "responsibilities_completed", "conditions_specified"] as const)[index])} variant="accent" disabled={updateChecklistMutation.isPending} />
                                       <span>{label}</span>
                                     </label>
                                   ))}
                                 </div>
 
-                                <label className="content-moderation-page__comment-field">
-                                  <span className="content-moderation-page__detail-label">Комментарий</span>
+                                <label className="moderation-queue-page__comment-field">
+                                  <span className="moderation-queue-page__detail-label">Комментарий</span>
                                   <textarea
-                                    className="content-moderation-page__comment-input"
+                                    className="moderation-queue-page__comment-input"
                                     value={currentExpandedItem?.id === item.id ? moderatorComment : item.moderator_comment ?? ""}
                                     onChange={(event) => setModeratorComment(event.target.value)}
                                     placeholder=""
@@ -1061,15 +1061,15 @@ export function ContentModerationPage() {
                                 </label>
 
                                 {canReview ? (
-                                  <div className="content-moderation-page__detail-actions content-moderation-page__detail-actions--stacked">
-                                    <Button type="button" variant="accent-outline" size="sm" className="content-moderation-page__detail-action-request" onClick={() => handleRequestChanges(item.id)} loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id} disabled={anyMutationPending}>
+                                  <div className="moderation-queue-page__detail-actions moderation-queue-page__detail-actions--stacked">
+                                    <Button type="button" variant="accent-outline" size="sm" className="moderation-queue-page__detail-action-request" onClick={() => handleRequestChanges(item.id)} loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id} disabled={anyMutationPending}>
                                       Запросить дополнительную информацию
                                     </Button>
-                                    <div className="content-moderation-page__detail-actions-group">
-                                      <Button type="button" variant="danger" size="sm" className="content-moderation-page__decision-button" onClick={() => handleReject(item.id)} loading={rejectMutation.isPending && currentExpandedItem?.id === item.id} disabled={anyMutationPending}>
+                                    <div className="moderation-queue-page__detail-actions-group">
+                                      <Button type="button" variant="danger" size="sm" className="moderation-queue-page__decision-button" onClick={() => handleReject(item.id)} loading={rejectMutation.isPending && currentExpandedItem?.id === item.id} disabled={anyMutationPending}>
                                         Отклонить
                                       </Button>
-                                      <Button type="button" variant="success" size="sm" className="content-moderation-page__decision-button" onClick={() => handleApprove(item.id)} loading={approveMutation.isPending && currentExpandedItem?.id === item.id} disabled={anyMutationPending}>
+                                      <Button type="button" variant="success" size="sm" className="moderation-queue-page__decision-button" onClick={() => handleApprove(item.id)} loading={approveMutation.isPending && currentExpandedItem?.id === item.id} disabled={anyMutationPending}>
                                         Одобрить
                                       </Button>
                                     </div>
@@ -1085,15 +1085,15 @@ export function ContentModerationPage() {
                 })}
 
             {!isTableLoading && isAuthenticated && sortedItems.length === 0 ? (
-              <div className="content-moderation-page__empty">По выбранным параметрам публикации не найдены.</div>
+              <div className="moderation-queue-page__empty">По выбранным параметрам публикации не найдены.</div>
             ) : null}
           </div>
 
           {!isTableLoading && sortedItems.length > 0 ? (
-            <nav className="content-moderation-page__pagination" aria-label="Пагинация">
+            <nav className="moderation-queue-page__pagination" aria-label="Пагинация">
               <button
                 type="button"
-                className="content-moderation-page__pagination-arrow"
+                className="moderation-queue-page__pager-button"
                 onClick={() => setPage((current) => Math.max(current - 1, 1))}
                 disabled={page === 1}
                 aria-label="Предыдущая страница"
@@ -1102,12 +1102,12 @@ export function ContentModerationPage() {
                   src={arrowIcon}
                   alt=""
                   aria-hidden="true"
-                  className="content-moderation-page__pagination-arrow-icon content-moderation-page__pagination-arrow-icon--prev"
+                  className="moderation-queue-page__pager-button-icon moderation-queue-page__pager-button-icon--prev"
                 />
               </button>
               {pageNumbers.map((pageNumber, index) =>
                 pageNumber === "ellipsis" ? (
-                  <span key={`ellipsis-${index}`} className="content-moderation-page__pagination-ellipsis">
+                  <span key={`ellipsis-${index}`} className="moderation-queue-page__pagination-ellipsis">
                     ...
                   </span>
                 ) : (
@@ -1116,8 +1116,8 @@ export function ContentModerationPage() {
                     type="button"
                     className={
                       page === pageNumber
-                        ? "content-moderation-page__pagination-page content-moderation-page__pagination-page--active"
-                        : "content-moderation-page__pagination-page"
+                        ? "moderation-queue-page__pagination-page moderation-queue-page__pagination-page--active"
+                        : "moderation-queue-page__pagination-page"
                     }
                     onClick={() => setPage(pageNumber)}
                   >
@@ -1127,7 +1127,7 @@ export function ContentModerationPage() {
               )}
               <button
                 type="button"
-                className="content-moderation-page__pagination-arrow"
+                className="moderation-queue-page__pager-button"
                 onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
                 disabled={page === totalPages}
                 aria-label="Следующая страница"
@@ -1136,7 +1136,7 @@ export function ContentModerationPage() {
                   src={arrowIcon}
                   alt=""
                   aria-hidden="true"
-                  className="content-moderation-page__pagination-arrow-icon"
+                  className="moderation-queue-page__pager-button-icon"
                 />
               </button>
             </nav>

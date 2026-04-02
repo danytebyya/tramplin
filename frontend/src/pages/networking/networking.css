@@ -3,7 +3,7 @@
   background: var(--color-bg-primary);
 }
 
-.networking-page__container.container {
+.networking-page__shell.page-shell {
   width: min(1080px, 100%);
   padding: 24px;
 }

@@ -2,11 +2,11 @@ import adminAvatar from "../../assets/icons/admin.png";
 import applicantAvatar from "../../assets/icons/applicant.png";
 import employerAvatar from "../../assets/icons/employer.png";
 import profileAvatar from "../../assets/icons/profile.png";
-import { env } from "../config/env";
+import { getApiBaseUrl, normalizeUrlForCurrentOrigin } from "../config/env";
 
 function resolveApiOrigin() {
   try {
-    return new URL(env.apiBaseUrl).origin;
+    return new URL(getApiBaseUrl()).origin;
   } catch {
     return "";
   }
@@ -23,15 +23,15 @@ export function resolveAvatarUrl(avatarUrl: string | null | undefined) {
     avatarUrl.startsWith("blob:") ||
     avatarUrl.startsWith("data:")
   ) {
-    return avatarUrl;
+    return normalizeUrlForCurrentOrigin(avatarUrl);
   }
 
   if (avatarUrl.startsWith("/")) {
     const apiOrigin = resolveApiOrigin();
-    return `${apiOrigin}${avatarUrl}`;
+    return normalizeUrlForCurrentOrigin(`${apiOrigin}${avatarUrl}`);
   }
 
-  return avatarUrl;
+  return normalizeUrlForCurrentOrigin(avatarUrl);
 }
 
 export function resolveAvatarIcon(role: string | null | undefined) {

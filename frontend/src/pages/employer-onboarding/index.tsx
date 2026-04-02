@@ -649,7 +649,7 @@ export function EmployerOnboardingPage() {
                         aria-hidden="true"
                       />
                     </button>
-                    <div className="auth-verification-header__content employer-onboarding-card__header-content">
+                    <div className="auth-verification-header__content employer-onboarding-card__header-summary">
                       <div className="employer-onboarding-card__title-spacer" aria-hidden="true" />
                       <h2 className="auth-verification-header__title employer-onboarding-card__title">
                         <span className="auth-verification-header__title-accent">Верификация</span>{" "}
@@ -1051,7 +1051,7 @@ export function EmployerOnboardingPage() {
                         render={({ field }) => (
                           <Checkbox
                             checked={Boolean(field.value)}
-                            className={errors.confirmation ? "checkbox--error" : undefined}
+                            className={errors.confirmation ? "toggle-mark--error" : undefined}
                             onBlur={field.onBlur}
                             onChange={(event) => field.onChange(event.target.checked)}
                             ref={field.ref}

@@ -1,3 +1,4 @@
+import type { To } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
 import "./back-navigation.css";
@@ -5,15 +6,26 @@ import "./back-navigation.css";
 type BackNavigationProps = {
   fallbackTo?: string;
   className?: string;
+  to?: To;
+  state?: unknown;
+  replace?: boolean;
 };
 
 export function BackNavigation({
   fallbackTo = "/",
   className = "",
+  to,
+  state,
+  replace = false,
 }: BackNavigationProps) {
   const navigate = useNavigate();
 
   const handleBack = () => {
+    if (to) {
+      navigate(to, { state, replace });
+      return;
+    }
+
     if (window.history.length > 1) {
       navigate(-1);
       return;

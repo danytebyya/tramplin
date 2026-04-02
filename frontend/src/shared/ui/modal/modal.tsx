@@ -9,6 +9,7 @@ type ModalProps = {
   title: string;
   isOpen: boolean;
   onClose: () => void;
+  size?: "base" | "small";
   panelClassName?: string;
   titleAccentColor?: string;
   closeOnBackdrop?: boolean;
@@ -51,6 +52,7 @@ export function Modal({
   title,
   isOpen,
   onClose,
+  size = "base",
   panelClassName,
   titleAccentColor,
   closeOnBackdrop = true,
@@ -103,7 +105,7 @@ export function Modal({
         aria-label="Закрыть модальное окно"
         onClick={closeOnBackdrop ? onClose : undefined}
       />
-      <div className={cn("modal__panel", panelClassName)}>
+      <div className={cn("modal__panel", `modal__panel--${size}`, panelClassName)}>
         <div className="modal__header">
           <h2 className="modal__title" style={titleStyle}>
             {renderModalTitle(title)}

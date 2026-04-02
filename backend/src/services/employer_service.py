@@ -200,6 +200,36 @@ class EmployerService:
         self.db.refresh(employer_profile)
         return employer_profile
 
+    def delete_avatar(
+        self,
+        *,
+        current_user: User,
+    ) -> EmployerProfile:
+        if current_user.role != UserRole.EMPLOYER:
+            raise AppError(
+                code="EMPLOYER_PROFILE_FORBIDDEN",
+                message="Профиль работодателя доступен только работодателям",
+                status_code=403,
+            )
+
+        employer_profile = current_user.employer_profile
+        if employer_profile is None:
+            raise AppError(
+                code="EMPLOYER_PROFILE_REQUIRED",
+                message="Сначала заполните профиль работодателя",
+                status_code=400,
+            )
+
+        previous_file = self._resolve_avatar_storage_path(employer_profile.avatar_url)
+        if previous_file is not None and previous_file.exists() and previous_file.is_file():
+            previous_file.unlink()
+
+        employer_profile.avatar_url = None
+        self.db.add(employer_profile)
+        self.db.commit()
+        self.db.refresh(employer_profile)
+        return employer_profile
+
     def list_staff_members(
         self,
         current_user: User,

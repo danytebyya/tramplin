@@ -2,10 +2,10 @@ import axios from "axios";
 
 import { clearClientSession } from "../../features/auth/logout";
 import { restoreAuthSession, useAuthStore } from "../../features/auth/session";
-import { env } from "../config/env";
+import { getApiBaseUrl } from "../config/env";
 
 export const apiClient = axios.create({
-  baseURL: env.apiBaseUrl,
+  baseURL: getApiBaseUrl(),
   timeout: 15000,
   withCredentials: true,
   headers: {

@@ -7,9 +7,12 @@ type ContainerProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export function Container({ className, variant = "default", ...props }: ContainerProps) {
+  const variantClassName =
+    variant === "default" ? undefined : variant === "auth-page" ? "page-shell--auth" : `page-shell--${variant}`;
+
   return (
     <div
-      className={cn("container", variant !== "default" ? `container__${variant}` : undefined, className)}
+      className={cn("page-shell", variantClassName, className)}
       {...props}
     />
   );

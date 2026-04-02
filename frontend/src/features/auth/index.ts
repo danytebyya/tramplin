@@ -48,6 +48,22 @@ export type RefreshPayload = {
   refresh_token: string;
 };
 
+export type PasswordResetPayload = {
+  email: string;
+  force_resend?: boolean;
+};
+
+export type PasswordResetConfirmPayload = {
+  email: string;
+  code: string;
+  new_password: string;
+};
+
+export type PasswordChangePayload = {
+  current_password: string;
+  new_password: string;
+};
+
 export type AuthSuccessResponse = {
   data?: {
     access_token?: string;
@@ -117,6 +133,7 @@ export type MeResponse = {
         bitbucket_url?: string | null;
         linkedin_url?: string | null;
         habr_url?: string | null;
+        avatar_url?: string | null;
         profile_views_count?: number | null;
         recommendations_count?: number | null;
       } | null;
@@ -279,6 +296,12 @@ export type UserNotificationPreferencesResponse = {
   };
 };
 
+export type DeleteCurrentUserResponse = {
+  data?: {
+    deleted?: boolean;
+  };
+};
+
 export async function registerRequest(payload: RegisterPayload) {
   const response = await apiClient.post("/users", payload);
   return response.data;
@@ -315,6 +338,29 @@ export async function loginRequest(payload: LoginPayload) {
   return response.data;
 }
 
+export async function requestPasswordResetCode(payload: PasswordResetPayload) {
+  const response = await apiClient.post("/auth/password/request-reset-code", {
+    email: payload.email,
+    force_resend: payload.force_resend ?? false,
+  });
+  return response.data;
+}
+
+export async function verifyPasswordResetCode(email: string, code: string) {
+  const response = await apiClient.post("/auth/password/verify-reset-code", { email, code });
+  return response.data;
+}
+
+export async function resetPasswordRequest(payload: PasswordResetConfirmPayload) {
+  const response = await apiClient.post<AuthSuccessResponse>("/auth/password/reset", payload);
+  return response.data;
+}
+
+export async function changePasswordRequest(payload: PasswordChangePayload) {
+  const response = await apiClient.post("/auth/password/change", payload);
+  return response.data;
+}
+
 export async function refreshSessionRequest(payload: RefreshPayload) {
   const response = await apiClient.post("/auth/tokens", payload);
   return response.data;
@@ -342,6 +388,19 @@ export async function updatePreferredCityRequest(preferredCity: string) {
 
 export async function applicantDashboardRequest() {
   const response = await apiClient.get<ApplicantDashboardResponse>("/users/me/applicant-dashboard");
+  return response.data;
+}
+
+export async function uploadApplicantAvatarRequest(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await apiClient.post<MeResponse>("/users/me/applicant-avatar", formData);
+  return response.data;
+}
+
+export async function deleteApplicantAvatarRequest() {
+  const response = await apiClient.delete<MeResponse>("/users/me/applicant-avatar");
   return response.data;
 }
 
@@ -405,7 +464,7 @@ export async function updateApplicantDashboardRequest(payload: {
 }
 
 export async function deleteCurrentUserRequest() {
-  const response = await apiClient.delete("/users/me");
+  const response = await apiClient.delete<DeleteCurrentUserResponse>("/users/me");
   return response.data;
 }
 

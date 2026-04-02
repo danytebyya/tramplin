@@ -1,5 +1,7 @@
+import os
 from datetime import UTC, date, datetime
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, select, update
 
@@ -13,13 +15,23 @@ from src.models import (
     Application,
     ApplicationStatus,
     AuthLoginEvent,
+    ChatConversation,
+    ChatConversationReadState,
+    ChatMessage,
+    ChatUnreadReminderState,
+    ChatUserKey,
     Employer,
     EmployerProfile,
     EmployerMembership,
     EmployerStaffInvitation,
+    EmployerVerificationDocument,
+    EmployerVerificationRequest,
     FavoriteOpportunity,
+    MediaFile,
     Notification,
     Opportunity,
+    OpportunityCompensation,
+    OpportunityTag,
     RefreshSession,
     UserNotificationPreference,
 )
@@ -40,9 +52,37 @@ from src.enums import MembershipRole, UserRole, UserStatus
 
 
 class UserService:
+    APPLICANT_AVATAR_PUBLIC_PREFIX = "/storage/applicant-avatars"
+
     def __init__(self, db) -> None:
         self.db = db
         self.user_repo = UserRepository(db)
+
+    @staticmethod
+    def _get_applicant_avatar_storage_dir() -> Path:
+        configured_path = os.getenv("APPLICANT_AVATARS_STORAGE_DIR")
+        if configured_path:
+            return Path(configured_path).expanduser().resolve()
+        return Path(__file__).resolve().parents[2] / "storage" / "applicant-avatars"
+
+    @classmethod
+    def _build_applicant_avatar_public_url(cls, file_name: str) -> str:
+        return f"{cls.APPLICANT_AVATAR_PUBLIC_PREFIX}/{file_name}"
+
+    @classmethod
+    def _resolve_applicant_avatar_storage_path(cls, avatar_url: str | None) -> Path | None:
+        if not avatar_url:
+            return None
+
+        if avatar_url.startswith(cls.APPLICANT_AVATAR_PUBLIC_PREFIX + "/"):
+            file_name = avatar_url.removeprefix(cls.APPLICANT_AVATAR_PUBLIC_PREFIX + "/")
+            return cls._get_applicant_avatar_storage_dir() / file_name
+
+        candidate = Path(avatar_url)
+        if candidate.is_absolute():
+            return candidate
+
+        return None
 
     def update_preferred_city(self, current_user: User, preferred_city: str) -> User:
         normalized_city = preferred_city.strip()
@@ -71,6 +111,87 @@ class UserService:
         self.db.commit()
         self.db.refresh(updated_user)
         return updated_user
+
+    def upload_applicant_avatar(
+        self,
+        *,
+        current_user: User,
+        original_filename: str,
+        mime_type: str,
+        content: bytes,
+    ) -> User:
+        if current_user.role != UserRole.APPLICANT:
+            raise AppError(
+                code="USER_ROLE_FORBIDDEN",
+                message="Профиль соискателя доступен только соискателю.",
+                status_code=403,
+            )
+
+        if not mime_type.startswith("image/"):
+            raise AppError(
+                code="APPLICANT_AVATAR_INVALID_TYPE",
+                message="Можно загрузить только изображение",
+                status_code=400,
+            )
+
+        user = self.user_repo.get_by_id(current_user.id, with_profiles=True)
+        if user is None:
+            raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
+
+        profile = user.applicant_profile
+        if profile is None:
+            profile = ApplicantProfile(user_id=user.id)
+            user.applicant_profile = profile
+            self.db.add(profile)
+
+        storage_dir = self._get_applicant_avatar_storage_dir()
+        storage_dir.mkdir(parents=True, exist_ok=True)
+
+        suffix = Path(original_filename).suffix or ".png"
+        target_path = storage_dir / f"{uuid4()}{suffix}"
+        target_path.write_bytes(content)
+
+        previous_file = self._resolve_applicant_avatar_storage_path(profile.avatar_url)
+        if previous_file is not None and previous_file.exists() and previous_file.is_file():
+            previous_file.unlink()
+
+        profile.avatar_url = self._build_applicant_avatar_public_url(target_path.name)
+        self.db.add(user)
+        self.db.add(profile)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def delete_applicant_avatar(
+        self,
+        *,
+        current_user: User,
+    ) -> User:
+        if current_user.role != UserRole.APPLICANT:
+            raise AppError(
+                code="USER_ROLE_FORBIDDEN",
+                message="Профиль соискателя доступен только соискателю.",
+                status_code=403,
+            )
+
+        user = self.user_repo.get_by_id(current_user.id, with_profiles=True)
+        if user is None:
+            raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
+
+        profile = user.applicant_profile
+        if profile is None:
+            return user
+
+        previous_file = self._resolve_applicant_avatar_storage_path(profile.avatar_url)
+        if previous_file is not None and previous_file.exists() and previous_file.is_file():
+            previous_file.unlink()
+
+        profile.avatar_url = None
+        self.db.add(user)
+        self.db.add(profile)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
 
     def get_applicant_dashboard(self, current_user: User) -> ApplicantDashboardRead:
         if current_user.role != UserRole.APPLICANT:
@@ -110,6 +231,7 @@ class UserService:
                     "bitbucket_url": profile.bitbucket_url,
                     "linkedin_url": profile.linkedin_url,
                     "habr_url": profile.habr_url,
+                    "avatar_url": profile.avatar_url,
                     "profile_views_count": profile.profile_views_count or 0,
                     "recommendations_count": profile.recommendations_count or 0,
                 },
@@ -339,74 +461,212 @@ class UserService:
         )
 
         if primary_owned_employer_ids:
-            has_other_staff = self.db.execute(
-                select(EmployerMembership.id).where(
-                    EmployerMembership.employer_id.in_(primary_owned_employer_ids),
-                    EmployerMembership.user_id != current_user.id,
-                )
-            ).scalar_one_or_none()
-            if has_other_staff is not None:
-                raise AppError(
-                    code="USER_DELETE_HAS_EMPLOYEES",
-                    message="Удаление невозможно, пока в компании есть сотрудники.",
-                    status_code=409,
-                )
+            self._delete_owned_employers(
+                employer_ids=primary_owned_employer_ids,
+                owner_user_id=current_user.id,
+            )
 
+        self._archive_user_account(current_user_with_profiles, now=now)
+
+        self.db.commit()
+
+    def _delete_owned_employers(self, *, employer_ids: list, owner_user_id) -> None:
+        if not employer_ids:
+            return
+
+        membership_rows = list(
             self.db.execute(
-                delete(EmployerStaffInvitation).where(
-                    EmployerStaffInvitation.employer_id.in_(primary_owned_employer_ids)
+                select(EmployerMembership.id, EmployerMembership.user_id).where(
+                    EmployerMembership.employer_id.in_(employer_ids)
                 )
-            )
+            ).all()
+        )
+        membership_ids = [row[0] for row in membership_rows]
+        staff_user_ids = [row[1] for row in membership_rows if str(row[1]) != str(owner_user_id)]
+
+        if membership_ids:
             self.db.execute(
-                delete(EmployerMembership).where(
-                    EmployerMembership.employer_id.in_(primary_owned_employer_ids)
+                delete(RefreshSession).where(RefreshSession.active_membership_id.in_(membership_ids))
+            )
+
+        self.db.execute(
+            delete(RefreshSession).where(RefreshSession.active_employer_id.in_(employer_ids))
+        )
+        self.db.execute(
+            delete(EmployerStaffInvitation).where(EmployerStaffInvitation.employer_id.in_(employer_ids))
+        )
+
+        opportunity_ids = list(
+            self.db.execute(
+                select(Opportunity.id).where(Opportunity.employer_id.in_(employer_ids))
+            ).scalars().all()
+        )
+        if opportunity_ids:
+            self.db.execute(
+                delete(FavoriteOpportunity).where(FavoriteOpportunity.opportunity_id.in_(opportunity_ids))
+            )
+            self.db.execute(delete(Application).where(Application.opportunity_id.in_(opportunity_ids)))
+            self.db.execute(
+                delete(OpportunityCompensation).where(
+                    OpportunityCompensation.opportunity_id.in_(opportunity_ids)
                 )
             )
+            self.db.execute(delete(OpportunityTag).where(OpportunityTag.opportunity_id.in_(opportunity_ids)))
+            self.db.execute(delete(Opportunity).where(Opportunity.id.in_(opportunity_ids)))
 
-            owned_employers = list(
-                self.db.execute(
-                    select(Employer).where(Employer.id.in_(primary_owned_employer_ids))
-                ).scalars().all()
+        conversation_ids = list(
+            self.db.execute(
+                select(ChatConversation.id).where(ChatConversation.employer_id.in_(employer_ids))
+            ).scalars().all()
+        )
+        if conversation_ids:
+            self.db.execute(
+                delete(ChatConversationReadState).where(
+                    ChatConversationReadState.conversation_id.in_(conversation_ids)
+                )
             )
-            for employer in owned_employers:
-                employer.deleted_at = now
-                self.db.add(employer)
+            self.db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(conversation_ids)))
+            self.db.execute(delete(ChatConversation).where(ChatConversation.id.in_(conversation_ids)))
 
-            owned_opportunities = list(
+        self.db.execute(
+            delete(ChatUnreadReminderState).where(ChatUnreadReminderState.employer_id.in_(employer_ids))
+        )
+
+        verification_requests = list(
+            self.db.execute(
+                select(EmployerVerificationRequest).where(
+                    EmployerVerificationRequest.employer_id.in_(employer_ids)
+                )
+            ).scalars().all()
+        )
+        verification_request_ids = [item.id for item in verification_requests]
+        if verification_request_ids:
+            verification_documents = list(
                 self.db.execute(
-                    select(Opportunity).where(
-                        Opportunity.employer_id.in_(primary_owned_employer_ids),
-                        Opportunity.deleted_at.is_(None),
+                    select(EmployerVerificationDocument).where(
+                        EmployerVerificationDocument.verification_request_id.in_(verification_request_ids)
                     )
                 ).scalars().all()
             )
-            for opportunity in owned_opportunities:
-                opportunity.deleted_at = now
-                self.db.add(opportunity)
+            media_file_ids = []
+            for document in verification_documents:
+                if document.media_file_id is not None:
+                    media_file_ids.append(document.media_file_id)
 
+            if media_file_ids:
+                media_files = list(
+                    self.db.execute(select(MediaFile).where(MediaFile.id.in_(media_file_ids))).scalars().all()
+                )
+                for media_file in media_files:
+                    if media_file.public_url:
+                        file_path = Path(media_file.public_url)
+                        if file_path.exists() and file_path.is_file():
+                            file_path.unlink()
+
+            self.db.execute(
+                delete(EmployerVerificationDocument).where(
+                    EmployerVerificationDocument.verification_request_id.in_(verification_request_ids)
+                )
+            )
+            if media_file_ids:
+                self.db.execute(delete(MediaFile).where(MediaFile.id.in_(media_file_ids)))
+            self.db.execute(
+                delete(EmployerVerificationRequest).where(
+                    EmployerVerificationRequest.id.in_(verification_request_ids)
+                )
+            )
+
+        self.db.execute(delete(EmployerMembership).where(EmployerMembership.employer_id.in_(employer_ids)))
+        self.db.execute(delete(Employer).where(Employer.id.in_(employer_ids)))
+
+        for staff_user_id in set(staff_user_ids):
+            staff_user = self.user_repo.get_by_id(staff_user_id, with_profiles=True)
+            if staff_user is None or staff_user.deleted_at is not None:
+                continue
+            if self._should_archive_staff_user_after_company_deletion(staff_user):
+                self._archive_user_account(staff_user, now=datetime.now(UTC))
+
+    def _should_archive_staff_user_after_company_deletion(self, user: User) -> bool:
+        has_other_company_memberships = (
+            self.db.execute(
+                select(EmployerMembership.id).where(EmployerMembership.user_id == user.id)
+            ).scalar_one_or_none()
+            is not None
+        )
+        if has_other_company_memberships:
+            return False
+
+        if user.role == UserRole.APPLICANT or user.applicant_profile is not None:
+            return False
+
+        return True
+
+    def _archive_user_account(self, user: User, *, now: datetime) -> None:
         self.db.execute(
             delete(EmployerStaffInvitation).where(
-                EmployerStaffInvitation.invited_email == current_user.email,
+                EmployerStaffInvitation.invited_email == user.email,
                 EmployerStaffInvitation.accepted_at.is_(None),
             )
         )
-        self.db.execute(delete(EmployerMembership).where(EmployerMembership.user_id == current_user.id))
-        self.db.execute(delete(Notification).where(Notification.user_id == current_user.id))
-        self.db.execute(delete(FavoriteOpportunity).where(FavoriteOpportunity.user_id == current_user.id))
-        self.db.execute(delete(UserNotificationPreference).where(UserNotificationPreference.user_id == current_user.id))
-        self.db.execute(delete(RefreshSession).where(RefreshSession.user_id == current_user.id))
-        self.db.execute(delete(AuthLoginEvent).where(AuthLoginEvent.user_id == current_user.id))
+        self.db.execute(delete(EmployerMembership).where(EmployerMembership.user_id == user.id))
+        self.db.execute(delete(Notification).where(Notification.user_id == user.id))
+        self.db.execute(delete(FavoriteOpportunity).where(FavoriteOpportunity.user_id == user.id))
+        self.db.execute(delete(Application).where(Application.applicant_user_id == user.id))
+        self.db.execute(delete(UserNotificationPreference).where(UserNotificationPreference.user_id == user.id))
+        self.db.execute(delete(ChatConversationReadState).where(ChatConversationReadState.user_id == user.id))
+        self.db.execute(delete(ChatUnreadReminderState).where(ChatUnreadReminderState.user_id == user.id))
+        self.db.execute(delete(ChatUserKey).where(ChatUserKey.user_id == user.id))
 
-        if current_user_with_profiles.applicant_profile is not None:
-            self.db.delete(current_user_with_profiles.applicant_profile)
-        if current_user_with_profiles.employer_profile is not None:
-            self.db.delete(current_user_with_profiles.employer_profile)
-        if current_user_with_profiles.curator_profile is not None:
-            self.db.delete(current_user_with_profiles.curator_profile)
+        conversation_ids = list(
+            self.db.execute(
+                select(ChatConversation.id).where(
+                    (ChatConversation.applicant_user_id == user.id)
+                    | (ChatConversation.employer_user_id == user.id)
+                )
+            ).scalars().all()
+        )
+        if conversation_ids:
+            self.db.execute(
+                delete(ChatConversationReadState).where(
+                    ChatConversationReadState.conversation_id.in_(conversation_ids)
+                )
+            )
+            self.db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(conversation_ids)))
+            self.db.execute(delete(ChatConversation).where(ChatConversation.id.in_(conversation_ids)))
 
-        current_user_with_profiles.email = f"deleted-{current_user.id}@deleted.local"
-        current_user_with_profiles.display_name = "Удаленный аккаунт"
-        current_user_with_profiles.password_hash = "deleted"
+        self.db.execute(delete(RefreshSession).where(RefreshSession.user_id == user.id))
+        self.db.execute(delete(AuthLoginEvent).where(AuthLoginEvent.user_id == user.id))
+        self.db.execute(delete(ApplicantProject).where(ApplicantProject.applicant_user_id == user.id))
+        self.db.execute(delete(ApplicantAchievement).where(ApplicantAchievement.applicant_user_id == user.id))
+        self.db.execute(delete(ApplicantCertificate).where(ApplicantCertificate.applicant_user_id == user.id))
+
+        applicant_avatar_path = self._resolve_applicant_avatar_storage_path(
+            user.applicant_profile.avatar_url if user.applicant_profile is not None else None
+        )
+        if applicant_avatar_path is not None and applicant_avatar_path.exists() and applicant_avatar_path.is_file():
+            applicant_avatar_path.unlink()
+
+        if user.employer_profile is not None:
+            from src.services.employer_service import EmployerService
+
+            employer_avatar_path = EmployerService._resolve_avatar_storage_path(user.employer_profile.avatar_url)
+            if employer_avatar_path is not None and employer_avatar_path.exists() and employer_avatar_path.is_file():
+                employer_avatar_path.unlink()
+
+        if user.applicant_profile is not None:
+            self.db.delete(user.applicant_profile)
+        if user.employer_profile is not None:
+            self.db.delete(user.employer_profile)
+        if user.curator_profile is not None:
+            self.db.delete(user.curator_profile)
+
+        user.email = f"deleted-{user.id}@deleted.local"
+        user.display_name = "Удаленный аккаунт"
+        user.password_hash = "deleted"
+        user.preferred_city = None
+        user.status = UserStatus.ARCHIVED
+        user.deleted_at = now
+        self.db.add(user)
 
     def _get_employer_public_stats(self, user_id: str | UUID) -> tuple[int, int]:
         active_statuses = ("active", "scheduled")
@@ -427,12 +687,6 @@ class UserService:
             )
         ).scalar_one()
         return active_opportunities_count or 0, responses_count or 0
-        current_user_with_profiles.preferred_city = None
-        current_user_with_profiles.status = UserStatus.ARCHIVED
-        current_user_with_profiles.deleted_at = now
-        self.db.add(current_user_with_profiles)
-
-        self.db.commit()
 
     def _get_applicant_stats(self, user_id) -> tuple[int, int, int]:
         applications_count = (

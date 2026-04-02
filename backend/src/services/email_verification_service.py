@@ -51,16 +51,83 @@ class EmailVerificationService:
         *,
         force_resend: bool = False,
     ) -> None:
+        self._request_code(
+            email,
+            purpose="register",
+            ip_address=ip_address,
+            force_resend=force_resend,
+            ensure_email_state="available",
+        )
+
+    def verify_registration_code(
+        self,
+        email: str,
+        code: str,
+        ip_address: str | None = None,
+        *,
+        consume: bool = False,
+    ) -> None:
+        self._verify_code(
+            email,
+            code,
+            purpose="register",
+            ip_address=ip_address,
+            consume=consume,
+        )
+
+    def request_password_reset_code(
+        self,
+        email: str,
+        ip_address: str | None = None,
+        *,
+        force_resend: bool = False,
+    ) -> None:
+        self._request_code(
+            email,
+            purpose="password_reset",
+            ip_address=ip_address,
+            force_resend=force_resend,
+            ensure_email_state="existing",
+        )
+
+    def verify_password_reset_code(
+        self,
+        email: str,
+        code: str,
+        ip_address: str | None = None,
+        *,
+        consume: bool = False,
+    ) -> None:
+        self._verify_code(
+            email,
+            code,
+            purpose="password_reset",
+            ip_address=ip_address,
+            consume=consume,
+        )
+
+    def _request_code(
+        self,
+        email: str,
+        *,
+        purpose: str,
+        ip_address: str | None = None,
+        force_resend: bool = False,
+        ensure_email_state: str | None = None,
+    ) -> None:
         normalized_email = self._normalize_email(email)
         now = datetime.now(UTC)
 
-        state = self.repo.get_or_create(normalized_email, "register")
+        state = self.repo.get_or_create(normalized_email, purpose)
         self._ensure_not_blocked(state, now)
 
-        self._ensure_email_is_available(normalized_email)
+        if ensure_email_state == "available":
+            self._ensure_email_is_available(normalized_email)
+        elif ensure_email_state == "existing":
+            self._ensure_email_exists(normalized_email)
 
         if self._has_active_code(state, now) and not force_resend:
-            self.logger.info("auth.otp.request.skip_active email=%s", normalized_email)
+            self.logger.info("auth.otp.request.skip_active email=%s purpose=%s", normalized_email, purpose)
             return
 
         self._ensure_request_allowed(state, now)
@@ -76,37 +143,37 @@ class EmailVerificationService:
         self.db.flush()
 
         if force_resend:
-            # Persist the rotated code before delivery so the previous code
-            # becomes invalid immediately after the resend request is made.
             self.db.commit()
-            self._deliver_code(normalized_email, code, force_resend=True, state=state)
+            self._deliver_code(normalized_email, code, force_resend=True, state=state, purpose=purpose)
             return
 
         try:
-            self._deliver_code(normalized_email, code, force_resend=force_resend, state=state)
+            self._deliver_code(normalized_email, code, force_resend=force_resend, state=state, purpose=purpose)
         except Exception:
             self.db.rollback()
             raise
 
         self.db.commit()
 
-    def verify_registration_code(
+    def _verify_code(
         self,
         email: str,
         code: str,
-        ip_address: str | None = None,
         *,
+        purpose: str,
+        ip_address: str | None = None,
         consume: bool = False,
     ) -> None:
         normalized_email = self._normalize_email(email)
         normalized_code = code.strip()
         now = datetime.now(UTC)
 
-        state = self.repo.get_or_create(normalized_email, "register")
+        state = self.repo.get_or_create(normalized_email, purpose)
         self._ensure_not_blocked(state, now)
         self.logger.info(
-            "auth.otp.verify.start email=%s consume=%s has_code=%s attempts_left=%s blocked_until=%s expires_at=%s",
+            "auth.otp.verify.start email=%s purpose=%s consume=%s has_code=%s attempts_left=%s blocked_until=%s expires_at=%s",
             normalized_email,
+            purpose,
             consume,
             state.code_hash is not None,
             state.code_attempts_left,
@@ -115,7 +182,7 @@ class EmailVerificationService:
         )
 
         if state.code_hash is None or state.code_expires_at is None:
-            self.logger.warning("auth.otp.verify.not_found email=%s", normalized_email)
+            self.logger.warning("auth.otp.verify.not_found email=%s purpose=%s", normalized_email, purpose)
             raise AppError(
                 code="AUTH_OTP_NOT_FOUND",
                 message="Код подтверждения не найден. Запросите новый.",
@@ -126,7 +193,7 @@ class EmailVerificationService:
         if code_expires_at <= now:
             self._clear_code(state)
             self.db.commit()
-            self.logger.warning("auth.otp.verify.expired email=%s", normalized_email)
+            self.logger.warning("auth.otp.verify.expired email=%s purpose=%s", normalized_email, purpose)
             raise AppError(
                 code="AUTH_OTP_EXPIRED",
                 message="Срок действия кода истёк. Запросите новый.",
@@ -137,8 +204,9 @@ class EmailVerificationService:
             self._register_verification_failure(state, now)
             self.db.commit()
             self.logger.warning(
-                "auth.otp.verify.invalid email=%s attempts_left=%s blocked_until=%s",
+                "auth.otp.verify.invalid email=%s purpose=%s attempts_left=%s blocked_until=%s",
                 normalized_email,
+                purpose,
                 state.code_attempts_left,
                 state.blocked_until,
             )
@@ -148,7 +216,7 @@ class EmailVerificationService:
         if consume:
             self._clear_code(state)
         self.db.commit()
-        self.logger.info("auth.otp.verify.success email=%s consume=%s", normalized_email, consume)
+        self.logger.info("auth.otp.verify.success email=%s purpose=%s consume=%s", normalized_email, purpose, consume)
 
     def consume_debug_code(self, email: str, purpose: str) -> str | None:
         state = self.repo.get_by_email_and_purpose(self._normalize_email(email), purpose)
@@ -189,6 +257,15 @@ class EmailVerificationService:
                 status_code=409,
             )
 
+    def _ensure_email_exists(self, email: str) -> None:
+        if self.user_repo.get_by_email(email) is None:
+            self.logger.info("auth.otp.request.reject_missing_email email=%s", email)
+            raise AppError(
+                code="AUTH_EMAIL_NOT_FOUND",
+                message="Аккаунт с такой почтой не найден",
+                status_code=404,
+            )
+
     def _deliver_code(
         self,
         email: str,
@@ -196,23 +273,35 @@ class EmailVerificationService:
         *,
         force_resend: bool,
         state: EmailVerificationState,
+        purpose: str,
     ) -> None:
         self.logger.info(
-            "auth.otp.request.issue email=%s force_resend=%s request_count=%s attempts_left=%s expires_at=%s",
+            "auth.otp.request.issue email=%s purpose=%s force_resend=%s request_count=%s attempts_left=%s expires_at=%s",
             email,
+            purpose,
             force_resend,
             state.request_count,
             state.code_attempts_left,
             state.code_expires_at,
         )
-        send_email(
-            recipient=email,
-            subject="Код подтверждения регистрации в Трамплин",
-            body=(
+        if purpose == "password_reset":
+            subject = "Код восстановления пароля в Трамплин"
+            body = (
+                f"Ваш код восстановления пароля: {code}\n"
+                "Код действует 15 минут.\n"
+                "Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо."
+            )
+        else:
+            subject = "Код подтверждения регистрации в Трамплин"
+            body = (
                 f"Ваш код подтверждения: {code}\n"
                 "Код действует 15 минут.\n"
                 "Если вы не запрашивали регистрацию, просто проигнорируйте это письмо."
-            ),
+            )
+        send_email(
+            recipient=email,
+            subject=subject,
+            body=body,
         )
 
     def _register_verification_failure(self, state: EmailVerificationState, now: datetime) -> None:

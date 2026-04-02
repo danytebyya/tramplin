@@ -122,7 +122,7 @@
   cursor: default;
 }
 
-.notification-menu__content {
+.notification-menu__records {
   display: flex;
   flex-direction: column;
   min-height: 60px;
@@ -132,22 +132,22 @@
   scrollbar-color: rgba(15, 23, 42, 0.22) transparent;
 }
 
-.notification-menu__content::-webkit-scrollbar {
+.notification-menu__records::-webkit-scrollbar {
   width: 8px;
 }
 
-.notification-menu__content::-webkit-scrollbar-track {
+.notification-menu__records::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.notification-menu__content::-webkit-scrollbar-thumb {
+.notification-menu__records::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.18);
   background-clip: padding-box;
 }
 
-.notification-menu__content::-webkit-scrollbar-thumb:hover {
+.notification-menu__records::-webkit-scrollbar-thumb:hover {
   background: rgba(15, 23, 42, 0.28);
   background-clip: padding-box;
 }
@@ -164,7 +164,7 @@
   text-align: center;
 }
 
-.notification-menu__item {
+.notification-menu__notice {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -174,25 +174,25 @@
   background: var(--color-bg-primary);
 }
 
-.notification-menu__item-top {
+.notification-menu__notice-head {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
-.notification-menu__item:hover {
+.notification-menu__notice:hover {
   background: var(--notification-menu-hover-bg);
 }
 
-.notification-menu__item:active {
+.notification-menu__notice:active {
   background: var(--notification-menu-active-bg);
 }
 
-.notification-menu__item--read {
+.notification-menu__notice--read {
   opacity: 1;
 }
 
-.notification-menu__item-main {
+.notification-menu__notice-main {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
@@ -203,7 +203,7 @@
   cursor: pointer;
 }
 
-.notification-menu__item-dismiss {
+.notification-menu__notice-dismiss {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -221,7 +221,7 @@
   -webkit-appearance: none;
 }
 
-.notification-menu__item-dismiss::before {
+.notification-menu__notice-dismiss::before {
   content: "";
   display: block;
   margin-top: 2px;
@@ -238,41 +238,41 @@
   -webkit-mask-size: contain;
 }
 
-.notification-menu__item-dismiss:hover {
+.notification-menu__notice-dismiss:hover {
   color: var(--notification-menu-primary);
 }
 
-.notification-menu__item-dismiss:active {
+.notification-menu__notice-dismiss:active {
   color: var(--notification-menu-accent);
 }
 
-.notification-menu__item-dismiss:disabled {
+.notification-menu__notice-dismiss:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
-.notification-menu__item-body {
+.notification-menu__notice-body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   gap: 8px;
 }
 
-.notification-menu__item-title-row {
+.notification-menu__title-summary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
 
-.notification-menu__item-heading {
+.notification-menu__notice-heading {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   gap: 4px;
 }
 
-.notification-menu__item-title {
+.notification-menu__notice-title {
   color: var(--notification-menu-text);
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
@@ -280,7 +280,7 @@
   flex: 1 1 auto;
 }
 
-.notification-menu__item-indicator {
+.notification-menu__notice-indicator {
   width: 8px;
   height: 8px;
   border-radius: 999px;
@@ -289,20 +289,20 @@
   flex: 0 0 8px;
 }
 
-.notification-menu__item-indicator-placeholder {
+.notification-menu__notice-indicator-slot {
   width: 8px;
   height: 8px;
   flex: 0 0 8px;
 }
 
-.notification-menu__item-date-row {
+.notification-menu__date-summary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-top: 0;
 }
 
-.notification-menu__item-date-icon {
+.notification-menu__notice-date-icon {
   width: 13px;
   height: 13px;
   flex: 0 0 13px;
@@ -317,21 +317,21 @@
   -webkit-mask-size: contain;
 }
 
-.notification-menu__item-date {
+.notification-menu__notice-date {
   color: var(--notification-menu-text-subtle);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   white-space: nowrap;
 }
 
-.notification-menu__item-message {
+.notification-menu__notice-message {
   color: var(--notification-menu-text-muted);
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   width: 100%;
 }
 
-.notification-menu__item-action.button.button--ghost {
+.notification-menu__notice-action.button.button--ghost {
   height: auto;
   min-height: 0;
   margin-top: 0;
@@ -342,27 +342,27 @@
   gap: 6px;
 }
 
-.notification-menu__item-action .button__label {
+.notification-menu__notice-action .button__label {
   display: inline-flex;
   align-items: center;
   gap: 10px;
 }
 
-.notification-menu__item-action.button--ghost:not(.button--loading):not(:disabled):hover {
+.notification-menu__notice-action.button--ghost:not(.button--loading):not(:disabled):hover {
   color: var(--notification-menu-secondary);
 }
 
-.notification-menu__item-action.button--ghost:not(.button--loading):not(:disabled):active {
+.notification-menu__notice-action.button--ghost:not(.button--loading):not(:disabled):active {
   color: var(--notification-menu-accent);
 }
 
-.notification-menu__item-action-label {
+.notification-menu__notice-action-label {
   font-size: 12px;
   line-height: 16px;
   font-weight: 500;
 }
 
-.notification-menu__item-action-icon {
+.notification-menu__notice-action-icon {
   width: 10px;
   height: 10px;
   flex: 0 0 10px;
@@ -424,8 +424,8 @@
 .settings-page--admin .notification-menu,
 .curator-dashboard-page .notification-menu,
 .curator-management-page .notification-menu,
-.content-moderation-page .notification-menu,
-.employer-verification-page .notification-menu {
+.moderation-queue-page .notification-menu,
+.company-review-page .notification-menu {
   --notification-menu-primary: var(--color-accent);
   --notification-menu-light: var(--color-accent-light);
   --notification-menu-secondary: var(--color-accent-hover);
@@ -434,7 +434,7 @@
 
 .curator-dashboard-page,
 .curator-management-page,
-.content-moderation-page {
+.moderation-queue-page {
   --notification-menu-primary: var(--color-accent);
   --notification-menu-light: var(--color-accent-light);
   --notification-menu-secondary: var(--color-accent-hover);
@@ -445,8 +445,8 @@
 .settings-page--admin .notification-menu__badge,
 .curator-dashboard-page .notification-menu__badge,
 .curator-management-page .notification-menu__badge,
-.content-moderation-page .notification-menu__badge,
-.employer-verification-page .notification-menu__badge {
+.moderation-queue-page .notification-menu__badge,
+.company-review-page .notification-menu__badge {
   background: var(--notification-menu-light);
   border-color: var(--color-bg-primary);
   color: var(--notification-menu-secondary);
@@ -456,8 +456,8 @@
 .settings-page--admin .notification-menu__button .notification-menu__badge,
 .curator-dashboard-page .notification-menu__button .notification-menu__badge,
 .curator-management-page .notification-menu__button .notification-menu__badge,
-.content-moderation-page .notification-menu__button .notification-menu__badge,
-.employer-verification-page .notification-menu__button .notification-menu__badge {
+.moderation-queue-page .notification-menu__button .notification-menu__badge,
+.company-review-page .notification-menu__button .notification-menu__badge {
   background: var(--notification-menu-light);
 }
 
@@ -473,12 +473,12 @@
 .curator-management-page .notification-menu__button:hover .notification-menu__badge,
 .curator-management-page .notification-menu__button:focus-visible .notification-menu__badge,
 .curator-management-page .notification-menu__button:active .notification-menu__badge,
-.content-moderation-page .notification-menu__button:hover .notification-menu__badge,
-.content-moderation-page .notification-menu__button:focus-visible .notification-menu__badge,
-.content-moderation-page .notification-menu__button:active .notification-menu__badge,
-.employer-verification-page .notification-menu__button:hover .notification-menu__badge,
-.employer-verification-page .notification-menu__button:focus-visible .notification-menu__badge,
-.employer-verification-page .notification-menu__button:active .notification-menu__badge {
+.moderation-queue-page .notification-menu__button:hover .notification-menu__badge,
+.moderation-queue-page .notification-menu__button:focus-visible .notification-menu__badge,
+.moderation-queue-page .notification-menu__button:active .notification-menu__badge,
+.company-review-page .notification-menu__button:hover .notification-menu__badge,
+.company-review-page .notification-menu__button:focus-visible .notification-menu__badge,
+.company-review-page .notification-menu__button:active .notification-menu__badge {
   background: var(--notification-menu-light);
 }
 

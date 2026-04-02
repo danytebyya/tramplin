@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import jobIcon from "../../assets/icons/job.svg";
 import arrowIcon from "../../assets/icons/arrow.svg";
@@ -28,17 +28,18 @@ import {
   BackendApplicationStatus,
   listMyApplicationsRequest,
   submitOpportunityApplicationRequest,
+  WithdrawApplicationModal,
   withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
-import { useAuthStore } from "../../features/auth";
+import { readAccessTokenPayload, useAuthStore } from "../../features/auth";
 import {
   canViewerAccessApplicantProfile,
   getApplicantPrivacySettings,
   resolveAvatarIcon,
   resolveAvatarUrl,
 } from "../../shared/lib";
-import { Button, Container, Modal } from "../../shared/ui";
+import { Button, Container, VerifiedTooltip } from "../../shared/ui";
 import { BackNavigation } from "../../widgets/back-navigation";
 import { Footer } from "../../widgets/footer";
 import {
@@ -47,7 +48,6 @@ import {
   buildModerationProfileMenuItems,
   Header,
 } from "../../widgets/header";
-import verifiedIcon from "../../assets/icons/verified.svg";
 import "./opportunity-details.css";
 
 type SuggestedContact = {
@@ -63,6 +63,16 @@ type SuggestedContact = {
   formatLabel: string;
   employmentLabel: string;
   avatarSrc: string;
+};
+
+type OpportunityDetailsReturnState = {
+  restoreScrollY?: number;
+  restoreViewMode?: "list" | "map";
+  returnTo?: {
+    pathname: string;
+    search?: string;
+    hash?: string;
+  };
 };
 
 const RECOMMENDED_CONTACTS_PAGE_SIZE = 2;
@@ -84,6 +94,10 @@ function buildPaginationItems(currentPage: number, totalPages: number) {
 }
 
 function resolveThemeRole(role: string | null) {
+  if (!role) {
+    return "employer";
+  }
+
   if (role === "junior") {
     return "curator";
   }
@@ -93,6 +107,46 @@ function resolveThemeRole(role: string | null) {
   }
 
   return "applicant";
+}
+
+function resolveHeaderTheme(role: string | null) {
+  if (role === "junior" || role === "curator" || role === "admin") {
+    return "curator" as const;
+  }
+
+  if (role === "employer") {
+    return "employer" as const;
+  }
+
+  if (role === "applicant") {
+    return "applicant" as const;
+  }
+
+  return "employer" as const;
+}
+
+function resolveOpportunitySolidVariant(themeRole: "applicant" | "employer" | "curator" | "admin") {
+  if (themeRole === "employer") {
+    return "primary" as const;
+  }
+
+  if (themeRole === "curator" || themeRole === "admin") {
+    return "accent" as const;
+  }
+
+  return "secondary" as const;
+}
+
+function resolveOpportunityOutlineVariant(themeRole: "applicant" | "employer" | "curator" | "admin") {
+  if (themeRole === "employer") {
+    return "primary-outline" as const;
+  }
+
+  if (themeRole === "curator" || themeRole === "admin") {
+    return "accent-outline" as const;
+  }
+
+  return "secondary-outline" as const;
 }
 
 function formatOpportunityFormatLabel(format: Opportunity["format"]) {
@@ -184,11 +238,11 @@ function resolveSuggestedContactLevelClassName(levelLabel: string | null) {
 
 function OpportunityDetailsSkeleton() {
   return (
-    <section className="opportunity-details-page__layout opportunity-details-page__layout--skeleton" aria-hidden="true">
+    <section className="opportunity-details-page__overview opportunity-details-page__overview--skeleton" aria-hidden="true">
       <div className="opportunity-details-page__main">
         <div className="opportunity-details-page__hero">
           <div className="opportunity-details-page__hero-copy">
-            <div className="opportunity-details-page__content">
+            <div className="opportunity-details-page__summary">
               <div className="opportunity-details-page__hero-summary">
                 <div className="opportunity-details-page__hero-header">
                   <span className="opportunity-details-page__skeleton opportunity-details-page__skeleton--title" />
@@ -246,16 +300,34 @@ function OpportunityDetailsSkeleton() {
 }
 
 export function OpportunityDetailsPage() {
+  const location = useLocation();
   const { opportunityId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
+  const activeRole = readAccessTokenPayload(accessToken)?.active_role ?? role;
   const isAuthenticated = Boolean(accessToken || refreshToken);
-  const themeRole = resolveThemeRole(role);
+  const themeRole = resolveThemeRole(activeRole);
+  const headerTheme = resolveHeaderTheme(activeRole);
+  const backNavigationTarget = useMemo(() => {
+    const state = location.state as OpportunityDetailsReturnState | null;
+
+    if (!state?.returnTo?.pathname) {
+      return null;
+    }
+
+    return {
+      to: `${state.returnTo.pathname}${state.returnTo.search ?? ""}${state.returnTo.hash ?? ""}`,
+      state: {
+        restoreScrollY: state.restoreScrollY,
+        restoreViewMode: state.restoreViewMode,
+      },
+    };
+  }, [location.state]);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
-  const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
+  const [unauthorizedActionLabel, setUnauthorizedActionLabel] = useState<string | null>(null);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [recommendedUserIds, setRecommendedUserIds] = useState<string[]>([]);
   const [recommendedContactsPage, setRecommendedContactsPage] = useState(1);
@@ -360,13 +432,15 @@ export function OpportunityDetailsPage() {
   const isFavorite = opportunity ? favoriteOpportunityIds.includes(opportunity.id) : false;
   const isApplied = opportunity ? appliedOpportunityIds.includes(opportunity.id) : false;
   const opportunityStatus = opportunity ? applicationStatusByOpportunityId[opportunity.id] : undefined;
+  const themedButtonVariant = resolveOpportunitySolidVariant(themeRole);
+  const themedOutlineButtonVariant = resolveOpportunityOutlineVariant(themeRole);
   const disabledApplyMeta =
     opportunityStatus === "withdrawn"
-      ? { label: "Отклик отозван", variant: "secondary-outline" as const }
+      ? { label: "Отклик отозван", variant: themedOutlineButtonVariant }
       : opportunityStatus === "rejected"
       ? { label: "Работодатель отклонил отклик", variant: "danger-outline" as const }
       : opportunityStatus === "interview" || opportunityStatus === "offer" || opportunityStatus === "accepted"
-        ? { label: "Работодатель принял отклик", variant: "secondary-outline" as const }
+        ? { label: "Работодатель принял отклик", variant: themedOutlineButtonVariant }
         : null;
   const shouldDisableApply = !isApplied && disabledApplyMeta !== null;
   const canApply = role !== "employer" && role !== "curator" && role !== "admin";
@@ -409,7 +483,7 @@ export function OpportunityDetailsPage() {
     setRecommendedContactsPage(1);
   }, [suggestedContacts.length]);
 
-  const profileMenuItems = role === "employer"
+  const profileMenuItems = activeRole === "employer"
     ? buildEmployerProfileMenuItems(navigate, {
         isEmployer: true,
         isStaffContext: false,
@@ -427,7 +501,7 @@ export function OpportunityDetailsPage() {
         canManageStaff: true,
         canAccessChat: true,
       })
-    : role === "junior" || role === "curator" || role === "admin"
+    : activeRole === "junior" || activeRole === "curator" || activeRole === "admin"
       ? buildModerationProfileMenuItems()
       : buildApplicantProfileMenuItems(navigate);
 
@@ -442,7 +516,7 @@ export function OpportunityDetailsPage() {
     }
 
     if (!isAuthenticated) {
-      setIsFavoriteAuthModalOpen(true);
+      setUnauthorizedActionLabel("добавить возможность в избранное");
       return;
     }
 
@@ -458,7 +532,7 @@ export function OpportunityDetailsPage() {
     }
 
     if (!isAuthenticated) {
-      setIsFavoriteAuthModalOpen(true);
+      setUnauthorizedActionLabel("откликнуться на возможность");
       return;
     }
 
@@ -494,7 +568,7 @@ export function OpportunityDetailsPage() {
 
   const handleRecommend = (targetUserId: string) => {
     if (!isAuthenticated) {
-      setIsFavoriteAuthModalOpen(true);
+      setUnauthorizedActionLabel("рекомендовать кандидата");
       return;
     }
 
@@ -508,15 +582,21 @@ export function OpportunityDetailsPage() {
   return (
     <main className={`opportunity-details-page opportunity-details-page--${themeRole}`}>
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
-        theme={themeRole === "admin" ? "curator" : themeRole}
+        theme={headerTheme}
         city={selectedCity}
         onCityChange={handleCityChange}
         isAuthenticated={isAuthenticated}
         guestActions={
           <>
-            <Button type="button" variant="primary-outline" size="md" onClick={() => navigate("/login")}>
+            <Button
+              type="button"
+              variant="primary-outline"
+              size="md"
+              className="header__action-button header__action-button--login"
+              onClick={() => navigate("/login")}
+            >
               Вход
             </Button>
             <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
@@ -526,8 +606,8 @@ export function OpportunityDetailsPage() {
         }
       />
 
-      <BackNavigation />
-      <Container className="opportunity-details-page__container">
+      <BackNavigation {...backNavigationTarget} />
+      <Container className="opportunity-details-page__shell">
         {!opportunity && opportunitiesQuery.isPending ? (
           <OpportunityDetailsSkeleton />
         ) : null}
@@ -535,18 +615,18 @@ export function OpportunityDetailsPage() {
         {!opportunity && !opportunitiesQuery.isPending ? (
           <section className="opportunity-details-page__state">
             <h1 className="opportunity-details-page__state-title">Возможность не найдена</h1>
-            <Button type="button" variant="secondary" onClick={() => navigate("/")}>
+            <Button type="button" variant={themedButtonVariant} onClick={() => navigate("/")}>
               Вернуться на главную
             </Button>
           </section>
         ) : null}
 
         {opportunity ? (
-          <section className="opportunity-details-page__layout">
+          <section className="opportunity-details-page__overview">
             <div className="opportunity-details-page__main">
               <div className="opportunity-details-page__hero">
                 <div className="opportunity-details-page__hero-copy">
-                  <div className="opportunity-details-page__content">
+                  <div className="opportunity-details-page__summary">
                     <div className="opportunity-details-page__hero-summary">
                       <div className="opportunity-details-page__hero-header">
                         <h1 className="opportunity-details-page__title">{opportunity.title}</h1>
@@ -556,19 +636,19 @@ export function OpportunityDetailsPage() {
                         </p>
 
                         <div className="opportunity-details-page__meta">
-                          <span className="opportunity-details-page__meta-item">
+                          <span className="opportunity-details-page__meta-detail">
                             <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
                             {opportunity.city || "Россия"}
                           </span>
-                          <span className="opportunity-details-page__meta-item">
+                          <span className="opportunity-details-page__meta-detail">
                             <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
                             {formatOpportunityFormatLabel(opportunity.format)}
                           </span>
-                          <span className="opportunity-details-page__meta-item">
+                          <span className="opportunity-details-page__meta-detail">
                             <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
                             {opportunity.employmentLabel}
                           </span>
-                          <span className="opportunity-details-page__meta-item">
+                          <span className="opportunity-details-page__meta-detail">
                             <img src={levelIcon} alt="" aria-hidden="true" className="opportunity-details-page__meta-icon" />
                             {opportunity.levelLabel}
                           </span>
@@ -603,7 +683,7 @@ export function OpportunityDetailsPage() {
                         <div className="opportunity-details-page__apply-section">
                           <Button
                             type="button"
-                            variant={shouldDisableApply ? disabledApplyMeta.variant : isApplied ? "danger-outline" : "secondary"}
+                            variant={shouldDisableApply ? disabledApplyMeta.variant : isApplied ? "danger-outline" : themedButtonVariant}
                             className={isApplied
                               ? "opportunity-details-page__apply opportunity-details-page__apply-button opportunity-details-page__apply-button--applied opportunity-details-page__apply--withdraw"
                               : "opportunity-details-page__apply opportunity-details-page__apply-button"}
@@ -656,7 +736,7 @@ export function OpportunityDetailsPage() {
                           <p className="opportunity-details-page__description-text">Подбираем подходящих кандидатов...</p>
                         ) : null}
 
-                        <div className="opportunity-details-page__contacts-grid">
+                        <div className="opportunity-details-page__contacts">
                           {visibleSuggestedContacts.map((contact) => {
                             const isRecommended = recommendedUserIds.includes(contact.userId);
                             const isCurrentTargetLoading =
@@ -664,7 +744,7 @@ export function OpportunityDetailsPage() {
 
                             return (
                               <article key={contact.id} className="opportunity-details-page__contact-card">
-                                <div className="opportunity-details-page__contact-id-block">
+                                <div className="opportunity-details-page__contact-badge">
                                   <span className="opportunity-details-page__contact-id">ID: {contact.id.slice(-6)}</span>
                                 </div>
 
@@ -703,20 +783,20 @@ export function OpportunityDetailsPage() {
                                   </div>
                                 ) : null}
 
-                                <div className="opportunity-details-page__contact-meta">
-                                  <span className="opportunity-details-page__contact-meta-item">
+                                <div className="opportunity-details-page__contact-facts">
+                                  <span className="opportunity-details-page__contact-fact">
                                     <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                     {contact.city}
                                   </span>
-                                  <span className="opportunity-details-page__contact-meta-item">
+                                  <span className="opportunity-details-page__contact-fact">
                                     <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                     {contact.salaryLabel}
                                   </span>
-                                  <span className="opportunity-details-page__contact-meta-item">
+                                  <span className="opportunity-details-page__contact-fact">
                                     <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                     {contact.formatLabel}
                                   </span>
-                                  <span className="opportunity-details-page__contact-meta-item">
+                                  <span className="opportunity-details-page__contact-fact">
                                     <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                     {contact.employmentLabel}
                                   </span>
@@ -724,7 +804,7 @@ export function OpportunityDetailsPage() {
 
                                 <Button
                                   type="button"
-                                  variant={isRecommended ? "secondary-outline" : "secondary"}
+                                  variant={isRecommended ? themedOutlineButtonVariant : themedButtonVariant}
                                   size="md"
                                   fullWidth
                                   onClick={() => handleRecommend(contact.userId)}
@@ -742,7 +822,7 @@ export function OpportunityDetailsPage() {
                           <nav className="opportunity-details-page__pagination" aria-label="Пагинация подходящих кандидатов">
                             <button
                               type="button"
-                              className="opportunity-details-page__pagination-arrow"
+                              className="opportunity-details-page__pager-button"
                               onClick={() => setRecommendedContactsPage((currentValue) => Math.max(1, currentValue - 1))}
                               disabled={recommendedContactsCurrentPage === 1}
                               aria-label="Предыдущая страница"
@@ -751,7 +831,7 @@ export function OpportunityDetailsPage() {
                                 src={arrowIcon}
                                 alt=""
                                 aria-hidden="true"
-                                className="opportunity-details-page__pagination-arrow-icon opportunity-details-page__pagination-arrow-icon--prev"
+                                className="opportunity-details-page__pager-button-icon opportunity-details-page__pager-button-icon--prev"
                               />
                             </button>
                             {recommendedContactsPaginationItems.map((item, index) =>
@@ -776,7 +856,7 @@ export function OpportunityDetailsPage() {
                             )}
                             <button
                               type="button"
-                              className="opportunity-details-page__pagination-arrow"
+                              className="opportunity-details-page__pager-button"
                               onClick={() => setRecommendedContactsPage((currentValue) => Math.min(recommendedContactsTotalPages, currentValue + 1))}
                               disabled={recommendedContactsCurrentPage === recommendedContactsTotalPages}
                               aria-label="Следующая страница"
@@ -785,7 +865,7 @@ export function OpportunityDetailsPage() {
                                 src={arrowIcon}
                                 alt=""
                                 aria-hidden="true"
-                                className="opportunity-details-page__pagination-arrow-icon"
+                                className="opportunity-details-page__pager-button-icon"
                               />
                             </button>
                           </nav>
@@ -836,7 +916,7 @@ export function OpportunityDetailsPage() {
                 {opportunity.companyVerified ? (
                   <span className="opportunity-details-page__company-badge">
                     Верифицировано
-                    <img src={verifiedIcon} alt="" aria-hidden="true" />
+                    <VerifiedTooltip size="lg" />
                   </span>
                 ) : null}
 
@@ -844,24 +924,30 @@ export function OpportunityDetailsPage() {
                   {opportunity.contactEmail ? (
                     <a href={`mailto:${opportunity.contactEmail}`} className="opportunity-details-page__company-contact">
                       <img src={mailIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
-                      {opportunity.contactEmail}
+                      <span className="opportunity-details-page__company-contact-text opportunity-details-page__company-contact-text--truncate">
+                        {opportunity.contactEmail}
+                      </span>
                     </a>
                   ) : null}
                   {opportunity.companyWebsite ? (
                     <a href={opportunity.companyWebsite} target="_blank" rel="noreferrer" className="opportunity-details-page__company-contact">
                       <img src={siteIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
-                      {opportunity.companyWebsite.replace(/^https?:\/\//, "")}
+                      <span className="opportunity-details-page__company-contact-text opportunity-details-page__company-contact-text--truncate">
+                        {opportunity.companyWebsite.replace(/^https?:\/\//, "")}
+                      </span>
                     </a>
                   ) : null}
                   {opportunity.companyPhone ? (
                     <a href={`tel:${opportunity.companyPhone}`} className="opportunity-details-page__company-contact">
                       <img src={phoneIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
-                      {opportunity.companyPhone}
+                      <span className="opportunity-details-page__company-contact-text">{opportunity.companyPhone}</span>
                     </a>
                   ) : null}
                   <p className="opportunity-details-page__company-address">
                     <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__company-contact-icon" />
-                    {opportunity.address || opportunity.locationLabel}
+                    <span className="opportunity-details-page__company-contact-text opportunity-details-page__company-contact-text--wrap">
+                      {opportunity.address || opportunity.locationLabel}
+                    </span>
                   </p>
                   <Link
                     to={{
@@ -877,7 +963,7 @@ export function OpportunityDetailsPage() {
 
                 <Button
                   type="button"
-                  variant="secondary-outline"
+                  variant={themedOutlineButtonVariant}
                   size="md"
                   fullWidth
                   onClick={() =>
@@ -896,39 +982,17 @@ export function OpportunityDetailsPage() {
 
       <Footer theme={themeRole} />
 
-      <FavoriteAuthModal isOpen={isFavoriteAuthModalOpen} onClose={() => setIsFavoriteAuthModalOpen(false)} />
-      <Modal
+      <FavoriteAuthModal
+        isOpen={unauthorizedActionLabel !== null}
+        onClose={() => setUnauthorizedActionLabel(null)}
+        actionLabel={unauthorizedActionLabel ?? undefined}
+      />
+      <WithdrawApplicationModal
         isOpen={isWithdrawConfirmModalOpen}
         onClose={() => setIsWithdrawConfirmModalOpen(false)}
-        title="Подтвердите отзыв"
-        panelClassName="opportunity-details-page__confirm-modal"
-      >
-        <div className="opportunity-details-page__confirm-modal-body">
-          <p className="opportunity-details-page__confirm-modal-text">
-            Вы действительно хотите отозвать отклик на эту возможность?
-          </p>
-          <div className="opportunity-details-page__confirm-modal-actions">
-            <Button
-              type="button"
-              variant="danger-outline"
-              size="md"
-              onClick={handleConfirmWithdraw}
-              loading={submitApplicationMutation.isPending}
-            >
-              Отозвать отклик
-            </Button>
-            <Button
-              type="button"
-              variant="primary-outline"
-              size="md"
-              onClick={() => setIsWithdrawConfirmModalOpen(false)}
-              disabled={submitApplicationMutation.isPending}
-            >
-              Отмена
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={handleConfirmWithdraw}
+        isPending={submitApplicationMutation.isPending}
+      />
     </main>
   );
 }

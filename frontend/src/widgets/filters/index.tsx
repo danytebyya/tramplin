@@ -217,21 +217,22 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
           <div ref={sortRef} className="opportunity-filters__dropdown-shell">
             <button
               type="button"
-              className="opportunity-filters__placeholder"
+              className={
+                isSortOpen
+                  ? "opportunity-filters__placeholder opportunity-filters__placeholder--active"
+                  : "opportunity-filters__placeholder"
+              }
               onClick={() => setIsSortOpen((current) => !current)}
             >
               <span>Сортировка</span>
               <span
                 className={
                   isSortOpen
-                    ? "opportunity-filters__placeholder-arrow opportunity-filters__placeholder-arrow--open"
-                    : "opportunity-filters__placeholder-arrow"
+                    ? "opportunity-filters__placeholder-toggle opportunity-filters__placeholder-toggle--open"
+                    : "opportunity-filters__placeholder-toggle"
                 }
                 aria-hidden="true"
               />
-            </button>
-            <button type="button" className="opportunity-filters__reset">
-              Сбросить
             </button>
             <div
               className={
@@ -249,21 +250,22 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
           <div ref={filtersRef} className="opportunity-filters__dropdown-shell">
             <button
               type="button"
-              className="opportunity-filters__placeholder"
+              className={
+                isFiltersOpen
+                  ? "opportunity-filters__placeholder opportunity-filters__placeholder--active"
+                  : "opportunity-filters__placeholder"
+              }
               onClick={() => setIsFiltersOpen((current) => !current)}
             >
               <span>Фильтры</span>
               <span
                 className={
                   isFiltersOpen
-                    ? "opportunity-filters__placeholder-arrow opportunity-filters__placeholder-arrow--open"
-                    : "opportunity-filters__placeholder-arrow"
+                    ? "opportunity-filters__placeholder-toggle opportunity-filters__placeholder-toggle--open"
+                    : "opportunity-filters__placeholder-toggle"
                 }
                 aria-hidden="true"
               />
-            </button>
-            <button type="button" className="opportunity-filters__reset" onClick={resetAllFilters}>
-              Сбросить
             </button>
 
             <div
@@ -302,15 +304,11 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     </button>
                   ))}
                 </div>
-                <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">
-                  Сбросить
-                </button>
               </section>
 
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Радиус поиска, км</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
                 <label className="opportunity-filters__search opportunity-filters__search--panel" aria-label="Адрес поиска">
                   <Input
@@ -334,23 +332,21 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Отображение</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
-                <label className="opportunity-filters__checkbox">
+                <label className="opportunity-filters__selection-toggle">
                   <input
                     type="checkbox"
                     checked={hideVacanciesOnMap}
                     onChange={(event) => setHideVacanciesOnMap(event.target.checked)}
                   />
-                  <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
-                  <span>Не отображать на карте вакансии и стажировки</span>
+                  <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
+                  <span>Не отображать в списке вакансии и стажировки</span>
                 </label>
               </section>
 
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Навыки (Стек)</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
                 <label className="opportunity-filters__search opportunity-filters__search--panel" aria-label="Поиск навыка">
                   <Input
@@ -394,8 +390,8 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                           <span
                             className={
                               isExpanded
-                                ? "opportunity-filters__placeholder-arrow opportunity-filters__placeholder-arrow--open"
-                                : "opportunity-filters__placeholder-arrow"
+                                ? "opportunity-filters__placeholder-toggle opportunity-filters__placeholder-toggle--open"
+                                : "opportunity-filters__placeholder-toggle"
                             }
                             aria-hidden="true"
                           />
@@ -418,17 +414,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Уровень</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
-                <div className="opportunity-filters__checkbox-grid">
+                <div className="opportunity-filters__selection-list">
                   {levelOptions.map((option) => (
-                    <label key={option} className="opportunity-filters__checkbox">
+                    <label key={option} className="opportunity-filters__selection-toggle">
                       <input
                         type="checkbox"
                         checked={selectedLevels.includes(option)}
                         onChange={() => toggleOption(option, selectedLevels, setSelectedLevels)}
                       />
-                      <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                      <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                       <span>{option}</span>
                     </label>
                   ))}
@@ -438,17 +433,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Формат</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
-                <div className="opportunity-filters__checkbox-grid">
+                <div className="opportunity-filters__selection-list">
                   {formatOptions.map((option) => (
-                    <label key={option} className="opportunity-filters__checkbox">
+                    <label key={option} className="opportunity-filters__selection-toggle">
                       <input
                         type="checkbox"
                         checked={selectedFormats.includes(option)}
                         onChange={() => toggleOption(option, selectedFormats, setSelectedFormats)}
                       />
-                      <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                      <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                       <span>{option}</span>
                     </label>
                   ))}
@@ -458,17 +452,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Занятость</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
-                <div className="opportunity-filters__checkbox-grid">
+                <div className="opportunity-filters__selection-list">
                   {employmentOptions.map((option) => (
-                    <label key={option} className="opportunity-filters__checkbox">
+                    <label key={option} className="opportunity-filters__selection-toggle">
                       <input
                         type="checkbox"
                         checked={selectedEmployment.includes(option)}
                         onChange={() => toggleOption(option, selectedEmployment, setSelectedEmployment)}
                       />
-                      <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                      <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                       <span>{option}</span>
                     </label>
                   ))}
@@ -478,7 +471,6 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Зарплата</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
                 <div className="opportunity-filters__range-inputs">
                   <Input value={salaryFrom} onChange={(event) => setSalaryFrom(event.target.value)} placeholder="От" className="input--sm" />
@@ -495,17 +487,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Дата публикации</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
-                <div className="opportunity-filters__checkbox-grid">
+                <div className="opportunity-filters__selection-list">
                   {publicationOptions.map((option) => (
-                    <label key={option} className="opportunity-filters__checkbox">
+                    <label key={option} className="opportunity-filters__selection-toggle">
                       <input
                         type="checkbox"
                         checked={selectedPublication.includes(option)}
                         onChange={() => toggleOption(option, selectedPublication, setSelectedPublication)}
                       />
-                      <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                      <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                       <span>{option}</span>
                     </label>
                   ))}
@@ -515,17 +506,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
               <section className="opportunity-filters__panel-section">
                 <div className="opportunity-filters__panel-head">
                   <h3 className="opportunity-filters__panel-title">Компания</h3>
-                  <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                 </div>
-                <div className="opportunity-filters__checkbox-grid">
+                <div className="opportunity-filters__selection-list">
                   {companyOptions.map((option) => (
-                    <label key={option} className="opportunity-filters__checkbox">
+                    <label key={option} className="opportunity-filters__selection-toggle">
                       <input
                         type="checkbox"
                         checked={selectedCompanyOptions.includes(option)}
                         onChange={() => toggleOption(option, selectedCompanyOptions, setSelectedCompanyOptions)}
                       />
-                      <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                      <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                       <span>{option}</span>
                     </label>
                   ))}
@@ -542,8 +532,8 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                   <span
                     className={
                       expandedGroups.events
-                        ? "opportunity-filters__placeholder-arrow opportunity-filters__placeholder-arrow--open"
-                        : "opportunity-filters__placeholder-arrow"
+                        ? "opportunity-filters__placeholder-toggle opportunity-filters__placeholder-toggle--open"
+                        : "opportunity-filters__placeholder-toggle"
                     }
                     aria-hidden="true"
                   />
@@ -553,17 +543,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Тип</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid opportunity-filters__checkbox-grid--single">
+                      <div className="opportunity-filters__selection-list opportunity-filters__selection-list--single">
                         {eventTypeOptions.map((option) => (
-                          <label key={option} className="opportunity-filters__checkbox">
+                          <label key={option} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedEventTypes.includes(option)}
                               onChange={() => toggleOption(option, selectedEventTypes, setSelectedEventTypes)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -573,17 +562,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Формат</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid">
+                      <div className="opportunity-filters__selection-list">
                         {formatOptions.map((option) => (
-                          <label key={`event-${option}`} className="opportunity-filters__checkbox">
+                          <label key={`event-${option}`} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedFormats.includes(option)}
                               onChange={() => toggleOption(option, selectedFormats, setSelectedFormats)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -593,17 +581,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Стоимость</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid">
+                      <div className="opportunity-filters__selection-list">
                         {costOptions.map((option) => (
-                          <label key={`event-cost-${option}`} className="opportunity-filters__checkbox">
+                          <label key={`event-cost-${option}`} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedCosts.includes(option)}
                               onChange={() => toggleOption(option, selectedCosts, setSelectedCosts)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -623,7 +610,6 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Дата проведения</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
                       <Input
                         value={eventDate}
@@ -636,17 +622,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Компания</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid opportunity-filters__checkbox-grid--single">
+                      <div className="opportunity-filters__selection-list opportunity-filters__selection-list--single">
                         {companyOptions.map((option) => (
-                          <label key={`event-company-${option}`} className="opportunity-filters__checkbox">
+                          <label key={`event-company-${option}`} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedCompanyOptions.includes(option)}
                               onChange={() => toggleOption(option, selectedCompanyOptions, setSelectedCompanyOptions)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -666,8 +651,8 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                   <span
                     className={
                       expandedGroups.mentorship
-                        ? "opportunity-filters__placeholder-arrow opportunity-filters__placeholder-arrow--open"
-                        : "opportunity-filters__placeholder-arrow"
+                        ? "opportunity-filters__placeholder-toggle opportunity-filters__placeholder-toggle--open"
+                        : "opportunity-filters__placeholder-toggle"
                     }
                     aria-hidden="true"
                   />
@@ -677,7 +662,6 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Область экспертизы</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
                       <div className="opportunity-filters__chip-list">
                         {mentorExpertiseAreas.map((item) => (
@@ -689,7 +673,6 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Организатор</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
                       <label className="opportunity-filters__search opportunity-filters__search--panel" aria-label="Поиск организатора">
                         <Input
@@ -710,17 +693,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Направление менторства</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid">
+                      <div className="opportunity-filters__selection-list">
                         {mentorshipDirectionOptions.map((option) => (
-                          <label key={option} className="opportunity-filters__checkbox">
+                          <label key={option} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedMentorDirections.includes(option)}
                               onChange={() => toggleOption(option, selectedMentorDirections, setSelectedMentorDirections)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -730,17 +712,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Доступность ментора</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid opportunity-filters__checkbox-grid--single">
+                      <div className="opportunity-filters__selection-list opportunity-filters__selection-list--single">
                         {mentorAvailabilityOptions.map((option) => (
-                          <label key={option} className="opportunity-filters__checkbox">
+                          <label key={option} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedMentorAvailability.includes(option)}
                               onChange={() => toggleOption(option, selectedMentorAvailability, setSelectedMentorAvailability)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -750,17 +731,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Опыт ментора</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid">
+                      <div className="opportunity-filters__selection-list">
                         {mentorExperienceOptions.map((option) => (
-                          <label key={option} className="opportunity-filters__checkbox">
+                          <label key={option} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedMentorExperience.includes(option)}
                               onChange={() => toggleOption(option, selectedMentorExperience, setSelectedMentorExperience)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -771,7 +751,6 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Стоимость</h3>
                         <span className="opportunity-filters__panel-note">₽/час</span>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
                       <div className="opportunity-filters__range-inputs">
                         <Input value={mentorCostFrom} onChange={(event) => setMentorCostFrom(event.target.value)} placeholder="От" className="input--sm" />
@@ -788,17 +767,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Формат</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid">
+                      <div className="opportunity-filters__selection-list">
                         {formatOptions.map((option) => (
-                          <label key={`mentor-${option}`} className="opportunity-filters__checkbox">
+                          <label key={`mentor-${option}`} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedFormats.includes(option)}
                               onChange={() => toggleOption(option, selectedFormats, setSelectedFormats)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}
@@ -808,7 +786,6 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Дата проведения</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
                       <Input
                         value={mentorDate}
@@ -821,17 +798,16 @@ export function OpportunityFilters({ viewMode, isMapExpanded, onViewModeChange }
                     <section className="opportunity-filters__panel-section">
                       <div className="opportunity-filters__panel-head">
                         <h3 className="opportunity-filters__panel-title">Компания</h3>
-                        <button type="button" className="opportunity-filters__reset opportunity-filters__reset--inline">Сбросить</button>
                       </div>
-                      <div className="opportunity-filters__checkbox-grid opportunity-filters__checkbox-grid--single">
+                      <div className="opportunity-filters__selection-list opportunity-filters__selection-list--single">
                         {companyOptions.map((option) => (
-                          <label key={`mentor-company-${option}`} className="opportunity-filters__checkbox">
+                          <label key={`mentor-company-${option}`} className="opportunity-filters__selection-toggle">
                             <input
                               type="checkbox"
                               checked={selectedCompanyOptions.includes(option)}
                               onChange={() => toggleOption(option, selectedCompanyOptions, setSelectedCompanyOptions)}
                             />
-                            <span className="opportunity-filters__checkbox-box" aria-hidden="true" />
+                            <span className="opportunity-filters__selection-indicator" aria-hidden="true" />
                             <span>{option}</span>
                           </label>
                         ))}

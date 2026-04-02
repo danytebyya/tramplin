@@ -22,7 +22,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   overflow: visible;
 }
 
-.auth-page__content.container.container__auth-page {
+.auth-page__auth-shell.page-shell.page-shell--auth {
   width: min(1080px, 100%);
   max-width: 100%;
   min-height: 100vh;
@@ -33,7 +33,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   align-items: start;
 }
 
-.auth-page--verification .auth-page__content.container.container__auth-page {
+.auth-page--verification .auth-page__auth-shell.page-shell.page-shell--auth {
   width: min(1080px, 100%);
   max-width: 100%;
   min-height: 100vh;
@@ -56,7 +56,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   background: var(--color-bg-primary);
 }
 
-.auth-page__hero-content {
+.auth-page__hero-stage {
   position: relative;
   display: flex;
   align-items: center;
@@ -135,7 +135,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   padding: 0;
 }
 
-.auth-page__panel-content {
+.auth-page__panel-summary {
   width: 100%;
   max-width: 100%;
   min-height: calc(100vh - 96px);
@@ -146,7 +146,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   overflow: visible;
 }
 
-.auth-page--verification .auth-page__panel-content {
+.auth-page--verification .auth-page__panel-summary {
   min-height: auto;
   justify-content: center;
   overflow: visible;
@@ -232,7 +232,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   opacity: 0.88;
 }
 
-.auth-verification-header__content {
+.auth-verification-header__summary {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -437,7 +437,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   margin: 0;
 }
 
-.auth-verification__content {
+.auth-verification__summary {
   width: min(504px, 100%);
   max-width: 100%;
   margin: 0 auto;
@@ -457,7 +457,7 @@ body:has(.auth-page)::-webkit-scrollbar {
   gap: 8px;
 }
 
-.auth-verification__resend-block {
+.auth-verification__resend-note {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -589,11 +589,11 @@ body:has(.auth-page)::-webkit-scrollbar {
 }
 
 @media (max-width: 1079px) {
-  .auth-page__content.container.container__auth-page {
+  .auth-page__auth-shell.page-shell.page-shell--auth {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 
-  .auth-page--verification .auth-page__content.container.container__auth-page {
+  .auth-page--verification .auth-page__auth-shell.page-shell.page-shell--auth {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 
@@ -620,13 +620,13 @@ body:has(.auth-page)::-webkit-scrollbar {
     max-width: min(220px, 62vw);
   }
 
-  .auth-page__content.container.container__auth-page {
+  .auth-page__auth-shell.page-shell.page-shell--auth {
     min-height: auto;
     height: auto;
     padding: 24px 16px;
   }
 
-  .auth-page--verification .auth-page__content.container.container__auth-page {
+  .auth-page--verification .auth-page__auth-shell.page-shell.page-shell--auth {
     padding: 24px 16px;
   }
 
@@ -642,8 +642,8 @@ body:has(.auth-page)::-webkit-scrollbar {
     grid-column: 1 / -1;
   }
 
-  .auth-page__panel-content,
-  .auth-page--verification .auth-page__panel-content {
+  .auth-page__panel-summary,
+  .auth-page--verification .auth-page__panel-summary {
     min-height: auto;
   }
 
@@ -667,7 +667,7 @@ body:has(.auth-page)::-webkit-scrollbar {
     width: 100%;
   }
 
-  .auth-verification-header__content {
+  .auth-verification-header__summary {
     gap: 20px;
   }
 

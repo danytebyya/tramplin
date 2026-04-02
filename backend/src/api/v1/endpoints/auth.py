@@ -9,6 +9,10 @@ from src.schemas.auth import (
     EmailCheckRequest,
     LoginRequest,
     LogoutRequest,
+    PasswordChangeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    PasswordResetVerifyRequest,
     RefreshRequest,
     VerificationCodeRequest,
     VerificationCodeVerifyRequest,
@@ -69,6 +73,64 @@ def verify_registration_code(
         ip_address=request.client.host if request.client else None,
     )
     return success_response({"message": "Код подтверждён"})
+
+
+@router.post("/password/request-reset-code", status_code=status.HTTP_200_OK)
+def request_password_reset_code(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    service = EmailVerificationService(db, AuthService(db).user_repo)
+    service.request_password_reset_code(
+        payload.email,
+        ip_address=request.client.host if request.client else None,
+        force_resend=payload.force_resend,
+    )
+    return success_response({"message": "Код восстановления отправлен на email"})
+
+
+@router.post("/password/verify-reset-code", status_code=status.HTTP_200_OK)
+def verify_password_reset_code(
+    payload: PasswordResetVerifyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    service = EmailVerificationService(db, AuthService(db).user_repo)
+    service.verify_password_reset_code(
+        payload.email,
+        payload.code,
+        ip_address=request.client.host if request.client else None,
+    )
+    return success_response({"message": "Код подтверждён"})
+
+
+@router.post("/password/reset", status_code=status.HTTP_200_OK)
+def reset_password(
+    payload: PasswordResetConfirmRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    token_data = AuthService(db).reset_password(
+        payload,
+        user_agent=request.headers.get("User-Agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    token_data["user"] = _serialize_auth_user(
+        token_data["user"],
+        has_employer_profile=token_data.pop("has_employer_profile"),
+    )
+    return success_response(token_data)
+
+
+@router.post("/password/change", status_code=status.HTTP_200_OK)
+def change_password(
+    payload: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    AuthService(db).change_password(current_user, payload)
+    return success_response({"message": "Пароль успешно изменён"})
 
 
 

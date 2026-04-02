@@ -3,7 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { useAuthStore } from "../../features/auth";
-import { Container } from "../../shared/ui";
+import { Container, ProfileTabs } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import { ChatWorkspace } from "../../widgets/chat-workspace";
@@ -35,30 +35,14 @@ export function NetworkingPage() {
   return (
     <main className="networking-page settings-page settings-page--applicant">
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
       />
 
-      <Container className="settings-page__container networking-page__container">
-        <nav className="settings-page__tabs" aria-label="Навигация соискателя">
-          <button type="button" className="settings-page__tab" onClick={() => navigate("/dashboard/applicant")}>
-            Профиль
-          </button>
-          <button type="button" className="settings-page__tab" onClick={() => navigate("/applications")}>
-            Мои отклики
-          </button>
-          <button type="button" className="settings-page__tab" onClick={() => navigate("/favorites")}>
-            Избранное
-          </button>
-          <button type="button" className="settings-page__tab settings-page__tab--active">
-            Нетворкинг
-          </button>
-          <button type="button" className="settings-page__tab" onClick={() => navigate("/settings")}>
-            Настройки
-          </button>
-        </nav>
+      <Container className="settings-page__shell networking-page__shell">
+        <ProfileTabs navigate={navigate} audience="applicant" current="networking" />
 
         <ChatWorkspace
           title="Чат"

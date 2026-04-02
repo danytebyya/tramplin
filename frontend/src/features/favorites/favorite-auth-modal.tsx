@@ -6,9 +6,10 @@ import "./favorites.css";
 type FavoriteAuthModalProps = {
   isOpen: boolean;
   onClose: () => void;
+  actionLabel?: string;
 };
 
-export function FavoriteAuthModal({ isOpen, onClose }: FavoriteAuthModalProps) {
+export function FavoriteAuthModal({ isOpen, onClose, actionLabel }: FavoriteAuthModalProps) {
   const navigate = useNavigate();
 
   const handleNavigate = (path: string) => {
@@ -20,23 +21,16 @@ export function FavoriteAuthModal({ isOpen, onClose }: FavoriteAuthModalProps) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Избранное доступно после входа"
-      panelClassName="favorite-auth-modal"
+      title="Войдите или зарегистрируйтесь"
+      size="small"
     >
-      <div className="favorite-auth-modal__body">
-        <p className="favorite-auth-modal__text">
-          Чтобы добавлять мероприятия и возможности в избранное, нужно зарегистрироваться или
-          войти в профиль.
+      <div className="modal__body favorite-auth-modal__body">
+        <p className="modal__text favorite-auth-modal__text">
+          {actionLabel
+            ? `Авторизуйтесь, чтобы ${actionLabel}.`
+            : "Авторизуйтесь, чтобы продолжить."}
         </p>
-        <div className="favorite-auth-modal__actions">
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={() => handleNavigate("/register")}
-          >
-            Регистрация
-          </Button>
+        <div className="modal__actions favorite-auth-modal__actions">
           <Button
             type="button"
             variant="primary-outline"
@@ -44,6 +38,14 @@ export function FavoriteAuthModal({ isOpen, onClose }: FavoriteAuthModalProps) {
             onClick={() => handleNavigate("/login")}
           >
             Войти
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="md"
+            onClick={() => handleNavigate("/register")}
+          >
+            Зарегистрироваться
           </Button>
         </div>
       </div>

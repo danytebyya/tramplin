@@ -50,6 +50,19 @@ app.mount(
     name="company-avatars",
 )
 
+applicant_avatar_storage_dir = os.getenv("APPLICANT_AVATARS_STORAGE_DIR")
+app.mount(
+    "/storage/applicant-avatars",
+    StaticFiles(
+        directory=str(
+            Path(applicant_avatar_storage_dir).expanduser().resolve()
+            if applicant_avatar_storage_dir
+            else Path(__file__).resolve().parents[1] / "storage" / "applicant-avatars"
+        )
+    ),
+    name="applicant-avatars",
+)
+
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 chat_reminder_worker = ChatReminderWorker()
 

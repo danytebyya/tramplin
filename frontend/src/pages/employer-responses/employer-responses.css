@@ -1,4 +1,5 @@
 .employer-responses-page {
+  --page-tabs-accent: var(--color-primary);
   --opportunity-details-accent: var(--color-primary);
   --opportunity-details-accent-strong: var(--color-primary-active);
   --opportunity-details-accent-soft: var(--color-primary-light);
@@ -18,8 +19,8 @@
     );
 }
 
-.employer-responses-page .header__top-container.container,
-.employer-responses-page .header__bottom-container.container {
+.employer-responses-page .header__top-shell.page-shell,
+.employer-responses-page .header__bottom-shell.page-shell {
   width: min(1080px, 100%);
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -33,16 +34,16 @@
   --notification-menu-accent: var(--color-primary-active);
 }
 
-.employer-responses-page__container.container {
+.employer-responses-page__shell.page-shell {
   width: min(1080px, 100%);
   padding: 0 24px;
 }
 
-.employer-responses-page__container.container {
+.employer-responses-page__shell.page-shell {
   padding: 24px;
 }
 
-.employer-responses-page__content {
+.employer-responses-page__summary {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -51,54 +52,15 @@
 .employer-responses-page__section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .employer-responses-page__section--list {
-  gap: 0;
+  gap: 18px;
 }
 
 .employer-responses-page .favorites-page__metrics {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.employer-responses-page__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 18px;
-  margin-left: -16px;
-}
-
-.employer-responses-page__tab {
-  position: relative;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0 16px 5px;
-  color: var(--color-text-tertiary);
-  font-size: var(--type-h3-size);
-  line-height: var(--type-h3-line);
-  font-weight: 400;
-  font-family: inherit;
-  transition: color 0.2s ease;
-}
-
-.employer-responses-page__tab:hover,
-.employer-responses-page__tab:focus-visible,
-.employer-responses-page__tab--active {
-  color: var(--color-text-primary);
-}
-
-.employer-responses-page__tab--active::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--color-primary);
+  --stats-panel-columns: 4;
 }
 
 .employer-responses-page__list {
@@ -141,7 +103,7 @@
   line-height: var(--type-body-regular-line);
 }
 
-.employer-responses-page__group-arrow {
+.employer-responses-page__group-toggle-icon {
   width: 19px;
   height: 19px;
   flex: 0 0 19px;
@@ -152,7 +114,7 @@
   transition: transform var(--transition-base);
 }
 
-.employer-responses-page__group-arrow--expanded {
+.employer-responses-page__group-toggle-icon--expanded {
   transform: rotate(180deg);
 }
 
@@ -194,20 +156,20 @@
 }
 
 .employer-responses-page__group-toolbar {
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
-.employer-responses-page__responses-grid {
+.employer-responses-page__candidates {
   display: grid;
   gap: 16px;
 }
 
-.employer-responses-page__responses-grid--single,
-.employer-responses-page__responses-grid--double {
+.employer-responses-page__candidates--single,
+.employer-responses-page__candidates--double {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.employer-responses-page__responses-grid--triple {
+.employer-responses-page__candidates--triple {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -228,7 +190,7 @@
   line-height: var(--type-body-regular-line);
 }
 
-.employer-responses-page__status-row {
+.employer-responses-page__status-summary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -289,19 +251,11 @@
   mask: center / contain no-repeat url("../../assets/icons/edit.svg");
 }
 
-.employer-responses-page__status-modal.modal__panel {
-  width: min(500px, calc(100vw - 32px));
-}
-
 .employer-responses-page__status-modal-body {
-  display: flex;
-  flex-direction: column;
   gap: 24px;
 }
 
 .employer-responses-page__status-modal-copy {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
   color: var(--color-text-primary);
   font-size: var(--type-body-large-size);
@@ -310,9 +264,7 @@
 
 .employer-responses-page__status-field {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 .employer-responses-page__status-field .date-input {
@@ -355,12 +307,20 @@
 }
 
 .employer-responses-page__status-field-label {
-  color: var(--color-text-primary);
-  font-size: var(--type-body-large-size);
-  line-height: var(--type-body-large-line);
+  margin-left: 15px;
+  color: var(--color-text-secondary);
+  font-size: inherit;
+  line-height: inherit;
 }
 
-.employer-responses-page__status-radio-grid {
+.employer-responses-page__status-field--selector > .employer-responses-page__status-field-label {
+  margin-left: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
+.employer-responses-page__status-options {
   display: flex;
   flex-wrap: wrap;
   gap: 0px 16px;
@@ -373,7 +333,14 @@
   padding: 10px 10px 10px 0;
 }
 
-.employer-responses-page__status-time-grid {
+.employer-responses-page__status-radio > span {
+  margin-left: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+}
+
+.employer-responses-page__meeting-schedule {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -381,6 +348,10 @@
 
 .employer-responses-page__time-input.input {
   padding-right: 12px;
+}
+
+.employer-responses-page__time-input.input::-webkit-clear-button {
+  display: none;
 }
 
 .employer-responses-page__time-input.input::-webkit-calendar-picker-indicator {
@@ -402,14 +373,6 @@
 
 .employer-responses-page__status-textarea {
   min-height: 96px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  resize: vertical;
-  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .employer-responses-page__status-textarea--sm {
@@ -419,20 +382,7 @@
   line-height: 24px;
 }
 
-.employer-responses-page__status-textarea::placeholder {
-  color: var(--color-text-tertiary);
-}
-
-.employer-responses-page__status-textarea:focus,
-.employer-responses-page__status-textarea:focus-visible {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
-}
-
 .employer-responses-page__status-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -458,21 +408,21 @@
 }
 
 .employer-responses-page__groups-pagination {
-  padding-top: 32px;
+  padding-top: 18px;
 }
 
 @media (max-width: 1080px) {
-  .employer-responses-page__responses-grid--triple {
+  .employer-responses-page__candidates--triple {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .employer-responses-page .favorites-page__metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --stats-panel-columns: 2;
   }
 }
 
 @media (max-width: 767px) {
-  .employer-responses-page__container.container {
+  .employer-responses-page__shell.page-shell {
     padding: 20px 16px 24px;
   }
 
@@ -481,7 +431,7 @@
   }
 
   .employer-responses-page .favorites-page__metrics {
-    grid-template-columns: minmax(0, 1fr);
+    --stats-panel-columns: 1;
   }
 
   .employer-responses-page__group-toggle {
@@ -492,17 +442,17 @@
     padding: 0 20px 24px;
   }
 
-  .employer-responses-page__responses-grid--single,
-  .employer-responses-page__responses-grid--double,
-  .employer-responses-page__responses-grid--triple {
+  .employer-responses-page__candidates--single,
+  .employer-responses-page__candidates--double,
+  .employer-responses-page__candidates--triple {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .employer-responses-page__responses-grid--single .employer-responses-page__response-card {
+  .employer-responses-page__candidates--single .employer-responses-page__response-card {
     max-width: none;
   }
 
-  .employer-responses-page__status-time-grid,
+  .employer-responses-page__meeting-schedule,
   .employer-responses-page__status-actions {
     grid-template-columns: minmax(0, 1fr);
   }

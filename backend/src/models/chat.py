@@ -66,6 +66,8 @@ class ChatMessage(UUIDPrimaryKeyMixin, Base):
         Enum(UserRole, name="user_role", values_callable=enum_values, create_type=False),
         nullable=False,
     )
+    sender_public_key_jwk: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    recipient_public_key_jwk: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
     iv: Mapped[str] = mapped_column(String(120), nullable=False)
     salt: Mapped[str] = mapped_column(String(120), nullable=False)

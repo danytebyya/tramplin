@@ -91,10 +91,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const isControlled = value !== undefined;
   const inputValue = isControlled ? String(value ?? "") : uncontrolledValue;
   const isPasswordField = props.type === "password";
+  const isTimeField = props.type === "time";
   const resolvedType = isPasswordField ? (isPasswordVisible ? "text" : "password") : props.type;
   const shouldShowPasswordToggle = isPasswordField && !props.disabled;
   const shouldShowClear =
-    !isPasswordField && clearable && !props.disabled && isFocused && inputValue.length > 0;
+    !isPasswordField && !isTimeField && clearable && !props.disabled && isFocused && inputValue.length > 0;
   const shouldShowAction = shouldShowPasswordToggle || shouldShowClear;
 
   useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);

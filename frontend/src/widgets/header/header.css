@@ -63,6 +63,29 @@
   box-shadow: none;
 }
 
+.header--landing .header__top-shell {
+  row-gap: 20px;
+}
+
+.header--landing .header__main,
+.header--landing .header__controls,
+.header--landing .header__actions {
+  justify-content: flex-start;
+}
+
+.header--landing .header__main {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.header--landing .header__controls {
+  margin-left: auto;
+}
+
+.header--landing .header__search {
+  max-width: 250px;
+}
+
 .home-page--applicant .header__top,
 .header--applicant .header__top {
   --header-top-gradient:
@@ -102,10 +125,15 @@
     );
 }
 
-.header__top-container {
+.header__top-shell {
   align-items: center;
   gap: 24px;
   min-height: 100px;
+}
+
+.header__top-shell > *,
+.header__bottom-shell > * {
+  min-width: 0;
 }
 
 .header__brand {
@@ -114,22 +142,29 @@
   gap: 12px;
   width: max-content;
   max-width: 100%;
+  min-width: 0;
   grid-column: 1 / span 2;
 }
 
 .header__main {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 38px;
   grid-column: 3 / span 10;
   justify-self: end;
+  width: 100%;
+  min-width: 0;
+  row-gap: 16px;
 }
 
 .header__brand-name {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
+  max-width: 100%;
+  min-width: 0;
   color: var(--color-text-inverse);
   font-size: var(--type-h2-size);
   line-height: var(--type-h2-line);
@@ -158,6 +193,8 @@
 .header__nav {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .header__nav-link {
@@ -182,16 +219,20 @@
 .header__controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-start;
   gap: 24px;
+  min-width: 0;
+  row-gap: 12px;
 }
 
 .header__search {
   position: relative;
   display: flex;
   align-items: center;
-  width: 250px;
-  flex: 0 0 250px;
+  width: min(250px, 100%);
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .header__search::before {
@@ -215,7 +256,8 @@
 }
 
 .header__search-input.input {
-  width: 250px;
+  width: 100%;
+  min-width: 0;
   border-color: var(--color-bg-primary);
   background: transparent;
   color: var(--color-bg-primary);
@@ -256,8 +298,10 @@
 .header__actions {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-start;
   gap: 24px;
+  min-width: 0;
 }
 
 .header__account-actions {
@@ -266,6 +310,7 @@
   align-items: center;
   gap: 10px;
   z-index: 80;
+  min-width: 0;
 }
 
 .header__profile-menu {
@@ -342,7 +387,7 @@
   pointer-events: none;
 }
 
-.header__profile-dropdown-item {
+.header__profile-dropdown-option {
   display: flex;
   align-items: center;
   width: 100%;
@@ -359,24 +404,24 @@
     background-color 180ms ease;
 }
 
-.header__profile-dropdown-item:hover {
+.header__profile-dropdown-option:hover {
   background: var(--color-bg-tertiary);
 }
 
-.header__profile-dropdown-item:active {
+.header__profile-dropdown-option:active {
   background: #f1f5f9;
 }
 
-.header__profile-dropdown-item--danger {
+.header__profile-dropdown-option--danger {
   color: var(--color-danger);
 }
 
-.header__profile-dropdown-item--danger:hover {
+.header__profile-dropdown-option--danger:hover {
   color: var(--color-danger-hover);
   background: rgba(239, 68, 68, 0.08);
 }
 
-.header__profile-dropdown-item--danger:active {
+.header__profile-dropdown-option--danger:active {
   color: var(--color-danger-active);
   background: rgba(239, 68, 68, 0.14);
 }
@@ -573,7 +618,7 @@
   box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
 }
 
-.header__bottom-container {
+.header__bottom-shell {
   align-items: center;
   gap: 24px;
 }
@@ -584,6 +629,7 @@
   flex-wrap: wrap;
   gap: 24px;
   grid-column: 1 / span 8;
+  min-width: 0;
 }
 
 .header__categories--curator {
@@ -632,28 +678,32 @@
   justify-self: end;
   gap: 10px;
   grid-column: 10 / span 3;
-  color: var(--color-text-inverse);
+  min-width: 0;
+  color: var(--color-text-tertiary);
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
+  transition:
+    color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .header__location:hover {
-  color: var(--home-accent);
+  color: var(--color-text-primary);
 }
 
 .header__location:active {
-  color: var(--home-accent-strong);
+  color: var(--color-text-primary);
 }
 
 .header__location:focus-visible {
-  outline: 2px solid var(--home-accent);
+  outline: 2px solid var(--color-secondary);
   outline-offset: 4px;
 }
 
 .header__location-icon {
   display: block;
   height: 19px;
-  background-color: var(--color-text-inverse);
+  background-color: var(--color-text-tertiary);
   mask-image: url("../../assets/icons/location.svg");
   mask-repeat: no-repeat;
   mask-position: center;
@@ -666,15 +716,39 @@
 }
 
 .header__location:hover .header__location-icon {
-  background-color: var(--home-accent);
+  background-color: var(--color-text-primary);
 }
 
 .header__location:active .header__location-icon {
+  background-color: var(--color-text-primary);
+}
+
+.header--landing .header__location {
+  color: var(--color-text-inverse);
+}
+
+.header--landing .header__location:hover {
+  color: var(--home-accent);
+}
+
+.header--landing .header__location:active {
+  color: var(--home-accent-strong);
+}
+
+.header--landing .header__location-icon {
+  background-color: var(--color-text-inverse);
+}
+
+.header--landing .header__location:hover .header__location-icon {
+  background-color: var(--home-accent);
+}
+
+.header--landing .header__location:active .header__location-icon {
   background-color: var(--home-accent-strong);
 }
 
 @media (max-width: 1279px) {
-  .header__top-container {
+  .header__top-shell {
     row-gap: 20px;
   }
 
@@ -695,13 +769,13 @@
   }
 }
 
-@media (max-width: 1023px) {
-  .header__top-container,
-  .header__bottom-container {
+@media (max-width: 1279px) {
+  .header__top-shell,
+  .header__bottom-shell {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 
-  .header__top-container {
+  .header__top-shell {
     padding-top: 28px;
     padding-bottom: 28px;
   }
@@ -720,7 +794,7 @@
     justify-content: flex-start;
   }
 
-  .header__bottom-container {
+  .header__bottom-shell {
     display: grid;
     justify-content: stretch;
     padding-top: 22px;
@@ -734,7 +808,7 @@
 }
 
 @media (max-width: 767px) {
-  .header__top-container {
+  .header__top-shell {
     gap: 18px;
   }
 

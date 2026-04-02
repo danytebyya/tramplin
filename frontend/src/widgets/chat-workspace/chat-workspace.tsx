@@ -82,6 +82,7 @@ const SYSTEM_PARTICIPANT_ID = "tramplin-system";
 const SYSTEM_NOTES_STORAGE_KEY_PREFIX = "tramplin.chat.notes";
 const SYSTEM_WELCOME_AT_STORAGE_KEY_PREFIX = "tramplin.chat.welcome-at";
 const ACTIVE_CONVERSATION_STORAGE_KEY_PREFIX = "tramplin.chat.active-conversation";
+const CHAT_DECRYPTION_ERROR_TEXT = "Не удалось расшифровать сообщение. Скорее всего, оно было зашифровано старым ключом.";
 const SYSTEM_BRAND_AVATAR_URL = "/favicon.svg";
 
 type LocalNoteRecord = {
@@ -307,6 +308,14 @@ function ChatAvatar({
 
 function ChatWorkspaceSkeleton({ className }: { className: string }) {
   return <span className={`chat-workspace__skeleton ${className}`} aria-hidden="true" />;
+}
+
+function resolveMessageCounterpartKey(message: ChatMessageView, fallbackCounterpartKey?: JsonWebKey | null) {
+  if (message.isOwn) {
+    return message.recipientPublicKeyJwk ?? fallbackCounterpartKey ?? null;
+  }
+
+  return message.senderPublicKeyJwk ?? fallbackCounterpartKey ?? null;
 }
 
 export function ChatWorkspace({
@@ -540,6 +549,8 @@ export function ChatWorkspace({
       conversationId: SYSTEM_CHAT_ID,
       senderUserId: SYSTEM_PARTICIPANT_ID,
       senderRole: "admin",
+      senderPublicKeyJwk: null,
+      recipientPublicKeyJwk: null,
       ciphertext: "",
       iv: "",
       salt: "",
@@ -560,6 +571,8 @@ export function ChatWorkspace({
         conversationId: SYSTEM_CHAT_ID,
         senderUserId: currentUserId ?? "local-user",
         senderRole: currentRole ?? "applicant",
+        senderPublicKeyJwk: null,
+        recipientPublicKeyJwk: null,
         ciphertext: "",
         iv: "",
         salt: "",
@@ -880,11 +893,14 @@ export function ChatWorkspace({
             iv: item.lastMessage.iv,
             salt: item.lastMessage.salt,
             ownPrivateKeyJwk: keyPair.privateKeyJwk,
-            counterpartPublicKeyJwk: item.counterpart.publicKeyJwk,
+            counterpartPublicKeyJwk: resolveMessageCounterpartKey(
+              item.lastMessage,
+              item.counterpart.publicKeyJwk,
+            ),
             conversationId: item.id,
           });
         } catch {
-          nextPreviewMap[item.id] = "Не удалось расшифровать сообщение";
+          nextPreviewMap[item.id] = CHAT_DECRYPTION_ERROR_TEXT;
         }
       }
 
@@ -938,11 +954,14 @@ export function ChatWorkspace({
             iv: item.iv,
             salt: item.salt,
             ownPrivateKeyJwk: keyPair.privateKeyJwk,
-            counterpartPublicKeyJwk: activeCounterpart.publicKeyJwk,
+            counterpartPublicKeyJwk: resolveMessageCounterpartKey(
+              item,
+              activeCounterpart.publicKeyJwk,
+            ),
             conversationId: item.conversationId,
           });
         } catch {
-          nextMessageMap[item.id] = "Не удалось расшифровать сообщение";
+          nextMessageMap[item.id] = CHAT_DECRYPTION_ERROR_TEXT;
         }
       }
 
@@ -1205,6 +1224,8 @@ export function ChatWorkspace({
         conversationId: optimisticConversationId,
         senderUserId: "",
         senderRole: currentRole ?? activeCounterpart.role,
+        senderPublicKeyJwk: null,
+        recipientPublicKeyJwk: null,
         ciphertext: "",
         iv: "",
         salt: "",
@@ -1400,12 +1421,12 @@ export function ChatWorkspace({
             <div className="chat-workspace__list chat-workspace__list--search">
               {isSearchLoading
                 ? Array.from({ length: 3 }, (_, index) => (
-                    <div key={`chat-search-skeleton-${index}`} className="chat-workspace__list-item chat-workspace__list-item--skeleton">
+                    <div key={`chat-search-skeleton-${index}`} className="chat-workspace__conversation-card chat-workspace__conversation-card--skeleton">
                       <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar" />
-                      <span className="chat-workspace__list-content">
+                      <span className="chat-workspace__conversation-summary">
                         <span className="chat-workspace__list-main">
                           <ChatWorkspaceSkeleton className="chat-workspace__skeleton--list-name" />
-                          <span className="chat-workspace__presence-row">
+                          <span className="chat-workspace__presence-summary">
                             <ChatWorkspaceSkeleton className="chat-workspace__skeleton--status-dot" />
                             <ChatWorkspaceSkeleton className="chat-workspace__skeleton--presence" />
                           </span>
@@ -1433,11 +1454,11 @@ export function ChatWorkspace({
                   <button
                     key={`${item.userId}:${item.employerId ?? "none"}`}
                     type="button"
-                    className={`chat-workspace__list-item${isActive ? " chat-workspace__list-item--active" : ""}`}
+                    className={`chat-workspace__conversation-card${isActive ? " chat-workspace__conversation-card--active" : ""}`}
                     onClick={() => handleSelectSearchContact(item)}
                   >
                     <ChatAvatar displayName={item.displayName} role={item.role} avatarUrl={item.avatarUrl} />
-                    <span className="chat-workspace__list-content">
+                    <span className="chat-workspace__conversation-summary">
                       <span className="chat-workspace__list-main">
                         {item.publicId ? (
                           <span
@@ -1461,7 +1482,7 @@ export function ChatWorkspace({
                         ) : (
                           <span className="chat-workspace__list-name">{counterpartTitle}</span>
                         )}
-                        <span className="chat-workspace__presence-row">
+                        <span className="chat-workspace__presence-summary">
                           <span className={`chat-workspace__status${item.isOnline ? " chat-workspace__status--online" : ""}`} />
                           <span className="chat-workspace__presence-text">
                             {formatPresenceStatus({
@@ -1481,12 +1502,12 @@ export function ChatWorkspace({
           <div className="chat-workspace__list">
             {isConversationListLoading ? (
               Array.from({ length: CHAT_LIST_SKELETON_COUNT }, (_, index) => (
-                <div key={`chat-list-skeleton-${index}`} className="chat-workspace__list-item chat-workspace__list-item--skeleton">
+                <div key={`chat-list-skeleton-${index}`} className="chat-workspace__conversation-card chat-workspace__conversation-card--skeleton">
                   <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar" />
-                  <span className="chat-workspace__list-content">
+                  <span className="chat-workspace__conversation-summary">
                     <span className="chat-workspace__list-main">
                       <ChatWorkspaceSkeleton className="chat-workspace__skeleton--list-name" />
-                      <span className="chat-workspace__presence-row">
+                      <span className="chat-workspace__presence-summary">
                         <ChatWorkspaceSkeleton className="chat-workspace__skeleton--status-dot" />
                         <ChatWorkspaceSkeleton className="chat-workspace__skeleton--presence" />
                       </span>
@@ -1509,7 +1530,7 @@ export function ChatWorkspace({
                   <button
                     key={item.id}
                     type="button"
-                    className={`chat-workspace__list-item${isActive ? " chat-workspace__list-item--active" : ""}`}
+                    className={`chat-workspace__conversation-card${isActive ? " chat-workspace__conversation-card--active" : ""}`}
                     onClick={() => handleSelectConversation(item.id)}
                   >
                     <ChatAvatar
@@ -1518,7 +1539,7 @@ export function ChatWorkspace({
                       avatarUrl={item.counterpart.avatarUrl}
                       unreadCount={item.unreadCount}
                     />
-                    <span className="chat-workspace__list-content">
+                    <span className="chat-workspace__conversation-summary">
                       <span className="chat-workspace__list-main">
                         {item.counterpart.publicId ? (
                           <span
@@ -1542,7 +1563,7 @@ export function ChatWorkspace({
                         ) : (
                           <span className="chat-workspace__list-name">{counterpartTitle}</span>
                         )}
-                        <span className="chat-workspace__presence-row">
+                        <span className="chat-workspace__presence-summary">
                           <span
                             className={`chat-workspace__status${item.counterpart.isOnline ? " chat-workspace__status--online" : ""}`}
                           />
@@ -1568,7 +1589,7 @@ export function ChatWorkspace({
           </div>
         </aside>
 
-        <div className="chat-workspace__content">
+        <div className="chat-workspace__workspace-main">
           {activeCounterpart && activeCounterpartTitle ? (
             <>
               <header className="chat-workspace__thread-header">
@@ -1615,7 +1636,7 @@ export function ChatWorkspace({
                         return (
                           <div
                             key={`chat-message-skeleton-${index}`}
-                            className={`chat-workspace__message-skeleton-row${isOwn ? " chat-workspace__message-skeleton-row--own" : ""}`}
+                            className={`chat-workspace__message-skeleton-line${isOwn ? " chat-workspace__message-skeleton-line--own" : ""}`}
                           >
                             {!isOwn ? (
                               <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar chat-workspace__skeleton--avatar-small" />
@@ -1756,7 +1777,7 @@ export function ChatWorkspace({
                   </div>
                 ) : null}
                 {composerError ? <div className="chat-workspace__composer-error">{composerError}</div> : null}
-                <div className="chat-workspace__composer-row">
+                <div className="chat-workspace__composer-actions">
                   <button type="button" className="chat-workspace__composer-attach" aria-label="Прикрепить файл" disabled>
                     <img src={clipIcon} alt="" aria-hidden="true" className="chat-workspace__composer-attach-icon" />
                   </button>
@@ -1823,7 +1844,7 @@ export function ChatWorkspace({
         >
           <button
             type="button"
-            className="chat-workspace__message-menu-item"
+            className="chat-workspace__message-menu-action"
             onClick={() => {
               const targetMessage = visibleMessages.find((item) => item.id === messageMenu.messageId);
               if (targetMessage) {
@@ -1835,7 +1856,7 @@ export function ChatWorkspace({
           </button>
           <button
             type="button"
-            className="chat-workspace__message-menu-item chat-workspace__message-menu-item--danger"
+            className="chat-workspace__message-menu-action chat-workspace__message-menu-action--danger"
             onClick={() => {
               const targetMessage = visibleMessages.find((item) => item.id === messageMenu.messageId);
               if (targetMessage) {

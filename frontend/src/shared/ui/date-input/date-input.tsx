@@ -330,7 +330,7 @@ export function DateInput({
               />
             </div>
 
-            <div className="date-input__calendar-grid date-input__calendar-grid--weekdays">
+            <div className="date-input__calendar-days date-input__calendar-days--weekdays">
               {WEEKDAY_LABELS.map((item, index) => (
                 <span
                   key={item}
@@ -344,7 +344,7 @@ export function DateInput({
               ))}
             </div>
 
-            <div className="date-input__calendar-grid">
+            <div className="date-input__calendar-days">
               {calendarCells.map((item) => (
                 <button
                   key={item.isoValue}

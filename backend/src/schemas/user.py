@@ -27,6 +27,7 @@ class ApplicantProfileRead(BaseModel):
     bitbucket_url: str | None = None
     linkedin_url: str | None = None
     habr_url: str | None = None
+    avatar_url: str | None = None
     profile_views_count: int = 0
     recommendations_count: int = 0
     model_config = {"from_attributes": True}

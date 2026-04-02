@@ -22,12 +22,13 @@ import {
   BackendApplicationStatus,
   listMyApplicationsRequest,
   submitOpportunityApplicationRequest,
+  WithdrawApplicationModal,
   withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
 import { getEmployerAccessState, meRequest, updatePreferredCityRequest, useAuthStore } from "../../features/auth";
 import { ModerationDashboardContent } from "../curator-dashboard";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
-import { Button, Container, Modal } from "../../shared/ui";
+import { Button, Container } from "../../shared/ui";
 import { OpportunityFilters } from "../../widgets/filters";
 import type { OpportunityToolbarFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
@@ -136,10 +137,12 @@ export function HomePage() {
     center: [number, number];
     zoom: number;
   } | null>(null);
+  const [shouldMountMap, setShouldMountMap] = useState(false);
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
-  const [isFavoriteAuthModalOpen, setIsFavoriteAuthModalOpen] = useState(false);
+  const [unauthorizedActionLabel, setUnauthorizedActionLabel] = useState<string | null>(null);
   const [pendingWithdrawOpportunityId, setPendingWithdrawOpportunityId] = useState<string | null>(null);
+  const mapSectionRef = useRef<HTMLDivElement | null>(null);
   const mapPanelShellRef = useRef<HTMLDivElement | null>(null);
   const mapPanelLiveRef = useRef<HTMLDivElement | null>(null);
   const mapPanelProxyContentRef = useRef<HTMLDivElement | null>(null);
@@ -148,6 +151,7 @@ export function HomePage() {
   const collapsedMapPanelRectRef = useRef<DOMRect | null>(null);
   const expandedFromScrollYRef = useRef(0);
   const pendingRestoreScrollYRef = useRef<number | null>(null);
+  const pendingProfileReturnScrollYRef = useRef<number | null>(null);
   const mapTransitionTimeoutRef = useRef<number | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
@@ -435,6 +439,9 @@ export function HomePage() {
   ];
   const isOpportunityDataLoading = !isModerationRole && opportunitiesQuery.isPending;
   const isPlatformStatsLoading = !isModerationRole && (platformStatsQuery.isPending || opportunitiesQuery.isPending);
+  const preferredCity = currentUserQuery.data?.data?.user?.preferred_city?.trim() || "";
+  const isCityReady = !isAuthenticated || isModerationRole || currentUserQuery.status !== "pending";
+  const displayCity = preferredCity || selectedCity;
   const landingTheme =
     roleName === "applicant"
       ? "applicant"
@@ -592,7 +599,7 @@ export function HomePage() {
     roleName === "admin" ? "home-page--admin" : "",
     isMapFloating ? "home-page--map-floating" : "",
     isMapExpandedLayout ? "home-page--map-expanded" : "",
-    isMapCollapsing ? "home-page--map-collapsing" : "",
+    isMapCollapsing ? "home-page--map-folding" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -603,12 +610,12 @@ export function HomePage() {
   useEffect(() => {
     document.body.classList.toggle("home-page--map-floating", isMapFloating);
     document.body.classList.toggle("home-page--map-expanded", isMapExpandedLayout);
-    document.body.classList.toggle("home-page--map-collapsing", isMapCollapsing);
+    document.body.classList.toggle("home-page--map-folding", isMapCollapsing);
 
     return () => {
       document.body.classList.remove("home-page--map-floating");
       document.body.classList.remove("home-page--map-expanded");
-      document.body.classList.remove("home-page--map-collapsing");
+      document.body.classList.remove("home-page--map-folding");
     };
   }, [isMapCollapsing, isMapExpandedLayout, isMapFloating]);
 
@@ -658,6 +665,45 @@ export function HomePage() {
   }, [mapExpandMode]);
 
   useEffect(() => {
+    const navigationState = location.state as { restoreScrollY?: number; restoreViewMode?: "list" | "map" } | null;
+    const restoreScrollY = navigationState?.restoreScrollY;
+    const restoreViewMode = navigationState?.restoreViewMode;
+
+    if (typeof restoreScrollY !== "number" && !restoreViewMode) {
+      return;
+    }
+
+    if (restoreViewMode) {
+      setViewMode(restoreViewMode);
+    }
+
+    if (typeof restoreScrollY === "number") {
+      pendingProfileReturnScrollYRef.current = restoreScrollY;
+    }
+
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
+
+  useEffect(() => {
+    if (pendingProfileReturnScrollYRef.current === null || opportunitiesQuery.isPending) {
+      return;
+    }
+
+    const restoreScrollY = pendingProfileReturnScrollYRef.current;
+    pendingProfileReturnScrollYRef.current = null;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({
+        top: Math.max(restoreScrollY, 0),
+        behavior: "auto",
+      });
+    });
+  }, [opportunitiesQuery.isPending, displayedOpportunities.length]);
+
+  useEffect(() => {
     if (selectedOpportunityId && !displayedOpportunities.some((opportunity) => opportunity.id === selectedOpportunityId)) {
       setSelectedOpportunityId(null);
     }
@@ -692,6 +738,47 @@ export function HomePage() {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }, [isModerationRole, location.hash, selectedCategoryFilter]);
+
+  useEffect(() => {
+    if (shouldMountMap) {
+      return;
+    }
+
+    const target = mapSectionRef.current;
+    if (!target) {
+      return;
+    }
+
+    if (location.hash === "#opportunity-map") {
+      setShouldMountMap(true);
+      return;
+    }
+
+    if (typeof window === "undefined" || typeof window.IntersectionObserver !== "function") {
+      setShouldMountMap(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) {
+          return;
+        }
+
+        setShouldMountMap(true);
+        observer.disconnect();
+      },
+      {
+        rootMargin: "320px 0px",
+      },
+    );
+
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [location.hash, shouldMountMap]);
 
   useEffect(() => {
     const preferredCity = currentUserQuery.data?.data?.user?.preferred_city?.trim();
@@ -750,7 +837,7 @@ export function HomePage() {
 
   const handleToggleFavorite = (opportunityId: string) => {
     if (!isAuthenticated) {
-      setIsFavoriteAuthModalOpen(true);
+      setUnauthorizedActionLabel("добавить возможность в избранное");
       return;
     }
 
@@ -762,7 +849,7 @@ export function HomePage() {
 
   const handleApplyOpportunity = (opportunityId: string) => {
     if (!isAuthenticated) {
-      setIsFavoriteAuthModalOpen(true);
+      setUnauthorizedActionLabel("откликнуться на возможность");
       return;
     }
 
@@ -809,6 +896,11 @@ export function HomePage() {
   };
 
   const handleWriteToEmployer = (opportunity: Opportunity) => {
+    if (!isAuthenticated) {
+      setUnauthorizedActionLabel("написать сообщение работодателю");
+      return;
+    }
+
     navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`);
   };
   const handleFindOpportunity = () => {
@@ -859,19 +951,19 @@ export function HomePage() {
         ))}
       </nav>
 
-      <CitySelector value={selectedCity} onChange={handleCityChange} />
+      {isCityReady ? <CitySelector value={displayCity} onChange={handleCityChange} /> : null}
     </>
   );
 
   return (
     <main className={homePageClassName}>
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme={landingTheme}
         variant={isModerationRole ? "default" : "landing"}
-        city={selectedCity}
-        onCityChange={handleCityChange}
+        city={isCityReady ? displayCity : undefined}
+        onCityChange={isCityReady ? handleCityChange : undefined}
         isAuthenticated={isAuthenticated}
         topNavigation={
           isModerationRole ? null : (
@@ -922,7 +1014,7 @@ export function HomePage() {
       {isModerationRole ? null : (
         <>
           <section className="home-page__hero">
-            <Container className="home-page__container home-page__hero-container">
+            <Container className="home-page__shell home-page__hero-shell">
               <section className="home-page__hero-block">
                 <div className="home-page__hero-copy">
                   <img
@@ -933,7 +1025,7 @@ export function HomePage() {
                     loading="eager"
                     decoding="async"
                   />
-                  <div className="home-page__hero-copy-content">
+                  <div className="home-page__hero-summary">
                     <div className="home-page__hero-panel">
                       <img src={heroLogo} alt="Трамплин" className="home-page__hero-logo" />
                       <div className="home-page__hero-heading">
@@ -984,13 +1076,13 @@ export function HomePage() {
             </Container>
           </section>
 
-          <section className="home-page__content-sections">
-            <Container className="home-page__container home-page__content-sections-container">
+          <section className="home-page__section-groups">
+            <Container className="home-page__shell home-page__section-groups-shell">
               <div className="home-page__journey-section" id="about">
                 <div className="home-page__section-heading">
                   <h2 className="home-page__section-title"><span className="home-page__section-title-accent">Как</span> это работает?</h2>
                 </div>
-                <div className="home-page__journey-grid">
+                <div className="home-page__journey-showcase">
                   <article className="home-page__journey-card">
                     <h3 className="home-page__journey-title">Для <span className="home-page__journey-title-accent">соискателей</span></h3>
                     <ol className="home-page__journey-list">
@@ -1016,11 +1108,11 @@ export function HomePage() {
                 </div>
               </div>
 
-              <div className="home-page__map-section" id="opportunity-map">
+              <div ref={mapSectionRef} className="home-page__map-section" id="opportunity-map">
                 <div className="home-page__map-section-head">
                   <div className="home-page__section-heading home-page__section-heading--compact">
                     <h2 className="home-page__section-title"><span className="home-page__section-title-accent">Карта</span> возможностей</h2>
-                    <div className="home-page__section-text-block">
+                    <div className="home-page__section-summary">
                       <p className="home-page__section-text">
                         IT-карьера <span className="home-page__section-text-accent">не привязана</span> к месту
                       </p>
@@ -1036,6 +1128,7 @@ export function HomePage() {
                     <OpportunityFilters
                       viewMode={viewMode}
                       isMapExpanded={isMapExpandedLayout}
+                      roleName={roleName}
                       searchValue={searchQuery}
                       onSearchChange={setSearchQuery}
                       filterValue={toolbarFilters}
@@ -1046,8 +1139,8 @@ export function HomePage() {
                     <div
                       className={
                         viewMode === "list"
-                          ? "home-page__explorer-content home-page__explorer-content--list"
-                          : "home-page__explorer-content"
+                          ? "home-page__explorer-summary home-page__explorer-summary--list"
+                          : "home-page__explorer-summary"
                       }
                     >
                       <div
@@ -1085,25 +1178,29 @@ export function HomePage() {
                                 : "home-page__map-panel-live"
                             }
                           >
-                            <MapView
-                              opportunities={displayedOpportunities}
-                              favoriteOpportunityIds={favoriteOpportunityIds}
-                              appliedOpportunityIds={appliedOpportunityIds}
-                              applicationStatusByOpportunityId={applicationStatusByOpportunityId}
-                              selectedOpportunityId={selectedOpportunityId}
-                              selectedCity={selectedCity}
-                              searchQuery={searchQuery}
-                              selectedCityViewport={selectedCityViewport}
-                              isExpanded={isMapExpanded}
-                              isTransitioning={isMapTransitioning}
-                              roleName={roleName}
-                              onSelectOpportunity={setSelectedOpportunityId}
-                              onToggleFavorite={handleToggleFavorite}
-                              onSelectCity={handleCityChange}
-                              onCloseDetails={() => setSelectedOpportunityId(null)}
-                              onToggleExpand={handleToggleMapExpand}
-                              onApply={handleApplyOpportunity}
-                            />
+                            {shouldMountMap ? (
+                              <MapView
+                                opportunities={displayedOpportunities}
+                                favoriteOpportunityIds={favoriteOpportunityIds}
+                                appliedOpportunityIds={appliedOpportunityIds}
+                                applicationStatusByOpportunityId={applicationStatusByOpportunityId}
+                                selectedOpportunityId={selectedOpportunityId}
+                                selectedCity={selectedCity}
+                                searchQuery={searchQuery}
+                                selectedCityViewport={selectedCityViewport}
+                                isExpanded={isMapExpanded}
+                                isTransitioning={isMapTransitioning}
+                                roleName={roleName}
+                                onSelectOpportunity={setSelectedOpportunityId}
+                                onToggleFavorite={handleToggleFavorite}
+                                onSelectCity={handleCityChange}
+                                onCloseDetails={() => setSelectedOpportunityId(null)}
+                                onToggleExpand={handleToggleMapExpand}
+                                onApply={handleApplyOpportunity}
+                              />
+                            ) : (
+                              <div className="home-page__map-lazy-placeholder" aria-hidden="true" />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1131,7 +1228,7 @@ export function HomePage() {
                   </div>
                 </div>
 
-                <div className="home-page__highlight-grid">
+                <div className="home-page__highlights-showcase">
                   {mapHighlights.map((highlight) => (
                     <article key={highlight.accent} className="home-page__highlight-card">
                       <p className="home-page__highlight-text">
@@ -1147,7 +1244,7 @@ export function HomePage() {
                 <div className="home-page__section-heading home-page__section-heading--compact">
                   <h2 className="home-page__section-title"><span className="home-page__section-title-accent">Популярные</span> направления</h2>
                 </div>
-                <div className="home-page__directions-grid">
+                <div className="home-page__directions-showcase">
                   {directions.map((direction) => (
                     <article key={direction.label} className="home-page__direction-card">
                       <span
@@ -1167,7 +1264,7 @@ export function HomePage() {
                 </div>
                 <ul className="home-page__benefits-list">
                   {platformBenefits.map((benefit) => (
-                    <li key={benefit} className="home-page__benefit-item">{benefit}</li>
+                    <li key={benefit} className="home-page__benefit-card">{benefit}</li>
                   ))}
                 </ul>
               </section>
@@ -1176,7 +1273,7 @@ export function HomePage() {
                 <div className="home-page__section-heading home-page__section-heading--compact">
                   <h2 className="home-page__section-title">Трамплин <span className="home-page__section-title-accent">в цифрах</span></h2>
                 </div>
-                <div className="home-page__numbers-grid">
+                <div className="home-page__numbers-showcase">
                   {platformStats.map((stat) => (
                     <article
                       key={stat.label}
@@ -1210,7 +1307,7 @@ export function HomePage() {
                       <p className="home-page__section-subtext">Выберите Вашу <span className="home-page__section-title-accent">роль</span></p>
                     </div>
                   </div>
-                  <div className="home-page__cta-grid">
+                  <div className="home-page__cta-showcase">
                     <article className="home-page__cta-card">
                       <h3 className="home-page__cta-title">Я ищу <span className="home-page__section-title-accent">работу</span></h3>
                       <p className="home-page__cta-text">
@@ -1254,49 +1351,22 @@ export function HomePage() {
             }
             style={mapPanelFrameStyle}
           >
-            <div ref={mapPanelProxyContentRef} className="home-page__map-panel-proxy-content" />
+            <div ref={mapPanelProxyContentRef} className="home-page__map-panel-summary" />
           </div>
         </>
       )}
 
       <FavoriteAuthModal
-        isOpen={isFavoriteAuthModalOpen}
-        onClose={() => setIsFavoriteAuthModalOpen(false)}
+        isOpen={unauthorizedActionLabel !== null}
+        onClose={() => setUnauthorizedActionLabel(null)}
+        actionLabel={unauthorizedActionLabel ?? undefined}
       />
-      <Modal
-        title="Подтвердите действие"
+      <WithdrawApplicationModal
         isOpen={pendingWithdrawOpportunityId !== null}
         onClose={() => setPendingWithdrawOpportunityId(null)}
-        panelClassName="home-page__withdraw-modal-panel"
-        titleAccentColor={roleName === "applicant" ? "var(--color-secondary)" : undefined}
-      >
-        <div className="home-page__withdraw-modal">
-          <p className="home-page__withdraw-modal-text">
-            Вы уверены, что хотите отозвать отклик?
-          </p>
-          <div className="home-page__withdraw-modal-actions">
-            <Button
-              type="button"
-              variant="secondary-outline"
-              size="md"
-              fullWidth
-              onClick={() => setPendingWithdrawOpportunityId(null)}
-            >
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="md"
-              fullWidth
-              onClick={handleConfirmWithdrawOpportunity}
-              loading={submitApplicationMutation.isPending}
-            >
-              Отозвать отклик
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={handleConfirmWithdrawOpportunity}
+        isPending={submitApplicationMutation.isPending}
+      />
 
       <Footer
         theme={

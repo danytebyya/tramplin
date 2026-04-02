@@ -71,6 +71,15 @@ async def upload_employer_avatar(
     return success_response({"avatar_url": employer_profile.avatar_url})
 
 
+@router.delete("/avatar", status_code=status.HTTP_200_OK)
+def delete_employer_avatar(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    employer_profile = EmployerService(db).delete_avatar(current_user=current_user)
+    return success_response({"avatar_url": employer_profile.avatar_url})
+
+
 @router.get("/verification-draft", status_code=status.HTTP_200_OK)
 def read_employer_verification_draft(
     current_user: User = Depends(get_current_user),

@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from src.api.serializers.user import serialize_user
@@ -86,6 +86,31 @@ def update_applicant_dashboard(
 ) -> dict:
     response = UserService(db).update_applicant_dashboard(current_user, payload)
     return success_response(response.model_dump(mode="json"))
+
+
+@router.post("/me/applicant-avatar", status_code=status.HTTP_200_OK)
+async def upload_applicant_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    content = await file.read()
+    user = UserService(db).upload_applicant_avatar(
+        current_user=current_user,
+        original_filename=file.filename or "avatar",
+        mime_type=file.content_type or "application/octet-stream",
+        content=content,
+    )
+    return success_response({"user": serialize_user(user)})
+
+
+@router.delete("/me/applicant-avatar", status_code=status.HTTP_200_OK)
+def delete_applicant_avatar(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = UserService(db).delete_applicant_avatar(current_user=current_user)
+    return success_response({"user": serialize_user(user)})
 
 
 @router.get("/me/notification-preferences", status_code=status.HTTP_200_OK)

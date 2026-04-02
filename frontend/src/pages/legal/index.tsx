@@ -2,9 +2,12 @@ import { MouseEvent, useEffect, useState } from "react";
 
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import arrowIcon from "../../assets/icons/arrow.svg";
+import logoPrimary from "../../assets/icons/logo-primary.svg";
+import logoSecondary from "../../assets/icons/logo-secondary.svg";
+import { useAuthStore } from "../../features/auth";
 import { Container } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
+import "../../widgets/back-navigation/back-navigation.css";
 import { legalDocuments, LegalDocumentType } from "./legal-data";
 import "./legal.css";
 
@@ -12,10 +15,25 @@ type LegalDocumentPageProps = {
   documentType: LegalDocumentType;
 };
 
+function resolveThemeRole(role: string | null) {
+  if (role === "junior") {
+    return "curator";
+  }
+
+  if (role === "applicant" || role === "employer" || role === "curator" || role === "admin") {
+    return role;
+  }
+
+  return "guest";
+}
+
 export function LegalDocumentPage({ documentType }: LegalDocumentPageProps) {
   const legalDocument = legalDocuments[documentType];
   const location = useLocation();
   const navigate = useNavigate();
+  const role = useAuthStore((state) => state.role);
+  const themeRole = resolveThemeRole(role);
+  const brandLogo = themeRole === "applicant" ? logoSecondary : logoPrimary;
   const [activeSectionId, setActiveSectionId] = useState(legalDocument.sections[0]?.id ?? "");
   const returnTo =
     typeof location.state?.returnTo === "string" &&
@@ -88,26 +106,12 @@ export function LegalDocumentPage({ documentType }: LegalDocumentPageProps) {
   };
 
   return (
-    <main className="legal-page">
+    <main className={`legal-page legal-page--${themeRole}`}>
       <header className="legal-page__header">
-        <Container className="legal-page__header-container">
+        <Container className="legal-page__header-shell">
           <div className="legal-page__brand-group">
-            <button
-              type="button"
-              className="legal-page__back"
-              aria-label="Назад"
-              onClick={handleBackClick}
-            >
-              <img
-                src={arrowIcon}
-                alt=""
-                className="legal-page__back-icon"
-                aria-hidden="true"
-              />
-            </button>
-
             <Link to="/" className="legal-page__brand">
-              Трамплин
+              <img src={brandLogo} alt="Трамплин" className="legal-page__brand-logo" />
             </Link>
           </div>
 
@@ -141,13 +145,21 @@ export function LegalDocumentPage({ documentType }: LegalDocumentPageProps) {
       </header>
 
       <section className="legal-page__hero">
-        <Container className="legal-page__hero-container">
+        <Container className="legal-page__hero-shell">
+          <button
+            type="button"
+            className="back-navigation__button legal-page__back"
+            aria-label="Назад"
+            onClick={handleBackClick}
+          >
+            <span aria-hidden="true" className="legal-page__back-icon" />
+          </button>
           <h1 className="legal-page__title">{legalDocument.title}</h1>
         </Container>
       </section>
 
-      <section className="legal-page__content">
-        <Container className="legal-page__content-container">
+      <section className="legal-page__summary">
+        <Container className="legal-page__summary-shell">
           <aside className="legal-page__sidebar" aria-label="Разделы документа">
             <div className="legal-page__sidebar-card">
               {legalDocument.sections.map((section) => (
@@ -182,7 +194,7 @@ export function LegalDocumentPage({ documentType }: LegalDocumentPageProps) {
                     ) : (
                       <ul key={`${section.id}-${blockIndex}`} className="legal-page__list">
                         {block.items.map((item, itemIndex) => (
-                          <li key={`${section.id}-${blockIndex}-${itemIndex}`} className="legal-page__list-item">
+                          <li key={`${section.id}-${blockIndex}-${itemIndex}`} className="legal-page__list-entry">
                             {item}
                           </li>
                         ))}
@@ -196,7 +208,7 @@ export function LegalDocumentPage({ documentType }: LegalDocumentPageProps) {
         </Container>
       </section>
 
-      <Footer theme="guest" />
+      <Footer theme={themeRole} />
     </main>
   );
 }

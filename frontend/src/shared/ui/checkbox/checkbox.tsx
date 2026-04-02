@@ -16,7 +16,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
     <input
       ref={ref}
       type="checkbox"
-      className={cn("checkbox", `checkbox--${variant}`, className)}
+      className={cn("toggle-mark", `toggle-mark--${variant}`, className)}
       {...props}
     />
   );

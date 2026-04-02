@@ -35,7 +35,7 @@ import {
 } from "../../features/city-selector/api";
 import { getEmployerAccessState, meRequest, resolveEmployerFallbackRoute, useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
-import { Badge, Button, Checkbox, Container, DateInput, Input, Modal, Radio, Status } from "../../shared/ui";
+import { Badge, Button, Checkbox, Container, DateInput, Input, Modal, ProfileTabs, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import { OpportunityLocationMap, OpportunityLocationPoint } from "./opportunity-location-map";
@@ -1333,7 +1333,7 @@ export function OpportunityManagementPage() {
   return (
     <main className="opportunity-management-page">
       <Header
-        containerClassName="opportunity-management-page__header-container"
+        containerClassName="opportunity-management-page__header-shell"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
@@ -1346,34 +1346,16 @@ export function OpportunityManagementPage() {
         }
       />
 
-      <Container className="opportunity-management-page__container">
-        <nav className="opportunity-management-page__tabs" aria-label="Разделы работодателя">
-          {employerAccess.canManageCompanyProfile ? (
-            <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/dashboard/employer")}>
-              Профиль компании
-            </button>
-          ) : null}
-          <button type="button" className="opportunity-management-page__tab opportunity-management-page__tab--active">
-            Управление возможностями
-          </button>
-          {employerAccess.canReviewResponses ? (
-            <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/employer/responses")}>
-              Отклики
-            </button>
-          ) : null}
-          {employerAccess.canAccessChat ? (
-            <button
-              type="button"
-              className="opportunity-management-page__tab"
-              onClick={() => navigate("/employer/chat")}
-            >
-              Чат
-            </button>
-          ) : null}
-          <button type="button" className="opportunity-management-page__tab" onClick={() => navigate("/settings")}>
-            Настройки
-          </button>
-        </nav>
+      <Container className="opportunity-management-page__shell">
+        <ProfileTabs
+          navigate={navigate}
+          audience="employer"
+          current="opportunities"
+          employerAccess={employerAccess}
+          tabsClassName="opportunity-management-page__tabs"
+          tabClassName="opportunity-management-page__tab"
+          activeTabClassName="opportunity-management-page__tab--active"
+        />
 
         <section className="opportunity-management-page__metrics" aria-label="Статистика возможностей">
           <article className="opportunity-management-page__metric-card">
@@ -1443,7 +1425,7 @@ export function OpportunityManagementPage() {
                         Сбросить
                       </button>
                     </div>
-                    <div className="opportunity-management-page__filters-options opportunity-management-page__filters-options--checkboxes">
+                    <div className="opportunity-management-page__filters-options opportunity-management-page__filters-options--choices">
                       {statusFilterItems.map((item) => (
                         <label key={item.value} className="opportunity-management-page__filter-option">
                           <Checkbox
@@ -1568,7 +1550,7 @@ export function OpportunityManagementPage() {
 
         {visibleItems.length > 0 ? (
           <>
-            <section className="opportunity-management-page__grid" aria-label="Карточки возможностей">
+            <section className="opportunity-management-page__catalog" aria-label="Карточки возможностей">
               {visibleItems.map((item) => (
                 <article key={item.id} className="opportunity-management-page__card">
                   {(() => {
@@ -1614,56 +1596,56 @@ export function OpportunityManagementPage() {
                     <div className="opportunity-management-page__footer">
                       <div className="opportunity-management-page__meta">
                         {item.responsesCount !== undefined ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Откликов:</span>
                             <span className="opportunity-management-page__meta-value">{item.responsesCount}</span>
                           </p>
                         ) : null}
 
                         {item.publishedAtLabel ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Опубликовано:</span>
                             <span className="opportunity-management-page__meta-value">{item.publishedAtLabel}</span>
                           </p>
                         ) : null}
 
                         {item.activeUntilLabel ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Активно до:</span>
                             <span className="opportunity-management-page__meta-value">{item.activeUntilLabel}</span>
                           </p>
                         ) : null}
 
                         {item.plannedPublishAtLabel ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Дата публикации:</span>
                             <span className="opportunity-management-page__meta-value">{item.plannedPublishAtLabel}</span>
                           </p>
                         ) : null}
 
                         {item.plannedCloseAtLabel ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Дата закрытия:</span>
                             <span className="opportunity-management-page__meta-value">{item.plannedCloseAtLabel}</span>
                           </p>
                         ) : null}
 
                         {item.closedAtLabel ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Закрыто:</span>
                             <span className="opportunity-management-page__meta-value">{item.closedAtLabel}</span>
                           </p>
                         ) : null}
 
                         {item.submittedAtLabel ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Дата отправки:</span>
                             <span className="opportunity-management-page__meta-value">{item.submittedAtLabel}</span>
                           </p>
                         ) : null}
 
                         {item.moderationComment ? (
-                          <p className="opportunity-management-page__meta-row">
+                          <p className="opportunity-management-page__meta-summary">
                             <span className="opportunity-management-page__meta-label">Комментарий:</span>
                             <span className="opportunity-management-page__meta-value">{item.moderationComment}</span>
                           </p>
@@ -1718,7 +1700,7 @@ export function OpportunityManagementPage() {
               <nav className="opportunity-management-page__pagination" aria-label="Пагинация">
                 <button
                   type="button"
-                  className="opportunity-management-page__pagination-arrow"
+                  className="opportunity-management-page__pager-button"
                   onClick={() => setPage((currentValue) => Math.max(1, currentValue - 1))}
                   disabled={currentPage === 1}
                   aria-label="Предыдущая страница"
@@ -1727,7 +1709,7 @@ export function OpportunityManagementPage() {
                     src={arrowIcon}
                     alt=""
                     aria-hidden="true"
-                    className="opportunity-management-page__pagination-arrow-icon opportunity-management-page__pagination-arrow-icon--prev"
+                    className="opportunity-management-page__pager-button-icon opportunity-management-page__pager-button-icon--prev"
                   />
                 </button>
                 {paginationItems.map((item, index) =>
@@ -1752,7 +1734,7 @@ export function OpportunityManagementPage() {
                 )}
                 <button
                   type="button"
-                  className="opportunity-management-page__pagination-arrow"
+                  className="opportunity-management-page__pager-button"
                   onClick={() => setPage((currentValue) => Math.min(totalPages, currentValue + 1))}
                   disabled={currentPage === totalPages}
                   aria-label="Следующая страница"
@@ -1761,7 +1743,7 @@ export function OpportunityManagementPage() {
                     src={arrowIcon}
                     alt=""
                     aria-hidden="true"
-                    className="opportunity-management-page__pagination-arrow-icon"
+                    className="opportunity-management-page__pager-button-icon"
                   />
                 </button>
               </nav>
@@ -1778,20 +1760,28 @@ export function OpportunityManagementPage() {
         isOpen={deleteOpportunityId !== null}
         onClose={() => setDeleteOpportunityId(null)}
         title="Удалить возможность"
-        panelClassName="opportunity-management-page__modal-panel"
-        titleAccentColor="var(--color-primary)"
+        size="small"
+        titleAccentColor="var(--color-danger)"
       >
-        <div className="opportunity-management-page__modal-form">
-          <p className="opportunity-management-page__description">
-            Возможность будет удалена. Подтвердите действие.
+        <div className="modal__body opportunity-management-page__modal-form">
+          <p className="modal__text opportunity-management-page__delete-text">
+            Вы уверены, что хотите удалить эту вакансию?
           </p>
-          <div className="opportunity-management-page__modal-actions">
+          <p className="modal__warning opportunity-management-page__delete-warning">Это действие нельзя отменить!</p>
+          <div className="modal__section opportunity-management-page__delete-removal">
+            <p className="modal__text opportunity-management-page__delete-text">Безвозвратно будут удалены:</p>
+            <ul className="modal__list opportunity-management-page__delete-list">
+              <li>Все отклики на эту вакансию</li>
+              <li>Вакансия исчезнет из поиска</li>
+            </ul>
+          </div>
+          <div className="modal__actions opportunity-management-page__modal-actions">
             {formErrors.submit ? (
-              <p className="opportunity-management-page__modal-error">{formErrors.submit}</p>
+              <p className="modal__error opportunity-management-page__modal-error">{formErrors.submit}</p>
             ) : null}
             <Button
               type="button"
-              variant="primary-outline"
+              variant="cancel"
               size="md"
               className="opportunity-management-page__modal-cancel"
               onClick={() => setDeleteOpportunityId(null)}
@@ -1825,9 +1815,9 @@ export function OpportunityManagementPage() {
         titleAccentColor="var(--color-primary)"
         closeOnBackdrop={false}
       >
-        <div className="opportunity-management-page__modal-form">
-          <div className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">
+        <div className="modal__form opportunity-management-page__modal-form">
+          <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
               Тип <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <div className="opportunity-management-page__modal-radio-group">
@@ -1855,8 +1845,8 @@ export function OpportunityManagementPage() {
             </div>
           </div>
 
-          <label className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">
+          <label className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
               Название <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <Input
@@ -1873,8 +1863,8 @@ export function OpportunityManagementPage() {
             {formErrors.title ? <p className="opportunity-management-page__modal-error">{formErrors.title}</p> : null}
           </label>
 
-          <label className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">
+          <label className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
               Описание с требованиями, обязанностями и условиями
               {" "}
               <span className="opportunity-management-page__modal-required">*</span>
@@ -1899,8 +1889,8 @@ export function OpportunityManagementPage() {
             ) : null}
           </label>
 
-          <label className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">
+          <label className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
               Работодатель <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <Input
@@ -1911,8 +1901,8 @@ export function OpportunityManagementPage() {
             />
           </label>
 
-          <div ref={addressFieldRef} className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">
+          <div ref={addressFieldRef} className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
               Адрес <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <div className="opportunity-management-page__modal-address-head">
@@ -2003,7 +1993,7 @@ export function OpportunityManagementPage() {
                   <span
                     className={
                       isMapExpanded
-                        ? "opportunity-management-page__modal-map-expand-icon opportunity-management-page__modal-map-expand-icon--narrow"
+                        ? "opportunity-management-page__modal-map-expand-icon opportunity-management-page__modal-map-expand-icon--compact"
                         : "opportunity-management-page__modal-map-expand-icon"
                     }
                     aria-hidden="true"
@@ -2027,8 +2017,8 @@ export function OpportunityManagementPage() {
             </div>
           ) : null}
 
-          <label className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">
+          <label className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
               {createOpportunityType === "event" ? "Стоимость" : "Зарплата"}
               {" "}
               <span className="opportunity-management-page__modal-required">*</span>
@@ -2047,8 +2037,8 @@ export function OpportunityManagementPage() {
             {formErrors.salary ? <p className="opportunity-management-page__modal-error">{formErrors.salary}</p> : null}
           </label>
 
-          <div className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">
+          <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
               Теги <span className="opportunity-management-page__modal-required">*</span>
             </span>
             <div className="opportunity-management-page__modal-tag-panel">
@@ -2114,8 +2104,8 @@ export function OpportunityManagementPage() {
           </div>
 
           {createOpportunityType === "event" ? (
-            <div className="opportunity-management-page__modal-field">
-              <span className="opportunity-management-page__modal-label">
+            <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+              <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
                 Тип мероприятия <span className="opportunity-management-page__modal-required">*</span>
               </span>
               <div className="opportunity-management-page__modal-radio-group opportunity-management-page__modal-radio-group--event-type">
@@ -2141,8 +2131,8 @@ export function OpportunityManagementPage() {
 
           {createOpportunityType === "mentorship" ? (
             <>
-              <div className="opportunity-management-page__modal-field">
-                <span className="opportunity-management-page__modal-label">
+              <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+                <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
                   Направление менторства <span className="opportunity-management-page__modal-required">*</span>
                 </span>
                 <div className="opportunity-management-page__modal-radio-group opportunity-management-page__modal-radio-group--event-type">
@@ -2165,8 +2155,8 @@ export function OpportunityManagementPage() {
                 ) : null}
               </div>
 
-              <div className="opportunity-management-page__modal-field">
-                <span className="opportunity-management-page__modal-label">
+              <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+                <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
                   Опыт ментора <span className="opportunity-management-page__modal-required">*</span>
                 </span>
                 <div className="opportunity-management-page__modal-radio-group">
@@ -2193,8 +2183,8 @@ export function OpportunityManagementPage() {
 
           {createOpportunityType === "vacancy" ? (
             <>
-              <div className="opportunity-management-page__modal-field">
-                <span className="opportunity-management-page__modal-label">
+              <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+                <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
                   Уровень <span className="opportunity-management-page__modal-required">*</span>
                 </span>
                 <div className="opportunity-management-page__modal-radio-group">
@@ -2211,8 +2201,8 @@ export function OpportunityManagementPage() {
                 </div>
               </div>
 
-              <div className="opportunity-management-page__modal-field">
-                <span className="opportunity-management-page__modal-label">
+              <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+                <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
                   Формат работы <span className="opportunity-management-page__modal-required">*</span>
                 </span>
                 <div className="opportunity-management-page__modal-radio-group">
@@ -2229,8 +2219,8 @@ export function OpportunityManagementPage() {
                 </div>
               </div>
 
-              <div className="opportunity-management-page__modal-field">
-                <span className="opportunity-management-page__modal-label">
+              <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+                <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
                   Занятость <span className="opportunity-management-page__modal-required">*</span>
                 </span>
                 <div className="opportunity-management-page__modal-radio-group">
@@ -2248,8 +2238,8 @@ export function OpportunityManagementPage() {
               </div>
             </>
           ) : createOpportunityType !== "event" && createOpportunityType !== "mentorship" ? (
-            <div className="opportunity-management-page__modal-field">
-              <span className="opportunity-management-page__modal-label">
+            <div className="modal__field modal__field--compact opportunity-management-page__modal-field">
+              <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">
                 Формат работы <span className="opportunity-management-page__modal-required">*</span>
               </span>
               <div className="opportunity-management-page__modal-radio-group">
@@ -2267,8 +2257,8 @@ export function OpportunityManagementPage() {
             </div>
           ) : null}
 
-          <label className="opportunity-management-page__modal-field">
-            <span className="opportunity-management-page__modal-label">Дата (для запланированной публикации)</span>
+          <label className="modal__field modal__field--compact opportunity-management-page__modal-field">
+            <span className="modal__field-label modal__field-label--inset opportunity-management-page__modal-label">Дата (для запланированной публикации)</span>
             <DateInput
               value={createOpportunityPublishDate}
               onChange={setCreateOpportunityPublishDate}
@@ -2276,16 +2266,16 @@ export function OpportunityManagementPage() {
             />
           </label>
 
-          <div className="opportunity-management-page__modal-note">
-            <p className="opportunity-management-page__modal-note-title">Срок публикации вакансии: 30 дней</p>
-            <p className="opportunity-management-page__modal-note-text">Отсчёт срока начинается:</p>
-            <ul className="opportunity-management-page__modal-note-list">
+          <div className="modal__section opportunity-management-page__modal-note">
+            <p className="modal__note opportunity-management-page__modal-note-title">Срок публикации вакансии: 30 дней</p>
+            <p className="modal__note opportunity-management-page__modal-note-text">Отсчёт срока начинается:</p>
+            <ul className="modal__list opportunity-management-page__modal-note-list">
               <li>С момента одобрения карточки куратором</li>
               <li>После изменения статуса на «Активно»</li>
             </ul>
           </div>
 
-          <div className="opportunity-management-page__modal-actions">
+          <div className="modal__actions opportunity-management-page__modal-actions">
             <Button
               type="button"
               variant="primary-outline"

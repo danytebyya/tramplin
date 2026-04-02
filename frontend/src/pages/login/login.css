@@ -1,10 +1,15 @@
 .login-page__actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  align-items: center;
 }
 
 .login-page__error {
   text-align: left;
   align-self: stretch;
+}
+
+.login-page__forgot-password {
+  margin: 0;
 }

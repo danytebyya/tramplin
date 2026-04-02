@@ -566,10 +566,10 @@ export function AuthPage() {
     <main
       className={`auth-page ${isCodeStep ? "auth-page--verification" : ""} ${roleTheme === "secondary" ? "auth-page--secondary-theme" : ""}`.trim()}
     >
-      <Container className="auth-page__content" variant="auth-page">
+      <Container className="auth-page__auth-shell" variant="auth-page">
         {!isCodeStep ? (
           <section className="auth-page__hero">
-            <div className="auth-page__hero-content">
+            <div className="auth-page__hero-stage">
               <div className="auth-page__brand-stage">
                 <WaveAuraBackground variant={roleTheme} withInteractionOrb />
                 <div className="auth-page__brand-lockup">
@@ -583,7 +583,7 @@ export function AuthPage() {
         ) : null}
 
         <section className="auth-page__panel">
-          <div className="auth-page__panel-content">
+          <div className="auth-page__panel-summary">
             <div className={`auth-card ${isCodeStep ? "auth-card--verification" : ""}`}>
               <div className="auth-card__header">
                 {isCodeStep ? (
@@ -601,7 +601,7 @@ export function AuthPage() {
                         aria-hidden="true"
                       />
                     </button>
-                    <div className="auth-verification-header__content">
+                    <div className="auth-verification-header__summary">
                       <h2 className="auth-verification-header__title">
                         <span className="auth-verification-header__title-accent">Подтверждение</span>{" "}
                         адреса электронной почты
@@ -741,7 +741,7 @@ export function AuthPage() {
               ) : (
                 <div className="auth-form auth-form--verification">
                   <div className="auth-verification">
-                    <div className="auth-verification__content">
+                    <div className="auth-verification__summary">
                       <div className="auth-verification__group">
                         <label className="auth-form__control auth-form__control--verification">
                           <CodeInput
@@ -765,7 +765,7 @@ export function AuthPage() {
                         {apiError && <span className="auth-form__error">{apiError}</span>}
 
                         <div className="auth-verification__meta">
-                          <div className="auth-verification__resend-block">
+                          <div className="auth-verification__resend-note">
                             {!isTemporarilyRateLimited ? (
                               resendCountdown > 0 ? (
                                 <p className="auth-verification__timer">

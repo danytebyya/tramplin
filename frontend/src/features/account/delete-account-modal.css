@@ -1,0 +1,23 @@
+.delete-account-modal {
+  gap: 20px;
+}
+
+.delete-account-modal__removal {
+  gap: 12px;
+}
+
+.delete-account-modal__list {
+  font-weight: 400;
+}
+
+.delete-account-modal__list li + li {
+  margin-top: 4px;
+}
+
+.delete-account-modal__note {
+  color: var(--color-text-secondary);
+}
+
+.delete-account-modal__error {
+  color: var(--color-danger);
+}

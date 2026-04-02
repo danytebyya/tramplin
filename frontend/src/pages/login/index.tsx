@@ -87,9 +87,9 @@ export function LoginPage() {
 
   return (
     <main className="auth-page login-page">
-      <Container className="auth-page__content" variant="auth-page">
+      <Container className="auth-page__auth-shell" variant="auth-page">
         <section className="auth-page__hero">
-          <div className="auth-page__hero-content login-page__hero-content">
+          <div className="auth-page__hero-stage login-page__hero-content">
             <div className="auth-page__brand-stage">
               <WaveAuraBackground variant="primary" withInteractionOrb />
               <div className="auth-page__brand-lockup">
@@ -102,7 +102,7 @@ export function LoginPage() {
         </section>
 
         <section className="auth-page__panel">
-          <div className="auth-page__panel-content">
+          <div className="auth-page__panel-summary">
             <div className="auth-card login-card">
               <div className="auth-card__header">
                 <h2 className="auth-card__title">Авторизация</h2>
@@ -145,6 +145,9 @@ export function LoginPage() {
                   <Button type="submit" variant="primary" fullWidth loading={loginMutation.isPending}>
                     Войти
                   </Button>
+                  <p className="auth-card__hint login-page__forgot-password">
+                    <Link to="/password-recovery">Забыли пароль?</Link>
+                  </p>
                 </div>
               </form>
 

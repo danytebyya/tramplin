@@ -206,12 +206,12 @@ function formatActivityMeta(value: string | null) {
 
 function CuratorManagementRowSkeleton() {
   return (
-    <article className="curator-management-page__row curator-management-page__row--skeleton" aria-hidden="true">
-      <div className="curator-management-page__row-summary">
-        <div className="curator-management-page__row-leading">
-          <span className="curator-management-page__skeleton curator-management-page__skeleton--checkbox" />
+    <article className="curator-management-page__profile curator-management-page__profile--skeleton" aria-hidden="true">
+      <div className="curator-management-page__profile-summary">
+        <div className="curator-management-page__profile-select">
+          <span className="curator-management-page__skeleton curator-management-page__skeleton--toggle-mark" />
         </div>
-        <div className="curator-management-page__row-main">
+        <div className="curator-management-page__profile-overview">
           <span className="curator-management-page__skeleton curator-management-page__skeleton--title" />
           <span className="curator-management-page__skeleton curator-management-page__skeleton--cell" />
           <span className="curator-management-page__skeleton curator-management-page__skeleton--badge" />
@@ -797,29 +797,29 @@ export function CuratorManagementPage() {
   return (
     <main className={`curator-management-page curator-management-page--${themeRole}`}>
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme="curator"
         topNavigation={null}
         bottomContent={<CuratorHeaderNavigation isAdmin currentPage="curators" />}
       />
 
-      <Container className="curator-management-page__container">
+      <Container className="curator-management-page__shell">
         <header className="curator-management-page__header">
           <h1 className="curator-management-page__title">Управление кураторами</h1>
         </header>
 
-        <section className="curator-management-page__metrics" aria-label="Статистика кураторов">
+        <section className="curator-management-page__metrics stats-panel" aria-label="Статистика кураторов">
           {curatorMetricDefinitions.map((metric) => (
-            <article key={metric.key} className="curator-management-page__metric-card">
-              <span className="curator-management-page__metric-label">{metric.label}</span>
+            <article key={metric.key} className="curator-management-page__metric-card stats-panel__card">
+              <span className="curator-management-page__metric-label stats-panel__label">{metric.label}</span>
               {curatorsQuery.isPending ? (
                 <span
                   className="curator-management-page__skeleton curator-management-page__skeleton--metric-value"
                   aria-hidden="true"
                 />
               ) : (
-                <strong className="curator-management-page__metric-value">
+                <strong className="curator-management-page__metric-value stats-panel__value">
                   {
                     {
                       totalCurators,
@@ -891,7 +891,7 @@ export function CuratorManagementPage() {
                         Сбросить
                       </button>
                     </div>
-                    <div className="curator-management-page__filters-options curator-management-page__filters-options--checkboxes">
+                    <div className="curator-management-page__filters-options curator-management-page__filters-options--choices">
                       <label className="curator-management-page__filter-option">
                         <Checkbox
                           checked={selectedRoles.includes("all")}
@@ -924,7 +924,7 @@ export function CuratorManagementPage() {
                         Сбросить
                       </button>
                     </div>
-                    <div className="curator-management-page__filters-options curator-management-page__filters-options--checkboxes">
+                    <div className="curator-management-page__filters-options curator-management-page__filters-options--choices">
                       <label className="curator-management-page__filter-option">
                         <Checkbox
                           checked={selectedStatuses.includes("all")}
@@ -1098,7 +1098,7 @@ export function CuratorManagementPage() {
           </div>
         </div>
 
-        <section className="curator-management-page__content">
+        <section className="curator-management-page__directory">
           <div className="curator-management-page__table-head">
             <div className="curator-management-page__table-cell curator-management-page__table-cell--check">
               <Checkbox checked={allRowsSelected} onChange={toggleSelectAll} variant="accent" />
@@ -1111,7 +1111,7 @@ export function CuratorManagementPage() {
             <div className="curator-management-page__table-cell">Действия</div>
           </div>
 
-          <div className="curator-management-page__rows">
+          <div className="curator-management-page__directory-list">
             {isTableLoading
               ? Array.from({ length: 3 }, (_, index) => (
                   <CuratorManagementRowSkeleton key={`skeleton-${index}`} />
@@ -1123,9 +1123,9 @@ export function CuratorManagementPage() {
                   const isCurrentUserRow = currentUserId === item.id;
 
                   return (
-                    <article key={item.id} className="curator-management-page__row">
-                      <div className="curator-management-page__row-summary">
-                        <div className="curator-management-page__row-leading">
+                    <article key={item.id} className="curator-management-page__profile">
+                      <div className="curator-management-page__profile-summary">
+                        <div className="curator-management-page__profile-select">
                           <Checkbox
                             checked={selectedIds.includes(item.id)}
                             onChange={() => toggleSelectedId(item.id)}
@@ -1134,27 +1134,27 @@ export function CuratorManagementPage() {
                           />
                         </div>
 
-                        <div className="curator-management-page__row-main">
-                          <div className="curator-management-page__row-name">
-                            <strong className="curator-management-page__row-title">{item.full_name}</strong>
+                        <div className="curator-management-page__profile-overview">
+                          <div className="curator-management-page__profile-name">
+                            <strong className="curator-management-page__profile-title">{item.full_name}</strong>
                           </div>
-                          <div className="curator-management-page__row-email">{item.email}</div>
-                          <div className="curator-management-page__row-role">
+                          <div className="curator-management-page__profile-email">{item.email}</div>
+                          <div className="curator-management-page__profile-role">
                             <Status variant={roleMeta.variant}>{roleMeta.label}</Status>
                           </div>
-                          <div className="curator-management-page__row-status">
+                          <div className="curator-management-page__profile-status">
                             <span
                               className={
                                 item.status === "online"
-                                  ? "curator-management-page__row-status-dot curator-management-page__row-status-dot--online"
-                                  : "curator-management-page__row-status-dot curator-management-page__row-status-dot--offline"
+                                  ? "curator-management-page__presence-dot curator-management-page__presence-dot--online"
+                                  : "curator-management-page__presence-dot curator-management-page__presence-dot--offline"
                               }
                               aria-hidden="true"
                             />
                             <span>{item.status === "online" ? "Online" : "Offline"}</span>
                           </div>
-                          <div className="curator-management-page__row-activity">{activityMeta.label}</div>
-                          <div className="curator-management-page__row-actions">
+                          <div className="curator-management-page__profile-activity">{activityMeta.label}</div>
+                          <div className="curator-management-page__profile-actions">
                             <button
                               type="button"
                               className="curator-management-page__action-button"
@@ -1190,7 +1190,7 @@ export function CuratorManagementPage() {
             <nav className="curator-management-page__pagination" aria-label="Пагинация">
               <button
                 type="button"
-                className="curator-management-page__pagination-arrow"
+                className="curator-management-page__pager-button"
                 onClick={() => setPage((current) => Math.max(current - 1, 1))}
                 disabled={safePage === 1}
                 aria-label="Предыдущая страница"
@@ -1199,7 +1199,7 @@ export function CuratorManagementPage() {
                   src={arrowIcon}
                   alt=""
                   aria-hidden="true"
-                  className="curator-management-page__pagination-arrow-icon curator-management-page__pagination-arrow-icon--prev"
+                  className="curator-management-page__pager-button-icon curator-management-page__pager-button-icon--prev"
                 />
               </button>
               {pageNumbers.map((item, index) =>
@@ -1224,7 +1224,7 @@ export function CuratorManagementPage() {
               )}
               <button
                 type="button"
-                className="curator-management-page__pagination-arrow"
+                className="curator-management-page__pager-button"
                 onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
                 disabled={safePage === totalPages}
                 aria-label="Следующая страница"
@@ -1233,7 +1233,7 @@ export function CuratorManagementPage() {
                   src={arrowIcon}
                   alt=""
                   aria-hidden="true"
-                  className="curator-management-page__pagination-arrow-icon"
+                  className="curator-management-page__pager-button-icon"
                 />
               </button>
             </nav>
@@ -1245,36 +1245,21 @@ export function CuratorManagementPage() {
         isOpen={isDeleteCuratorModalOpen}
         onClose={handleDeleteCuratorModalClose}
         title="Удалить куратора"
+        size="small"
         panelClassName="curator-management-page__modal-panel curator-management-page__bulk-role-modal-panel curator-management-page__edit-curator-modal-panel"
-        titleAccentColor="var(--color-accent)"
+        titleAccentColor="var(--color-danger)"
       >
-        <div className="curator-management-page__bulk-role-modal">
-          <p className="curator-management-page__bulk-role-count">Вы уверены, что хотите удалить куратора?</p>
-          <p className="curator-management-page__delete-warning">Это действие нельзя отменить</p>
-          <p className="curator-management-page__bulk-role-count">Будет удален:</p>
+        <div className="modal__body curator-management-page__bulk-role-modal">
+          <p className="modal__text curator-management-page__bulk-role-count">
+            {`Вы уверены, что хотите удалить куратора «${deletingCurator?.full_name ?? ""}»?`}
+          </p>
 
-          {deletingCurator ? (
-            <ul className="curator-management-page__bulk-role-list">
-              <li className="curator-management-page__bulk-role-item">
-                <p className="curator-management-page__bulk-role-line">
-                  <span className="curator-management-page__bulk-role-label">ФИО:</span> {deletingCurator.full_name}
-                </p>
-                <p className="curator-management-page__bulk-role-line">
-                  <span className="curator-management-page__bulk-role-label">E-mail:</span> {deletingCurator.email}
-                </p>
-                <p className="curator-management-page__bulk-role-line">
-                  <span className="curator-management-page__bulk-role-label">Роль:</span> {resolveRoleMeta(deletingCurator.role).label}
-                </p>
-              </li>
-            </ul>
-          ) : null}
+          {deleteCuratorError ? <p className="modal__error curator-management-page__modal-error">{deleteCuratorError}</p> : null}
 
-          {deleteCuratorError ? <p className="curator-management-page__modal-error">{deleteCuratorError}</p> : null}
-
-          <div className="curator-management-page__modal-actions">
+          <div className="modal__actions curator-management-page__modal-actions">
             <Button
               type="button"
-              variant="accent"
+              variant="cancel"
               size="md"
               className="curator-management-page__modal-action curator-management-page__modal-action--submit"
               onClick={handleDeleteCuratorModalClose}
@@ -1284,14 +1269,14 @@ export function CuratorManagementPage() {
             </Button>
             <Button
               type="button"
-              variant="danger-outline"
+              variant="danger"
               size="md"
               className="curator-management-page__modal-action curator-management-page__modal-action--submit"
               onClick={handleDeleteCuratorSubmit}
               loading={deleteCuratorMutation.isPending}
               disabled={!deletingCurator}
             >
-              Удалить куратора
+              Удалить
             </Button>
           </div>
         </div>
@@ -1301,36 +1286,26 @@ export function CuratorManagementPage() {
         isOpen={isBulkDeleteCuratorsModalOpen}
         onClose={handleBulkDeleteCuratorsModalClose}
         title="Удалить кураторов"
+        size="small"
         panelClassName="curator-management-page__modal-panel curator-management-page__bulk-role-modal-panel curator-management-page__edit-curator-modal-panel"
-        titleAccentColor="var(--color-accent)"
+        titleAccentColor="var(--color-danger)"
       >
-        <div className="curator-management-page__bulk-role-modal">
-          <p className="curator-management-page__bulk-role-count">Вы уверены, что хотите удалить выбранных кураторов?</p>
-          <p className="curator-management-page__delete-warning">Это действие нельзя отменить</p>
-          <p className="curator-management-page__bulk-role-count">Будут удалены:</p>
-
-          <ul className="curator-management-page__bulk-role-list">
+        <div className="modal__body curator-management-page__bulk-role-modal">
+          <p className="modal__text curator-management-page__bulk-role-count">Вы уверены, что хотите удалить выбранных кураторов?</p>
+          <ul className="modal__list curator-management-page__bulk-role-list">
             {bulkDeletingCurators.map((curator) => (
-              <li key={curator.id} className="curator-management-page__bulk-role-item">
-                <p className="curator-management-page__bulk-role-line">
-                  <span className="curator-management-page__bulk-role-label">ФИО:</span> {curator.full_name}
-                </p>
-                <p className="curator-management-page__bulk-role-line">
-                  <span className="curator-management-page__bulk-role-label">E-mail:</span> {curator.email}
-                </p>
-                <p className="curator-management-page__bulk-role-line">
-                  <span className="curator-management-page__bulk-role-label">Роль:</span> {resolveRoleMeta(curator.role).label}
-                </p>
+              <li key={curator.id} className="curator-management-page__bulk-role-option">
+                <p className="curator-management-page__bulk-role-line">{curator.full_name}</p>
               </li>
             ))}
           </ul>
 
-          {bulkDeleteCuratorError ? <p className="curator-management-page__modal-error">{bulkDeleteCuratorError}</p> : null}
+          {bulkDeleteCuratorError ? <p className="modal__error curator-management-page__modal-error">{bulkDeleteCuratorError}</p> : null}
 
-          <div className="curator-management-page__modal-actions">
+          <div className="modal__actions curator-management-page__modal-actions">
             <Button
               type="button"
-              variant="accent"
+              variant="cancel"
               size="md"
               className="curator-management-page__modal-action curator-management-page__modal-action--submit"
               onClick={handleBulkDeleteCuratorsModalClose}
@@ -1340,14 +1315,14 @@ export function CuratorManagementPage() {
             </Button>
             <Button
               type="button"
-              variant="danger-outline"
+              variant="danger"
               size="md"
               className="curator-management-page__modal-action curator-management-page__modal-action--submit"
               onClick={handleBulkDeleteCuratorsSubmit}
               loading={bulkDeleteCuratorsMutation.isPending}
               disabled={bulkDeletingCurators.length === 0}
             >
-              Удалить кураторов
+              Удалить
             </Button>
           </div>
         </div>
@@ -1360,9 +1335,9 @@ export function CuratorManagementPage() {
         panelClassName="curator-management-page__modal-panel curator-management-page__bulk-role-modal-panel"
         titleAccentColor="var(--color-accent)"
       >
-        <div className="curator-management-page__modal-form">
-          <label className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label curator-management-page__modal-label--flush">ФИО</span>
+        <div className="modal__form curator-management-page__modal-form">
+          <label className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label curator-management-page__modal-label--flush">ФИО</span>
             <Input
               value={editCuratorName}
               onChange={(event) => setEditCuratorName(event.target.value)}
@@ -1371,8 +1346,8 @@ export function CuratorManagementPage() {
             />
           </label>
 
-          <label className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label curator-management-page__modal-label--flush">E-mail</span>
+          <label className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label curator-management-page__modal-label--flush">E-mail</span>
             <Input
               type="email"
               value={editCuratorEmail}
@@ -1382,8 +1357,8 @@ export function CuratorManagementPage() {
             />
           </label>
 
-          <label className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label curator-management-page__modal-label--flush">Пароль</span>
+          <label className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label curator-management-page__modal-label--flush">Пароль</span>
             <Input
               type="password"
               value={editCuratorPassword}
@@ -1394,12 +1369,12 @@ export function CuratorManagementPage() {
             />
           </label>
 
-          <div className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label curator-management-page__modal-label--flush">Роль</span>
-            <div className="curator-management-page__modal-role-options">
-              <label className="curator-management-page__modal-role-option">
+          <div className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label curator-management-page__modal-label--flush">Роль</span>
+            <div className="modal__options curator-management-page__modal-role-options">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio checked={editCuratorRole === "junior"} onChange={() => setEditCuratorRole("junior")} variant="accent" />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Junior</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1408,9 +1383,9 @@ export function CuratorManagementPage() {
                   />
                 </span>
               </label>
-              <label className="curator-management-page__modal-role-option">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio checked={editCuratorRole === "curator"} onChange={() => setEditCuratorRole("curator")} variant="accent" />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Middle</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1419,9 +1394,9 @@ export function CuratorManagementPage() {
                   />
                 </span>
               </label>
-              <label className="curator-management-page__modal-role-option">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio checked={editCuratorRole === "admin"} onChange={() => setEditCuratorRole("admin")} variant="accent" />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Senior</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1434,14 +1409,14 @@ export function CuratorManagementPage() {
           </div>
 
           {shouldShowEditRoleDowngradeNote ? (
-            <p className="curator-management-page__bulk-role-note">
+            <p className="modal__note curator-management-page__bulk-role-note">
               При понижении роли будут отозваны соответствующие права доступа.
             </p>
           ) : null}
 
-          {editCuratorError ? <p className="curator-management-page__modal-error">{editCuratorError}</p> : null}
+          {editCuratorError ? <p className="modal__error curator-management-page__modal-error">{editCuratorError}</p> : null}
 
-          <div className="curator-management-page__modal-actions">
+          <div className="modal__actions curator-management-page__modal-actions">
             <Button
               type="button"
               variant="accent-outline"
@@ -1479,15 +1454,15 @@ export function CuratorManagementPage() {
         panelClassName="curator-management-page__modal-panel curator-management-page__bulk-role-modal-panel"
         titleAccentColor="var(--color-accent)"
       >
-        <div className="curator-management-page__bulk-role-modal">
-          <p className="curator-management-page__bulk-role-count">Выбрано кураторов: {selectedCurators.length}</p>
+        <div className="modal__body curator-management-page__bulk-role-modal">
+          <p className="modal__text curator-management-page__bulk-role-count">Выбрано кураторов: {selectedCurators.length}</p>
 
-          <ul className="curator-management-page__bulk-role-list">
+          <ul className="modal__list curator-management-page__bulk-role-list">
             {selectedCurators.map((curator) => {
               const roleMeta = resolveRoleMeta(curator.role);
 
               return (
-                <li key={curator.id} className="curator-management-page__bulk-role-item">
+                <li key={curator.id} className="curator-management-page__bulk-role-option">
                   <p className="curator-management-page__bulk-role-line">
                     <span className="curator-management-page__bulk-role-label">ФИО:</span> {curator.full_name}
                   </p>
@@ -1502,14 +1477,14 @@ export function CuratorManagementPage() {
             })}
           </ul>
 
-          <div className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label curator-management-page__modal-label--flush">
+          <div className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label curator-management-page__modal-label--flush">
               Новая роль
             </span>
-            <div className="curator-management-page__modal-role-options">
-              <label className="curator-management-page__modal-role-option">
+            <div className="modal__options curator-management-page__modal-role-options">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio checked={bulkRoleValue === "junior"} onChange={() => setBulkRoleValue("junior")} variant="accent" />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Junior</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1518,9 +1493,9 @@ export function CuratorManagementPage() {
                   />
                 </span>
               </label>
-              <label className="curator-management-page__modal-role-option">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio checked={bulkRoleValue === "curator"} onChange={() => setBulkRoleValue("curator")} variant="accent" />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Middle</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1529,9 +1504,9 @@ export function CuratorManagementPage() {
                   />
                 </span>
               </label>
-              <label className="curator-management-page__modal-role-option">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio checked={bulkRoleValue === "admin"} onChange={() => setBulkRoleValue("admin")} variant="accent" />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Senior</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1544,14 +1519,14 @@ export function CuratorManagementPage() {
           </div>
 
           {shouldShowBulkRoleDowngradeNote ? (
-            <p className="curator-management-page__bulk-role-note">
+            <p className="modal__note curator-management-page__bulk-role-note">
               При понижении роли будут отозваны соответствующие права доступа.
             </p>
           ) : null}
 
-          {bulkRoleError ? <p className="curator-management-page__modal-error">{bulkRoleError}</p> : null}
+          {bulkRoleError ? <p className="modal__error curator-management-page__modal-error">{bulkRoleError}</p> : null}
 
-          <div className="curator-management-page__modal-actions">
+          <div className="modal__actions curator-management-page__modal-actions">
             <Button
               type="button"
               variant="accent-outline"
@@ -1591,9 +1566,9 @@ export function CuratorManagementPage() {
         panelClassName="curator-management-page__modal-panel"
         titleAccentColor="var(--color-accent)"
       >
-        <div className="curator-management-page__modal-form">
-          <label className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label">Имя пользователя</span>
+        <div className="modal__form curator-management-page__modal-form">
+          <label className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label">Имя пользователя</span>
             <Input
               value={newCuratorName}
               onChange={(event) => setNewCuratorName(event.target.value)}
@@ -1602,8 +1577,8 @@ export function CuratorManagementPage() {
             />
           </label>
 
-          <label className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label">E-mail</span>
+          <label className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label">E-mail</span>
             <Input
               type="email"
               value={newCuratorEmail}
@@ -1613,8 +1588,8 @@ export function CuratorManagementPage() {
             />
           </label>
 
-          <label className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label">Пароль</span>
+          <label className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label">Пароль</span>
             <Input
               type="password"
               value={newCuratorPassword}
@@ -1625,16 +1600,16 @@ export function CuratorManagementPage() {
             />
           </label>
 
-          <div className="curator-management-page__modal-field">
-            <span className="curator-management-page__modal-label">Роль</span>
-            <div className="curator-management-page__modal-role-options">
-              <label className="curator-management-page__modal-role-option">
+          <div className="modal__field curator-management-page__modal-field">
+            <span className="modal__field-label curator-management-page__modal-label">Роль</span>
+            <div className="modal__options curator-management-page__modal-role-options">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio
                   checked={newCuratorRole === "junior"}
                   onChange={() => setNewCuratorRole("junior")}
                   variant="accent"
                 />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Junior</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1643,13 +1618,13 @@ export function CuratorManagementPage() {
                   />
                 </span>
               </label>
-              <label className="curator-management-page__modal-role-option">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio
                   checked={newCuratorRole === "curator"}
                   onChange={() => setNewCuratorRole("curator")}
                   variant="accent"
                 />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Middle</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1658,13 +1633,13 @@ export function CuratorManagementPage() {
                   />
                 </span>
               </label>
-              <label className="curator-management-page__modal-role-option">
+              <label className="modal__option curator-management-page__modal-role-option">
                 <Radio
                   checked={newCuratorRole === "admin"}
                   onChange={() => setNewCuratorRole("admin")}
                   variant="accent"
                 />
-                <span className="curator-management-page__modal-role-option-text">
+                <span className="modal__option-text curator-management-page__modal-role-option-text">
                   <span>Senior</span>
                   <InfoTooltip
                     className="curator-management-page__modal-role-info"
@@ -1677,10 +1652,10 @@ export function CuratorManagementPage() {
           </div>
 
           {createCuratorError ? (
-            <p className="curator-management-page__modal-error">{createCuratorError}</p>
+            <p className="modal__error curator-management-page__modal-error">{createCuratorError}</p>
           ) : null}
 
-          <div className="curator-management-page__modal-actions">
+          <div className="modal__actions curator-management-page__modal-actions">
             <Button
               type="button"
               variant="accent-outline"

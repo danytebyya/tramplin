@@ -1,4 +1,4 @@
-.public-profile-page__status-container {
+.public-profile-page__status-shell {
   min-height: 56vh;
   display: flex;
   align-items: center;
@@ -6,7 +6,7 @@
   padding-top: 12px;
 }
 
-.public-profile-page__status-container--loading {
+.public-profile-page__status-shell--loading {
   align-items: flex-start;
 }
 
@@ -60,7 +60,7 @@
   color: #6b7280;
 }
 
-.public-profile-page__empty-block {
+.public-profile-page__empty-panel {
   margin: 0;
   color: #6b7280;
 }
@@ -68,7 +68,62 @@
 .public-profile-page__field-value {
   margin: 0;
   color: #122033;
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.public-profile-page {
+  --public-profile-accent: var(--color-secondary);
+  --public-profile-accent-light: var(--color-secondary-light);
+  --public-profile-accent-hover: var(--color-secondary-hover);
+  --public-profile-accent-active: var(--color-secondary-active);
+}
+
+.public-profile-page--viewer-employer {
+  --public-profile-accent: var(--color-primary);
+  --public-profile-accent-light: var(--color-primary-light);
+  --public-profile-accent-hover: var(--color-primary-hover);
+  --public-profile-accent-active: var(--color-primary-active);
+}
+
+.public-profile-page--viewer-curator {
+  --public-profile-accent: var(--color-accent);
+  --public-profile-accent-light: var(--color-accent-light);
+  --public-profile-accent-hover: var(--color-accent-hover);
+  --public-profile-accent-active: var(--color-accent-active);
+}
+
+.public-profile-page.seeker-dashboard {
+  --color-secondary: var(--public-profile-accent);
+  --color-secondary-light: var(--public-profile-accent-light);
+  --color-secondary-hover: var(--public-profile-accent-hover);
+  --color-secondary-active: var(--public-profile-accent-active);
+}
+
+.public-profile-page--employer .seeker-dashboard__link-value {
+  color: var(--public-profile-accent);
+}
+
+.public-profile-page--employer {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
+}
+
+.public-profile-page--employer .notification-menu {
+  --notification-menu-primary: var(--public-profile-accent);
+  --notification-menu-secondary: var(--public-profile-accent-hover);
+  --notification-menu-accent: var(--public-profile-accent-active);
+}
+
+.public-profile-page--employer .employer-dashboard__shell.page-shell {
+  --color-primary: var(--public-profile-accent);
+  --color-primary-light: var(--public-profile-accent-light);
+  --color-primary-hover: var(--public-profile-accent-hover);
+  --color-primary-active: var(--public-profile-accent-active);
+  --page-tabs-accent: var(--public-profile-accent);
+}
+
+.public-profile-page--employer .employer-dashboard__summary-value {
+  color: var(--public-profile-accent);
 }
 
 .public-profile-page--employer .employer-dashboard__field-label {
@@ -84,17 +139,17 @@
   gap: 2px;
 }
 
-.public-profile-page--applicant .seeker-dashboard__profile-grid {
+.public-profile-page--applicant .seeker-dashboard__profile-summary {
   align-items: stretch;
 }
 
 .public-profile-page--applicant .seeker-dashboard__form-panel,
-.public-profile-page--applicant .seeker-dashboard__summary-column,
+.public-profile-page--applicant .seeker-dashboard__summary-panel,
 .public-profile-page--applicant .seeker-dashboard__summary-card {
   min-height: 100%;
 }
 
-.public-profile-page--applicant .seeker-dashboard__summary-column {
+.public-profile-page--applicant .seeker-dashboard__summary-panel {
   grid-template-rows: 1fr;
 }
 
@@ -111,12 +166,8 @@
   white-space: pre-wrap;
 }
 
-.public-profile-page__verified-icon {
-  width: 20px;
-  height: 20px;
-}
 
-.public-profile-page__skeleton-layout {
+.public-profile-page__skeleton-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 24px;
@@ -146,7 +197,7 @@
   grid-column: 1 / -1;
 }
 
-.public-profile-page__skeleton-grid {
+.public-profile-page__skeleton-panels {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -226,7 +277,7 @@
 }
 
 @media (max-width: 1023px) {
-  .public-profile-page__skeleton-layout {
+  .public-profile-page__skeleton-overview {
     grid-template-columns: 1fr;
   }
 }

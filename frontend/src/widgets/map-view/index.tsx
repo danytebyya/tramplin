@@ -5,8 +5,7 @@ import { load } from "@2gis/mapgl";
 import { Clusterer } from "@2gis/mapgl-clusterer";
 import type { ClusterStyle, InputMarker } from "@2gis/mapgl-clusterer";
 import type { Map as DGisMap } from "@2gis/mapgl/types";
-import { useNavigate } from "react-router-dom";
-import verifiedIcon from "../../assets/icons/verified.svg";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Opportunity } from "../../entities/opportunity";
 import type { BackendApplicationStatus } from "../../features/applications";
 import {
@@ -23,7 +22,7 @@ import {
 } from "../../features/opportunity/api";
 import { env } from "../../shared/config/env";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
-import { Badge, Button, Checkbox, DateInput, Input } from "../../shared/ui";
+import { Badge, Button, Checkbox, DateInput, Input, VerifiedTooltip } from "../../shared/ui";
 import "../../features/city-selector/city-selector.css";
 import "./map-view.css";
 
@@ -574,16 +573,14 @@ export function MapView({
   onToggleExpand,
   onApply,
 }: MapViewProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<DGisMap | null>(null);
   const clustererRef = useRef<Clusterer | null>(null);
   const hasAlignedInitialViewportRef = useRef(false);
   const previousSelectedOpportunityIdRef = useRef<string | null>(null);
-  const preservedViewportRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
-  const shouldRestoreViewportAfterCloseRef = useRef(false);
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
-  const onCloseDetailsRef = useRef(onCloseDetails);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isMapVisible, setIsMapVisible] = useState(false);
@@ -640,6 +637,7 @@ export function MapView({
   const [selectedMentorshipDirections, setSelectedMentorshipDirections] = useState<string[]>([]);
   const [selectedMentorAvailability, setSelectedMentorAvailability] = useState<string[]>([]);
   const [selectedMentorExperience, setSelectedMentorExperience] = useState<string[]>([]);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [mentorCostFrom, setMentorCostFrom] = useState("");
   const [mentorCostTo, setMentorCostTo] = useState("");
   const [selectedMentorFormats, setSelectedMentorFormats] = useState<string[]>([]);
@@ -660,7 +658,16 @@ export function MapView({
   const [isEventAddressLoading, setIsEventAddressLoading] = useState(false);
   const [isMentorAddressLoading, setIsMentorAddressLoading] = useState(false);
   const openOpportunityDetails = (opportunityId: string) => {
-    navigate(`/opportunities/${opportunityId}`);
+    navigate(`/opportunities/${opportunityId}`, {
+      state: {
+        restoreViewMode: "map",
+        returnTo: {
+          pathname: location.pathname,
+          search: location.search,
+          hash: location.hash,
+        },
+      },
+    });
   };
   const handleDetailsKeyDown = (event: KeyboardEvent<HTMLDivElement>, opportunityId: string) => {
     if (event.key !== "Enter" && event.key !== " ") {
@@ -982,6 +989,7 @@ export function MapView({
   const selectedOpportunity = filteredOpportunities.find(
     (opportunity) => opportunity.id === selectedOpportunityId,
   );
+  const detailsOpportunity = isDetailsOpen ? selectedOpportunity : null;
   const isSelectedOpportunityFavorite = selectedOpportunity
     ? favoriteOpportunityIds.includes(selectedOpportunity.id)
     : false;
@@ -1374,10 +1382,6 @@ export function MapView({
   }, [onSelectOpportunity]);
 
   useEffect(() => {
-    onCloseDetailsRef.current = onCloseDetails;
-  }, [onCloseDetails]);
-
-  useEffect(() => {
     const container = mapContainerRef.current;
 
     if (!container || mapInstanceRef.current) {
@@ -1457,6 +1461,7 @@ export function MapView({
 
       const opportunityId = event.target.data.userData?.opportunityId as string | undefined;
       if (opportunityId) {
+        setIsDetailsOpen(true);
         onSelectOpportunityRef.current(opportunityId);
       }
     });
@@ -1504,17 +1509,21 @@ export function MapView({
   }, [isMapReady]);
 
   useEffect(() => {
+    setIsDetailsOpen(Boolean(selectedOpportunityId));
+  }, [selectedOpportunityId]);
+
+  useEffect(() => {
     if (!mapInstanceRef.current) {
       return;
     }
 
     const map = mapInstanceRef.current;
     const handleMoveStart = (event: { isUser: boolean }) => {
-      if (!event.isUser || !selectedOpportunityId) {
+      if (!event.isUser || !selectedOpportunityId || !isDetailsOpen) {
         return;
       }
 
-      onCloseDetailsRef.current();
+      setIsDetailsOpen(false);
     };
 
     map.on("movestart", handleMoveStart);
@@ -1522,7 +1531,7 @@ export function MapView({
     return () => {
       map.off("movestart", handleMoveStart);
     };
-  }, [selectedOpportunityId]);
+  }, [isDetailsOpen, selectedOpportunityId]);
 
   useEffect(() => {
     if (!isMapReady || !clustererRef.current) {
@@ -1580,7 +1589,7 @@ export function MapView({
       return;
     }
 
-    const rightPadding = selectedOpportunity ? (isExpanded ? 200 : 100) : 0;
+    const rightPadding = detailsOpportunity ? (isExpanded ? 200 : 100) : 0;
 
     mapInstanceRef.current.setPadding(
       {
@@ -1592,16 +1601,16 @@ export function MapView({
       { duration: 280 },
     );
 
-    if (!selectedOpportunity) {
+    if (!detailsOpportunity) {
       return;
     }
 
     mapInstanceRef.current.setCenter(
-      [selectedOpportunity.longitude, selectedOpportunity.latitude],
+      [detailsOpportunity.longitude, detailsOpportunity.latitude],
       { duration: 280 },
     );
-    mapInstanceRef.current.setZoom(isExpanded ? 16.5 : 15.5, { duration: 280 });
-  }, [isExpanded, selectedOpportunity, selectedOpportunityId]);
+    mapInstanceRef.current.setZoom(isExpanded ? 15.8 : 14.9, { duration: 280 });
+  }, [detailsOpportunity, isExpanded]);
 
   useEffect(() => {
     hasAlignedInitialViewportRef.current = false;
@@ -1612,18 +1621,17 @@ export function MapView({
       return;
     }
 
-    if (shouldRestoreViewportAfterCloseRef.current && preservedViewportRef.current) {
-      const nextViewport = preservedViewportRef.current;
-      shouldRestoreViewportAfterCloseRef.current = false;
-      preservedViewportRef.current = null;
-      mapInstanceRef.current.setCenter(nextViewport.center, { duration: 0 });
-      mapInstanceRef.current.setZoom(nextViewport.zoom, { duration: 0 });
-      return;
-    }
-
     const shouldUpdateZoom = !hasAlignedInitialViewportRef.current;
 
     if (previousSelectedOpportunityIdRef.current && !selectedOpportunityId) {
+      return;
+    }
+
+    const knownViewport = selectedCityViewport ?? resolveViewportByCityName(selectedCity);
+
+    if (knownViewport) {
+      applyViewport(mapInstanceRef.current, knownViewport, { duration: 320, shouldUpdateZoom });
+      hasAlignedInitialViewportRef.current = true;
       return;
     }
 
@@ -1637,14 +1645,6 @@ export function MapView({
     if (filteredOpportunities.length > 0) {
       const viewport = getViewportByCoordinates(filteredOpportunities);
       applyViewport(mapInstanceRef.current, viewport, { duration: 320, shouldUpdateZoom });
-      hasAlignedInitialViewportRef.current = true;
-      return;
-    }
-
-    const knownViewport = selectedCityViewport ?? resolveViewportByCityName(selectedCity);
-
-    if (knownViewport) {
-      applyViewport(mapInstanceRef.current, knownViewport, { duration: 320, shouldUpdateZoom });
       hasAlignedInitialViewportRef.current = true;
       return;
     }
@@ -1727,8 +1727,8 @@ export function MapView({
     hasError: boolean,
     reset: () => void,
   ) => (
-    <div className="map-view__filter-block">
-      <div className="map-view__filter-block-head">
+    <div className="map-view__filter-section">
+      <div className="map-view__filter-heading">
         <h3 className="map-view__filter-title">Город</h3>
         <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
       </div>
@@ -1788,8 +1788,8 @@ export function MapView({
     setTo: (value: string) => void,
     reset: () => void,
   ) => (
-    <div className="map-view__filter-block">
-      <div className="map-view__filter-block-head">
+    <div className="map-view__filter-section">
+      <div className="map-view__filter-heading">
         <h3 className="map-view__filter-title">{title}</h3>
         <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
       </div>
@@ -1835,7 +1835,7 @@ export function MapView({
           )}
         </div>
       ) : null}
-      <div className="map-view__filter-range-grid">
+      <div className="map-view__range-fields">
         <Input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="от" className={`input--${themeVariant} input--sm map-view__filter-input`} />
         <Input value={to} onChange={(event) => setTo(event.target.value)} placeholder="до" className={`input--${themeVariant} input--sm map-view__filter-input`} />
       </div>
@@ -1843,9 +1843,9 @@ export function MapView({
   );
 
   const renderDisplaySection = (label: string, checked: boolean, onChange: (checked: boolean) => void) => (
-    <div className="map-view__filter-block">
+    <div className="map-view__filter-section">
       <h3 className="map-view__filter-title">Отображение</h3>
-      <label className="map-view__filter-checkbox-row">
+      <label className="map-view__filter-option">
         <Checkbox checked={checked} onChange={(event) => onChange(event.target.checked)} variant={themeVariant} />
         <span>{label}</span>
       </label>
@@ -1864,8 +1864,8 @@ export function MapView({
     reset: () => void,
     popular?: string[],
   ) => (
-    <div className="map-view__filter-block">
-      <div className="map-view__filter-block-head">
+    <div className="map-view__filter-section">
+      <div className="map-view__filter-heading">
         <h3 className="map-view__filter-title">{title}</h3>
         <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
       </div>
@@ -1970,14 +1970,14 @@ export function MapView({
     setSelected: (value: string[]) => void,
     singleColumn = false,
   ) => (
-    <div className="map-view__filter-block">
-      <div className="map-view__filter-block-head">
+    <div className="map-view__filter-section">
+      <div className="map-view__filter-heading">
         <h3 className="map-view__filter-title">{title}</h3>
         <button type="button" className="map-view__filter-reset-link" onClick={() => setSelected([])}>Сбросить</button>
       </div>
-      <div className={singleColumn ? "map-view__filter-checkbox-grid map-view__filter-checkbox-grid--single" : "map-view__filter-checkbox-grid"}>
+      <div className={singleColumn ? "map-view__filter-options map-view__filter-options--single" : "map-view__filter-options"}>
         {options.map((option) => (
-          <label key={option} className="map-view__filter-checkbox-row">
+          <label key={option} className="map-view__filter-option">
             <Checkbox
               checked={selected.includes(option)}
               onChange={() => toggleSelection(option, selected, setSelected)}
@@ -2001,15 +2001,15 @@ export function MapView({
     selected?: string[],
     setSelected?: (value: string[]) => void,
   ) => (
-    <div className="map-view__filter-block">
-      <div className="map-view__filter-block-head">
+    <div className="map-view__filter-section">
+      <div className="map-view__filter-heading">
         <h3 className="map-view__filter-title">{title}</h3>
         <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
       </div>
       {options && selected && setSelected ? (
-        <div className="map-view__filter-checkbox-grid map-view__filter-checkbox-grid--single">
+        <div className="map-view__filter-options map-view__filter-options--single">
           {options.map((option) => (
-            <label key={option} className="map-view__filter-checkbox-row">
+            <label key={option} className="map-view__filter-option">
               <Checkbox
                 checked={selected.includes(option)}
                 onChange={() => toggleSelection(option, selected, setSelected)}
@@ -2020,7 +2020,7 @@ export function MapView({
           ))}
         </div>
       ) : null}
-      <div className="map-view__filter-range-grid">
+      <div className="map-view__range-fields">
         <Input value={from} onChange={(event) => setFrom(event.target.value)} placeholder="от" className={`input--${themeVariant} input--sm map-view__filter-input`} />
         <Input value={to} onChange={(event) => setTo(event.target.value)} placeholder="до" className={`input--${themeVariant} input--sm map-view__filter-input`} />
       </div>
@@ -2034,8 +2034,8 @@ export function MapView({
     items: string[],
     reset: () => void,
   ) => (
-    <div className="map-view__filter-block">
-      <div className="map-view__filter-block-head">
+    <div className="map-view__filter-section">
+      <div className="map-view__filter-heading">
         <h3 className="map-view__filter-title">{title}</h3>
         <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
       </div>
@@ -2069,8 +2069,8 @@ export function MapView({
   );
 
   const renderDateSection = (title: string, value: string, onChange: (value: string) => void, reset: () => void) => (
-    <div className="map-view__filter-block">
-      <div className="map-view__filter-block-head">
+    <div className="map-view__filter-section">
+      <div className="map-view__filter-heading">
         <h3 className="map-view__filter-title">{title}</h3>
         <button type="button" className="map-view__filter-reset-link" onClick={reset}>Сбросить</button>
       </div>
@@ -2097,15 +2097,15 @@ export function MapView({
           className={
             isFiltersVisible
               ? "map-view__filter-card map-view__filter-card--compact map-view__filter-toggle"
-              : "map-view__filter-card map-view__filter-card--compact map-view__filter-toggle map-view__filter-toggle--collapsed"
+              : "map-view__filter-card map-view__filter-card--compact map-view__filter-toggle map-view__filter-toggle--closed"
           }
           onClick={() => setIsFiltersVisible((current) => !current)}
         >
           <span
             className={
               isFiltersVisible
-                ? "map-view__filter-toggle-content"
-                : "map-view__filter-toggle-content map-view__filter-toggle-content--collapsed"
+                ? "map-view__filter-summary"
+                : "map-view__filter-summary map-view__filter-summary--closed"
             }
           >
             <span className="map-view__filter-toggle-label">Скрыть фильтры</span>
@@ -2113,7 +2113,7 @@ export function MapView({
               className={
                 isFiltersVisible
                   ? "map-view__filter-toggle-icon"
-                  : "map-view__filter-toggle-icon map-view__filter-toggle-icon--collapsed"
+                  : "map-view__filter-toggle-icon map-view__filter-toggle-icon--closed"
               }
               aria-hidden="true"
             />
@@ -2150,7 +2150,7 @@ export function MapView({
                   className={
                     isOpportunitiesOpen
                       ? "map-view__filter-category-icon"
-                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
+                      : "map-view__filter-category-icon map-view__filter-category-icon--closed"
                   }
                   aria-hidden="true"
                 />
@@ -2237,7 +2237,7 @@ export function MapView({
                   className={
                     isEventsOpen
                       ? "map-view__filter-category-icon"
-                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
+                      : "map-view__filter-category-icon map-view__filter-category-icon--closed"
                   }
                   aria-hidden="true"
                 />
@@ -2327,7 +2327,7 @@ export function MapView({
                   className={
                     isMentorshipOpen
                       ? "map-view__filter-category-icon"
-                      : "map-view__filter-category-icon map-view__filter-category-icon--collapsed"
+                      : "map-view__filter-category-icon map-view__filter-category-icon--closed"
                   }
                   aria-hidden="true"
                 />
@@ -2405,22 +2405,22 @@ export function MapView({
         </div>
       </div>
 
-      {selectedOpportunity ? (
+      {detailsOpportunity ? (
         <div
           className="map-view__details"
           role="link"
           tabIndex={0}
-          onClick={() => openOpportunityDetails(selectedOpportunity.id)}
-          onKeyDown={(event) => handleDetailsKeyDown(event, selectedOpportunity.id)}
+          onClick={() => openOpportunityDetails(detailsOpportunity.id)}
+          onKeyDown={(event) => handleDetailsKeyDown(event, detailsOpportunity.id)}
         >
-          <div className="map-view__details-content">
+          <div className="map-view__details-summary">
             <div className="map-view__details-header">
               <div className="map-view__details-title-group">
-                <h3 className="map-view__details-title" title={selectedOpportunity.title}>
-                  {selectedOpportunity.title}
+                <h3 className="map-view__details-title" title={detailsOpportunity.title}>
+                  {detailsOpportunity.title}
                 </h3>
                 <p className="map-view__details-kind">
-                  {getOpportunityKindLabel(selectedOpportunity.kind)}
+                  {getOpportunityKindLabel(detailsOpportunity.kind)}
                 </p>
               </div>
               <button
@@ -2433,15 +2433,7 @@ export function MapView({
                 }}
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (mapInstanceRef.current) {
-                    const center = mapInstanceRef.current.getCenter();
-                    preservedViewportRef.current = {
-                      center: [center[0], center[1]],
-                      zoom: mapInstanceRef.current.getZoom(),
-                    };
-                    shouldRestoreViewportAfterCloseRef.current = true;
-                  }
-                  onCloseDetails();
+                  setIsDetailsOpen(false);
                 }}
               >
                 <svg
@@ -2455,43 +2447,45 @@ export function MapView({
             </div>
 
             <div className="map-view__details-group">
-              <div className="map-view__details-company-row">
-                {selectedOpportunity.employerPublicId ? (
+              <div className="map-view__details-company">
+                {detailsOpportunity.employerPublicId ? (
                   <button
                     type="button"
                     className="map-view__details-company map-view__details-company-button"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {
                       event.stopPropagation();
-                      navigate(`/profiles/${selectedOpportunity.employerPublicId}`);
+                      navigate(`/profiles/${detailsOpportunity.employerPublicId}`, {
+                        state: {
+                          restoreViewMode: "map",
+                          returnTo: {
+                            pathname: location.pathname,
+                            search: location.search,
+                            hash: location.hash,
+                          },
+                        },
+                      });
                     }}
                   >
-                    {selectedOpportunity.companyName}
+                    {detailsOpportunity.companyName}
                   </button>
                 ) : (
-                  <p className="map-view__details-company">{selectedOpportunity.companyName}</p>
+                  <p className="map-view__details-company">{detailsOpportunity.companyName}</p>
                 )}
-                {selectedOpportunity.companyVerified ? (
-                  <span className="map-view__details-verified-icon" aria-hidden="true">
-                    <img
-                      src={verifiedIcon}
-                      alt=""
-                      aria-hidden="true"
-                      className="map-view__details-verified-icon-image"
-                    />
-                  </span>
+                {detailsOpportunity.companyVerified ? (
+                  <VerifiedTooltip className="map-view__details-verified-icon" />
                 ) : null}
               </div>
             </div>
 
             <div className="map-view__details-group">
-              <p className="map-view__details-price">{selectedOpportunity.salaryLabel}</p>
-              <p className="map-view__details-meta">{selectedOpportunity.locationLabel}</p>
+              <p className="map-view__details-price">{detailsOpportunity.salaryLabel}</p>
+              <p className="map-view__details-meta">{detailsOpportunity.locationLabel}</p>
             </div>
 
             <div className="map-view__details-group map-view__details-group--meta">
               <div className="map-view__details-tags">
-                {selectedOpportunity.tags.map((tag) => (
+                {detailsOpportunity.tags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="map-view__details-tag">
                     {tag}
                   </Badge>
@@ -2499,10 +2493,10 @@ export function MapView({
               </div>
               <div className="map-view__details-secondary-group">
                 <p className="map-view__details-secondary">
-                  Уровень: {selectedOpportunity.levelLabel}
+                  Уровень: {detailsOpportunity.levelLabel}
                 </p>
                 <p className="map-view__details-secondary">
-                  Занятость: {selectedOpportunity.employmentLabel}
+                  Занятость: {detailsOpportunity.employmentLabel}
                 </p>
               </div>
             </div>
@@ -2515,7 +2509,7 @@ export function MapView({
                     ? selectedOpportunityStatusMeta.variant
                     : roleName !== "employer" && isSelectedOpportunityApplied
                       ? "danger-outline"
-                      : "secondary"
+                      : themeVariant
                 }
                 size="sm"
                 className="map-view__details-apply"
@@ -2525,7 +2519,7 @@ export function MapView({
                   if (shouldDisableSelectedOpportunityApply) {
                     return;
                   }
-                  onApply?.(selectedOpportunity.id);
+                  onApply?.(detailsOpportunity.id);
                 }}
               >
                 {shouldDisableSelectedOpportunityApply
@@ -2546,7 +2540,7 @@ export function MapView({
                 aria-pressed={isSelectedOpportunityFavorite}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onToggleFavorite(selectedOpportunity.id);
+                  onToggleFavorite(detailsOpportunity.id);
                 }}
               >
                 <svg
@@ -2577,7 +2571,7 @@ export function MapView({
         <span
           className={
             isExpanded
-              ? "map-view__expand-icon map-view__expand-icon--narrow"
+              ? "map-view__expand-icon map-view__expand-icon--compact"
               : "map-view__expand-icon map-view__expand-icon--expand"
           }
           aria-hidden="true"
@@ -2607,15 +2601,15 @@ export function MapView({
         className={
           isFormatBarExpanded
             ? "map-view__format-bar"
-            : "map-view__format-bar map-view__format-bar--collapsed"
+            : "map-view__format-bar map-view__format-bar--closed"
         }
       >
         <button
           type="button"
           className={
             isFormatBarExpanded
-              ? "map-view__format-arrow map-view__format-arrow--expanded"
-              : "map-view__format-arrow"
+              ? "map-view__format-toggle map-view__format-toggle--open"
+              : "map-view__format-toggle"
           }
           aria-label={isFormatBarExpanded ? "Скрыть форматы" : "Показать форматы"}
           aria-expanded={isFormatBarExpanded}
@@ -2624,8 +2618,8 @@ export function MapView({
         <div
           className={
             isFormatBarExpanded
-              ? "map-view__format-content"
-              : "map-view__format-content map-view__format-content--collapsed"
+              ? "map-view__format-summary"
+              : "map-view__format-summary map-view__format-summary--closed"
           }
           aria-hidden={!isFormatBarExpanded}
         >

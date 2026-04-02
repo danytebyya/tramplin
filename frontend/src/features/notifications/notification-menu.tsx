@@ -288,18 +288,14 @@ export function NotificationMenu({
   });
 
   const handleItemClick = async (notificationId: string, actionUrl?: string | null, isRead?: boolean) => {
-    if (!isRead) {
-      await markAsReadMutation.mutateAsync(notificationId);
-    }
-
-    if (actionUrl?.startsWith("/onboarding/employer")) {
-      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
-      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
-    }
+    const markAsReadPromise = !isRead
+      ? markAsReadMutation.mutateAsync(notificationId).catch(() => undefined)
+      : Promise.resolve(undefined);
 
     closeMenu();
 
     if (!actionUrl) {
+      await markAsReadPromise;
       return;
     }
 
@@ -309,6 +305,11 @@ export function NotificationMenu({
         : actionUrl;
     const shouldAllowEmployerChangesRequested =
       resolvedActionUrl.startsWith("/onboarding/employer?mode=changes-requested");
+
+    if (resolvedActionUrl.startsWith("/onboarding/employer")) {
+      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
+    }
 
     if (resolvedActionUrl.startsWith("/")) {
       const [targetPathname, targetHash] = resolvedActionUrl.split("#");
@@ -322,12 +323,14 @@ export function NotificationMenu({
         }
       }
 
+      void markAsReadPromise;
       navigate(resolvedActionUrl, {
         state: shouldAllowEmployerChangesRequested ? { allowChangesRequestedAccess: true } : undefined,
       });
       return;
     }
 
+    void markAsReadPromise;
     window.location.assign(resolvedActionUrl);
   };
 
@@ -398,7 +401,7 @@ export function NotificationMenu({
           </button>
         </div>
 
-        <div ref={contentRef} className="notification-menu__content">
+        <div ref={contentRef} className="notification-menu__records">
           {hasLoadError ? (
             <div className="notification-menu__empty">
               Не удалось загрузить уведомления.
@@ -417,42 +420,42 @@ export function NotificationMenu({
             <div
               key={item.id}
               className={cn(
-                "notification-menu__item",
-                item.is_read && "notification-menu__item--read",
+                "notification-menu__notice",
+                item.is_read && "notification-menu__notice--read",
               )}
               role="menuitem"
             >
-              <div className="notification-menu__item-top">
+              <div className="notification-menu__notice-head">
                 <button
                   type="button"
-                  className="notification-menu__item-main"
+                  className="notification-menu__notice-main"
                   onClick={() => {
                     void handleItemClick(item.id, item.action_url, item.is_read);
                   }}
                 >
-                  <span className="notification-menu__item-body">
-                    <span className="notification-menu__item-title-row">
-                      <span className="notification-menu__item-heading">
-                        <span className="notification-menu__item-title">{item.title}</span>
-                        <span className="notification-menu__item-date-row">
-                          <span className="notification-menu__item-date-icon" aria-hidden="true" />
-                          <span className="notification-menu__item-date">
+                  <span className="notification-menu__notice-body">
+                    <span className="notification-menu__title-summary">
+                      <span className="notification-menu__notice-heading">
+                        <span className="notification-menu__notice-title">{item.title}</span>
+                        <span className="notification-menu__date-summary">
+                          <span className="notification-menu__notice-date-icon" aria-hidden="true" />
+                          <span className="notification-menu__notice-date">
                             {formatNotificationDate(item.created_at)}
                           </span>
                         </span>
                       </span>
                       {!item.is_read ? (
-                        <span className="notification-menu__item-indicator" aria-hidden="true" />
+                        <span className="notification-menu__notice-indicator" aria-hidden="true" />
                       ) : (
-                        <span className="notification-menu__item-indicator-placeholder" aria-hidden="true" />
+                        <span className="notification-menu__notice-indicator-slot" aria-hidden="true" />
                       )}
                     </span>
-                    <span className="notification-menu__item-message">{item.message}</span>
+                    <span className="notification-menu__notice-message">{item.message}</span>
                   </span>
                 </button>
                 <button
                   type="button"
-                  className="notification-menu__item-dismiss"
+                  className="notification-menu__notice-dismiss"
                   aria-label="Скрыть уведомление"
                   disabled={hideNotificationMutation.isPending}
                   onClick={() => {
@@ -465,13 +468,13 @@ export function NotificationMenu({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="notification-menu__item-action"
+                  className="notification-menu__notice-action"
                   onClick={() => {
                     void handleItemClick(item.id, item.action_url, item.is_read);
                   }}
                 >
-                  <span className="notification-menu__item-action-label">{item.action_label}</span>
-                  <span className="notification-menu__item-action-icon" aria-hidden="true" />
+                  <span className="notification-menu__notice-action-label">{item.action_label}</span>
+                  <span className="notification-menu__notice-action-icon" aria-hidden="true" />
                 </Button>
               ) : null}
             </div>

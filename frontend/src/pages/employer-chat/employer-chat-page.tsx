@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { getEmployerAccessState, resolveEmployerFallbackRoute, useAuthStore } from "../../features/auth";
-import { Container } from "../../shared/ui";
+import { Container, ProfileTabs } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import { ChatWorkspace } from "../../widgets/chat-workspace";
@@ -40,40 +40,22 @@ export function EmployerChatPage() {
   return (
     <main className="employer-chat-page">
       <Header
-        containerClassName="employer-chat-page__header-container"
+        containerClassName="employer-chat-page__header-shell"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
       />
 
-      <Container className="employer-chat-page__container">
-        <nav className="employer-chat-page__tabs" aria-label="Разделы работодателя">
-          {employerAccess.canManageCompanyProfile ? (
-            <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/dashboard/employer")}>
-              Профиль компании
-            </button>
-          ) : null}
-          {employerAccess.canManageOpportunities ? (
-            <button
-              type="button"
-              className="employer-chat-page__tab"
-              onClick={() => navigate("/employer/opportunities")}
-            >
-              Управление возможностями
-            </button>
-          ) : null}
-          {employerAccess.canReviewResponses ? (
-            <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/employer/responses")}>
-              Отклики
-            </button>
-          ) : null}
-          <button type="button" className="employer-chat-page__tab employer-chat-page__tab--active">
-            Чат
-          </button>
-          <button type="button" className="employer-chat-page__tab" onClick={() => navigate("/settings")}>
-            Настройки
-          </button>
-        </nav>
+      <Container className="employer-chat-page__shell">
+        <ProfileTabs
+          navigate={navigate}
+          audience="employer"
+          current="chat"
+          employerAccess={employerAccess}
+          tabsClassName="employer-chat-page__tabs"
+          tabClassName="employer-chat-page__tab"
+          activeTabClassName="employer-chat-page__tab--active"
+        />
 
         <ChatWorkspace
           title="Чат"

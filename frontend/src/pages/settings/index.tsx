@@ -7,6 +7,7 @@ import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
 import copyIcon from "../../assets/icons/copy.svg";
 import copiedIcon from "../../assets/icons/check-mark-light.png";
+import { DeleteAccountModal } from "../../features/account";
 import {
   CitySelector,
   CitySelection,
@@ -19,6 +20,7 @@ import {
   AuthSessionListResponse,
   NotificationPreferenceGroup,
   NotificationPreferenceKey,
+  changePasswordRequest,
   clearClientSession,
   clearCompanyInviteReturnTo,
   deleteCurrentUserRequest,
@@ -31,6 +33,7 @@ import {
   persistCompanyInviteReturnTo,
   readAccessTokenPayload,
   readCompanyInviteReturnTo,
+  requestPasswordResetCode,
   revokeOtherSessionsRequest,
   revokeSessionRequest,
   switchAccountContextRequest,
@@ -58,7 +61,7 @@ import {
   saveApplicantPrivacySettings,
 } from "../../shared/lib";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
-import { Button, Checkbox, Container, Input, Modal, Radio, Status } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, Modal, ProfileTabs, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import {
   buildApplicantProfileMenuItems,
@@ -77,12 +80,6 @@ type NotificationPreference = {
 };
 
 type ApplicantProfileVisibility = "public" | "authorized" | "hidden";
-
-type SettingsTabItem = {
-  label: string;
-  to?: string;
-  isCurrent?: boolean;
-};
 
 const notificationPreferenceKeys: NotificationPreferenceKey[] = [
   "new_verification_requests",
@@ -287,26 +284,6 @@ function resolveCheckboxVariant(role: string | null) {
 
 function resolveModerationTitle(role: string | null) {
   return role === "admin" ? "Настройки администрирования" : "Настройки модерации";
-}
-
-function resolvePublicSettingsTabs(role: string | null, employerAccess: ReturnType<typeof getEmployerAccessState>): SettingsTabItem[] {
-  if (role === "employer") {
-    return [
-      ...(employerAccess.canManageCompanyProfile ? [{ label: "Профиль компании", to: "/dashboard/employer" }] : []),
-      ...(employerAccess.canManageOpportunities ? [{ label: "Управление возможностями", to: "/employer/opportunities" }] : []),
-      ...(employerAccess.canReviewResponses ? [{ label: "Отклики", to: "/employer/responses" }] : []),
-      ...(employerAccess.canAccessChat ? [{ label: "Чат", to: "/employer/chat" }] : []),
-      { label: "Настройки", to: "/settings", isCurrent: true },
-    ];
-  }
-
-  return [
-    { label: "Профиль", to: "/dashboard/applicant" },
-    { label: "Мои отклики", to: "/applications" },
-    { label: "Избранное", to: "/favorites" },
-    { label: "Нетворкинг", to: "/networking" },
-    { label: "Настройки", to: "/settings", isCurrent: true },
-  ];
 }
 
 function resolveEmployerStaffRoleLabel(role: string) {
@@ -547,6 +524,8 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const [securitySuccess, setSecuritySuccess] = useState<string | null>(null);
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
   const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
@@ -569,7 +548,7 @@ export function SettingsPage() {
   const activeEmployerMembershipIdFromToken = accessTokenPayload?.active_membership_id ?? null;
   const activeEmployerPermissionKeys = accessTokenPayload?.active_permissions ?? [];
 
-  const { data: meData } = useQuery({
+  const { data: meData, status: meStatus } = useQuery({
     queryKey: ["auth", "me"],
     queryFn: meRequest,
     staleTime: 5 * 60 * 1000,
@@ -631,6 +610,9 @@ export function SettingsPage() {
   });
 
   const user = meData?.data?.user;
+  const preferredCity = user?.preferred_city?.trim() || "";
+  const isCityReady = !isAuthenticated || meStatus !== "pending";
+  const displayCity = preferredCity || selectedCity;
   const canManageEmployerStaff = canManageEmployerStaffByState;
   const isProfileLoading = !user;
   const isNotificationLoading = notificationPreferencesQuery.isPending;
@@ -727,6 +709,46 @@ export function SettingsPage() {
     mutationFn: updateNotificationPreferencesRequest,
     onSuccess: (response) => {
       queryClient.setQueryData(["users", "me", "notification-preferences"], response);
+    },
+  });
+  const changePasswordMutation = useMutation({
+    mutationFn: changePasswordRequest,
+    onMutate: () => {
+      setSecurityError(null);
+      setSecuritySuccess(null);
+    },
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setSecuritySuccess("Пароль успешно изменён.");
+    },
+    onError: (error: any) => {
+      setSecurityError(
+        error?.response?.data?.error?.message ?? "Не удалось изменить пароль. Попробуйте еще раз.",
+      );
+    },
+  });
+  const requestPasswordResetMutation = useMutation({
+    mutationFn: requestPasswordResetCode,
+    onMutate: () => {
+      setSecurityError(null);
+      setSecuritySuccess(null);
+    },
+    onSuccess: () => {
+      const normalizedEmail = user?.email?.trim();
+      if (!normalizedEmail) {
+        setSecurityError("Не удалось определить email для восстановления пароля.");
+        return;
+      }
+
+      navigate(`/password-recovery?email=${encodeURIComponent(normalizedEmail)}&step=code`);
+    },
+    onError: (error: any) => {
+      setSecurityError(
+        error?.response?.data?.error?.message ??
+          "Не удалось отправить код восстановления. Попробуйте еще раз.",
+      );
     },
   });
 
@@ -877,7 +899,12 @@ export function SettingsPage() {
     onMutate: () => {
       setDeleteAccountError(null);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (!response?.data?.deleted) {
+        setDeleteAccountError("Сервер не подтвердил удаление аккаунта. Попробуйте еще раз.");
+        return;
+      }
+
       clearClientSession({ redirectTo: "/" });
     },
     onError: (error: any) => {
@@ -999,6 +1026,42 @@ export function SettingsPage() {
       display_name: fullName.trim(),
       email: email.trim(),
     });
+  };
+
+  const handleChangePassword = () => {
+    if (!currentPassword.trim()) {
+      setSecuritySuccess(null);
+      setSecurityError("Введите текущий пароль");
+      return;
+    }
+
+    if (!newPassword.trim()) {
+      setSecuritySuccess(null);
+      setSecurityError("Введите новый пароль");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setSecuritySuccess(null);
+      setSecurityError("Новый пароль и подтверждение не совпадают");
+      return;
+    }
+
+    changePasswordMutation.mutate({
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  };
+
+  const handlePasswordRecovery = () => {
+    const normalizedEmail = user?.email?.trim();
+    if (!normalizedEmail) {
+      setSecuritySuccess(null);
+      setSecurityError("Не удалось определить email для восстановления пароля.");
+      return;
+    }
+
+    requestPasswordResetMutation.mutate({ email: normalizedEmail });
   };
 
   const handleApplicantPrivacySave = () => {
@@ -1157,12 +1220,14 @@ export function SettingsPage() {
     isEmployer &&
     Boolean(currentEmployerMembership?.is_primary) &&
     employerStaffItems.some((item) => !item.is_current_user);
-  const isDeleteAccountBlockedByEmployees = Boolean(hasManagedEmployees);
+  const isEmployerDeleteFlow = isEmployer;
+  const isDeletingEmployerWithCascade = Boolean(hasManagedEmployees);
   const invitePermissionKeys = useMemo(
     () => mapEmployerStaffPermissionsToKeys(invitePermissions),
     [invitePermissions],
   );
   const trimmedInviteEmail = inviteEmail.trim();
+  const isInviteLinkMode = !trimmedInviteEmail && Boolean(latestInvitationUrl);
   const inviteEmailError =
     trimmedInviteEmail.length > 0 && !isValidEmail(trimmedInviteEmail)
       ? "Введите корректный email"
@@ -1230,11 +1295,6 @@ export function SettingsPage() {
   };
 
   const handleDeleteAccount = () => {
-    if (isDeleteAccountBlockedByEmployees) {
-      setDeleteAccountError("Удаление невозможно, пока в компании есть сотрудники.");
-      return;
-    }
-
     deleteCurrentUserMutation.mutate();
   };
 
@@ -1295,23 +1355,31 @@ export function SettingsPage() {
   };
 
   const renderPublicTabs = () => {
+    if (role === "employer") {
+      return (
+        <ProfileTabs
+          navigate={navigate}
+          audience="employer"
+          current="settings"
+          employerAccess={employerAccess}
+          tabsClassName="settings-page__tabs"
+          tabClassName="settings-page__tab"
+          activeTabClassName="settings-page__tab--active"
+          ariaLabel="Разделы настроек"
+        />
+      );
+    }
+
     return (
-      <nav className="settings-page__tabs" aria-label="Разделы настроек">
-        {resolvePublicSettingsTabs(role, employerAccess).map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            className={item.isCurrent ? "settings-page__tab settings-page__tab--active" : "settings-page__tab"}
-            onClick={() => {
-              if (item.to) {
-                navigate(item.to);
-              }
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      <ProfileTabs
+        navigate={navigate}
+        audience="applicant"
+        current="settings"
+        tabsClassName="settings-page__tabs"
+        tabClassName="settings-page__tab"
+        activeTabClassName="settings-page__tab--active"
+        ariaLabel="Разделы настроек"
+      />
     );
   };
 
@@ -1322,32 +1390,50 @@ export function SettingsPage() {
   ) => {
     if (isNotificationLoading) {
       return Array.from({ length: isPublicRole ? 2 : 4 }, (_, index) => (
-        <div key={`${prefix}-skeleton-${index}`} className="settings-page__checkbox-row">
-          <SettingsSkeleton className="settings-page__skeleton--checkbox" />
-          <SettingsSkeleton className="settings-page__skeleton--checkbox-label" />
+        <div key={`${prefix}-skeleton-${index}`} className="settings-page__preference-option">
+          <SettingsSkeleton className="settings-page__skeleton--mark" />
+          <SettingsSkeleton className="settings-page__skeleton--mark-label" />
         </div>
       ));
     }
 
     return items.map((item) => (
-      <label key={`${prefix}-${item.key}`} className="settings-page__checkbox-row">
+      <label key={`${prefix}-${item.key}`} className="settings-page__preference-option">
         <Checkbox
           variant={checkboxVariant}
           checked={item.enabled}
           onChange={() => onToggle(item.key)}
         />
-        <span className="settings-page__checkbox-label">{item.label}</span>
+        <span className="settings-page__preference-label">{item.label}</span>
       </label>
     ));
   };
 
-  const renderSecurityPanel = () => {
+  const renderSecurityPanel = (layout: "panel" | "card" = "panel") => {
+    const containerClassName =
+      layout === "card" ? "settings-page__card" : "settings-page__panel";
+    const headerClassName =
+      layout === "card" ? "settings-page__card-header" : "settings-page__panel-header";
+    const titleClassName =
+      layout === "card" ? "settings-page__card-title" : "settings-page__panel-title";
+    const subtitleClassName =
+      layout === "card" ? "settings-page__card-subtitle" : "settings-page__panel-subtitle";
+    const bodyClassName =
+      layout === "card"
+        ? "settings-page__card-body settings-page__panel-body--security"
+        : "settings-page__panel-body settings-page__panel-body--security";
+    const actionsClassName =
+      layout === "card"
+        ? "settings-page__card-footer settings-page__card-footer--stacked"
+        : "settings-page__panel-actions settings-page__panel-actions--stacked";
+
     return (
-      <div className="settings-page__panel">
-        <div className="settings-page__panel-header">
-          <h3 className="settings-page__panel-title">Смена пароля</h3>
+      <div className={containerClassName}>
+        <div className={headerClassName}>
+          <h3 className={titleClassName}>{layout === "card" ? "Безопасность" : "Смена пароля"}</h3>
+          {layout === "card" ? <p className={subtitleClassName}>Смена пароля</p> : null}
         </div>
-        <div className="settings-page__panel-body settings-page__panel-body--security">
+        <div className={bodyClassName}>
           <label className="settings-page__field">
             <span className="settings-page__field-label">Текущий пароль</span>
             <Input
@@ -1379,13 +1465,31 @@ export function SettingsPage() {
             />
           </label>
         </div>
-        <div className="settings-page__panel-actions settings-page__panel-actions--stacked">
-          <Button type="button" variant={outlineVariant} size="md">
+        <div className={actionsClassName}>
+          <Button
+            type="button"
+            variant={outlineVariant}
+            size="md"
+            loading={requestPasswordResetMutation.isPending}
+            onClick={handlePasswordRecovery}
+          >
             Восстановить пароль
           </Button>
-          <Button type="button" variant={actionVariant} size="md">
+          <Button
+            type="button"
+            variant={actionVariant}
+            size="md"
+            loading={changePasswordMutation.isPending}
+            onClick={handleChangePassword}
+          >
             Изменить пароль
           </Button>
+          {securityError ? (
+            <p className="settings-page__form-message settings-page__form-message--error">{securityError}</p>
+          ) : null}
+          {securitySuccess ? (
+            <p className="settings-page__form-message settings-page__form-message--success">{securitySuccess}</p>
+          ) : null}
         </div>
       </div>
     );
@@ -1396,7 +1500,7 @@ export function SettingsPage() {
       <div className="settings-page__panel">
         <div className="settings-page__panel-body settings-page__panel-body--account">
           {canLeaveCurrentCompany ? (
-            <div className="settings-page__account-block">
+            <div className="settings-page__account-panel">
               <p className="settings-page__account-subtitle">Выход из компании</p>
               <p className="settings-page__account-description">
                 Рабочий профиль компании будет отвязан от вашего аккаунта
@@ -1423,7 +1527,7 @@ export function SettingsPage() {
               </Button>
             </div>
           ) : null}
-          <div className="settings-page__account-block">
+          <div className="settings-page__account-panel">
             <p className="settings-page__account-subtitle">Удаление аккаунта</p>
             <p className="settings-page__account-description">Все данные будут удалены безвозвратно</p>
           </div>
@@ -1456,16 +1560,16 @@ export function SettingsPage() {
           <div
             className={
               hasOtherSessions
-                ? "settings-page__sessions-layout"
-                : "settings-page__sessions-layout settings-page__sessions-layout--without-footer"
+                ? "settings-page__sessions-overview"
+                : "settings-page__sessions-overview settings-page__sessions-overview--without-footer"
             }
           >
             <div className="settings-page__session-list">
               {isSessionsLoading
                 ? Array.from({ length: 3 }, (_, index) => (
-                    <div key={`session-skeleton-${index}`} className="settings-page__session-item">
+                    <div key={`session-skeleton-${index}`} className="settings-page__session-entry">
                       <SettingsSkeleton className="settings-page__skeleton--dot" />
-                      <div className="settings-page__session-content">
+                      <div className="settings-page__session-details">
                         <SettingsSkeleton className="settings-page__skeleton--session-line" />
                         <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
                         <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
@@ -1473,9 +1577,9 @@ export function SettingsPage() {
                     </div>
                   ))
                 : sessionItems.map((session) => (
-                    <div key={session.id} className="settings-page__session-item">
+                    <div key={session.id} className="settings-page__session-entry">
                       <span className="settings-page__session-dot" aria-hidden="true" />
-                      <div className="settings-page__session-content">
+                      <div className="settings-page__session-details">
                         <p className="settings-page__session-title">{session.title}</p>
                         <p className="settings-page__session-meta">{session.meta}</p>
                         <p className="settings-page__session-date">{session.date}</p>
@@ -1529,14 +1633,14 @@ export function SettingsPage() {
           <div className="settings-page__history-list">
             {isLoginHistoryLoading
               ? Array.from({ length: 4 }, (_, index) => (
-                  <div key={`history-skeleton-${index}`} className="settings-page__history-item">
+                  <div key={`history-skeleton-${index}`} className="settings-page__history-entry">
                     <SettingsSkeleton className="settings-page__skeleton--dot" />
                     <SettingsSkeleton className="settings-page__skeleton--history-line" />
                     <SettingsSkeleton className="settings-page__skeleton--history-status" />
                   </div>
                 ))
               : loginHistoryItems.map((item) => (
-                  <div key={item.id} className="settings-page__history-item">
+                  <div key={item.id} className="settings-page__history-entry">
                     <span className="settings-page__history-dot" aria-hidden="true" />
                     <span className="settings-page__history-date">{item.date}</span>
                     <Status className="settings-page__history-status" variant={item.statusVariant}>
@@ -1700,7 +1804,7 @@ export function SettingsPage() {
                                   <p className="settings-page__staff-role">Роль: {member.roleLabel}</p>
                                   <ul className="settings-page__staff-permission-list">
                                     {member.permissions.map((permission) => (
-                                      <li key={`${member.id}-${permission}`} className="settings-page__staff-permission-item">
+                                      <li key={`${member.id}-${permission}`} className="settings-page__staff-permission-option">
                                         {permission}
                                       </li>
                                     ))}
@@ -1786,7 +1890,7 @@ export function SettingsPage() {
                                     <p className="settings-page__staff-role">Роль: {item.roleLabel}</p>
                                     <ul className="settings-page__staff-permission-list">
                                       {(item.permissions ?? []).map((permission) => (
-                                        <li key={`${item.id}-${permission}`} className="settings-page__staff-permission-item">
+                                        <li key={`${item.id}-${permission}`} className="settings-page__staff-permission-option">
                                           {permission}
                                         </li>
                                       ))}
@@ -1823,11 +1927,15 @@ export function SettingsPage() {
                 setLatestInvitationUrl(null);
               }}
               panelClassName="settings-page__staff-modal-panel"
-              titleAccentColor={modalTitleAccentColor}
+              titleAccentColor={
+                pendingDeleteItem?.kind === "membership" && !pendingDeleteItem.isCurrentUser
+                  ? "var(--color-danger)"
+                  : modalTitleAccentColor
+              }
             >
-              <div className="settings-page__staff-modal">
-                <label className="settings-page__field">
-                  <span className="settings-page__field-label">Почта сотрудника</span>
+              <div className="modal__body settings-page__staff-modal">
+                <label className="modal__field settings-page__field">
+                  <span className="modal__field-label settings-page__field-label">Почта сотрудника</span>
                   <Input
                     className="input--sm"
                     value={inviteEmail}
@@ -1840,9 +1948,9 @@ export function SettingsPage() {
                     placeholder="Введите email или оставьте пустым"
                   />
                 </label>
-                <div className="settings-page__staff-permissions">
-                  <p className="settings-page__staff-subtitle">Доступы сотрудника</p>
-                  <label className="settings-page__checkbox-row">
+                <div className="modal__section settings-page__staff-permissions">
+                  <p className="modal__section-title settings-page__staff-subtitle">Доступы сотрудника</p>
+                  <label className="modal__option settings-page__preference-option">
                     <Checkbox
                       checked={invitePermissions.canReviewResponses}
                       variant={checkboxVariant}
@@ -1853,9 +1961,9 @@ export function SettingsPage() {
                         }))
                       }
                     />
-                    <span className="settings-page__checkbox-label">Просмотр откликов</span>
+                    <span className="settings-page__preference-label">Просмотр откликов</span>
                   </label>
-                  <label className="settings-page__checkbox-row">
+                  <label className="modal__option settings-page__preference-option">
                     <Checkbox
                       checked={invitePermissions.canManageOpportunities}
                       variant={checkboxVariant}
@@ -1866,9 +1974,9 @@ export function SettingsPage() {
                         }))
                       }
                     />
-                    <span className="settings-page__checkbox-label">Создание и редактирование возможностей</span>
+                    <span className="settings-page__preference-label">Управление возможностями</span>
                   </label>
-                  <label className="settings-page__checkbox-row">
+                  <label className="modal__option settings-page__preference-option">
                     <Checkbox
                       checked={invitePermissions.canManageCompanyProfile}
                       variant={checkboxVariant}
@@ -1879,9 +1987,9 @@ export function SettingsPage() {
                         }))
                       }
                     />
-                    <span className="settings-page__checkbox-label">Управление профилем компании</span>
+                    <span className="settings-page__preference-label">Управление профилем компании</span>
                   </label>
-                  <label className="settings-page__checkbox-row">
+                  <label className="modal__option settings-page__preference-option">
                     <Checkbox
                       checked={invitePermissions.canManageStaff}
                       variant={checkboxVariant}
@@ -1892,9 +2000,9 @@ export function SettingsPage() {
                         }))
                       }
                     />
-                    <span className="settings-page__checkbox-label">Управление сотрудниками</span>
+                    <span className="settings-page__preference-label">Управление сотрудниками</span>
                   </label>
-                  <label className="settings-page__checkbox-row">
+                  <label className="modal__option settings-page__preference-option">
                     <Checkbox
                       checked={invitePermissions.canAccessChat}
                       variant={checkboxVariant}
@@ -1905,15 +2013,15 @@ export function SettingsPage() {
                         }))
                       }
                     />
-                    <span className="settings-page__checkbox-label">Общение в чате</span>
+                    <span className="settings-page__preference-label">Общение в чате</span>
                   </label>
                 </div>
                 {inviteError ? (
-                  <p className="settings-page__form-message settings-page__form-message--error">{inviteError}</p>
+                  <p className="modal__error settings-page__form-message settings-page__form-message--error">{inviteError}</p>
                 ) : null}
                 {!trimmedInviteEmail && latestInvitationUrl ? (
-                  <label className="settings-page__field">
-                    <span className="settings-page__field-label">Ссылка приглашения</span>
+                  <label className="modal__field settings-page__field">
+                    <span className="modal__field-label settings-page__field-label">Ссылка приглашения</span>
                     <span className="settings-page__invite-link-shell">
                       <input
                         className="input input--sm settings-page__invite-link-input"
@@ -1946,14 +2054,14 @@ export function SettingsPage() {
                     </span>
                   </label>
                 ) : null}
-                <div className="settings-page__staff-invite-actions">
+                <div className="modal__actions settings-page__staff-invite-actions">
                   <Button
                     type="button"
-                    variant={outlineVariant}
+                    variant={isInviteLinkMode ? outlineVariant : "cancel"}
                     size="md"
                     onClick={() => setIsStaffInviteModalOpen(false)}
                   >
-                    Закрыть
+                    {isInviteLinkMode ? "Закрыть" : "Отменить"}
                   </Button>
                   <Button
                     type="button"
@@ -1984,21 +2092,30 @@ export function SettingsPage() {
 
                 setPendingDeleteItem(null);
               }}
+              size="small"
               panelClassName="settings-page__staff-modal-panel"
-              titleAccentColor={modalTitleAccentColor}
+              titleAccentColor={
+                pendingDeleteItem?.kind === "membership" && pendingDeleteItem.isCurrentUser
+                  ? modalTitleAccentColor
+                  : "var(--color-danger)"
+              }
             >
-              <div className="settings-page__staff-modal">
-                <p className="settings-page__staff-delete-message">
+              <div className="modal__body settings-page__staff-modal">
+                <p className="modal__text settings-page__staff-delete-message">
                   {pendingDeleteItem?.kind === "membership"
                     ? pendingDeleteItem.isCurrentUser
-                      ? `Вы уверены, что хотите отвязать рабочий профиль ${pendingDeleteItem.email} от компании?`
-                      : `Вы уверены, что хотите удалить сотрудника ${pendingDeleteItem.email} из компании?`
-                    : `Вы уверены, что хотите удалить приглашение для ${pendingDeleteItem?.email}?`}
+                      ? `Вы уверены, что хотите отвязать рабочий профиль «${pendingDeleteItem.email}» от компании?`
+                      : `Вы уверены, что хотите удалить сотрудника «${pendingDeleteItem.email}» из компании?`
+                    : `Вы уверены, что хотите удалить приглашение для «${pendingDeleteItem?.email}»?`}
                 </p>
-                <div className="settings-page__staff-invite-actions">
+                <div className="modal__actions settings-page__staff-invite-actions">
                   <Button
                     type="button"
-                    variant={outlineVariant}
+                    variant={
+                      pendingDeleteItem?.kind === "membership" && pendingDeleteItem.isCurrentUser
+                        ? outlineVariant
+                        : "cancel"
+                    }
                     size="md"
                     disabled={isDeleteStaffItemPending}
                     onClick={() => setPendingDeleteItem(null)}
@@ -2007,12 +2124,18 @@ export function SettingsPage() {
                   </Button>
                   <Button
                     type="button"
-                    variant={actionVariant}
+                    variant={
+                      pendingDeleteItem?.kind === "membership" && pendingDeleteItem.isCurrentUser
+                        ? actionVariant
+                        : "danger"
+                    }
                     size="md"
                     loading={isDeleteStaffItemPending}
                     onClick={handleConfirmDeleteStaffItem}
                   >
-                    Подтвердить
+                    {pendingDeleteItem?.kind === "membership" && pendingDeleteItem.isCurrentUser
+                      ? "Выйти"
+                      : "Удалить"}
                   </Button>
                 </div>
               </div>
@@ -2082,50 +2205,50 @@ export function SettingsPage() {
                 <h2 className="settings-page__section-title">Настройки приватности</h2>
                 <h2 className="settings-page__section-title">Уведомления</h2>
               </div>
-              <div className="settings-page__notification-grid settings-page__notification-grid--applicant">
+              <div className="settings-page__notification-preferences settings-page__notification-preferences--applicant">
               <div className="settings-page__panel settings-page__panel--notification settings-page__panel--notification-wide">
                 <div className="settings-page__panel-body settings-page__panel-body--notification">
                   <div className="settings-page__group">
                     <h4 className="settings-page__group-title">Видимость профиля</h4>
                     <div className="settings-page__radio-list">
-                      <label className="settings-page__radio-row">
+                      <label className="settings-page__radio-option">
                         <Radio
                           checked={profileVisibility === "public"}
                           onChange={() => setProfileVisibility("public")}
                           variant="secondary"
                           name="applicant-privacy-visibility"
                         />
-                        <span className="settings-page__checkbox-label">Видят все</span>
+                        <span className="settings-page__preference-label">Видят все</span>
                       </label>
-                      <label className="settings-page__radio-row">
+                      <label className="settings-page__radio-option">
                         <Radio
                           checked={profileVisibility === "authorized"}
                           onChange={() => setProfileVisibility("authorized")}
                           variant="secondary"
                           name="applicant-privacy-visibility"
                         />
-                        <span className="settings-page__checkbox-label">Видят авторизованные пользователи</span>
+                        <span className="settings-page__preference-label">Видят авторизованные пользователи</span>
                       </label>
-                      <label className="settings-page__radio-row">
+                      <label className="settings-page__radio-option">
                         <Radio
                           checked={profileVisibility === "hidden"}
                           onChange={() => setProfileVisibility("hidden")}
                           variant="secondary"
                           name="applicant-privacy-visibility"
                         />
-                        <span className="settings-page__checkbox-label">Полностью скрыт</span>
+                        <span className="settings-page__preference-label">Полностью скрыт</span>
                       </label>
                     </div>
                   </div>
                   <div className="settings-page__group">
                     <h4 className="settings-page__group-title">Видимость резюме</h4>
-                    <label className="settings-page__checkbox-row">
+                    <label className="settings-page__preference-option">
                       <Checkbox
                         variant={checkboxVariant}
                         checked={isResumeVisible}
                         onChange={() => setIsResumeVisible((current) => !current)}
                       />
-                      <span className="settings-page__checkbox-label">Показывать резюме другим пользователям</span>
+                      <span className="settings-page__preference-label">Показывать резюме другим пользователям</span>
                     </label>
                   </div>
                 </div>
@@ -2134,13 +2257,13 @@ export function SettingsPage() {
                 <div className="settings-page__panel-body settings-page__panel-body--notification">
                   <div className="settings-page__group">
                     <h4 className="settings-page__group-title">E-mail уведомления</h4>
-                    <div className="settings-page__checkbox-list">
+                    <div className="settings-page__preference-list">
                       {renderNotificationItems(visibleEmailNotifications, toggleEmailNotification, "email")}
                     </div>
                   </div>
                   <div className="settings-page__group">
                     <h4 className="settings-page__group-title">Push-уведомления</h4>
-                    <div className="settings-page__checkbox-list">
+                    <div className="settings-page__preference-list">
                       {renderNotificationItems(visiblePushNotifications, togglePushNotification, "push")}
                     </div>
                   </div>
@@ -2151,13 +2274,13 @@ export function SettingsPage() {
           ) : (
             <>
               <h2 className="settings-page__section-title">Уведомления</h2>
-              <div className="settings-page__notification-grid">
+              <div className="settings-page__notification-preferences">
                 <div className="settings-page__panel settings-page__panel--notification">
                   <div className="settings-page__panel-header">
                     <h3 className="settings-page__panel-title">E-mail уведомления</h3>
                   </div>
                   <div className="settings-page__panel-body settings-page__panel-body--notification">
-                    <div className="settings-page__checkbox-list">
+                    <div className="settings-page__preference-list">
                       {renderNotificationItems(visibleEmailNotifications, toggleEmailNotification, "email")}
                     </div>
                   </div>
@@ -2167,7 +2290,7 @@ export function SettingsPage() {
                     <h3 className="settings-page__panel-title">Push-уведомления</h3>
                   </div>
                   <div className="settings-page__panel-body settings-page__panel-body--notification">
-                    <div className="settings-page__checkbox-list">
+                    <div className="settings-page__preference-list">
                       {renderNotificationItems(visiblePushNotifications, togglePushNotification, "push")}
                     </div>
                   </div>
@@ -2198,7 +2321,7 @@ export function SettingsPage() {
           {renderSecurityPanel()}
         </section>
 
-        <div className="settings-page__summary-grid">
+        <div className="settings-page__summary-panels">
           {renderLoginHistoryPanel()}
           {renderSessionsPanel()}
         </div>
@@ -2213,7 +2336,7 @@ export function SettingsPage() {
 
   const renderModerationLayout = () => {
     return (
-      <div className="settings-page__grid">
+      <div className="settings-page__sections">
         <section className="settings-page__card">
           <div className="settings-page__card-header">
             <h2 className="settings-page__card-title">Профиль</h2>
@@ -2264,34 +2387,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <section className="settings-page__card">
-          <div className="settings-page__card-header">
-            <h2 className="settings-page__card-title">Безопасность</h2>
-            <p className="settings-page__card-subtitle">Смена пароля</p>
-          </div>
-          <div className="settings-page__card-body">
-            <label className="settings-page__field">
-              <span className="settings-page__field-label">Текущий пароль</span>
-              <Input type="password" className="input--sm" placeholder="Введите текущий пароль" />
-            </label>
-            <label className="settings-page__field">
-              <span className="settings-page__field-label">Новый пароль</span>
-              <Input type="password" className="input--sm" placeholder="Введите новый пароль" />
-            </label>
-            <label className="settings-page__field">
-              <span className="settings-page__field-label">Подтверждение пароля</span>
-              <Input type="password" className="input--sm" placeholder="Повторите новый пароль" />
-            </label>
-          </div>
-          <div className="settings-page__card-footer settings-page__card-footer--stacked">
-            <Button type="button" variant={outlineVariant} size="md">
-              Восстановить пароль
-            </Button>
-            <Button type="button" variant={actionVariant} size="md">
-              Изменить пароль
-            </Button>
-          </div>
-        </section>
+        {renderSecurityPanel("card")}
 
         <section className="settings-page__card">
           <div className="settings-page__card-header">
@@ -2300,13 +2396,13 @@ export function SettingsPage() {
           <div className="settings-page__card-body settings-page__card-body--notifications">
             <div className="settings-page__group">
               <h3 className="settings-page__group-title">E-mail уведомления</h3>
-              <div className="settings-page__checkbox-list">
+              <div className="settings-page__preference-list">
                 {renderNotificationItems(visibleEmailNotifications, toggleEmailNotification, "moderation-email")}
               </div>
             </div>
             <div className="settings-page__group">
               <h3 className="settings-page__group-title">Push-уведомления</h3>
-              <div className="settings-page__checkbox-list">
+              <div className="settings-page__preference-list">
                 {renderNotificationItems(visiblePushNotifications, togglePushNotification, "moderation-push")}
               </div>
             </div>
@@ -2332,16 +2428,16 @@ export function SettingsPage() {
             <div
               className={
                 hasOtherSessions
-                  ? "settings-page__sessions-layout"
-                  : "settings-page__sessions-layout settings-page__sessions-layout--without-footer"
+                  ? "settings-page__sessions-overview"
+                  : "settings-page__sessions-overview settings-page__sessions-overview--without-footer"
               }
             >
               <div className="settings-page__session-list">
                 {isSessionsLoading
                   ? Array.from({ length: 3 }, (_, index) => (
-                      <div key={`session-skeleton-${index}`} className="settings-page__session-item">
+                      <div key={`session-skeleton-${index}`} className="settings-page__session-entry">
                         <SettingsSkeleton className="settings-page__skeleton--dot" />
-                        <div className="settings-page__session-content">
+                        <div className="settings-page__session-details">
                           <SettingsSkeleton className="settings-page__skeleton--session-line" />
                           <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
                           <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
@@ -2349,9 +2445,9 @@ export function SettingsPage() {
                       </div>
                     ))
                   : sessionItems.map((session) => (
-                      <div key={session.id} className="settings-page__session-item">
+                      <div key={session.id} className="settings-page__session-entry">
                         <span className="settings-page__session-dot" aria-hidden="true" />
-                        <div className="settings-page__session-content">
+                        <div className="settings-page__session-details">
                           <p className="settings-page__session-title">{session.title}</p>
                           <p className="settings-page__session-meta">{session.meta}</p>
                           <p className="settings-page__session-date">{session.date}</p>
@@ -2401,7 +2497,7 @@ export function SettingsPage() {
           <div className="settings-page__card-body settings-page__card-body--moderation">
             {isModerationSettingsLoading
               ? Array.from({ length: 4 }, (_, index) => (
-                  <div key={`review-skeleton-${index}`} className="settings-page__review-row">
+                  <div key={`review-skeleton-${index}`} className="settings-page__review-option">
                     <SettingsSkeleton className="settings-page__skeleton--review-label" />
                     <SettingsSkeleton className="settings-page__skeleton--review-input" />
                     <SettingsSkeleton className="settings-page__skeleton--review-suffix" />
@@ -2409,7 +2505,7 @@ export function SettingsPage() {
                 ))
               : (
                 <>
-                  <div className="settings-page__review-row">
+                  <div className="settings-page__review-option">
                     <span className="settings-page__review-label">Вакансии:</span>
                     <Input
                       type="number"
@@ -2421,7 +2517,7 @@ export function SettingsPage() {
                     />
                     <span className="settings-page__review-suffix">часа</span>
                   </div>
-                  <div className="settings-page__review-row">
+                  <div className="settings-page__review-option">
                     <span className="settings-page__review-label">Стажировки:</span>
                     <Input
                       type="number"
@@ -2433,7 +2529,7 @@ export function SettingsPage() {
                     />
                     <span className="settings-page__review-suffix">часа</span>
                   </div>
-                  <div className="settings-page__review-row">
+                  <div className="settings-page__review-option">
                     <span className="settings-page__review-label">Мероприятия:</span>
                     <Input
                       type="number"
@@ -2445,7 +2541,7 @@ export function SettingsPage() {
                     />
                     <span className="settings-page__review-suffix">часа</span>
                   </div>
-                  <div className="settings-page__review-row">
+                  <div className="settings-page__review-option">
                     <span className="settings-page__review-label">Менторские программы:</span>
                     <Input
                       type="number"
@@ -2481,14 +2577,14 @@ export function SettingsPage() {
             <div className="settings-page__history-list">
               {isLoginHistoryLoading
                 ? Array.from({ length: 4 }, (_, index) => (
-                    <div key={`history-skeleton-${index}`} className="settings-page__history-item">
+                    <div key={`history-skeleton-${index}`} className="settings-page__history-entry">
                       <SettingsSkeleton className="settings-page__skeleton--dot" />
                       <SettingsSkeleton className="settings-page__skeleton--history-line" />
                       <SettingsSkeleton className="settings-page__skeleton--history-status" />
                     </div>
                   ))
                 : loginHistoryItems.map((item) => (
-                    <div key={item.id} className="settings-page__history-item">
+                    <div key={item.id} className="settings-page__history-entry">
                       <span className="settings-page__history-dot" aria-hidden="true" />
                       <span className="settings-page__history-date">{item.date}</span>
                       <Status className="settings-page__history-status" variant={item.statusVariant}>
@@ -2506,11 +2602,11 @@ export function SettingsPage() {
   return (
     <main className={pageClassName}>
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme={isModerationRole ? "curator" : role === "employer" ? "employer" : "applicant"}
-        city={selectedCity}
-        onCityChange={handleCityChange}
+        city={isCityReady ? displayCity : undefined}
+        onCityChange={isCityReady ? handleCityChange : undefined}
         topNavigation={isModerationRole ? null : undefined}
         notificationOnRealtimeMessage={() => {
           if (!canViewEmployerStaffSection) {
@@ -2527,7 +2623,7 @@ export function SettingsPage() {
         }
       />
 
-      <Container className="settings-page__container">
+      <Container className="settings-page__shell">
         {isModerationRole ? (
           <div className="settings-page__header">
             <h1 className="settings-page__title">Настройки</h1>
@@ -2537,70 +2633,16 @@ export function SettingsPage() {
         {isModerationRole ? renderModerationLayout() : renderPublicLayout()}
       </Container>
 
-      <Modal
-        title="Удаление аккаунта"
+      <DeleteAccountModal
         isOpen={isDeleteAccountModalOpen}
         onClose={closeDeleteAccountModal}
-        panelClassName="settings-page__delete-account-modal-panel"
-        titleAccentColor="var(--color-danger)"
-      >
-        <div className="settings-page__delete-account-modal">
-          <p className="settings-page__delete-account-text">
-            Вы уверены, что хотите удалить аккаунт
-            {" "}
-            <strong>{`«${user?.display_name ?? "Пользователь"}»`}</strong>
-            ?
-          </p>
-          <p className="settings-page__delete-account-warning">Это действие нельзя отменить.</p>
-          <div className="settings-page__delete-account-block">
-            <p className="settings-page__delete-account-text">Будут безвозвратно удалены:</p>
-            <ul className="settings-page__delete-account-list">
-              <li>Профиль, резюме и портфолио</li>
-              <li>История откликов и статусы</li>
-              <li>Избранное и профессиональные контакты</li>
-              <li>Переписки и уведомления</li>
-            </ul>
-          </div>
-          <div className="settings-page__delete-account-note">
-            <p className="settings-page__delete-account-note-title">Совет:</p>
-            <p className="settings-page__delete-account-note-text">
-              Если вы хотите временно скрыть профиль, используйте настройки приватности.
-            </p>
-          </div>
-          {isDeleteAccountBlockedByEmployees ? (
-            <p className="settings-page__form-message settings-page__form-message--error">
-              Удаление невозможно, пока в компании есть сотрудники.
-            </p>
-          ) : null}
-          {deleteAccountError ? (
-            <p className="settings-page__form-message settings-page__form-message--error">
-              {deleteAccountError}
-            </p>
-          ) : null}
-          <div className="settings-page__delete-account-actions">
-            <Button
-              type="button"
-              variant={actionVariant}
-              size="md"
-              onClick={closeDeleteAccountModal}
-              disabled={deleteCurrentUserMutation.isPending}
-            >
-              Назад
-            </Button>
-            <Button
-              type="button"
-              variant="danger-ghost"
-              size="md"
-              className="settings-page__delete-account-submit"
-              loading={deleteCurrentUserMutation.isPending}
-              disabled={deleteCurrentUserMutation.isPending || isDeleteAccountBlockedByEmployees}
-              onClick={handleDeleteAccount}
-            >
-              Удалить
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={handleDeleteAccount}
+        variant={isEmployerDeleteFlow ? "employer" : "applicant"}
+        displayName={user?.display_name}
+        hasManagedEmployees={isDeletingEmployerWithCascade}
+        isPending={deleteCurrentUserMutation.isPending}
+        error={deleteAccountError}
+      />
 
       <Footer theme={themeRole} />
     </main>

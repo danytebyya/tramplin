@@ -5,7 +5,7 @@ from sqlalchemy import select
 from src.core.security import create_access_token
 from src.enums import EmployerType, MembershipRole, UserRole, UserStatus
 from src.enums.notifications import NotificationKind
-from src.models import ApplicantProfile, Employer, EmployerMembership, Notification, User
+from src.models import ApplicantProfile, ChatUserKey, Employer, EmployerMembership, Notification, User
 from src.services.chat_reminder_service import ChatReminderService
 
 
@@ -145,6 +145,8 @@ def test_applicant_can_create_conversation_and_exchange_messages(client, db_sess
     )
     assert send_response.status_code == 200
     assert send_response.json()["data"]["ciphertext"] == "ciphertext-payload"
+    assert send_response.json()["data"]["sender_public_key_jwk"] is None
+    assert send_response.json()["data"]["recipient_public_key_jwk"] is None
 
     list_response = client.get(
         f"/api/v1/chat/conversations/{conversation_id}/messages",
@@ -152,6 +154,56 @@ def test_applicant_can_create_conversation_and_exchange_messages(client, db_sess
     )
     assert list_response.status_code == 200
     assert list_response.json()["data"]["items"][0]["ciphertext"] == "ciphertext-payload"
+
+
+def test_chat_message_snapshots_sender_and_recipient_keys(client, db_session):
+    applicant, employer_user, employer, applicant_token, employer_token = _create_chat_participants(
+        db_session,
+        applicant_email="chat-keys-applicant@example.com",
+        employer_email="chat-keys-employer@example.com",
+        company_name="Key Snapshot Corp",
+        inn="5555555555",
+    )
+    applicant_key = {"kty": "EC", "crv": "P-256", "x": "applicant-x", "y": "applicant-y"}
+    employer_key = {"kty": "EC", "crv": "P-256", "x": "employer-x", "y": "employer-y"}
+    db_session.add_all(
+        [
+          ChatUserKey(user_id=applicant.id, algorithm="ECDH_P256", public_key_jwk=applicant_key, private_key_jwk=None),
+          ChatUserKey(user_id=employer_user.id, algorithm="ECDH_P256", public_key_jwk=employer_key, private_key_jwk=None),
+        ]
+    )
+    db_session.commit()
+
+    create_response = client.post(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={"recipient_user_id": str(employer_user.id), "employer_id": str(employer.id)},
+    )
+    conversation_id = create_response.json()["data"]["conversation"]["id"]
+
+    send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {applicant_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "ciphertext-payload",
+            "iv": "iv-payload-123",
+            "salt": "salt-payload-123",
+        },
+    )
+
+    assert send_response.status_code == 200
+    body = send_response.json()["data"]
+    assert body["sender_public_key_jwk"] == applicant_key
+    assert body["recipient_public_key_jwk"] == employer_key
+
+    list_response = client.get(
+        f"/api/v1/chat/conversations/{conversation_id}/messages",
+        headers={"Authorization": f"Bearer {employer_token}"},
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["items"][0]["sender_public_key_jwk"] == applicant_key
+    assert list_response.json()["data"]["items"][0]["recipient_public_key_jwk"] == employer_key
 
 
 def test_chat_websocket_receives_new_message_event(client, db_session):

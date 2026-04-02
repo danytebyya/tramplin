@@ -97,11 +97,12 @@ export function Header({
       <a href="/" className="header__nav-link">Главная</a>
     </nav>
   ) : topNavigation;
-  const isPrimaryTheme = resolvedTheme === "employer" || resolvedTheme === "curator";
+  const shouldUsePrimaryLandingLogo = variant === "landing" && !isAuthenticated;
+  const shouldUsePrimaryGuestLogo = variant !== "landing" && !isAuthenticated && theme === undefined;
+  const isPrimaryTheme =
+    shouldUsePrimaryLandingLogo || shouldUsePrimaryGuestLogo || resolvedTheme === "employer" || resolvedTheme === "curator";
   const defaultLogoSource = isPrimaryTheme ? logoPrimary : logoSecondary;
-  const landingLogoSource = resolvedTheme === "employer" || resolvedTheme === "curator"
-    ? logoPrimarySm
-    : logoSecondarySm;
+  const landingLogoSource = isPrimaryTheme ? logoPrimarySm : logoSecondarySm;
   const logoSource = variant === "landing" ? landingLogoSource : defaultLogoSource;
   const brandSubtitle =
     variant === "landing" && (resolvedTheme === "applicant" || resolvedTheme === "employer")
@@ -111,7 +112,7 @@ export function Header({
   return (
     <header className={cn("header", headerRoleClassName, headerVariantClassName)}>
       <div className="header__top">
-        <Container className={cn(containerClassName, "header__top-container")}>
+        <Container className={cn(containerClassName, "header__top-shell")}>
           <div className="header__brand">
             <Link to="/" className="header__brand-name" aria-label="Трамплин">
               <img src={logoSource} alt="" aria-hidden="true" className="header__logo-badge" />
@@ -156,7 +157,7 @@ export function Header({
       </div>
 
       <div className="header__bottom">
-        <Container className={cn(containerClassName, "header__bottom-container")}>
+        <Container className={cn(containerClassName, "header__bottom-shell")}>
           {bottomContent ?? (city && onCityChange ? (
             <>
               <nav className="header__categories" aria-label="Категории">

@@ -37,6 +37,7 @@ body {
   line-height: var(--type-body-regular-line);
   color: var(--color-text-primary);
   background: var(--color-bg-secondary);
+  overflow-x: hidden;
 }
 
 h1,
@@ -100,13 +101,17 @@ a {
   color: var(--color-primary);
 }
 
-.container {
+.page-shell {
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 0 40px;
 }
 
-.container__auth-page {
+.page-shell > * {
+  min-width: 0;
+}
+
+.page-shell--auth {
   min-height: 100vh;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -115,9 +120,218 @@ a {
   padding-bottom: 32px;
 }
 
+:is(
+    .legal-page,
+    .settings-page,
+    .favorites-page,
+    .seeker-dashboard,
+    .applications-page,
+    .networking-page,
+    .employer-dashboard,
+    .employer-chat-page,
+    .employer-responses-page,
+    .opportunity-management-page,
+    .opportunity-details-page,
+    .curator-dashboard-page,
+    .curator-management-page,
+    .moderation-queue-page,
+    .company-review-page,
+    .public-profile-page
+  ) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+:is(
+    .legal-page,
+    .settings-page,
+    .favorites-page,
+    .seeker-dashboard,
+    .applications-page,
+    .networking-page,
+    .employer-dashboard,
+    .employer-chat-page,
+    .employer-responses-page,
+    .opportunity-management-page,
+    .opportunity-details-page,
+    .curator-dashboard-page,
+    .curator-management-page,
+    .moderation-queue-page,
+    .company-review-page,
+    .public-profile-page
+  ) > .site-footer {
+  margin-top: auto;
+}
+
+:is(
+    .legal-page__summary,
+    .settings-page__shell.page-shell,
+    .favorites-page__shell.page-shell,
+    .seeker-dashboard__shell.page-shell,
+    .applications-page__shell.page-shell,
+    .networking-page__shell.page-shell,
+    .employer-dashboard__shell.page-shell,
+    .employer-chat-page__shell.page-shell,
+    .employer-responses-page__shell.page-shell,
+    .opportunity-management-page__shell.page-shell,
+    .opportunity-details-page__shell.page-shell,
+    .curator-dashboard__shell.page-shell,
+    .curator-management-page__shell.page-shell,
+    .moderation-queue-page__shell.page-shell,
+    .company-review-page__shell.page-shell,
+    .public-profile-page__status-shell
+  ) {
+  flex: 1 0 auto;
+}
+
+:is(
+    .settings-page__shell.page-shell,
+    .networking-page__shell.page-shell,
+    .employer-chat-page__shell.page-shell,
+    .employer-responses-page__shell.page-shell,
+    .opportunity-management-page__shell.page-shell
+  ) {
+  --page-shell-gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-shell-gap);
+}
+
+.profile-tabs-section {
+  margin-bottom: calc(18px - var(--page-shell-gap, 24px));
+}
+
+:is(
+    .settings-page__tabs,
+    .favorites-page__tabs,
+    .seeker-dashboard__tabs,
+    .employer-dashboard__tabs,
+    .employer-chat-page__tabs,
+    .employer-responses-page__tabs,
+    .opportunity-management-page__tabs
+  ) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--page-tabs-gap, 6px);
+  margin: 0 0 0 var(--page-tabs-offset, -16px);
+}
+
+:is(
+    .settings-page__tab,
+    .seeker-dashboard__tab,
+    .employer-dashboard__tab,
+    .employer-chat-page__tab,
+    .employer-responses-page__tab,
+    .opportunity-management-page__tab
+  ) {
+  position: relative;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 16px 5px;
+  color: var(--color-text-tertiary);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+  font-weight: 400;
+  font-family: inherit;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+:is(
+    .settings-page__tab,
+    .seeker-dashboard__tab,
+    .employer-dashboard__tab,
+    .employer-chat-page__tab,
+    .employer-responses-page__tab,
+    .opportunity-management-page__tab
+  ):hover,
+:is(
+    .settings-page__tab,
+    .seeker-dashboard__tab,
+    .employer-dashboard__tab,
+    .employer-chat-page__tab,
+    .employer-responses-page__tab,
+    .opportunity-management-page__tab
+  ):focus-visible,
+:is(
+    .settings-page__tab,
+    .seeker-dashboard__tab,
+    .employer-dashboard__tab,
+    .employer-chat-page__tab,
+    .employer-responses-page__tab,
+    .opportunity-management-page__tab
+  ):active,
+:is(
+    .settings-page__tab--active,
+    .seeker-dashboard__tab--active,
+    .employer-dashboard__tab--active,
+    .employer-chat-page__tab--active,
+    .employer-responses-page__tab--active,
+    .opportunity-management-page__tab--active
+  ) {
+  color: var(--color-text-primary);
+}
+
+:is(
+    .settings-page__tab--active,
+    .seeker-dashboard__tab--active,
+    .employer-dashboard__tab--active,
+    .employer-chat-page__tab--active,
+    .employer-responses-page__tab--active,
+    .opportunity-management-page__tab--active
+  )::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--page-tabs-accent, var(--settings-accent, var(--color-secondary)));
+}
+
 .card {
   width: 100%;
   background: var(--color-bg-primary);
+}
+
+.stats-panel {
+  display: grid;
+  grid-template-columns: repeat(var(--stats-panel-columns, 4), minmax(0, 1fr));
+  gap: var(--stats-panel-gap, 24px);
+}
+
+.stats-panel__card {
+  display: flex;
+  flex-direction: column;
+  align-items: var(--stats-panel-card-align, center);
+  justify-content: var(--stats-panel-card-justify, center);
+  gap: var(--stats-panel-card-gap, 16px);
+  min-height: var(--stats-panel-card-min-height, auto);
+  padding: var(--stats-panel-card-padding, 32px);
+  border-radius: var(--stats-panel-card-radius, 12px);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-sm);
+  text-align: var(--stats-panel-card-text-align, center);
+}
+
+.stats-panel__label {
+  color: var(--color-text-primary);
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
+  text-align: var(--stats-panel-label-text-align, center);
+  font-weight: var(--stats-panel-label-font-weight, 400);
+}
+
+.stats-panel__value {
+  display: flex;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line);
+  font-weight: 500;
 }
 
 .button {
@@ -189,6 +403,36 @@ a {
 .button--primary-outline:disabled {
   background: var(--color-bg-primary);
   border-color: var(--color-primary-disabled);
+  color: var(--color-text-tertiary);
+}
+
+.button--cancel {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border-color: transparent;
+}
+
+.button--cancel:not(.button--loading):not(:disabled):hover {
+  background: var(--color-border);
+  border-color: transparent;
+  box-shadow: 0 4px 12px 0 rgba(17, 24, 39, 0.08);
+}
+
+.button--cancel:not(.button--loading):not(:disabled):active {
+  background: #e1e5ea;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.button--cancel:not(.button--loading):focus-visible {
+  outline: none;
+  border-width: 3px;
+  border-color: var(--color-border-focus);
+}
+
+.button--cancel:disabled {
+  background: var(--color-bg-secondary);
+  border-color: transparent;
   color: var(--color-text-tertiary);
 }
 
@@ -761,6 +1005,7 @@ a {
 .input[type="password"]::-ms-reveal,
 .input[type="password"]::-ms-clear,
 .input::-ms-clear,
+.input::-webkit-clear-button,
 .input::-webkit-search-cancel-button,
 .input::-webkit-search-decoration,
 .input::-webkit-search-results-button,
@@ -895,7 +1140,7 @@ a {
   height: 40px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  padding: 6px 60px 6px 16px;
+  padding: 6px 52px 6px 16px;
   background: var(--color-bg-primary);
   color: var(--color-text-secondary);
   font-size: var(--type-body-regular-size);
@@ -906,6 +1151,10 @@ a {
 .date-input__field::placeholder {
   color: #9098a8;
   opacity: 1;
+}
+
+.date-input__field:not(:placeholder-shown) {
+  color: var(--color-text-primary);
 }
 
 .date-input__field:hover:not(:disabled):not(:focus):not(:focus-visible) {
@@ -928,7 +1177,7 @@ a {
 .date-input__trigger {
   position: absolute;
   top: 50%;
-  right: 18px;
+  right: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -952,8 +1201,8 @@ a {
 }
 
 .date-input__trigger-icon {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
   background-color: var(--color-text-secondary);
   mask-image: url("../../assets/icons/calendar.svg");
   mask-repeat: no-repeat;
@@ -967,17 +1216,24 @@ a {
 }
 
 .date-input__popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
   display: flex;
   justify-content: center;
   width: 100%;
-  margin-top: 12px;
 }
 
 .date-input__calendar {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
   background: var(--color-bg-primary);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
 }
 
 .date-input__calendar-header {
@@ -1047,13 +1303,13 @@ a {
   transform: rotate(-90deg);
 }
 
-.date-input__calendar-grid {
+.date-input__calendar-days {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px 16px;
 }
 
-.date-input__calendar-grid--weekdays {
+.date-input__calendar-days--weekdays {
   gap: 16px 10px;
 }
 
@@ -1123,7 +1379,7 @@ a {
 @media (max-width: 720px) {
   .date-input__field {
     height: 52px;
-    padding: 6px 58px 6px 20px;
+    padding: 6px 56px 6px 20px;
     border-radius: 16px;
     font-size: 28px;
   }
@@ -1502,7 +1758,7 @@ a {
   transform: translateX(0);
 }
 
-.checkbox {
+.toggle-mark {
   appearance: none;
   position: relative;
   width: 20px;
@@ -1518,7 +1774,7 @@ a {
   transition: border-color var(--transition-base), background-color var(--transition-base);
 }
 
-.checkbox::after {
+.toggle-mark::after {
   content: "";
   position: absolute;
   inset: 4px;
@@ -1533,80 +1789,80 @@ a {
   -webkit-mask-size: contain;
 }
 
-.checkbox:not(:disabled):not(:checked):hover {
+.toggle-mark:not(:disabled):not(:checked):hover {
   border-color: var(--color-border-hover);
 }
 
-.checkbox.checkbox--error {
+.toggle-mark.toggle-mark--error {
   border-color: var(--color-danger);
 }
 
-.checkbox.checkbox--error:not(:disabled):hover {
+.toggle-mark.toggle-mark--error:not(:disabled):hover {
   border-color: var(--color-danger);
 }
 
-.checkbox:not(:checked):focus,
-.checkbox:not(:checked):focus-visible {
+.toggle-mark:not(:checked):focus,
+.toggle-mark:not(:checked):focus-visible {
   outline: none;
   border-color: var(--color-border-hover);
 }
 
-.checkbox.checkbox--error:not(:checked):focus,
-.checkbox.checkbox--error:not(:checked):focus-visible {
+.toggle-mark.toggle-mark--error:not(:checked):focus,
+.toggle-mark.toggle-mark--error:not(:checked):focus-visible {
   border-color: var(--color-danger);
 }
 
-.checkbox:checked {
+.toggle-mark:checked {
   border-color: var(--color-primary);
   background-color: var(--color-primary);
 }
 
-.checkbox--secondary:checked {
+.toggle-mark--secondary:checked {
   border-color: var(--color-secondary);
   background-color: var(--color-secondary);
 }
 
-.checkbox--accent:checked {
+.toggle-mark--accent:checked {
   border-color: var(--color-accent);
   background-color: var(--color-accent);
 }
 
-.checkbox:checked::after {
+.toggle-mark:checked::after {
   background-color: var(--color-text-inverse);
 }
 
-.checkbox:checked:not(:disabled):hover,
-.checkbox:checked:focus,
-.checkbox:checked:focus-visible {
+.toggle-mark:checked:not(:disabled):hover,
+.toggle-mark:checked:focus,
+.toggle-mark:checked:focus-visible {
   outline: none;
   border-color: var(--color-primary-hover);
   background-color: var(--color-primary-hover);
 }
 
-.checkbox--secondary:checked:not(:disabled):hover,
-.checkbox--secondary:checked:focus,
-.checkbox--secondary:checked:focus-visible {
+.toggle-mark--secondary:checked:not(:disabled):hover,
+.toggle-mark--secondary:checked:focus,
+.toggle-mark--secondary:checked:focus-visible {
   outline: none;
   border-color: var(--color-secondary-hover);
   background-color: var(--color-secondary-hover);
 }
 
-.checkbox--accent:checked:not(:disabled):hover,
-.checkbox--accent:checked:focus,
-.checkbox--accent:checked:focus-visible {
+.toggle-mark--accent:checked:not(:disabled):hover,
+.toggle-mark--accent:checked:focus,
+.toggle-mark--accent:checked:focus-visible {
   outline: none;
   border-color: var(--color-accent-hover);
   background-color: var(--color-accent-hover);
 }
 
-.checkbox:disabled {
+.toggle-mark:disabled {
   border-color: var(--color-border);
   background-color: var(--color-bg-tertiary);
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-.checkbox:checked:disabled::after {
+.toggle-mark:checked:disabled::after {
   background-color: var(--color-text-tertiary);
 }
 
@@ -1928,12 +2184,12 @@ a {
 }
 
 @media (max-width: 1200px) {
-  .container {
+  .page-shell {
     padding-left: var(--space-24);
     padding-right: var(--space-24);
   }
 
-  .container__auth-page {
+  .page-shell--auth {
     grid-template-columns: 1fr;
     min-height: auto;
     padding-top: var(--space-24);

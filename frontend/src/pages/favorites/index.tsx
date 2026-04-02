@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { CitySelection, CitySelector, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { Opportunity } from "../../entities/opportunity";
@@ -14,11 +14,12 @@ import {
 import {
   listMyAppliedOpportunityIdsRequest,
   submitOpportunityApplicationRequest,
+  WithdrawApplicationModal,
   withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
 import { useAuthStore } from "../../features/auth";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
-import { Button, Checkbox, Container, Input, Modal, Radio } from "../../shared/ui";
+import { Button, Checkbox, Container, Input, ProfileTabs, Radio } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import { OpportunityList } from "../../widgets/opportunity-list";
@@ -57,14 +58,6 @@ const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label:
   { value: "internship", label: "Стажировки" },
   { value: "event", label: "Мероприятия" },
   { value: "mentorship", label: "Менторские программы" },
-];
-
-const applicantTabs: Array<{ label: string; to?: string; isCurrent?: boolean }> = [
-  { label: "Профиль", to: "/dashboard/applicant" },
-  { label: "Мои отклики", to: "/applications" },
-  { label: "Избранное", to: "/favorites", isCurrent: true },
-  { label: "Нетворкинг", to: "/networking" },
-  { label: "Настройки", to: "/settings" },
 ];
 
 function normalizeFilterText(value: string) {
@@ -189,10 +182,12 @@ function resolveThemeRole(role: string | null) {
 }
 
 export function FavoritesPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const filtersRef = useRef<HTMLDivElement | null>(null);
   const sortingRef = useRef<HTMLDivElement | null>(null);
+  const pendingProfileReturnScrollYRef = useRef<number | null>(null);
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
@@ -313,6 +308,20 @@ export function FavoritesPage() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
+
+  useEffect(() => {
+    const restoreScrollY = (location.state as { restoreScrollY?: number } | null)?.restoreScrollY;
+
+    if (typeof restoreScrollY !== "number") {
+      return;
+    }
+
+    pendingProfileReturnScrollYRef.current = restoreScrollY;
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     if (!isFilterOpen && !isSortOpen) {
@@ -489,6 +498,19 @@ export function FavoritesPage() {
     });
   }, [appliedSortDirection, appliedSortField, filteredOpportunities]);
 
+  useEffect(() => {
+    if (pendingProfileReturnScrollYRef.current === null || isFavoritesLoading) {
+      return;
+    }
+
+    const restoreScrollY = pendingProfileReturnScrollYRef.current;
+    pendingProfileReturnScrollYRef.current = null;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: Math.max(restoreScrollY, 0), behavior: "auto" });
+    });
+  }, [isFavoritesLoading, sortedOpportunities.length]);
+
   const profileMenuItems = buildApplicantProfileMenuItems(navigate);
 
   const toggleMultiValue = (value: string, selectedValues: string[], setter: (value: string[]) => void) => {
@@ -570,7 +592,7 @@ export function FavoritesPage() {
   return (
     <main className="favorites-page home-page home-page--applicant">
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
@@ -597,27 +619,18 @@ export function FavoritesPage() {
         }
       />
 
-      <Container className="settings-page__container favorites-page__container">
-        <nav className="settings-page__tabs favorites-page__tabs" aria-label="Разделы аккаунта">
-          {applicantTabs.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={item.isCurrent ? "settings-page__tab settings-page__tab--active" : "settings-page__tab"}
-              onClick={() => {
-                if (item.to) {
-                  navigate(item.to);
-                }
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+      <Container className="settings-page__shell favorites-page__shell">
+        <ProfileTabs
+          navigate={navigate}
+          audience="applicant"
+          current="favorites"
+          tabsClassName="settings-page__tabs favorites-page__tabs"
+          ariaLabel="Разделы аккаунта"
+        />
 
-        <section className="favorites-page__metrics" aria-label="Статистика избранного">
+        <section className="favorites-page__metrics stats-panel" aria-label="Статистика избранного">
           {favoriteMetricDefinitions.map((metric) => (
-            <article key={metric.key} className="favorites-page__metric-card">
+            <article key={metric.key} className="favorites-page__metric-card stats-panel__card">
               {isFavoritesLoading ? (
                 <>
                   <span className="favorites-page__skeleton favorites-page__skeleton--metric-label" />
@@ -625,8 +638,8 @@ export function FavoritesPage() {
                 </>
               ) : (
                 <>
-                  <span className="favorites-page__metric-label">{metric.label}</span>
-                  <strong className="favorites-page__metric-value">{formatCount(stats[metric.key])}</strong>
+                  <span className="favorites-page__metric-label stats-panel__label">{metric.label}</span>
+                  <strong className="favorites-page__metric-value stats-panel__value">{formatCount(stats[metric.key])}</strong>
                 </>
               )}
             </article>
@@ -991,34 +1004,12 @@ export function FavoritesPage() {
           </section>
         )}
       </Container>
-      <Modal
-        title="Подтвердите действие"
+      <WithdrawApplicationModal
         isOpen={pendingWithdrawOpportunityId !== null}
         onClose={() => setPendingWithdrawOpportunityId(null)}
-      >
-        <div className="settings-page__confirm-delete">
-          <p className="settings-page__confirm-delete-text">
-            Вы уверены, что хотите отозвать отклик?
-          </p>
-          <div className="settings-page__confirm-delete-actions">
-            <Button
-              type="button"
-              variant="secondary-outline"
-              onClick={() => setPendingWithdrawOpportunityId(null)}
-            >
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              onClick={handleConfirmWithdrawOpportunity}
-              loading={submitApplicationMutation.isPending}
-            >
-              Отозвать отклик
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={handleConfirmWithdrawOpportunity}
+        isPending={submitApplicationMutation.isPending}
+      />
 
       <Footer theme={themeRole} />
     </main>

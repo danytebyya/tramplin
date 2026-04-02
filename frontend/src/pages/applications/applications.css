@@ -5,14 +5,15 @@
     linear-gradient(180deg, #f8fcff 0%, #f5f7fb 36%, #f8fafc 100%);
 }
 
-.applications-page__container.container {
+.applications-page__shell.page-shell {
+  --page-shell-gap: 24px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--page-shell-gap);
 }
 
 .applications-page .favorites-page__metrics {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  --stats-panel-columns: 4;
 }
 
 .applications-page__list {
@@ -42,7 +43,7 @@
   gap: 32px;
 }
 
-.applications-page__content {
+.applications-page__summary {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -96,7 +97,7 @@
   fill: currentColor;
 }
 
-.applications-page__title-block {
+.applications-page__title-panel {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -183,12 +184,12 @@
 
 .applications-page__summary,
 .applications-page__secondary,
-.applications-page__company-block,
+.applications-page__company-panel,
 .applications-page__actions,
 .applications-page__details,
 .applications-page__detail-section,
-.applications-page__detail-list-block,
-.applications-page__meta-item {
+.applications-page__detail-listing,
+.applications-page__meta-detail {
   display: flex;
   flex-direction: column;
 }
@@ -239,7 +240,7 @@
   gap: 24px;
 }
 
-.applications-page__company-block {
+.applications-page__company-panel {
   gap: 8px;
 }
 
@@ -333,7 +334,7 @@
   line-height: var(--type-body-regular-line);
 }
 
-.applications-page__detail-grid {
+.applications-page__details-panel {
   display: grid;
   gap: 8px;
   color: var(--color-text-primary);
@@ -354,13 +355,13 @@
   color: var(--color-text-primary);
 }
 
-.applications-page__meta-row {
+.applications-page__meta-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 24px;
 }
 
-.applications-page__meta-item {
+.applications-page__meta-detail {
   gap: 4px;
   min-width: 220px;
 }
@@ -439,8 +440,9 @@
 }
 
 @media (max-width: 639px) {
-  .applications-page__container.container {
-    gap: 20px;
+  .applications-page__shell.page-shell {
+    --page-shell-gap: 20px;
+    gap: var(--page-shell-gap);
     padding-top: 24px;
     padding-bottom: 40px;
   }
@@ -450,7 +452,7 @@
     padding: 24px;
   }
 
-  .applications-page__title-block {
+  .applications-page__title-panel {
     flex-direction: column;
     align-items: stretch;
   }

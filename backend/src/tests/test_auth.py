@@ -33,6 +33,31 @@ def _request_code(client, db_session, email: str, *, force_resend: bool = False)
     return code
 
 
+def _register_user(client, db_session, email: str, *, password: str = "StrongPass123") -> None:
+    code = _request_code(client, db_session, email)
+    response = client.post(
+        "/api/v1/users",
+        json={
+            "email": email,
+            "display_name": email.split("@")[0],
+            "password": password,
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Test User"},
+        },
+    )
+    assert response.status_code == 201
+
+
+def _login(client, email: str, password: str) -> str:
+    response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": email, "password": password},
+    )
+    assert response.status_code == 201
+    return response.json()["data"]["access_token"]
+
+
 def test_check_email_availability(client):
     response = client.post("/api/v1/auth/email/check", json={"email": "available@example.com"})
     assert response.status_code == 200
@@ -121,6 +146,132 @@ def test_request_code_rejects_existing_email_case_insensitive(client, db_session
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "AUTH_EMAIL_EXISTS"
     assert response.json()["error"]["message"] == "Аккаунт с такой почтой уже зарегистрирован"
+
+
+def test_request_password_reset_code_for_existing_user(client, db_session):
+    _register_user(client, db_session, "reset@example.com")
+
+    response = client.post(
+        "/api/v1/auth/password/request-reset-code",
+        json={"email": "reset@example.com"},
+    )
+
+    assert response.status_code == 200
+    code = db_session.execute(
+        select(EmailVerificationState.debug_code).where(
+            EmailVerificationState.email == "reset@example.com",
+            EmailVerificationState.purpose == "password_reset",
+        )
+    ).scalar_one_or_none()
+    assert code is not None
+    assert re.fullmatch(r"\d{6}", code)
+
+
+def test_password_reset_rejects_reusing_current_password(client, db_session):
+    _register_user(client, db_session, "reuse@example.com")
+    client.post(
+        "/api/v1/auth/password/request-reset-code",
+        json={"email": "reuse@example.com"},
+    )
+    code = db_session.execute(
+        select(EmailVerificationState.debug_code).where(
+            EmailVerificationState.email == "reuse@example.com",
+            EmailVerificationState.purpose == "password_reset",
+        )
+    ).scalar_one()
+
+    response = client.post(
+        "/api/v1/auth/password/reset",
+        json={
+            "email": "reuse@example.com",
+            "code": code,
+            "new_password": "StrongPass123",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "AUTH_PASSWORD_REUSE"
+
+
+def test_password_reset_updates_password_and_returns_session(client, db_session):
+    _register_user(client, db_session, "recover@example.com")
+    client.post(
+        "/api/v1/auth/password/request-reset-code",
+        json={"email": "recover@example.com"},
+    )
+    code = db_session.execute(
+        select(EmailVerificationState.debug_code).where(
+            EmailVerificationState.email == "recover@example.com",
+            EmailVerificationState.purpose == "password_reset",
+        )
+    ).scalar_one()
+
+    verify_response = client.post(
+        "/api/v1/auth/password/verify-reset-code",
+        json={"email": "recover@example.com", "code": code},
+    )
+    assert verify_response.status_code == 200
+
+    reset_response = client.post(
+        "/api/v1/auth/password/reset",
+        json={
+            "email": "recover@example.com",
+            "code": code,
+            "new_password": "UpdatedPass123",
+        },
+    )
+
+    assert reset_response.status_code == 200
+    assert reset_response.json()["data"]["access_token"]
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "recover@example.com", "password": "UpdatedPass123"},
+    )
+    assert login_response.status_code == 201
+
+
+def test_change_password_requires_current_password_and_blocks_reuse(client, db_session):
+    _register_user(client, db_session, "change@example.com")
+    access_token = _login(client, "change@example.com", "StrongPass123")
+
+    invalid_current_response = client.post(
+        "/api/v1/auth/password/change",
+        json={
+            "current_password": "WrongPass123",
+            "new_password": "NextPass123",
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert invalid_current_response.status_code == 400
+    assert invalid_current_response.json()["error"]["code"] == "AUTH_INVALID_CURRENT_PASSWORD"
+
+    reuse_response = client.post(
+        "/api/v1/auth/password/change",
+        json={
+            "current_password": "StrongPass123",
+            "new_password": "StrongPass123",
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert reuse_response.status_code == 400
+    assert reuse_response.json()["error"]["code"] == "AUTH_PASSWORD_REUSE"
+
+    success_response = client.post(
+        "/api/v1/auth/password/change",
+        json={
+            "current_password": "StrongPass123",
+            "new_password": "NextPass123",
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert success_response.status_code == 200
+
+    relogin_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "change@example.com", "password": "NextPass123"},
+    )
+    assert relogin_response.status_code == 201
 
 
 def test_register_rejects_existing_email_for_another_role(client, db_session):
@@ -1033,6 +1184,44 @@ def test_update_applicant_dashboard(client, db_session):
     assert body["profile"]["github_url"] == "https://github.com/ivanov"
     assert body["preferred_city"] == "Чебоксары"
     assert len(body["projects"]) == 1
+
+
+def test_upload_applicant_avatar_persists_avatar_url(client, db_session):
+    code = _request_code(client, db_session, "applicant-avatar@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "applicant-avatar@example.com",
+            "display_name": "Applicant Avatar",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Applicant Avatar"},
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "applicant-avatar@example.com", "password": "StrongPass123"},
+    )
+    assert login_response.status_code == 201
+    access_token = login_response.json()["data"]["access_token"]
+
+    response = client.post(
+        "/api/v1/users/me/applicant-avatar",
+        headers={"Authorization": f"Bearer {access_token}"},
+        files=[("file", ("avatar.png", b"fake-image-content", "image/png"))],
+    )
+
+    assert response.status_code == 200
+    avatar_url = response.json()["data"]["user"]["applicant_profile"]["avatar_url"]
+    assert avatar_url
+    assert avatar_url.startswith("/storage/applicant-avatars/")
+
+    user = db_session.query(User).filter(User.email == "applicant-avatar@example.com").one()
+    assert user.applicant_profile is not None
+    assert user.applicant_profile.avatar_url == avatar_url
 
 
 def test_read_public_applicant_profile(client, db_session):

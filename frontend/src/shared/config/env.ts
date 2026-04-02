@@ -5,9 +5,49 @@ export const env = {
   map2gisKey: import.meta.env.VITE_2GIS_MAP_KEY ?? "",
 };
 
+function getBrowserLocation() {
+  return typeof window !== "undefined" ? window.location : null;
+}
+
+export function normalizeUrlForCurrentOrigin(pathOrUrl: string) {
+  const browserLocation = getBrowserLocation();
+
+  if (!browserLocation) {
+    return pathOrUrl;
+  }
+
+  try {
+    const resolvedUrl = new URL(pathOrUrl, browserLocation.origin);
+    const shouldUpgradeToHttps =
+      browserLocation.protocol === "https:" &&
+      resolvedUrl.protocol === "http:" &&
+      resolvedUrl.hostname === browserLocation.hostname &&
+      (resolvedUrl.port === "" ||
+        resolvedUrl.port === browserLocation.port ||
+        resolvedUrl.port === "80");
+
+    if (!shouldUpgradeToHttps) {
+      return resolvedUrl.toString();
+    }
+
+    resolvedUrl.protocol = "https:";
+    if (resolvedUrl.port === "80") {
+      resolvedUrl.port = "";
+    }
+
+    return resolvedUrl.toString();
+  } catch {
+    return pathOrUrl;
+  }
+}
+
+export function getApiBaseUrl() {
+  return normalizeUrlForCurrentOrigin(env.apiBaseUrl);
+}
+
 export function getAppOrigin() {
-  const fallbackOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
-  const resolvedUrl = new URL(env.appBaseUrl || fallbackOrigin || "http://localhost");
+  const fallbackOrigin = getBrowserLocation()?.origin;
+  const resolvedUrl = new URL(normalizeUrlForCurrentOrigin(env.appBaseUrl || fallbackOrigin || "http://localhost"));
   resolvedUrl.pathname = "";
   resolvedUrl.search = "";
   resolvedUrl.hash = "";
@@ -20,10 +60,10 @@ export function resolveAppUrl(pathOrUrl: string) {
 }
 
 export function getWebSocketOrigin() {
-  const baseUrl = env.wsBaseUrl || env.apiBaseUrl;
+  const baseUrl = normalizeUrlForCurrentOrigin(env.wsBaseUrl || getApiBaseUrl());
   const resolvedUrl = new URL(
     baseUrl,
-    typeof window !== "undefined" ? window.location.origin : undefined,
+    getBrowserLocation()?.origin,
   );
 
   if (resolvedUrl.protocol === "ws:" || resolvedUrl.protocol === "wss:") {

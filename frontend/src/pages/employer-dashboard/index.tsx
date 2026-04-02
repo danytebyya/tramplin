@@ -3,7 +3,6 @@ import { Navigate, UNSAFE_NavigationContext, useNavigate } from "react-router-do
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import verifiedIcon from "../../assets/icons/verified.svg";
 import {
   CitySelection,
   readRecentAddressQueriesCookie,
@@ -12,7 +11,12 @@ import {
   writeSelectedCityCookie,
 } from "../../features/city-selector";
 import { AddressSuggestion, getAddressSuggestions } from "../../features/city-selector/api";
-import { getEmployerVerificationDraft, uploadEmployerAvatar, upsertEmployerProfile } from "../../features/company-verification";
+import {
+  deleteEmployerAvatar,
+  getEmployerVerificationDraft,
+  uploadEmployerAvatar,
+  upsertEmployerProfile,
+} from "../../features/company-verification";
 import {
   getEmployerAccessState,
   MeResponse,
@@ -23,7 +27,7 @@ import {
 import { listEmployerOpportunitiesRequest } from "../../features/opportunity";
 import type { Opportunity } from "../../entities/opportunity";
 import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
-import { Button, Container, InfoTooltip, Input, Modal } from "../../shared/ui";
+import { Button, Container, Input, Modal, ProfileTabs, VerifiedTooltip } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { OpportunityFilters } from "../../widgets/filters";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
@@ -202,6 +206,8 @@ export function EmployerDashboardPage() {
   const [formState, setFormState] = useState<EmployerProfileFormState>(EMPTY_FORM_STATE);
   const [isFormInitialized, setIsFormInitialized] = useState(false);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [isAvatarMarkedForDeletion, setIsAvatarMarkedForDeletion] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const organizationSizeInputRef = useRef<HTMLInputElement | null>(null);
   const foundationYearInputRef = useRef<HTMLInputElement | null>(null);
@@ -260,6 +266,9 @@ export function EmployerDashboardPage() {
       setAvatarPreviewUrl(null);
     },
   });
+  const deleteEmployerAvatarMutation = useMutation({
+    mutationFn: deleteEmployerAvatar,
+  });
 
   if (role !== "employer") {
     return <Navigate to="/" replace />;
@@ -277,6 +286,7 @@ export function EmployerDashboardPage() {
   };
 
   const employerProfile = meQuery.data?.data?.user?.employer_profile;
+  const persistedEmployerAvatarUrl = resolveAvatarUrl(employerProfile?.avatar_url);
   const employerPublicId = meQuery.data?.data?.user?.public_id?.trim() || meQuery.data?.data?.user?.id;
   const verificationDraft = verificationDraftQuery.data?.data;
   const verificationStatus = employerProfile?.verification_status;
@@ -326,7 +336,8 @@ export function EmployerDashboardPage() {
   const initialFormState = buildEmployerFormState(employerProfile ?? null, verificationDraft);
   const profileSeed = JSON.stringify(initialFormState);
   const currentFormSeed = JSON.stringify(formState);
-  const hasUnsavedChanges = isFormInitialized && currentFormSeed !== profileSeed;
+  const hasPendingAvatarChanges = Boolean(pendingAvatarFile) || isAvatarMarkedForDeletion;
+  const hasUnsavedChanges = (isFormInitialized && currentFormSeed !== profileSeed) || hasPendingAvatarChanges;
 
   useEffect(() => {
     if (
@@ -552,6 +563,8 @@ export function EmployerDashboardPage() {
       return;
     }
 
+    setPendingAvatarFile(file);
+    setIsAvatarMarkedForDeletion(false);
     setAvatarPreviewUrl((currentValue) => {
       if (currentValue) {
         URL.revokeObjectURL(currentValue);
@@ -559,10 +572,23 @@ export function EmployerDashboardPage() {
 
       return URL.createObjectURL(file);
     });
-    void uploadEmployerAvatarMutation.mutateAsync(file).catch(() => {
-      setAvatarPreviewUrl(null);
-    });
     event.target.value = "";
+  };
+
+  const handleDeleteAvatar = () => {
+    if (!pendingAvatarFile && !persistedEmployerAvatarUrl) {
+      return;
+    }
+
+    setPendingAvatarFile(null);
+    setIsAvatarMarkedForDeletion(true);
+    setAvatarPreviewUrl((currentValue) => {
+      if (currentValue) {
+        URL.revokeObjectURL(currentValue);
+      }
+
+      return null;
+    });
   };
 
   const handleOfficeAddressSuggestionSelect = (index: number, item: AddressSuggestion) => {
@@ -672,6 +698,22 @@ export function EmployerDashboardPage() {
       max_link: normalizeOptionalValue(formState.maxLink),
       rutube_link: normalizeOptionalValue(formState.rutubeLink),
     });
+
+    if (isAvatarMarkedForDeletion && persistedEmployerAvatarUrl) {
+      await deleteEmployerAvatarMutation.mutateAsync();
+    } else if (pendingAvatarFile) {
+      await uploadEmployerAvatarMutation.mutateAsync(pendingAvatarFile);
+    }
+
+    setPendingAvatarFile(null);
+    setIsAvatarMarkedForDeletion(false);
+    setAvatarPreviewUrl((currentValue) => {
+      if (currentValue) {
+        URL.revokeObjectURL(currentValue);
+      }
+
+      return null;
+    });
   };
 
   const handleSaveSummaryField = async () => {
@@ -699,42 +741,24 @@ export function EmployerDashboardPage() {
   return (
     <main className="employer-dashboard">
       <Header
-        containerClassName="employer-dashboard__header-container"
+        containerClassName="employer-dashboard__header-shell"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
       />
 
-      <Container className="employer-dashboard__container">
-        <nav className="employer-dashboard__tabs" aria-label="Разделы работодателя">
-          <button type="button" className="employer-dashboard__tab employer-dashboard__tab--active">
-            Профиль компании
-          </button>
-          {employerAccess.canManageOpportunities ? (
-            <button
-              type="button"
-              className="employer-dashboard__tab"
-              onClick={() => navigate("/employer/opportunities")}
-            >
-              Управление возможностями
-            </button>
-          ) : null}
-          {employerAccess.canReviewResponses ? (
-            <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/employer/responses")}>
-              Отклики
-            </button>
-          ) : null}
-          {employerAccess.canAccessChat ? (
-            <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/employer/chat")}>
-              Чат
-            </button>
-          ) : null}
-          <button type="button" className="employer-dashboard__tab" onClick={() => navigate("/settings")}>
-            Настройки
-          </button>
-        </nav>
+      <Container className="employer-dashboard__shell">
+        <ProfileTabs
+          navigate={navigate}
+          audience="employer"
+          current="company-profile"
+          employerAccess={employerAccess}
+          tabsClassName="employer-dashboard__tabs"
+          tabClassName="employer-dashboard__tab"
+          activeTabClassName="employer-dashboard__tab--active"
+        />
 
-        <section className="employer-dashboard__profile-grid">
+        <section className="employer-dashboard__profile-summary">
           <div className="employer-dashboard__form-panel">
             <div className="employer-dashboard__identity">
               <input
@@ -747,25 +771,35 @@ export function EmployerDashboardPage() {
                 aria-hidden="true"
                 onChange={handleAvatarChange}
               />
-              <div className="employer-dashboard__avatar-block">
+              <div className="employer-dashboard__avatar-panel">
                 {employerPublicId ? <p className="employer-dashboard__profile-id">ID: {employerPublicId}</p> : null}
                 <div className="employer-dashboard__avatar-shell">
                   <img
-                    src={avatarPreviewUrl ?? resolveAvatarUrl(employerProfile?.avatar_url) ?? resolveAvatarIcon("employer")}
+                    src={avatarPreviewUrl ?? (isAvatarMarkedForDeletion ? null : persistedEmployerAvatarUrl) ?? resolveAvatarIcon("employer")}
                     alt=""
                     aria-hidden="true"
                     className="employer-dashboard__avatar-image"
                   />
+                  {pendingAvatarFile || persistedEmployerAvatarUrl ? (
+                    <button
+                      type="button"
+                      className="employer-dashboard__avatar-overlay"
+                      aria-label="Удалить аватар"
+                      onClick={handleDeleteAvatar}
+                    >
+                      <span aria-hidden="true" className="employer-dashboard__avatar-overlay-icon" />
+                    </button>
+                  ) : null}
                 </div>
                 <div className="employer-dashboard__avatar-action-wrap">
                   <Button type="button" variant="ghost" size="md" className="employer-dashboard__avatar-action" onClick={handlePickAvatar}>
-                    <span className="employer-dashboard__avatar-action-content">Изменить аватар</span>
+                    <span className="employer-dashboard__avatar-actions">Изменить аватар</span>
                   </Button>
                 </div>
               </div>
             </div>
 
-            <div className="employer-dashboard__form-grid">
+            <div className="employer-dashboard__profile-form">
               <label className="employer-dashboard__field">
                 <span className="employer-dashboard__field-label">Наименование компании</span>
                 <Input
@@ -793,7 +827,7 @@ export function EmployerDashboardPage() {
                 <span className="employer-dashboard__field-label">Адреса офисов</span>
                 <div className="employer-dashboard__office-list">
                   {formState.officeAddresses.map((address, index) => (
-                    <div className="employer-dashboard__office-item" key={`office-address-${index}`}>
+                    <div className="employer-dashboard__office-card" key={`office-address-${index}`}>
                       <Input
                         ref={(element) => {
                           officeAddressInputRefs.current[index] = element;
@@ -893,7 +927,7 @@ export function EmployerDashboardPage() {
                 <span className="employer-dashboard__field-label">Сфера деятельности</span>
                 <div className="employer-dashboard__office-list">
                   {formState.activityAreas.map((area, index) => (
-                    <div className="employer-dashboard__office-item" key={`activity-area-${index}`}>
+                    <div className="employer-dashboard__office-card" key={`activity-area-${index}`}>
                       <Input
                         ref={(element) => {
                           activityAreaInputRefs.current[index] = element;
@@ -999,7 +1033,11 @@ export function EmployerDashboardPage() {
                 fullWidth
                 className="employer-dashboard__save-button"
                 onClick={() => void handleSubmit()}
-                loading={saveEmployerProfileMutation.isPending}
+                loading={
+                  saveEmployerProfileMutation.isPending ||
+                  uploadEmployerAvatarMutation.isPending ||
+                  deleteEmployerAvatarMutation.isPending
+                }
                 disabled={isSaveDisabled}
               >
                 Сохранить изменения
@@ -1019,17 +1057,17 @@ export function EmployerDashboardPage() {
                 </div>
               </div>
               <div className="employer-dashboard__summary-progress-meta">
-                <div className="employer-dashboard__summary-progress-item">
+                <div className="employer-dashboard__progress-point">
                   <p className="employer-dashboard__summary-meta">
                     Просмотров профиля: {employerProfile?.profile_views_count ?? 0}
                   </p>
                 </div>
-                <div className="employer-dashboard__summary-progress-item">
+                <div className="employer-dashboard__progress-point">
                   <p className="employer-dashboard__summary-meta">
                     Размещено возможностей: {activeOpportunitiesCount}
                   </p>
                 </div>
-                <div className="employer-dashboard__summary-progress-item">
+                <div className="employer-dashboard__progress-point">
                   <p className="employer-dashboard__summary-meta">
                     Получено откликов: {responsesCount}
                   </p>
@@ -1039,26 +1077,12 @@ export function EmployerDashboardPage() {
 
             <article className="employer-dashboard__summary-card">
               <p className="employer-dashboard__summary-label">Статус:</p>
-              <div className="employer-dashboard__status-row">
+              <div className="employer-dashboard__status-summary">
                 <strong className={formatVerificationClassName(verificationStatus)}>
                   {formatVerificationLabel(verificationStatus)}
                 </strong>
                 {isVerified ? (
-                  <InfoTooltip
-                    className="employer-dashboard__verification-tooltip"
-                    triggerClassName="employer-dashboard__verification-tooltip-trigger"
-                    panelClassName="employer-dashboard__verification-tooltip-panel"
-                    text={
-                      <span className="employer-dashboard__verification-tooltip-content">
-                        <strong className="employer-dashboard__verification-tooltip-title">
-                          Верифицированная организация
-                        </strong>
-                        <span className="employer-dashboard__verification-tooltip-text">
-                          Документы проверены и подтверждены
-                        </span>
-                      </span>
-                    }
-                  />
+                  <VerifiedTooltip className="employer-dashboard__verification-tooltip" size="lg" />
                 ) : null}
               </div>
             </article>
@@ -1071,7 +1095,7 @@ export function EmployerDashboardPage() {
             <article className="employer-dashboard__summary-card">
               <p className="employer-dashboard__summary-label">Размер организации:</p>
               {editingSummaryField === "organizationSize" ? (
-                <div className="employer-dashboard__summary-input-row">
+                <div className="employer-dashboard__summary-field">
                   <Input
                     ref={organizationSizeInputRef}
                     value={formState.organizationSize}
@@ -1093,7 +1117,7 @@ export function EmployerDashboardPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="employer-dashboard__summary-value-row">
+                <div className="employer-dashboard__summary-metric">
                   <strong className="employer-dashboard__summary-value">
                     {formState.organizationSize.trim() || "Не указано"}
                   </strong>
@@ -1112,7 +1136,7 @@ export function EmployerDashboardPage() {
             <article className="employer-dashboard__summary-card">
               <p className="employer-dashboard__summary-label">Год основания:</p>
               {editingSummaryField === "foundationYear" ? (
-                <div className="employer-dashboard__summary-input-row">
+                <div className="employer-dashboard__summary-field">
                   <Input
                     ref={foundationYearInputRef}
                     value={formState.foundationYear}
@@ -1134,7 +1158,7 @@ export function EmployerDashboardPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="employer-dashboard__summary-value-row">
+                <div className="employer-dashboard__summary-metric">
                   <strong className="employer-dashboard__summary-value">
                     {formState.foundationYear.trim() || "Не указано"}
                   </strong>
@@ -1174,7 +1198,7 @@ export function EmployerDashboardPage() {
               onViewModeChange={setOpportunityViewMode}
             />
 
-            <div className="employer-dashboard__opportunities-content">
+            <div className="employer-dashboard__opportunities-summary">
               <div
                 className={
                   opportunityViewMode === "map"
@@ -1228,21 +1252,22 @@ export function EmployerDashboardPage() {
         title="Несохраненные изменения"
         isOpen={isLeaveConfirmModalOpen}
         onClose={handleCloseLeaveConfirmModal}
+        size="small"
         panelClassName="employer-dashboard__leave-modal-panel"
-        titleAccentColor="var(--color-danger)"
+        titleAccentColor="var(--color-primary)"
         closeOnBackdrop={false}
       >
-        <div className="employer-dashboard__leave-modal">
-          <p className="employer-dashboard__leave-modal-text">
+        <div className="modal__body employer-dashboard__leave-modal">
+          <p className="modal__text employer-dashboard__leave-modal-text">
             Если перейти на другую страницу сейчас, все несохранённые данные сотрутся.
           </p>
           {saveEmployerProfileMutation.isError ? (
-            <p className="employer-dashboard__save-error">{saveErrorMessage}</p>
+            <p className="modal__error employer-dashboard__save-error">{saveErrorMessage}</p>
           ) : null}
-          <div className="employer-dashboard__leave-modal-actions">
+          <div className="modal__actions employer-dashboard__leave-modal-actions">
             <Button
               type="button"
-              variant="primary-outline"
+              variant="cancel"
               size="md"
               onClick={handleCloseLeaveConfirmModal}
               disabled={saveEmployerProfileMutation.isPending}
@@ -1254,10 +1279,18 @@ export function EmployerDashboardPage() {
               variant="primary"
               size="md"
               onClick={() => void handleSaveAndLeave()}
-              loading={saveEmployerProfileMutation.isPending}
-              disabled={saveEmployerProfileMutation.isPending}
+              loading={
+                saveEmployerProfileMutation.isPending ||
+                uploadEmployerAvatarMutation.isPending ||
+                deleteEmployerAvatarMutation.isPending
+              }
+              disabled={
+                saveEmployerProfileMutation.isPending ||
+                uploadEmployerAvatarMutation.isPending ||
+                deleteEmployerAvatarMutation.isPending
+              }
             >
-              Сохранить
+              Сохранить и выйти
             </Button>
           </div>
         </div>

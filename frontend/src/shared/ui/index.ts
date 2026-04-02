@@ -10,6 +10,8 @@ export { Switch } from "./switch/switch";
 export { SegmentedSwitch } from "./segmented-switch/segmented-switch";
 export { Select } from "./select/select";
 export { InfoTooltip } from "./info-tooltip/info-tooltip";
+export { VerifiedTooltip } from "./verified-tooltip/verified-tooltip";
 export { Status } from "./status/status";
 export { Badge } from "./badge/badge";
 export { Modal } from "./modal/modal";
+export { ProfileTabs } from "./profile-tabs/profile-tabs";

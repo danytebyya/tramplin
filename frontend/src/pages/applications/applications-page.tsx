@@ -3,12 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 
-import verifiedIcon from "../../assets/icons/verified.svg";
 import { CitySelection, CitySelector, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { Opportunity } from "../../entities/opportunity";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
 import {
   listMyApplicationsRequest,
+  WithdrawApplicationModal,
   withdrawOpportunityApplicationRequest,
   type ApplicationDetails,
 } from "../../features/applications";
@@ -20,7 +20,7 @@ import {
 import { useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
 import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
-import { Badge, Button, Checkbox, Container, Input, Modal, Radio, Status } from "../../shared/ui";
+import { Badge, Button, Checkbox, Container, Input, ProfileTabs, Radio, Status, VerifiedTooltip } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import "../favorites/favorites.css";
@@ -72,14 +72,6 @@ const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label:
   { value: "internship", label: "Стажировки" },
   { value: "event", label: "Мероприятия" },
   { value: "mentorship", label: "Менторские программы" },
-];
-
-const applicantTabs: Array<{ label: string; to?: string; isCurrent?: boolean }> = [
-  { label: "Профиль", to: "/dashboard/applicant" },
-  { label: "Мои отклики", to: "/applications", isCurrent: true },
-  { label: "Избранное", to: "/favorites" },
-  { label: "Нетворкинг", to: "/networking" },
-  { label: "Настройки", to: "/settings" },
 ];
 
 function normalizeFilterText(value: string) {
@@ -621,7 +613,7 @@ export function ApplicationsPage() {
   return (
     <main className="applications-page home-page home-page--applicant">
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
@@ -648,27 +640,18 @@ export function ApplicationsPage() {
         }
       />
 
-      <Container className="settings-page__container applications-page__container">
-        <nav className="settings-page__tabs favorites-page__tabs" aria-label="Разделы аккаунта">
-          {applicantTabs.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={item.isCurrent ? "settings-page__tab settings-page__tab--active" : "settings-page__tab"}
-              onClick={() => {
-                if (item.to) {
-                  navigate(item.to);
-                }
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+      <Container className="settings-page__shell applications-page__shell">
+        <ProfileTabs
+          navigate={navigate}
+          audience="applicant"
+          current="applications"
+          tabsClassName="settings-page__tabs favorites-page__tabs"
+          ariaLabel="Разделы аккаунта"
+        />
 
-        <section className="favorites-page__metrics" aria-label="Статистика откликов">
+        <section className="favorites-page__metrics stats-panel" aria-label="Статистика откликов">
           {metricDefinitions.map((metric) => (
-            <article key={metric.key} className="favorites-page__metric-card">
+            <article key={metric.key} className="favorites-page__metric-card stats-panel__card">
               {isApplicationsLoading ? (
                 <>
                   <span className="favorites-page__skeleton favorites-page__skeleton--metric-label" />
@@ -676,8 +659,8 @@ export function ApplicationsPage() {
                 </>
               ) : (
                 <>
-                  <span className="favorites-page__metric-label">{metric.label}</span>
-                  <strong className="favorites-page__metric-value">{formatCount(stats[metric.key])}</strong>
+                  <span className="favorites-page__metric-label stats-panel__label">{metric.label}</span>
+                  <strong className="favorites-page__metric-value stats-panel__value">{formatCount(stats[metric.key])}</strong>
                 </>
               )}
             </article>
@@ -963,7 +946,7 @@ export function ApplicationsPage() {
               return (
                 <article key={opportunity.id} className="applications-page__card">
                   <div className="applications-page__card-main">
-                    <div className="applications-page__content">
+                    <div className="applications-page__summary">
                       <div className="applications-page__topline">
                         <Status
                           variant={statusMeta.variant}
@@ -992,7 +975,7 @@ export function ApplicationsPage() {
                         </div>
                       </div>
 
-                      <div className="applications-page__title-block">
+                      <div className="applications-page__title-panel">
                         <div>
                           <Link to={`/opportunities/${opportunity.id}`} className="applications-page__title">
                             {opportunity.title}
@@ -1046,7 +1029,7 @@ export function ApplicationsPage() {
                     </div>
 
                     <aside className="applications-page__side">
-                      <div className="applications-page__company-block">
+                      <div className="applications-page__company-panel">
                         <div className="applications-page__company-header">
                           <button
                             type="button"
@@ -1056,9 +1039,7 @@ export function ApplicationsPage() {
                             {opportunity.companyName}
                           </button>
                           {opportunity.companyVerified ? (
-                            <span className="applications-page__verified-icon" aria-hidden="true">
-                              <img src={verifiedIcon} alt="" className="applications-page__verified-icon-image" />
-                            </span>
+                            <VerifiedTooltip className="applications-page__verified-icon" />
                           ) : null}
                         </div>
 
@@ -1104,7 +1085,7 @@ export function ApplicationsPage() {
                       {item.status === "accepted" && (
                         <section className="applications-page__detail-section">
                           <h3 className="applications-page__detail-title">Детали собеседования</h3>
-                          <div className="applications-page__detail-grid">
+                          <div className="applications-page__details-panel">
                             {item.interviewDate ? <p>Дата: {formatDate(item.interviewDate)}</p> : null}
                             {item.interviewStartTime && item.interviewEndTime ? (
                               <p>Время: {item.interviewStartTime} - {item.interviewEndTime}</p>
@@ -1143,12 +1124,12 @@ export function ApplicationsPage() {
                         </section>
                       ) : null}
 
-                      <section className="applications-page__meta-row">
-                        <div className="applications-page__meta-item">
+                      <section className="applications-page__meta-summary">
+                        <div className="applications-page__meta-detail">
                           <span className="applications-page__meta-label">Отклик отправлен</span>
                           <strong className="applications-page__meta-value">{formatDateTime(item.submittedAt)}</strong>
                         </div>
-                        <div className="applications-page__meta-item">
+                        <div className="applications-page__meta-detail">
                           <span className="applications-page__meta-label">Последнее обновление</span>
                           <strong className="applications-page__meta-value">{formatDateTime(item.updatedAt)}</strong>
                         </div>
@@ -1189,38 +1170,12 @@ export function ApplicationsPage() {
 
       <Footer theme="applicant" />
 
-      <Modal
-        title="Подтвердите действие"
+      <WithdrawApplicationModal
         isOpen={pendingWithdrawOpportunityId !== null}
         onClose={() => setPendingWithdrawOpportunityId(null)}
-        panelClassName="applications-page__withdraw-modal-panel"
-        titleAccentColor="var(--color-secondary)"
-      >
-        <div className="applications-page__withdraw-modal">
-          <p className="applications-page__withdraw-modal-text">
-            Вы уверены, что хотите отозвать отклик?
-          </p>
-          <div className="applications-page__withdraw-modal-actions">
-            <Button
-              type="button"
-              variant="secondary-outline"
-              size="md"
-              onClick={() => setPendingWithdrawOpportunityId(null)}
-            >
-              Отмена
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="md"
-              onClick={handleConfirmWithdraw}
-              loading={withdrawApplicationMutation.isPending}
-            >
-              Отозвать отклик
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={handleConfirmWithdraw}
+        isPending={withdrawApplicationMutation.isPending}
+      />
     </main>
   );
 }

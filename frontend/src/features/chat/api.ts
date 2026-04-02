@@ -45,6 +45,8 @@ export type ChatMessage = {
   conversationId: string;
   senderUserId: string;
   senderRole: string;
+  senderPublicKeyJwk: JsonWebKey | null;
+  recipientPublicKeyJwk: JsonWebKey | null;
   ciphertext: string;
   iv: string;
   salt: string;
@@ -58,6 +60,8 @@ type ChatMessageApi = {
   conversation_id: string;
   sender_user_id: string;
   sender_role: string;
+  sender_public_key_jwk?: JsonWebKey | null;
+  recipient_public_key_jwk?: JsonWebKey | null;
   ciphertext: string;
   iv: string;
   salt: string;
@@ -145,6 +149,8 @@ function mapMessage(item: ChatMessageApi): ChatMessage {
     conversationId: item.conversation_id,
     senderUserId: item.sender_user_id,
     senderRole: item.sender_role,
+    senderPublicKeyJwk: item.sender_public_key_jwk ?? null,
+    recipientPublicKeyJwk: item.recipient_public_key_jwk ?? null,
     ciphertext: item.ciphertext,
     iv: item.iv,
     salt: item.salt,

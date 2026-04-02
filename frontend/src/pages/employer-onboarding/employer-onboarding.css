@@ -13,7 +13,7 @@ body.employer-onboarding-page-root {
   isolation: isolate;
 }
 
-.employer-onboarding-page .auth-page__content.container.container__auth-page {
+.employer-onboarding-page .auth-page__auth-shell.page-shell.page-shell--auth {
   width: min(1080px, 100%);
   max-width: 100%;
   min-height: 100vh;
@@ -46,7 +46,7 @@ body.employer-onboarding-page-root {
   z-index: 3;
 }
 
-.employer-onboarding-card__header-content {
+.employer-onboarding-card__header-summary {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -65,7 +65,7 @@ body.employer-onboarding-page-root {
   grid-column: 1;
 }
 
-.employer-onboarding-page .auth-page__panel-content {
+.employer-onboarding-page .auth-page__panel-summary {
   width: 100%;
   flex-direction: column;
   justify-content: flex-start;
@@ -413,11 +413,11 @@ body.employer-onboarding-page-root {
     grid-column: 2 / span 10;
   }
 
-  .employer-onboarding-page .auth-page__content.container.container__auth-page {
+  .employer-onboarding-page .auth-page__auth-shell.page-shell.page-shell--auth {
     grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 
-  .employer-onboarding-page .auth-page__panel-content {
+  .employer-onboarding-page .auth-page__panel-summary {
     display: flex;
   }
 
@@ -432,7 +432,7 @@ body.employer-onboarding-page-root {
 }
 
 @media (max-width: 1023px) {
-  .employer-onboarding-page .auth-page__content.container.container__auth-page {
+  .employer-onboarding-page .auth-page__auth-shell.page-shell.page-shell--auth {
     padding: 24px 16px;
   }
 
@@ -440,7 +440,7 @@ body.employer-onboarding-page-root {
     grid-column: 1 / -1;
   }
 
-  .employer-onboarding-page .auth-page__panel-content {
+  .employer-onboarding-page .auth-page__panel-summary {
     display: flex;
   }
 

@@ -1,13 +1,13 @@
-import { type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import editIcon from "../../assets/icons/edit.svg";
-import deleteIcon from "../../assets/icons/delete.svg";
 import checkMarkIcon from "../../assets/icons/check-mark.svg";
 import closeIcon from "../../assets/icons/close.svg";
+import deleteIcon from "../../assets/icons/delete.svg";
 import {
   CitySelection,
   readSelectedCityCookie,
@@ -24,9 +24,11 @@ import {
   ApplicantDashboardCertificate,
   ApplicantDashboardProject,
   ApplicantDashboardResponse,
+  deleteApplicantAvatarRequest,
   MeResponse,
   applicantDashboardRequest,
   meRequest,
+  uploadApplicantAvatarRequest,
   updateApplicantDashboardRequest,
   useAuthStore,
 } from "../../features/auth";
@@ -34,8 +36,8 @@ import {
   OpportunityTagCatalogCategory,
   listOpportunityTagCatalogRequest,
 } from "../../features/opportunity/api";
-import { resolveAvatarIcon } from "../../shared/lib";
-import { Badge, Button, Checkbox, Container, Input, Modal, Select } from "../../shared/ui";
+import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import { Badge, Button, Checkbox, Container, Input, Modal, ProfileTabs, Select } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import "./seeker-dashboard.css";
@@ -647,6 +649,10 @@ export function SeekerDashboardPage() {
   const [profileForm, setProfileForm] = useState<ProfileFormState>(EMPTY_PROFILE_FORM);
   const [displayedProfileCompletion, setDisplayedProfileCompletion] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [isAvatarMarkedForDeletion, setIsAvatarMarkedForDeletion] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const [activeEditor, setActiveEditor] = useState<SectionMode>(null);
   const [aboutDraft, setAboutDraft] = useState("");
@@ -754,10 +760,30 @@ export function SeekerDashboardPage() {
   const saveDashboardMutation = useMutation({
     mutationFn: updateApplicantDashboardRequest,
   });
+  const uploadApplicantAvatarMutation = useMutation({
+    mutationFn: uploadApplicantAvatarRequest,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
+      setAvatarPreviewUrl((currentValue) => {
+        if (currentValue) {
+          URL.revokeObjectURL(currentValue);
+        }
+        return null;
+      });
+    },
+  });
+  const deleteApplicantAvatarMutation = useMutation({
+    mutationFn: deleteApplicantAvatarRequest,
+  });
 
   const user = meQuery.data?.data?.user;
   const profileMenuItems = buildApplicantProfileMenuItems(navigate);
-  const applicantAvatar = resolveAvatarIcon("applicant");
+  const persistedApplicantAvatarUrl = resolveAvatarUrl(user?.applicant_profile?.avatar_url);
+  const applicantAvatar =
+    avatarPreviewUrl ??
+    (isAvatarMarkedForDeletion ? null : persistedApplicantAvatarUrl) ??
+    resolveAvatarIcon("applicant");
   const profilePublicId = user?.public_id ?? user?.id ?? "000000";
   const confirmIcon = <img src={checkMarkIcon} alt="" aria-hidden="true" className="seeker-dashboard__confirm-icon" />;
   const hardSkillOptions = useMemo(
@@ -894,6 +920,50 @@ export function SeekerDashboardPage() {
     }));
   };
 
+  const handlePickAvatar = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      event.target.value = "";
+      return;
+    }
+
+    setPendingAvatarFile(file);
+    setIsAvatarMarkedForDeletion(false);
+    setAvatarPreviewUrl((currentValue) => {
+      if (currentValue) {
+        URL.revokeObjectURL(currentValue);
+      }
+
+      return URL.createObjectURL(file);
+    });
+
+    event.target.value = "";
+  };
+
+  const handleDeleteAvatar = () => {
+    if (!pendingAvatarFile && !persistedApplicantAvatarUrl) {
+      return;
+    }
+
+    setPendingAvatarFile(null);
+    setIsAvatarMarkedForDeletion(true);
+    setAvatarPreviewUrl((currentValue) => {
+      if (currentValue) {
+        URL.revokeObjectURL(currentValue);
+      }
+      return null;
+    });
+  };
+
   useEffect(() => {
     if (!user || !dashboardQuery.data?.data || isInitialized) {
       return;
@@ -923,6 +993,14 @@ export function SeekerDashboardPage() {
     });
     setIsInitialized(true);
   }, [dashboardQuery.data?.data, isInitialized, user]);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) {
+        URL.revokeObjectURL(avatarPreviewUrl);
+      }
+    };
+  }, [avatarPreviewUrl]);
 
   useEffect(() => {
     const isAnyDropdownOpen =
@@ -1168,6 +1246,19 @@ export function SeekerDashboardPage() {
 
   const currentProfileSeed = JSON.stringify(profileForm);
   const hasUnsavedProfileChanges = Boolean(initialProfileSeed) && initialProfileSeed !== currentProfileSeed;
+  const hasPendingAvatarChanges = Boolean(pendingAvatarFile) || isAvatarMarkedForDeletion;
+  const hasUnsavedApplicantChanges = hasUnsavedProfileChanges || hasPendingAvatarChanges;
+
+  const resetPendingAvatarState = () => {
+    setPendingAvatarFile(null);
+    setIsAvatarMarkedForDeletion(false);
+    setAvatarPreviewUrl((currentValue) => {
+      if (currentValue) {
+        URL.revokeObjectURL(currentValue);
+      }
+      return null;
+    });
+  };
 
   async function persistDashboard(nextState: DashboardState, options?: { syncHeaderCity?: boolean }) {
     const response = await saveDashboardMutation.mutateAsync(buildPayload(nextState));
@@ -1245,6 +1336,14 @@ export function SeekerDashboardPage() {
         },
         { syncHeaderCity: true },
       );
+
+      if (isAvatarMarkedForDeletion && persistedApplicantAvatarUrl) {
+        await deleteApplicantAvatarMutation.mutateAsync();
+      } else if (pendingAvatarFile) {
+        await uploadApplicantAvatarMutation.mutateAsync(pendingAvatarFile);
+      }
+
+      resetPendingAvatarState();
     } catch {
       setSaveError("Не удалось сохранить профиль.");
     }
@@ -1603,7 +1702,7 @@ export function SeekerDashboardPage() {
   return (
     <main className="seeker-dashboard">
       <Header
-        containerClassName="home-page__container"
+        containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme="applicant"
         city={headerCity || "Выберите город"}
@@ -1613,41 +1712,58 @@ export function SeekerDashboardPage() {
         }}
       />
 
-      <Container className="seeker-dashboard__container">
-        <nav className="seeker-dashboard__tabs" aria-label="Разделы профиля соискателя">
-          <button type="button" className="seeker-dashboard__tab seeker-dashboard__tab--active">
-            Профиль
-          </button>
-          <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/applications")}>
-            Мои отклики
-          </button>
-          <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/favorites")}>
-            Избранное
-          </button>
-          <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/networking")}>
-            Нетворкинг
-          </button>
-          <button type="button" className="seeker-dashboard__tab" onClick={() => navigate("/settings")}>
-            Настройки
-          </button>
-        </nav>
+      <Container className="seeker-dashboard__shell">
+        <ProfileTabs
+          navigate={navigate}
+          audience="applicant"
+          current="profile"
+          tabsClassName="seeker-dashboard__tabs"
+          tabClassName="seeker-dashboard__tab"
+          activeTabClassName="seeker-dashboard__tab--active"
+          ariaLabel="Разделы профиля соискателя"
+        />
 
         <section className="seeker-dashboard__profile">
-          <div className="seeker-dashboard__profile-grid">
+          <div className="seeker-dashboard__profile-summary">
             <section className="seeker-dashboard__form-panel">
               <div className="seeker-dashboard__identity">
                 <p className="seeker-dashboard__profile-id">{`ID:${profilePublicId}`}</p>
-                <div className="seeker-dashboard__avatar-block">
+                <div className="seeker-dashboard__avatar-panel">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    hidden
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    onChange={handleAvatarChange}
+                  />
                   <span className="seeker-dashboard__avatar-shell">
                     <img src={applicantAvatar} alt="" aria-hidden="true" className="seeker-dashboard__avatar-image" />
+                    {pendingAvatarFile || persistedApplicantAvatarUrl ? (
+                      <button
+                        type="button"
+                        className="seeker-dashboard__avatar-overlay"
+                        aria-label="Удалить аватар"
+                        onClick={handleDeleteAvatar}
+                      >
+                        <span aria-hidden="true" className="seeker-dashboard__avatar-overlay-icon" />
+                      </button>
+                    ) : null}
                   </span>
-                  <Button type="button" variant="secondary-ghost" size="md" className="seeker-dashboard__avatar-action">
-                    <span className="seeker-dashboard__avatar-action-content">Изменить аватар</span>
+                  <Button
+                    type="button"
+                    variant="secondary-ghost"
+                    size="md"
+                    className="seeker-dashboard__avatar-action"
+                    onClick={handlePickAvatar}
+                  >
+                    <span className="seeker-dashboard__avatar-actions">Изменить аватар</span>
                   </Button>
                 </div>
               </div>
 
-              <div className="seeker-dashboard__form-grid">
+              <div className="seeker-dashboard__profile-form">
                 <label className="seeker-dashboard__field">
                   <span className="seeker-dashboard__field-label">ФИО</span>
                   <Input
@@ -1815,8 +1931,17 @@ export function SeekerDashboardPage() {
                 type="button"
                 variant="secondary"
                 size="md"
-                loading={saveDashboardMutation.isPending}
-                disabled={saveDashboardMutation.isPending || !hasUnsavedProfileChanges}
+                loading={
+                  saveDashboardMutation.isPending ||
+                  uploadApplicantAvatarMutation.isPending ||
+                  deleteApplicantAvatarMutation.isPending
+                }
+                disabled={
+                  saveDashboardMutation.isPending ||
+                  uploadApplicantAvatarMutation.isPending ||
+                  deleteApplicantAvatarMutation.isPending ||
+                  !hasUnsavedApplicantChanges
+                }
                 className="seeker-dashboard__save-button"
                 onClick={() => void handleProfileSave()}
               >
@@ -1824,7 +1949,7 @@ export function SeekerDashboardPage() {
               </Button>
             </section>
 
-            <aside className="seeker-dashboard__summary-column">
+            <aside className="seeker-dashboard__summary-panel">
               <article className="seeker-dashboard__summary-card">
                 <div className="seeker-dashboard__summary-progress-head">
                   <p className="seeker-dashboard__summary-title">{`Профиль заполнен на ${displayedProfileCompletion}%`}</p>
@@ -1836,23 +1961,23 @@ export function SeekerDashboardPage() {
                   </div>
                 </div>
                 <dl className="seeker-dashboard__metrics">
-                  <div className="seeker-dashboard__metric-row">
+                  <div className="seeker-dashboard__metric-line">
                     <dt>Просмотров профиля:</dt>
                     <dd>{dashboardState.stats.profileViewsCount}</dd>
                   </div>
-                  <div className="seeker-dashboard__metric-row">
+                  <div className="seeker-dashboard__metric-line">
                     <dt>Отправлено откликов:</dt>
                     <dd>{dashboardState.stats.applicationsCount}</dd>
                   </div>
-                  <div className="seeker-dashboard__metric-row">
+                  <div className="seeker-dashboard__metric-line">
                     <dt>Получено ответов:</dt>
                     <dd>{dashboardState.stats.responsesCount}</dd>
                   </div>
-                  <div className="seeker-dashboard__metric-row">
+                  <div className="seeker-dashboard__metric-line">
                     <dt>Приглашений:</dt>
                     <dd>{dashboardState.stats.invitationsCount}</dd>
                   </div>
-                  <div className="seeker-dashboard__metric-row">
+                  <div className="seeker-dashboard__metric-line">
                     <dt>Рекомендаций от контактов:</dt>
                     <dd>{dashboardState.stats.recommendationsCount}</dd>
                   </div>
@@ -1972,9 +2097,9 @@ export function SeekerDashboardPage() {
                     </label>
                     <div className="seeker-dashboard__interest-card">
                       <span className="seeker-dashboard__interest-label">Тип занятости:</span>
-                      <div className="seeker-dashboard__choice-grid">
+                      <div className="seeker-dashboard__preference-options">
                         {EMPLOYMENT_OPTIONS.map((option) => (
-                          <label key={option} className="seeker-dashboard__choice-item">
+                          <label key={option} className="seeker-dashboard__preference-option">
                             <Checkbox
                               variant="secondary"
                               checked={careerDraft.employmentTypes.includes(option)}
@@ -1994,9 +2119,9 @@ export function SeekerDashboardPage() {
                     </div>
                     <div className="seeker-dashboard__interest-card">
                       <span className="seeker-dashboard__interest-label">Формат работы:</span>
-                      <div className="seeker-dashboard__choice-grid">
+                      <div className="seeker-dashboard__preference-options">
                         {WORK_FORMAT_OPTIONS.map((option) => (
-                          <label key={option} className="seeker-dashboard__choice-item">
+                          <label key={option} className="seeker-dashboard__preference-option">
                             <Checkbox
                               variant="secondary"
                               checked={careerDraft.workFormats.includes(option)}
@@ -2050,10 +2175,10 @@ export function SeekerDashboardPage() {
 
         <section className="seeker-dashboard__section">
           <h2 className="seeker-dashboard__section-title">Портфолио</h2>
-          <div className="seeker-dashboard__portfolio-grid">
-            <article className="seeker-dashboard__content-card seeker-dashboard__content-card--links">
-              <div className="seeker-dashboard__content-card-head">
-                <h3 className="seeker-dashboard__content-card-title">О себе</h3>
+          <div className="seeker-dashboard__portfolio-showcase">
+            <article className="seeker-dashboard__profile-panel seeker-dashboard__profile-panel--links">
+              <div className="seeker-dashboard__profile-panel-head">
+                <h3 className="seeker-dashboard__profile-panel-title">О себе</h3>
                 {activeEditor === "about" ? (
                   <Button type="button" variant="secondary" size="md" className="seeker-dashboard__confirm-button" onClick={() => void handleAboutSave()}>
                     {confirmIcon}
@@ -2072,7 +2197,7 @@ export function SeekerDashboardPage() {
                   </button>
                 )}
               </div>
-              <div className="seeker-dashboard__content-card-body">
+              <div className="seeker-dashboard__profile-panel-body">
                 {activeEditor === "about" ? (
                   <textarea
                     className="seeker-dashboard__textarea"
@@ -2094,12 +2219,12 @@ export function SeekerDashboardPage() {
             <article
               className={
                 activeEditor === "skills"
-                  ? "seeker-dashboard__content-card seeker-dashboard__content-card--skills-editing"
-                  : "seeker-dashboard__content-card"
+                  ? "seeker-dashboard__profile-panel seeker-dashboard__profile-panel--skills-editing"
+                  : "seeker-dashboard__profile-panel"
               }
             >
-              <div className="seeker-dashboard__content-card-head">
-                <h3 className="seeker-dashboard__content-card-title">Навыки</h3>
+              <div className="seeker-dashboard__profile-panel-head">
+                <h3 className="seeker-dashboard__profile-panel-title">Навыки</h3>
                 {activeEditor === "skills" ? (
                   <Button type="button" variant="secondary" size="md" className="seeker-dashboard__confirm-button" onClick={() => void handleSkillsSave()}>
                     {confirmIcon}
@@ -2119,14 +2244,14 @@ export function SeekerDashboardPage() {
                   </button>
                 )}
               </div>
-              <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
+              <div className="seeker-dashboard__profile-panel-body seeker-dashboard__profile-panel-body--stacked">
                 {activeEditor === "skills" ? (
                   <>
                     <div className="seeker-dashboard__skill-group">
                       <span className="seeker-dashboard__skill-title">Уровень</span>
-                      <div className="seeker-dashboard__choice-grid">
+                      <div className="seeker-dashboard__preference-options">
                         {(["Junior", "Middle", "Senior"] as SeekerLevel[]).map((level) => (
-                          <label key={level} className="seeker-dashboard__choice-item">
+                          <label key={level} className="seeker-dashboard__preference-option">
                             <Checkbox
                               variant="secondary"
                               checked={skillsDraft.level === level}
@@ -2229,9 +2354,9 @@ export function SeekerDashboardPage() {
               </div>
             </article>
 
-            <article className="seeker-dashboard__content-card">
-              <div className="seeker-dashboard__content-card-head">
-                <h3 className="seeker-dashboard__content-card-title">Ссылки на репозитории</h3>
+            <article className="seeker-dashboard__profile-panel">
+              <div className="seeker-dashboard__profile-panel-head">
+                <h3 className="seeker-dashboard__profile-panel-title">Ссылки на репозитории</h3>
                 {activeEditor === "links" ? (
                   <Button type="button" variant="secondary" size="md" className="seeker-dashboard__confirm-button" onClick={() => void handleLinksSave()}>
                     {confirmIcon}
@@ -2258,7 +2383,7 @@ export function SeekerDashboardPage() {
                   </button>
                 )}
               </div>
-              <div className="seeker-dashboard__content-card-body seeker-dashboard__content-card-body--stacked">
+              <div className="seeker-dashboard__profile-panel-body seeker-dashboard__profile-panel-body--stacked">
                 {activeEditor === "links" ? (
                   <>
                     {[
@@ -2286,37 +2411,37 @@ export function SeekerDashboardPage() {
                   </>
                 ) : (
                   <>
-                    <div className="seeker-dashboard__link-block">
+                    <div className="seeker-dashboard__link-panel">
                       <span className="seeker-dashboard__link-label">GitHub</span>
                       <a href={dashboardState.profile.githubUrl || "#"} className="seeker-dashboard__link-value">
                         {formatLinkLabel(dashboardState.profile.githubUrl, "github.com")}
                       </a>
                     </div>
-                    <div className="seeker-dashboard__link-block">
+                    <div className="seeker-dashboard__link-panel">
                       <span className="seeker-dashboard__link-label">GitLab</span>
                       <a href={dashboardState.profile.gitlabUrl || "#"} className="seeker-dashboard__link-value">
                         {formatLinkLabel(dashboardState.profile.gitlabUrl, "gitlab.com")}
                       </a>
                     </div>
-                    <div className="seeker-dashboard__link-block">
+                    <div className="seeker-dashboard__link-panel">
                       <span className="seeker-dashboard__link-label">Bitbucket</span>
                       <a href={dashboardState.profile.bitbucketUrl || "#"} className="seeker-dashboard__link-value">
                         {formatLinkLabel(dashboardState.profile.bitbucketUrl, "bitbucket.org")}
                       </a>
                     </div>
-                    <div className="seeker-dashboard__link-block">
+                    <div className="seeker-dashboard__link-panel">
                       <span className="seeker-dashboard__link-label">LinkedIn</span>
                       <a href={dashboardState.profile.linkedinUrl || "#"} className="seeker-dashboard__link-value">
                         {formatLinkLabel(dashboardState.profile.linkedinUrl, "linkedin.com")}
                       </a>
                     </div>
-                    <div className="seeker-dashboard__link-block">
+                    <div className="seeker-dashboard__link-panel">
                       <span className="seeker-dashboard__link-label">Портфолио</span>
                       <a href={dashboardState.profile.portfolioUrl || "#"} className="seeker-dashboard__link-value">
                         {formatLinkLabel(dashboardState.profile.portfolioUrl, "portfolio.example")}
                       </a>
                     </div>
-                    <div className="seeker-dashboard__link-block">
+                    <div className="seeker-dashboard__link-panel">
                       <span className="seeker-dashboard__link-label">Хабр</span>
                       <a href={dashboardState.profile.habrUrl || "#"} className="seeker-dashboard__link-value">
                         {formatLinkLabel(dashboardState.profile.habrUrl, "habr.com")}
@@ -2330,24 +2455,24 @@ export function SeekerDashboardPage() {
         </section>
 
         <section className="seeker-dashboard__section seeker-dashboard__section--combined">
-          <div className="seeker-dashboard__collection seeker-dashboard__collection--combined">
-            <div className="seeker-dashboard__collection-section">
+          <div className="seeker-dashboard__portfolio-set seeker-dashboard__portfolio-set--combined">
+            <div className="seeker-dashboard__portfolio-set-section">
               <h2 className="seeker-dashboard__section-title">Опыт проектов</h2>
             </div>
-            <div className="seeker-dashboard__collection-grid">
+            <div className="seeker-dashboard__portfolio-set-gallery">
               {dashboardState.projects.map((project) => (
-                <article key={project.id} className="seeker-dashboard__collection-card">
-                  <div className="seeker-dashboard__collection-card-head">
+                <article key={project.id} className="seeker-dashboard__portfolio-set-entry">
+                  <div className="seeker-dashboard__portfolio-set-entry-head">
                     {editingProjectId === project.id ? (
                       <Input
-                        className="input--secondary input--sm seeker-dashboard__collection-title-input"
+                        className="input--secondary input--sm seeker-dashboard__portfolio-set-title-input"
                         value={projectDraft.title}
                         onChange={(event) => setProjectDraft((current) => ({ ...current, title: event.target.value }))}
                       />
                     ) : (
-                      <h3 className="seeker-dashboard__collection-card-title">{project.title}</h3>
+                      <h3 className="seeker-dashboard__portfolio-set-entry-title">{project.title}</h3>
                     )}
-                    <div className="seeker-dashboard__collection-card-actions">
+                    <div className="seeker-dashboard__portfolio-set-entry-actions">
                       {editingProjectId === project.id ? (
                         <Button type="button" variant="secondary" size="md" className="seeker-dashboard__confirm-button" onClick={() => void handleProjectUpdate()}>
                           {confirmIcon}
@@ -2373,11 +2498,11 @@ export function SeekerDashboardPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="seeker-dashboard__collection-card-body">
+                  <div className="seeker-dashboard__portfolio-set-entry-body">
                     {editingProjectId === project.id ? (
                       <>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Описание:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Описание:</span>
                           <textarea
                             className="seeker-dashboard__textarea seeker-dashboard__textarea--sm"
                             value={projectDraft.description}
@@ -2388,7 +2513,7 @@ export function SeekerDashboardPage() {
                           />
                         </label>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Технологии:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Технологии:</span>
                           <Input
                             className="input--secondary input--sm"
                             value={projectDraft.technologies}
@@ -2398,7 +2523,7 @@ export function SeekerDashboardPage() {
                           />
                         </label>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Период:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Период:</span>
                           <Input
                             className="input--secondary input--sm"
                             value={projectDraft.periodLabel}
@@ -2408,7 +2533,7 @@ export function SeekerDashboardPage() {
                           />
                         </label>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Роль:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Роль:</span>
                           <Input
                             className="input--secondary input--sm"
                             value={projectDraft.roleName}
@@ -2418,7 +2543,7 @@ export function SeekerDashboardPage() {
                           />
                         </label>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
                           <Input
                             className="input--secondary input--sm"
                             value={projectDraft.repositoryUrl}
@@ -2430,18 +2555,18 @@ export function SeekerDashboardPage() {
                       </>
                     ) : (
                       <>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Описание:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Описание:</span>
                           <p className="seeker-dashboard__paragraph">{project.description}</p>
                         </div>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Технологии:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Технологии:</span>
                           <p className="seeker-dashboard__paragraph">{project.technologies}</p>
                           <p className="seeker-dashboard__paragraph">{`Период: ${project.periodLabel}`}</p>
                           <p className="seeker-dashboard__paragraph">{`Роль: ${project.roleName}`}</p>
                         </div>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
                           <p className="seeker-dashboard__paragraph">{project.repositoryUrl}</p>
                         </div>
                       </>
@@ -2450,27 +2575,27 @@ export function SeekerDashboardPage() {
                 </article>
               ))}
             </div>
-            <Button type="button" variant="secondary-outline" size="md" fullWidth className="seeker-dashboard__collection-button" onClick={() => setActiveModal("project")}>
+            <Button type="button" variant="secondary-outline" size="md" fullWidth className="seeker-dashboard__portfolio-set-button" onClick={() => setActiveModal("project")}>
               Добавить проект
             </Button>
 
-            <div className="seeker-dashboard__collection-section">
+            <div className="seeker-dashboard__portfolio-set-section">
               <h2 className="seeker-dashboard__section-title">Достижения</h2>
             </div>
-            <div className="seeker-dashboard__collection-grid">
+            <div className="seeker-dashboard__portfolio-set-gallery">
               {dashboardState.achievements.map((item) => (
-                <article key={item.id} className="seeker-dashboard__collection-card">
-                  <div className="seeker-dashboard__collection-card-head">
+                <article key={item.id} className="seeker-dashboard__portfolio-set-entry">
+                  <div className="seeker-dashboard__portfolio-set-entry-head">
                     {editingAchievementId === item.id ? (
                       <Input
-                        className="input--secondary input--sm seeker-dashboard__collection-title-input"
+                        className="input--secondary input--sm seeker-dashboard__portfolio-set-title-input"
                         value={achievementDraft.title}
                         onChange={(event) => setAchievementDraft((current) => ({ ...current, title: event.target.value }))}
                       />
                     ) : (
-                      <h3 className="seeker-dashboard__collection-card-title">{item.title}</h3>
+                      <h3 className="seeker-dashboard__portfolio-set-entry-title">{item.title}</h3>
                     )}
-                    <div className="seeker-dashboard__collection-card-actions">
+                    <div className="seeker-dashboard__portfolio-set-entry-actions">
                       {editingAchievementId === item.id ? (
                         <Button type="button" variant="secondary" size="md" className="seeker-dashboard__confirm-button" onClick={() => void handleAchievementUpdate()}>
                           {confirmIcon}
@@ -2496,11 +2621,11 @@ export function SeekerDashboardPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="seeker-dashboard__collection-card-body">
+                  <div className="seeker-dashboard__portfolio-set-entry-body">
                     {editingAchievementId === item.id ? (
                       <>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Мероприятие:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Мероприятие:</span>
                           <Input
                             className="input--secondary input--sm"
                             value={achievementDraft.eventName}
@@ -2513,7 +2638,7 @@ export function SeekerDashboardPage() {
                           />
                         </label>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Проект:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Проект:</span>
                           <Select
                             className="seeker-dashboard__select"
                             variant="secondary"
@@ -2535,7 +2660,7 @@ export function SeekerDashboardPage() {
                           />
                         </label>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__collection-card-label">Награда:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Награда:</span>
                           <Input
                             className="input--secondary input--sm"
                             value={achievementDraft.award}
@@ -2550,16 +2675,16 @@ export function SeekerDashboardPage() {
                       </>
                     ) : (
                       <>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Мероприятие:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Мероприятие:</span>
                           <p className="seeker-dashboard__paragraph">{item.eventName}</p>
                         </div>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Проект:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Проект:</span>
                           <p className="seeker-dashboard__paragraph">{item.projectName}</p>
                         </div>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Награда:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Награда:</span>
                           <p className="seeker-dashboard__paragraph">{item.award}</p>
                         </div>
                       </>
@@ -2568,27 +2693,27 @@ export function SeekerDashboardPage() {
                 </article>
               ))}
             </div>
-            <Button type="button" variant="secondary-outline" size="md" fullWidth className="seeker-dashboard__collection-button" onClick={() => setActiveModal("achievement")}>
+            <Button type="button" variant="secondary-outline" size="md" fullWidth className="seeker-dashboard__portfolio-set-button" onClick={() => setActiveModal("achievement")}>
               Добавить достижение
             </Button>
 
-            <div className="seeker-dashboard__collection-section">
+            <div className="seeker-dashboard__portfolio-set-section">
               <h2 className="seeker-dashboard__section-title">Сертификаты</h2>
             </div>
-            <div className="seeker-dashboard__collection-grid">
+            <div className="seeker-dashboard__portfolio-set-gallery">
               {dashboardState.certificates.map((item) => (
-                <article key={item.id} className="seeker-dashboard__collection-card">
-                  <div className="seeker-dashboard__collection-card-head">
+                <article key={item.id} className="seeker-dashboard__portfolio-set-entry">
+                  <div className="seeker-dashboard__portfolio-set-entry-head">
                     {editingCertificateId === item.id ? (
                       <Input
-                        className="input--secondary input--sm seeker-dashboard__collection-title-input"
+                        className="input--secondary input--sm seeker-dashboard__portfolio-set-title-input"
                         value={certificateDraft.title}
                         onChange={(event) => setCertificateDraft((current) => ({ ...current, title: event.target.value }))}
                       />
                     ) : (
-                      <h3 className="seeker-dashboard__collection-card-title">{item.title}</h3>
+                      <h3 className="seeker-dashboard__portfolio-set-entry-title">{item.title}</h3>
                     )}
-                    <div className="seeker-dashboard__collection-card-actions">
+                    <div className="seeker-dashboard__portfolio-set-entry-actions">
                       {editingCertificateId === item.id ? (
                         <Button type="button" variant="secondary" size="md" className="seeker-dashboard__confirm-button" onClick={() => void handleCertificateUpdate()}>
                           {confirmIcon}
@@ -2614,7 +2739,7 @@ export function SeekerDashboardPage() {
                       </button>
                     </div>
                   </div>
-                  <div className="seeker-dashboard__collection-card-body">
+                  <div className="seeker-dashboard__portfolio-set-entry-body">
                     {editingCertificateId === item.id ? (
                       <>
                         {[
@@ -2623,7 +2748,7 @@ export function SeekerDashboardPage() {
                           ["Ссылка", "credentialUrl"],
                         ].map(([label, key]) => (
                           <label key={key} className="seeker-dashboard__field">
-                            <span className="seeker-dashboard__collection-card-label">{`${label}:`}</span>
+                            <span className="seeker-dashboard__portfolio-set-entry-label">{`${label}:`}</span>
                             <Input
                               className="input--secondary input--sm"
                               value={certificateDraft[key as keyof CertificateDraft]}
@@ -2639,16 +2764,16 @@ export function SeekerDashboardPage() {
                       </>
                     ) : (
                       <>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Организация:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Организация:</span>
                           <p className="seeker-dashboard__paragraph">{item.organizationName}</p>
                         </div>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Дата:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Дата:</span>
                           <p className="seeker-dashboard__paragraph">{item.issuedAt}</p>
                         </div>
-                        <div className="seeker-dashboard__collection-card-detail">
-                          <span className="seeker-dashboard__collection-card-label">Ссылка:</span>
+                        <div className="seeker-dashboard__portfolio-set-entry-detail">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
                           <a href={item.credentialUrl || "#"} className="seeker-dashboard__link-value">
                             {formatLinkLabel(item.credentialUrl, "Посмотреть")}
                           </a>
@@ -2659,7 +2784,7 @@ export function SeekerDashboardPage() {
                 </article>
               ))}
             </div>
-            <Button type="button" variant="secondary-outline" size="md" fullWidth className="seeker-dashboard__collection-button" onClick={() => setActiveModal("certificate")}>
+            <Button type="button" variant="secondary-outline" size="md" fullWidth className="seeker-dashboard__portfolio-set-button" onClick={() => setActiveModal("certificate")}>
               Добавить сертификат
             </Button>
           </div>
@@ -2678,14 +2803,14 @@ export function SeekerDashboardPage() {
         }}
         titleAccentColor="var(--color-secondary)"
       >
-        <div className="seeker-dashboard__modal-form">
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Название проекта</span>
+        <div className="modal__form seeker-dashboard__modal-form">
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Название проекта</span>
             <Input className="input--secondary input--sm" value={modalProjectDraft.title} onChange={(event) => setModalProjectDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название проекта" />
           </label>
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Описание</span>
-            <textarea className="seeker-dashboard__textarea seeker-dashboard__textarea--sm" value={modalProjectDraft.description} onChange={(event) => setModalProjectDraft((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Описание" />
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Описание</span>
+            <textarea className="modal__textarea seeker-dashboard__textarea seeker-dashboard__textarea--sm" value={modalProjectDraft.description} onChange={(event) => setModalProjectDraft((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Описание" />
           </label>
           <SkillTagSelector
             fieldRef={projectTechnologiesFieldRef}
@@ -2704,11 +2829,11 @@ export function SeekerDashboardPage() {
             onSelect={addProjectTechnologyValue}
             onRemove={removeProjectTechnologyValue}
           />
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Ссылка</span>
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Ссылка</span>
             <Input className="input--secondary input--sm" value={modalProjectDraft.repositoryUrl} onChange={(event) => setModalProjectDraft((current) => ({ ...current, repositoryUrl: event.target.value }))} placeholder="Ссылка" />
           </label>
-          <div className="seeker-dashboard__modal-actions">
+          <div className="modal__actions seeker-dashboard__modal-actions">
             <Button
               type="button"
               variant="secondary-outline"
@@ -2744,17 +2869,17 @@ export function SeekerDashboardPage() {
         onClose={() => setActiveModal(null)}
         titleAccentColor="var(--color-secondary)"
       >
-        <div className="seeker-dashboard__modal-form">
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Название</span>
+        <div className="modal__form seeker-dashboard__modal-form">
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Название</span>
             <Input className="input--secondary input--sm" value={modalAchievementDraft.title} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
           </label>
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Мероприятие</span>
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Мероприятие</span>
             <Input className="input--secondary input--sm" value={modalAchievementDraft.eventName} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, eventName: event.target.value }))} placeholder="Мероприятие" />
           </label>
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Проект</span>
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Проект</span>
             <Select
               className="seeker-dashboard__select"
               variant="secondary"
@@ -2775,11 +2900,11 @@ export function SeekerDashboardPage() {
               }
             />
           </label>
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Награда</span>
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Награда</span>
             <Input className="input--secondary input--sm" value={modalAchievementDraft.award} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, award: event.target.value }))} placeholder="Награда" />
           </label>
-          <div className="seeker-dashboard__modal-actions">
+          <div className="modal__actions seeker-dashboard__modal-actions">
             <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setActiveModal(null)}>
               Отмена
             </Button>
@@ -2803,24 +2928,24 @@ export function SeekerDashboardPage() {
         onClose={() => setActiveModal(null)}
         titleAccentColor="var(--color-secondary)"
       >
-        <div className="seeker-dashboard__modal-form">
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Название</span>
+        <div className="modal__form seeker-dashboard__modal-form">
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Название</span>
             <Input className="input--secondary input--sm" value={modalCertificateDraft.title} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
           </label>
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Организация</span>
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Организация</span>
             <Input className="input--secondary input--sm" value={modalCertificateDraft.organizationName} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, organizationName: event.target.value }))} placeholder="Организация" />
           </label>
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Дата</span>
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Дата</span>
             <Input className="input--secondary input--sm" value={modalCertificateDraft.issuedAt} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, issuedAt: event.target.value }))} placeholder="Дата в формате YYYY-MM-DD" />
           </label>
-          <label className="seeker-dashboard__field">
-            <span className="seeker-dashboard__field-label">Ссылка</span>
+          <label className="modal__field seeker-dashboard__field">
+            <span className="modal__field-label seeker-dashboard__field-label">Ссылка</span>
             <Input className="input--secondary input--sm" value={modalCertificateDraft.credentialUrl} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, credentialUrl: event.target.value }))} placeholder="Ссылка" />
           </label>
-          <div className="seeker-dashboard__modal-actions">
+          <div className="modal__actions seeker-dashboard__modal-actions">
             <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setActiveModal(null)}>
               Отмена
             </Button>
@@ -2839,17 +2964,32 @@ export function SeekerDashboardPage() {
       </Modal>
 
       <Modal
-        title={pendingDelete?.title ?? ""}
+        title={
+          pendingDelete?.kind === "project"
+            ? "Удаление проекта"
+            : pendingDelete?.kind === "achievement"
+              ? "Удаление достижения"
+              : pendingDelete?.kind === "certificate"
+                ? "Удаление сертификата"
+                : ""
+        }
         isOpen={pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
-        titleAccentColor="var(--color-secondary)"
+        size="small"
+        titleAccentColor="var(--color-danger)"
       >
-        <div className="seeker-dashboard__modal-form">
-          <p className="seeker-dashboard__paragraph">
-            {`Удалить ${pendingDelete?.entityLabel ?? "элемент"}?`}
+        <div className="modal__body seeker-dashboard__modal-form">
+          <p className="modal__text seeker-dashboard__paragraph">
+            {pendingDelete?.kind === "project"
+              ? `Вы уверены, что хотите удалить проект «${pendingDelete.entityLabel}»?`
+              : pendingDelete?.kind === "achievement"
+                ? `Вы уверены, что хотите удалить достижение «${pendingDelete.entityLabel}»?`
+                : pendingDelete?.kind === "certificate"
+                  ? `Вы уверены, что хотите удалить сертификат «${pendingDelete.entityLabel}»?`
+                  : "Вы уверены, что хотите удалить элемент?"}
           </p>
-          <div className="seeker-dashboard__modal-actions">
-            <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setPendingDelete(null)}>
+          <div className="modal__actions seeker-dashboard__modal-actions">
+            <Button type="button" variant="cancel" size="md" fullWidth onClick={() => setPendingDelete(null)}>
               Отмена
             </Button>
             <Button type="button" variant="danger" size="md" fullWidth onClick={() => void handlePendingDeleteConfirm()}>

@@ -29,14 +29,14 @@ export function Footer({
 
   return (
     <footer className={`site-footer site-footer--${theme}`} id="about">
-      <Container className="site-footer__container">
+      <Container className="site-footer__shell">
         {isAdminCompact ? null : (
           <div className="site-footer__main">
             <div className="site-footer__logo-card">
               <img src={brandLogo} alt="Трамплин" className="site-footer__brand" />
             </div>
 
-            <div className="site-footer__column">
+            <div className="site-footer__section">
               <h2 className="site-footer__title">О платформе</h2>
               <div className="site-footer__links">
                 <a href={toHref(hashPrefix, "#")} className="site-footer__link">
@@ -48,7 +48,7 @@ export function Footer({
               </div>
             </div>
 
-            <div className="site-footer__column">
+            <div className="site-footer__section">
               <h2 className="site-footer__title">Категории</h2>
               <div className="site-footer__links">
                 <a href={toHref(hashPrefix, "#all")} className="site-footer__link">
@@ -69,7 +69,7 @@ export function Footer({
               </div>
             </div>
 
-            <div className="site-footer__column">
+            <div className="site-footer__section">
               <h2 className="site-footer__title">Поддержка</h2>
               <div className="site-footer__links">
                 <a href={toHref(hashPrefix, "#help")} className="site-footer__link">
@@ -87,7 +87,7 @@ export function Footer({
               </div>
             </div>
 
-            <div className="site-footer__column">
+            <div className="site-footer__section">
               <h2 className="site-footer__title">Контакты</h2>
               <div className="site-footer__contacts">
                 <a href="mailto:info@tramplin.ru" className="site-footer__contact">

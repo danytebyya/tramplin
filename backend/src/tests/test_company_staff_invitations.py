@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from src.core.security import decode_token
-from src.enums import EmployerType, MembershipRole, UserRole
+from src.enums import EmployerType, MembershipRole, UserRole, UserStatus
 from src.models import Employer, EmployerMembership, EmployerProfile, Notification, RefreshSession, User
 from src.tests.test_auth import _request_code
 
@@ -165,9 +165,9 @@ def test_owner_cannot_send_duplicate_pending_invitation_to_same_email(client, db
     assert second_response.json()["error"]["message"] == "Этому пользователю уже отправлена ссылка приглашения"
 
 
-def test_owner_cannot_delete_account_while_company_has_other_staff(client, db_session, monkeypatch):
+def test_owner_delete_removes_company_but_keeps_staff_applicant_account(client, db_session, monkeypatch):
     owner_token = _register_and_login(client, db_session, email="owner-delete-blocked@example.com", role="employer")
-    _create_company_for_owner(
+    employer = _create_company_for_owner(
         db_session,
         owner_email="owner-delete-blocked@example.com",
         company_name="Delete Blocked Corp",
@@ -207,9 +207,156 @@ def test_owner_cannot_delete_account_while_company_has_other_staff(client, db_se
         "/api/v1/users/me",
         headers={"Authorization": f"Bearer {owner_token}"},
     )
-    assert delete_response.status_code == 409
-    assert delete_response.json()["error"]["code"] == "USER_DELETE_HAS_EMPLOYEES"
-    assert delete_response.json()["error"]["message"] == "Удаление невозможно, пока в компании есть сотрудники."
+    assert delete_response.status_code == 200
+    assert delete_response.json()["data"]["deleted"] is True
+
+    staff_user = db_session.execute(
+        select(User).where(User.email == "staff-delete-blocked@example.com")
+    ).scalar_one()
+    assert staff_user.deleted_at is None
+    assert staff_user.status != UserStatus.ARCHIVED
+
+    deleted_employer = db_session.execute(
+        select(Employer).where(Employer.id == employer.id)
+    ).scalar_one_or_none()
+    assert deleted_employer is None
+
+    deleted_membership = db_session.execute(
+        select(EmployerMembership).where(
+            EmployerMembership.employer_id == employer.id,
+            EmployerMembership.user_id == staff_user.id,
+        )
+    ).scalar_one_or_none()
+    assert deleted_membership is None
+
+
+def test_owner_delete_keeps_staff_membership_in_other_company(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-company-a@example.com", role="employer")
+    employer_a = _create_company_for_owner(
+        db_session,
+        owner_email="owner-company-a@example.com",
+        company_name="Company A",
+        inn="7707083801",
+    )
+    second_owner_token = _register_and_login(client, db_session, email="owner-company-b@example.com", role="employer")
+    employer_b = _create_company_for_owner(
+        db_session,
+        owner_email="owner-company-b@example.com",
+        company_name="Company B",
+        inn="7707083802",
+    )
+    staff_token = _register_and_login(client, db_session, email="shared-staff@example.com", role="employer")
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    first_invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "shared-staff@example.com", "role": "manager"},
+    )
+    assert first_invite_response.status_code == 201
+    first_invite_url = sent_messages[-1][2].split("Ссылка: ", maxsplit=1)[1].strip()
+    first_invite_token = parse_qs(urlparse(first_invite_url).query)["invite_token"][0]
+    assert client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {staff_token}"},
+        json={"token": first_invite_token},
+    ).status_code == 200
+
+    second_invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {second_owner_token}"},
+        json={"email": "shared-staff@example.com", "role": "viewer"},
+    )
+    assert second_invite_response.status_code == 201
+    second_invite_url = sent_messages[-1][2].split("Ссылка: ", maxsplit=1)[1].strip()
+    second_invite_token = parse_qs(urlparse(second_invite_url).query)["invite_token"][0]
+    assert client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {staff_token}"},
+        json={"token": second_invite_token},
+    ).status_code == 200
+
+    delete_response = client.delete(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert delete_response.status_code == 200
+
+    staff_user = db_session.execute(select(User).where(User.email == "shared-staff@example.com")).scalar_one()
+    assert staff_user.deleted_at is None
+
+    remaining_memberships = list(
+        db_session.execute(
+            select(EmployerMembership).where(EmployerMembership.user_id == staff_user.id)
+        ).scalars().all()
+    )
+    assert len(remaining_memberships) == 1
+    assert remaining_memberships[0].employer_id == employer_b.id
+
+    deleted_membership = db_session.execute(
+        select(EmployerMembership).where(
+            EmployerMembership.user_id == staff_user.id,
+            EmployerMembership.employer_id == employer_a.id,
+        )
+    ).scalar_one_or_none()
+    assert deleted_membership is None
+
+
+def test_owner_delete_archives_staff_account_with_single_company_context(client, db_session, monkeypatch):
+    owner_token = _register_and_login(client, db_session, email="owner-delete-archive@example.com", role="employer")
+    _create_company_for_owner(
+        db_session,
+        owner_email="owner-delete-archive@example.com",
+        company_name="Delete Archive Corp",
+        inn="7707083894",
+    )
+    staff_token = _register_and_login(
+        client,
+        db_session,
+        email="staff-company-only@example.com",
+        role="employer",
+    )
+
+    sent_messages: list[tuple[str, str, str]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str) -> None:
+        sent_messages.append((recipient, subject, body))
+
+    monkeypatch.setattr("src.services.employer_service.send_email", fake_send_email)
+
+    invite_response = client.post(
+        "/api/v1/companies/staff/invitations",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"email": "staff-company-only@example.com", "role": "manager"},
+    )
+    assert invite_response.status_code == 201
+    invitation_url = sent_messages[0][2].split("Ссылка: ", maxsplit=1)[1].strip()
+    invite_token = parse_qs(urlparse(invitation_url).query)["invite_token"][0]
+
+    accept_response = client.post(
+        "/api/v1/companies/staff/invitations/accept",
+        headers={"Authorization": f"Bearer {staff_token}"},
+        json={"token": invite_token},
+    )
+    assert accept_response.status_code == 200
+
+    delete_response = client.delete(
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert delete_response.status_code == 200
+
+    archived_staff_user = db_session.execute(
+        select(User).where(User.id == UUID(accept_response.json()["data"]["user_id"]))
+    ).scalar_one()
+    assert archived_staff_user.status == UserStatus.ARCHIVED
+    assert archived_staff_user.deleted_at is not None
 
 
 def test_staff_member_can_leave_company_membership(client, db_session, monkeypatch):

@@ -29,7 +29,7 @@ import {
 } from "../../features/applications";
 import { useNotificationsRealtime } from "../../features/notifications";
 import { createApplicantChatRequest, resolveAvatarIcon, updateApplicantChatRequestStatus } from "../../shared/lib";
-import { Button, Checkbox, Container, DateInput, Input, Modal, Radio, Status } from "../../shared/ui";
+import { Button, Checkbox, Container, DateInput, Input, Modal, ProfileTabs, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
 import "../favorites/favorites.css";
@@ -793,42 +793,28 @@ export function EmployerResponsesPage() {
   return (
     <main className="employer-responses-page">
       <Header
-        containerClassName="employer-responses-page__header-container"
+        containerClassName="employer-responses-page__header-shell"
         profileMenuItems={profileMenuItems}
         city={selectedCity}
         onCityChange={handleCityChange}
       />
 
-      <Container className="employer-responses-page__container settings-page__container">
-        <nav className="employer-responses-page__tabs" aria-label="Разделы работодателя">
-          {employerAccess.canManageCompanyProfile ? (
-            <button type="button" className="employer-responses-page__tab" onClick={() => navigate("/dashboard/employer")}>
-              Профиль компании
-            </button>
-          ) : null}
-          {employerAccess.canManageOpportunities ? (
-            <button type="button" className="employer-responses-page__tab" onClick={() => navigate("/employer/opportunities")}>
-              Управление возможностями
-            </button>
-          ) : null}
-          <button type="button" className="employer-responses-page__tab employer-responses-page__tab--active">
-            Отклики
-          </button>
-          {employerAccess.canAccessChat ? (
-            <button type="button" className="employer-responses-page__tab" onClick={() => navigate("/employer/chat")}>
-              Чат
-            </button>
-          ) : null}
-          <button type="button" className="employer-responses-page__tab" onClick={() => navigate("/settings")}>
-            Настройки
-          </button>
-        </nav>
+      <Container className="employer-responses-page__shell settings-page__shell">
+        <ProfileTabs
+          navigate={navigate}
+          audience="employer"
+          current="responses"
+          employerAccess={employerAccess}
+          tabsClassName="employer-responses-page__tabs"
+          tabClassName="employer-responses-page__tab"
+          activeTabClassName="employer-responses-page__tab--active"
+        />
 
-        <div className="employer-responses-page__content">
+        <div className="employer-responses-page__summary">
           <section className="employer-responses-page__section">
-            <section className="favorites-page__metrics" aria-label="Статистика откликов">
+            <section className="favorites-page__metrics stats-panel" aria-label="Статистика откликов">
               {metricDefinitions.map((metric) => (
-                <article key={metric.key} className="favorites-page__metric-card">
+                <article key={metric.key} className="favorites-page__metric-card stats-panel__card">
                   {isLoading ? (
                     <>
                       <span className="favorites-page__skeleton favorites-page__skeleton--metric-label" />
@@ -836,8 +822,8 @@ export function EmployerResponsesPage() {
                     </>
                   ) : (
                     <>
-                      <span className="favorites-page__metric-label">{metric.label}</span>
-                      <strong className="favorites-page__metric-value">{formatCount(metrics[metric.key])}</strong>
+                      <span className="favorites-page__metric-label stats-panel__label">{metric.label}</span>
+                      <strong className="favorites-page__metric-value stats-panel__value">{formatCount(metrics[metric.key])}</strong>
                     </>
                   )}
                 </article>
@@ -1032,10 +1018,10 @@ export function EmployerResponsesPage() {
             const paginationItems = buildPaginationItems(safePage, totalPages);
             const layoutClassName =
               visibleResponses.length <= 1
-                ? "employer-responses-page__responses-grid employer-responses-page__responses-grid--single"
+                ? "employer-responses-page__candidates employer-responses-page__candidates--single"
                 : visibleResponses.length === 2
-                  ? "employer-responses-page__responses-grid employer-responses-page__responses-grid--double"
-                  : "employer-responses-page__responses-grid employer-responses-page__responses-grid--triple";
+                  ? "employer-responses-page__candidates employer-responses-page__candidates--double"
+                  : "employer-responses-page__candidates employer-responses-page__candidates--triple";
 
             return (
               <section
@@ -1056,7 +1042,7 @@ export function EmployerResponsesPage() {
                   </div>
                   <span
                     aria-hidden="true"
-                    className={`employer-responses-page__group-arrow${isExpanded ? " employer-responses-page__group-arrow--expanded" : ""}`}
+                    className={`employer-responses-page__group-toggle-icon${isExpanded ? " employer-responses-page__group-toggle-icon--expanded" : ""}`}
                   />
                 </button>
 
@@ -1227,7 +1213,7 @@ export function EmployerResponsesPage() {
                         <div className={layoutClassName}>
                           {visibleResponses.map((response) => (
                             <article key={`${group.opportunityId}-${response.id}`} className="opportunity-details-page__contact-card employer-responses-page__response-card">
-                              <div className="opportunity-details-page__contact-id-block">
+                              <div className="opportunity-details-page__contact-badge">
                                 <span className="opportunity-details-page__contact-id">ID: {response.id.slice(-6)}</span>
                               </div>
 
@@ -1256,20 +1242,20 @@ export function EmployerResponsesPage() {
                                 </div>
                               ) : null}
 
-                              <div className="opportunity-details-page__contact-meta employer-responses-page__contact-meta">
-                                <span className="opportunity-details-page__contact-meta-item">
+                              <div className="opportunity-details-page__contact-facts employer-responses-page__contact-meta">
+                                <span className="opportunity-details-page__contact-fact">
                                   <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                   {response.city}
                                 </span>
-                                <span className="opportunity-details-page__contact-meta-item">
+                                <span className="opportunity-details-page__contact-fact">
                                   <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                   {response.salaryLabel}
                                 </span>
-                                <span className="opportunity-details-page__contact-meta-item">
+                                <span className="opportunity-details-page__contact-fact">
                                   <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                   {response.formatLabel}
                                 </span>
-                                <span className="opportunity-details-page__contact-meta-item">
+                                <span className="opportunity-details-page__contact-fact">
                                   <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
                                   {response.employmentLabel}
                                 </span>
@@ -1279,7 +1265,7 @@ export function EmployerResponsesPage() {
                                 Отклик: {formatEmployerResponseAppliedAt(response.appliedAt)}
                               </p>
 
-                              <div className="employer-responses-page__status-row">
+                              <div className="employer-responses-page__status-summary">
                                 <span className="employer-responses-page__status-label">Статус:</span>
                                 <Status
                                   className={resolveStatusClassName(response.status)}
@@ -1439,18 +1425,18 @@ export function EmployerResponsesPage() {
         panelClassName="employer-responses-page__status-modal"
       >
         {editingResponseContext ? (
-          <div className="employer-responses-page__status-modal-body">
-            <div className="employer-responses-page__status-modal-copy">
+          <div className="modal__form employer-responses-page__status-modal-body">
+            <div className="modal__copy employer-responses-page__status-modal-copy">
               <p>Кандидат: {editingResponseContext.response.name}</p>
               <p>Вакансия: {editingResponseContext.opportunityTitle}</p>
               <p>Отклик: {formatEmployerResponseAppliedAt(editingResponseContext.response.appliedAt)}</p>
             </div>
 
-            <div className="employer-responses-page__status-field">
-              <span className="employer-responses-page__status-field-label">Выберите статус:</span>
-              <div className="employer-responses-page__status-radio-grid">
+            <div className="modal__field modal__field--compact employer-responses-page__status-field employer-responses-page__status-field--selector">
+              <span className="modal__field-label employer-responses-page__status-field-label">Выберите статус:</span>
+              <div className="employer-responses-page__status-options">
                 {responseStatusOptions.map((option) => (
-                  <label key={option.value} className="employer-responses-page__status-radio">
+                  <label key={option.value} className="modal__option employer-responses-page__status-radio">
                     <Radio
                       checked={draftStatus === option.value}
                       onChange={() => setDraftStatus(option.value)}
@@ -1464,41 +1450,41 @@ export function EmployerResponsesPage() {
 
             {draftStatus === "accepted" ? (
               <>
-                <div className="employer-responses-page__status-field">
-                  <span className="employer-responses-page__status-field-label">Назначьте дату собеседования:</span>
+                <div className="modal__field modal__field--compact employer-responses-page__status-field">
+                  <span className="modal__field-label employer-responses-page__status-field-label">Назначьте дату собеседования:</span>
                   <DateInput className="input--sm" value={draftInterviewDate} onChange={setDraftInterviewDate} variant="primary" />
                 </div>
 
-                <div className="employer-responses-page__status-time-grid">
-                  <label className="employer-responses-page__status-field">
-                    <span className="employer-responses-page__status-field-label">Начало:</span>
-                    <Input className="input--sm employer-responses-page__time-input" type="time" value={draftInterviewStartTime} onChange={(event) => setDraftInterviewStartTime(event.target.value)} />
+                <div className="employer-responses-page__meeting-schedule">
+                  <label className="modal__field modal__field--compact employer-responses-page__status-field">
+                    <span className="modal__field-label employer-responses-page__status-field-label">Начало:</span>
+                    <Input className="input--sm employer-responses-page__time-input" type="time" value={draftInterviewStartTime} onChange={(event) => setDraftInterviewStartTime(event.target.value)} clearable={false} />
                   </label>
-                  <label className="employer-responses-page__status-field">
-                    <span className="employer-responses-page__status-field-label">Окончание:</span>
-                    <Input className="input--sm employer-responses-page__time-input" type="time" value={draftInterviewEndTime} onChange={(event) => setDraftInterviewEndTime(event.target.value)} />
+                  <label className="modal__field modal__field--compact employer-responses-page__status-field">
+                    <span className="modal__field-label employer-responses-page__status-field-label">Окончание:</span>
+                    <Input className="input--sm employer-responses-page__time-input" type="time" value={draftInterviewEndTime} onChange={(event) => setDraftInterviewEndTime(event.target.value)} clearable={false} />
                   </label>
                 </div>
 
-                <label className="employer-responses-page__status-field">
-                  <span className="employer-responses-page__status-field-label">Формат:</span>
+                <label className="modal__field modal__field--compact employer-responses-page__status-field">
+                  <span className="modal__field-label employer-responses-page__status-field-label">Формат:</span>
                   <Input className="input--sm" value={draftInterviewFormat} onChange={(event) => setDraftInterviewFormat(event.target.value)} />
                 </label>
 
-                <label className="employer-responses-page__status-field">
-                  <span className="employer-responses-page__status-field-label">Ссылка:</span>
+                <label className="modal__field modal__field--compact employer-responses-page__status-field">
+                  <span className="modal__field-label employer-responses-page__status-field-label">Ссылка:</span>
                   <Input className="input--sm" value={draftMeetingLink} onChange={(event) => setDraftMeetingLink(event.target.value)} />
                 </label>
 
-                <label className="employer-responses-page__status-field">
-                  <span className="employer-responses-page__status-field-label">Контакты:</span>
+                <label className="modal__field modal__field--compact employer-responses-page__status-field">
+                  <span className="modal__field-label employer-responses-page__status-field-label">Контакты:</span>
                   <Input className="input--sm" value={draftContactEmail} onChange={(event) => setDraftContactEmail(event.target.value)} />
                 </label>
 
-                <label className="employer-responses-page__status-field">
-                  <span className="employer-responses-page__status-field-label">Что взять с собой:</span>
+                <label className="modal__field modal__field--compact employer-responses-page__status-field">
+                  <span className="modal__field-label employer-responses-page__status-field-label">Что взять с собой:</span>
                   <textarea
-                    className="employer-responses-page__status-textarea employer-responses-page__status-textarea--sm"
+                    className="modal__textarea employer-responses-page__status-textarea employer-responses-page__status-textarea--sm"
                     placeholder="Каждый пункт с новой строки"
                     value={draftChecklist}
                     onChange={(event) => setDraftChecklist(event.target.value)}
@@ -1507,19 +1493,19 @@ export function EmployerResponsesPage() {
               </>
             ) : null}
 
-            <label className="employer-responses-page__status-field">
-              <span className="employer-responses-page__status-field-label">Комментарий:</span>
+            <label className="modal__field modal__field--compact employer-responses-page__status-field">
+              <span className="modal__field-label employer-responses-page__status-field-label">Комментарий:</span>
               <textarea
-                className="employer-responses-page__status-textarea employer-responses-page__status-textarea--sm"
+                className="modal__textarea employer-responses-page__status-textarea employer-responses-page__status-textarea--sm"
                 placeholder="Введите комментарий"
                 value={draftComment}
                 onChange={(event) => setDraftComment(event.target.value)}
               />
             </label>
 
-            <div className="employer-responses-page__status-actions">
-              <Button type="button" variant="primary-outline" size="md" fullWidth onClick={closeStatusModal}>
-                Отменить
+            <div className="modal__actions employer-responses-page__status-actions">
+              <Button type="button" variant="cancel" size="md" fullWidth onClick={closeStatusModal}>
+                Отмена
               </Button>
               <Button type="button" variant="primary" size="md" fullWidth onClick={handleSaveStatus}>
                 Подтвердить

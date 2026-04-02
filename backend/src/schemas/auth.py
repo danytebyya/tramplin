@@ -9,6 +9,31 @@ class ApplicantRegistrationPayload(BaseModel):
     graduation_year: int | None = None
 
 
+def _validate_password_value(value: str, *, require_complexity: bool) -> str:
+    if len(value) < 8:
+        raise ValueError("Пароль должен содержать минимум 8 символов")
+    if any(char.isspace() for char in value):
+        raise ValueError("Пароль не должен содержать пробелы")
+    if not require_complexity:
+        return value
+    if not any("a" <= char.lower() <= "z" for char in value):
+        raise ValueError("Пароль должен содержать латинские буквы")
+    if not any(char.islower() for char in value):
+        raise ValueError("Пароль должен содержать строчные буквы")
+    if not any(char.isupper() for char in value):
+        raise ValueError("Пароль должен содержать заглавные буквы")
+    if not any(char.isdigit() for char in value):
+        raise ValueError("Пароль должен содержать цифры")
+    return value
+
+
+def _validate_verification_code_value(value: str) -> str:
+    normalized_value = value.strip()
+    if not normalized_value.isdigit() or len(normalized_value) != 6:
+        raise ValueError("Код подтверждения должен содержать 6 цифр")
+    return normalized_value
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     display_name: str = Field(min_length=2, max_length=120)
@@ -29,27 +54,12 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        if len(value) < 8:
-            raise ValueError("Пароль должен содержать минимум 8 символов")
-        if any(char.isspace() for char in value):
-            raise ValueError("Пароль не должен содержать пробелы")
-        if not any("a" <= char.lower() <= "z" for char in value):
-            raise ValueError("Пароль должен содержать латинские буквы")
-        if not any(char.islower() for char in value):
-            raise ValueError("Пароль должен содержать строчные буквы")
-        if not any(char.isupper() for char in value):
-            raise ValueError("Пароль должен содержать заглавные буквы")
-        if not any(char.isdigit() for char in value):
-            raise ValueError("Пароль должен содержать цифры")
-        return value
+        return _validate_password_value(value, require_complexity=True)
 
     @field_validator("verification_code")
     @classmethod
     def validate_verification_code(cls, value: str) -> str:
-        normalized_value = value.strip()
-        if not normalized_value.isdigit() or len(normalized_value) != 6:
-            raise ValueError("Код подтверждения должен содержать 6 цифр")
-        return normalized_value
+        return _validate_verification_code_value(value)
 
     @model_validator(mode="after")
     def validate_profiles(self) -> "RegisterRequest":
@@ -69,11 +79,7 @@ class LoginRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        if len(value) < 8:
-            raise ValueError("Пароль должен содержать минимум 8 символов")
-        if any(char.isspace() for char in value):
-            raise ValueError("Пароль не должен содержать пробелы")
-        return value
+        return _validate_password_value(value, require_complexity=False)
 
 
 class RefreshRequest(BaseModel):
@@ -104,10 +110,53 @@ class VerificationCodeVerifyRequest(BaseModel):
     @field_validator("code")
     @classmethod
     def validate_code(cls, value: str) -> str:
-        normalized_value = value.strip()
-        if not normalized_value.isdigit() or len(normalized_value) != 6:
-            raise ValueError("Код подтверждения должен содержать 6 цифр")
-        return normalized_value
+        return _validate_verification_code_value(value)
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    force_resend: bool = False
+
+
+class PasswordResetVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str = Field()
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, value: str) -> str:
+        return _validate_verification_code_value(value)
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    email: EmailStr
+    code: str = Field()
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, value: str) -> str:
+        return _validate_verification_code_value(value)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return _validate_password_value(value, require_complexity=True)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("current_password")
+    @classmethod
+    def validate_current_password(cls, value: str) -> str:
+        return _validate_password_value(value, require_complexity=False)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        return _validate_password_value(value, require_complexity=True)
 
 
 class TokenPairResponse(BaseModel):

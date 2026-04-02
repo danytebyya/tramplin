@@ -1,10 +1,9 @@
 import { KeyboardEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
-import verifiedIcon from "../../assets/icons/verified.svg";
 import { Opportunity } from "../../entities/opportunity";
 import type { BackendApplicationStatus } from "../../features/applications";
-import { Badge, Button } from "../../shared/ui";
+import { Badge, Button, VerifiedTooltip } from "../../shared/ui";
 import "./opportunity-list.css";
 
 type OpportunityListProps = {
@@ -48,8 +47,21 @@ export function OpportunityList({
   onApply,
   onWrite,
 }: OpportunityListProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const actionLabel = roleName === "employer" ? "Подробнее" : "Откликнуться";
+  const solidThemeVariant =
+    roleName === "applicant"
+      ? "secondary"
+      : roleName === "curator" || roleName === "admin"
+        ? "accent"
+        : "primary";
+  const outlineThemeVariant =
+    roleName === "applicant"
+      ? "secondary-outline"
+      : roleName === "curator" || roleName === "admin"
+        ? "accent-outline"
+        : "primary-outline";
 
   const resolveStatusButtonMeta = (status: BackendApplicationStatus | undefined) => {
     if (status === "withdrawn") {
@@ -72,9 +84,9 @@ export function OpportunityList({
       <section className="opportunity-list" aria-label="Список возможностей">
         {Array.from({ length: skeletonCount }, (_, index) => (
           <article key={`opportunity-skeleton-${index}`} className="opportunity-list__card opportunity-list__card--skeleton" aria-hidden="true">
-            <div className="opportunity-list__content">
-              <div className="opportunity-list__title-block">
-                <div className="opportunity-list__title-row">
+            <div className="opportunity-list__summary">
+              <div className="opportunity-list__title-panel">
+                <div className="opportunity-list__title-summary">
                   <span className="opportunity-list__skeleton opportunity-list__skeleton--title" />
                   <span className="opportunity-list__skeleton opportunity-list__skeleton--favorite" />
                 </div>
@@ -92,27 +104,27 @@ export function OpportunityList({
                 <span className="opportunity-list__skeleton opportunity-list__skeleton--tag opportunity-list__skeleton--tag-wide" />
               </div>
 
-              <div className="opportunity-list__details-block">
+              <div className="opportunity-list__details-panel">
                 <span className="opportunity-list__skeleton opportunity-list__skeleton--meta" />
                 <span className="opportunity-list__skeleton opportunity-list__skeleton--meta opportunity-list__skeleton--meta-short" />
               </div>
 
-              <div className="opportunity-list__description-block">
+              <div className="opportunity-list__description-panel">
                 <span className="opportunity-list__skeleton opportunity-list__skeleton--text" />
                 <span className="opportunity-list__skeleton opportunity-list__skeleton--text opportunity-list__skeleton--text-short" />
-                <div className="opportunity-list__content-actions">
+                <div className="opportunity-list__card-actions">
                   <span className="opportunity-list__skeleton opportunity-list__skeleton--button" />
                 </div>
               </div>
             </div>
 
             <div className="opportunity-list__side">
-              <div className="opportunity-list__company-block">
+              <div className="opportunity-list__company-panel">
                 <div className="opportunity-list__company-header">
                   <span className="opportunity-list__skeleton opportunity-list__skeleton--company" />
                   <span className="opportunity-list__skeleton opportunity-list__skeleton--verified" />
                 </div>
-                <div className="opportunity-list__rating-block">
+                <div className="opportunity-list__rating-panel">
                   <span className="opportunity-list__skeleton opportunity-list__skeleton--rating" />
                   <span className="opportunity-list__skeleton opportunity-list__skeleton--rating opportunity-list__skeleton--rating-short" />
                 </div>
@@ -130,12 +142,32 @@ export function OpportunityList({
   }
 
   const openOpportunity = (opportunityId: string) => {
-    navigate(`/opportunities/${opportunityId}`);
+    navigate(`/opportunities/${opportunityId}`, {
+      state: {
+        restoreScrollY: window.scrollY,
+        restoreViewMode: "list",
+        returnTo: {
+          pathname: location.pathname,
+          search: location.search,
+          hash: location.hash,
+        },
+      },
+    });
   };
 
   const openEmployerProfile = (opportunity: Opportunity) => {
     if (opportunity.employerPublicId) {
-      navigate(`/profiles/${opportunity.employerPublicId}`);
+      navigate(`/profiles/${opportunity.employerPublicId}`, {
+        state: {
+          restoreScrollY: window.scrollY,
+          restoreViewMode: "list",
+          returnTo: {
+            pathname: location.pathname,
+            search: location.search,
+            hash: location.hash,
+          },
+        },
+      });
       return;
     }
 
@@ -173,9 +205,9 @@ export function OpportunityList({
             onClick={() => openOpportunity(opportunity.id)}
             onKeyDown={(event) => handleCardKeyDown(event, opportunity.id)}
           >
-            <div className="opportunity-list__content">
-              <div className="opportunity-list__title-block">
-                <div className="opportunity-list__title-row">
+            <div className="opportunity-list__summary">
+              <div className="opportunity-list__title-panel">
+                <div className="opportunity-list__title-summary">
                   <h3 className="opportunity-list__title">
                     <span className="opportunity-list__title-link">{opportunity.title}</span>
                   </h3>
@@ -212,7 +244,7 @@ export function OpportunityList({
                 <p className="opportunity-list__meta">{opportunity.locationLabel}</p>
               </div>
 
-              <div className="opportunity-list__tags-block">
+              <div className="opportunity-list__tags-panel">
                 <div className="opportunity-list__tags">
                   {opportunity.tags.map((tag) => (
                     <Badge key={tag} variant="secondary" className="opportunity-list__tag">
@@ -222,16 +254,16 @@ export function OpportunityList({
                 </div>
               </div>
 
-              <div className="opportunity-list__details-block">
+              <div className="opportunity-list__details-panel">
                 <p className="opportunity-list__secondary">Уровень: {opportunity.levelLabel}</p>
                 <p className="opportunity-list__secondary">
                   Занятость: {opportunity.employmentLabel}
                 </p>
               </div>
 
-              <div className="opportunity-list__description-block">
+              <div className="opportunity-list__description-panel">
                 <p className="opportunity-list__text">{opportunity.description}</p>
-                <div className="opportunity-list__content-actions">
+                <div className="opportunity-list__card-actions">
                   <Button
                     type="button"
                     variant={
@@ -239,7 +271,7 @@ export function OpportunityList({
                         ? statusButtonMeta.variant
                         : roleName !== "employer" && isApplied
                           ? "danger-outline"
-                          : "secondary"
+                          : solidThemeVariant
                     }
                     size="sm"
                     disabled={shouldDisableAction}
@@ -262,8 +294,8 @@ export function OpportunityList({
             </div>
 
             <div className="opportunity-list__side">
-              <div className="opportunity-list__company-block">
-                <div className="opportunity-list__company-row">
+              <div className="opportunity-list__company-panel">
+                <div className="opportunity-list__company-summary">
                   <div className="opportunity-list__company-header">
                     {opportunity.employerPublicId ? (
                       <button
@@ -280,14 +312,12 @@ export function OpportunityList({
                       <p className="opportunity-list__company">{opportunity.companyName}</p>
                     )}
                     {opportunity.companyVerified ? (
-                      <span className="opportunity-list__verified-icon" aria-hidden="true">
-                        <img src={verifiedIcon} alt="" aria-hidden="true" className="opportunity-list__verified-icon-image" />
-                      </span>
+                      <VerifiedTooltip className="opportunity-list__verified-icon" />
                     ) : null}
                   </div>
                 </div>
 
-                <div className="opportunity-list__rating-block">
+                <div className="opportunity-list__rating-panel">
                   <p className="opportunity-list__rating">
                     Рейтинг:{" "}
                     {opportunity.companyRating !== null ? `${opportunity.companyRating}/5` : "0/5"}
@@ -302,7 +332,7 @@ export function OpportunityList({
               <div className="opportunity-list__actions">
                 <Button
                   type="button"
-                  variant="secondary-outline"
+                  variant={outlineThemeVariant}
                   size="sm"
                   onClick={(event) => {
                     event.stopPropagation();
@@ -313,7 +343,7 @@ export function OpportunityList({
                 </Button>
                 <Button
                   type="button"
-                  variant="secondary-outline"
+                  variant={solidThemeVariant}
                   size="sm"
                   onClick={(event) => {
                     event.stopPropagation();

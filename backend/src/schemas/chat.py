@@ -79,6 +79,8 @@ class ChatMessageRead(BaseModel):
     conversation_id: str
     sender_user_id: str
     sender_role: str
+    sender_public_key_jwk: dict | None = None
+    recipient_public_key_jwk: dict | None = None
     ciphertext: str
     iv: str
     salt: str
