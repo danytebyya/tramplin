@@ -32,9 +32,7 @@ jobs:
             cd /var/www/tramplin/backend
             source .venv/bin/activate
 
-            set -a
-            source /var/www/tramplin/backend/.env
-            set +a
+            export DATABASE_URL="$(python -c "from dotenv import dotenv_values; print(dotenv_values('/var/www/tramplin/backend/.env')['DATABASE_URL'])")"
 
             echo "Using DATABASE_URL:"
             echo "$DATABASE_URL" | sed 's#://[^:]*:[^@]*@#://***:***@#'
