@@ -31,12 +31,32 @@ jobs:
 
             cd /var/www/tramplin/backend
             source .venv/bin/activate
+
+            set -a
+            source /var/www/tramplin/backend/.env
+            set +a
+
+            echo "Using DATABASE_URL:"
+            echo "$DATABASE_URL" | sed 's#://[^:]*:[^@]*@#://***:***@#'
+
             pip install -r requirements.txt
+
+            echo "Alembic before upgrade:"
+            alembic current
+            alembic heads
+
             alembic upgrade head
-            sudo systemctl restart tramplin-backend
+
+            echo "Alembic after upgrade:"
+            alembic current
 
             cd /var/www/tramplin/frontend
             npm install
             npm run build
+
+            sudo systemctl restart tramplin-backend
+            sleep 3
+
+            curl -f http://127.0.0.1:8000/api/v1/platform/stats > /dev/null
 
             sudo systemctl reload nginx
