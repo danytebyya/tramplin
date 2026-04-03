@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import anyio
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from src.enums import UserRole
 from src.enums.notifications import NotificationKind, NotificationSeverity
@@ -910,7 +911,21 @@ class ChatService:
         ):
             return False, True, False
 
-        is_contact = self.repo.get_accepted_applicant_contact(str(current_user.id), str(counterpart_user.id)) is not None
+        try:
+            is_contact = self.repo.get_accepted_applicant_contact(str(current_user.id), str(counterpart_user.id)) is not None
+        except (ProgrammingError, OperationalError) as exc:
+            # Keep conversations working on databases where networking migrations
+            # have not been applied yet; the explicit contact features still
+            # require the schema upgrade.
+            self.db.rollback()
+            logger.warning(
+                "chat.contacts_schema_unavailable conversation_id=%s current_user_id=%s counterpart_user_id=%s error=%s",
+                conversation.id,
+                current_user.id,
+                counterpart_user.id,
+                exc,
+            )
+            is_contact = False
         if is_contact:
             return True, True, False
 

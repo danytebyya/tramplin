@@ -142,6 +142,7 @@
 }
 
 .chat-workspace__conversation-card--skeleton {
+  min-height: 108px;
   cursor: default;
   pointer-events: none;
 }
@@ -1178,6 +1179,10 @@
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
 }
 
+.chat-workspace__directory-card.chat-workspace__conversation-card--skeleton {
+  min-height: 508px;
+}
+
 .chat-workspace__directory-card--new {
   gap: 20px;
   min-width: 0;
@@ -1185,6 +1190,10 @@
   border: none;
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
+}
+
+.chat-workspace__directory-card--new.chat-workspace__conversation-card--skeleton {
+  min-height: 508px;
 }
 
 .chat-workspace__directory-card-badge {

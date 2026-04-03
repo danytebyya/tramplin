@@ -333,7 +333,7 @@ function ChatWorkspaceSkeleton({ className }: { className: string }) {
   return <span className={`chat-workspace__skeleton ${className}`} aria-hidden="true" />;
 }
 
-function ChatWorkspaceDirectorySkeleton({ detailed = false }: { detailed?: boolean }) {
+function ChatWorkspaceDirectorySkeleton({ detailed = true }: { detailed?: boolean }) {
   if (detailed) {
     return (
       <div className="chat-workspace__directory-card chat-workspace__directory-card--new contact-profile-card chat-workspace__conversation-card--skeleton">
@@ -2051,11 +2051,9 @@ export function ChatWorkspace({
                   </p>
                 ) : null}
                 {shouldShowApplicantContactRejectedNotice || (wasRejectedByActiveApplicantContact && !didRejectActiveApplicantContact) ? (
-                  <div className="chat-workspace__request-banner chat-workspace__request-banner--danger">
-                    <p className="chat-workspace__request-banner-text">
-                      Заявку в контакты не приняли.
-                    </p>
-                  </div>
+                  <p className="chat-workspace__request-text chat-workspace__request-text--danger">
+                    Заявку в контакты не приняли.
+                  </p>
                 ) : null}
                 {editingMessageId ? (
                   <div className="chat-workspace__composer-editing">
