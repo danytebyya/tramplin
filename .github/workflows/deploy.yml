@@ -25,7 +25,9 @@ jobs:
 
             cd /var/www/tramplin
             rm -f frontend/tsconfig.tsbuildinfo
-            git pull origin dev
+            git fetch origin dev
+            git reset --hard origin/dev
+            git clean -fd
 
             cd /var/www/tramplin/backend
             source .venv/bin/activate
