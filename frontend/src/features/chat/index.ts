@@ -1,4 +1,5 @@
 export {
+  addChatContactRequest,
   createChatConversationRequest,
   deleteChatMessageRequest,
   getMyChatKeyRequest,
@@ -6,6 +7,7 @@ export {
   listChatConversationsRequest,
   listChatMessagesRequest,
   markChatConversationReadRequest,
+  rejectChatContactRequest,
   searchChatContactsRequest,
   sendChatMessageRequest,
   updateChatMessageRequest,

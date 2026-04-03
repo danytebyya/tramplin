@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import editIcon from "../../assets/icons/edit.svg";
 import checkMarkIcon from "../../assets/icons/check-mark.svg";
 import closeIcon from "../../assets/icons/close.svg";
@@ -617,7 +618,10 @@ function SkillTagSelector({
                     </button>
                   ))
                 ) : (
-                  <div className="seeker-dashboard__skill-dropdown-empty">Ничего не найдено</div>
+                  <div className="seeker-dashboard__skill-dropdown-empty seeker-dashboard__search-empty">
+                    <img src={sadSearchIcon} alt="" aria-hidden="true" className="seeker-dashboard__search-empty-icon" />
+                    <span>Ничего не найдено</span>
+                  </div>
                 )}
               </div>,
               document.body,
@@ -1803,7 +1807,10 @@ export function SeekerDashboardPage() {
                         {!isUniversitySuggestionsLoading &&
                         !universitySuggestionsError &&
                         universitySuggestions.length === 0 ? (
-                          <div className="seeker-dashboard__university-empty">Ничего не найдено.</div>
+                          <div className="seeker-dashboard__university-empty seeker-dashboard__search-empty">
+                            <img src={sadSearchIcon} alt="" aria-hidden="true" className="seeker-dashboard__search-empty-icon" />
+                            <span>Ничего не найдено.</span>
+                          </div>
                         ) : null}
                         {!isUniversitySuggestionsLoading && !universitySuggestionsError
                           ? universitySuggestions.map((item) => (
@@ -1897,7 +1904,10 @@ export function SeekerDashboardPage() {
                           <div className="seeker-dashboard__city-empty">{citySuggestionsError}</div>
                         ) : null}
                         {!isCitySuggestionsLoading && !citySuggestionsError && citySuggestions.length === 0 ? (
-                          <div className="seeker-dashboard__city-empty">Ничего не найдено.</div>
+                          <div className="seeker-dashboard__city-empty seeker-dashboard__search-empty">
+                            <img src={sadSearchIcon} alt="" aria-hidden="true" className="seeker-dashboard__search-empty-icon" />
+                            <span>Ничего не найдено.</span>
+                          </div>
                         ) : null}
                         {!isCitySuggestionsLoading && !citySuggestionsError
                           ? citySuggestions.map((city) => (
@@ -2069,7 +2079,10 @@ export function SeekerDashboardPage() {
                             {!isPreferredLocationSuggestionsLoading &&
                             !preferredLocationSuggestionsError &&
                             preferredLocationSuggestions.length === 0 ? (
-                              <div className="seeker-dashboard__city-empty">Ничего не найдено.</div>
+                              <div className="seeker-dashboard__city-empty seeker-dashboard__search-empty">
+                                <img src={sadSearchIcon} alt="" aria-hidden="true" className="seeker-dashboard__search-empty-icon" />
+                                <span>Ничего не найдено.</span>
+                              </div>
                             ) : null}
                             {!isPreferredLocationSuggestionsLoading && !preferredLocationSuggestionsError
                               ? preferredLocationSuggestions.map((city) => (

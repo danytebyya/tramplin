@@ -873,9 +873,10 @@
 }
 
 .settings-page__account-delete.button {
-  border: 1px solid var(--color-danger);
   border-radius: 12px;
-  color: var(--color-danger);
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--color-text-inverse);
   box-shadow: 0 3px 6px rgba(15, 23, 42, 0.08);
 }
 

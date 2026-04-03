@@ -1,4 +1,4 @@
-import { KeyboardEvent } from "react";
+import { KeyboardEvent, MouseEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Opportunity } from "../../entities/opportunity";
@@ -144,6 +144,7 @@ export function OpportunityList({
   const openOpportunity = (opportunityId: string) => {
     navigate(`/opportunities/${opportunityId}`, {
       state: {
+        backgroundLocation: location,
         restoreScrollY: window.scrollY,
         restoreViewMode: "list",
         returnTo: {
@@ -188,6 +189,17 @@ export function OpportunityList({
     openOpportunity(opportunityId);
   };
 
+  const handleCardClick = (event: MouseEvent<HTMLElement>, opportunityId: string) => {
+    const selectedText = window.getSelection()?.toString().trim() ?? "";
+
+    if (selectedText.length > 0) {
+      event.preventDefault();
+      return;
+    }
+
+    openOpportunity(opportunityId);
+  };
+
   return (
     <section className="opportunity-list" aria-label="Список возможностей">
       {opportunities.map((opportunity) => {
@@ -202,7 +214,7 @@ export function OpportunityList({
             className="opportunity-list__card"
             role="link"
             tabIndex={0}
-            onClick={() => openOpportunity(opportunity.id)}
+            onClick={(event) => handleCardClick(event, opportunity.id)}
             onKeyDown={(event) => handleCardKeyDown(event, opportunity.id)}
           >
             <div className="opportunity-list__summary">

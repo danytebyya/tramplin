@@ -1339,6 +1339,78 @@ def test_read_public_employer_profile(client, db_session):
     assert me_response.json()["data"]["user"]["employer_profile"]["profile_views_count"] == 1
 
 
+def test_hidden_applicant_profile_is_not_publicly_accessible(client, db_session):
+    code = _request_code(client, db_session, "hidden-public-applicant@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "hidden-public-applicant@example.com",
+            "display_name": "Hidden Applicant",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Hidden Applicant"},
+        },
+    )
+    assert register_response.status_code == 201
+    public_id = register_response.json()["data"]["user"]["public_id"]
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "hidden-public-applicant@example.com", "password": "StrongPass123"},
+    )
+    access_token = login_response.json()["data"]["access_token"]
+
+    privacy_response = client.put(
+        "/api/v1/users/me/applicant-privacy",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"profile_visibility": "hidden", "show_resume": False},
+    )
+    assert privacy_response.status_code == 200
+
+    response = client.get(f"/api/v1/users/public/{public_id}")
+    assert response.status_code == 404
+
+
+def test_authorized_applicant_profile_requires_authenticated_viewer(client, db_session):
+    code = _request_code(client, db_session, "authorized-public-applicant@example.com")
+    register_response = client.post(
+        "/api/v1/users",
+        json={
+            "email": "authorized-public-applicant@example.com",
+            "display_name": "Authorized Applicant",
+            "password": "StrongPass123",
+            "verification_code": code,
+            "role": "applicant",
+            "applicant_profile": {"full_name": "Authorized Applicant"},
+        },
+    )
+    assert register_response.status_code == 201
+    public_id = register_response.json()["data"]["user"]["public_id"]
+
+    login_response = client.post(
+        "/api/v1/auth/sessions",
+        json={"email": "authorized-public-applicant@example.com", "password": "StrongPass123"},
+    )
+    access_token = login_response.json()["data"]["access_token"]
+
+    privacy_response = client.put(
+        "/api/v1/users/me/applicant-privacy",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"profile_visibility": "authorized", "show_resume": True},
+    )
+    assert privacy_response.status_code == 200
+
+    anonymous_response = client.get(f"/api/v1/users/public/{public_id}")
+    assert anonymous_response.status_code == 404
+
+    authorized_response = client.get(
+        f"/api/v1/users/public/{public_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert authorized_response.status_code == 200
+
+
 def test_login_rate_limit(client, db_session):
     code = _request_code(client, db_session, "limited-login@example.com")
     register_payload = {

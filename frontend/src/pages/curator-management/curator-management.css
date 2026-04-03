@@ -656,6 +656,14 @@
   text-align: center;
 }
 
+.curator-management-page__empty-icon {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  object-fit: contain;
+}
+
 .curator-management-page__skeleton {
   position: relative;
   display: block;

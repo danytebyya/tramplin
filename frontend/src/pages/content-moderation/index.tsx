@@ -5,6 +5,7 @@ import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 
 import arrowIcon from "../../assets/icons/arrow.svg";
 import editIcon from "../../assets/icons/edit.svg";
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import { getModerationAccessState, meRequest, performLogout, useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
 import {
@@ -1085,7 +1086,10 @@ export function ContentModerationPage() {
                 })}
 
             {!isTableLoading && isAuthenticated && sortedItems.length === 0 ? (
-              <div className="moderation-queue-page__empty">По выбранным параметрам публикации не найдены.</div>
+              <div className="moderation-queue-page__empty moderation-queue-page__empty--search">
+                <img src={sadSearchIcon} alt="" aria-hidden="true" className="moderation-queue-page__empty-icon" />
+                <span>По выбранным параметрам публикации не найдены.</span>
+              </div>
             ) : null}
           </div>
 

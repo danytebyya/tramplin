@@ -6,6 +6,16 @@
   background: var(--color-bg-primary);
 }
 
+.opportunity-details-page--overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+}
+
 .opportunity-details-page--employer {
   --opportunity-details-accent: var(--color-primary);
   --opportunity-details-accent-strong: var(--color-primary-active);

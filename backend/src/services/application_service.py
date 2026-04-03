@@ -17,6 +17,7 @@ from src.models import (
 from src.models.profile import ApplicantProfile
 from src.models.opportunity import EmploymentType, ModerationStatus, OpportunityStatus, OpportunityType
 from src.realtime import presence_hub
+from src.repositories.user_repository import UserRepository
 from src.schemas.application import (
     ApplicationApplicantRead,
     ApplicationDetailsRead,
@@ -29,6 +30,7 @@ from src.schemas.application import (
     MyApplicationsResponse,
 )
 from src.services.notification_service import NotificationService
+from src.services.email_service import send_email
 from src.utils.errors import AppError
 
 
@@ -302,22 +304,7 @@ class ApplicationService:
             application.contact_email = None
             application.checklist = None
 
-        NotificationService(self.db).create_notification(
-            user_id=application.applicant_user_id,
-            kind=NotificationKind.APPLICATION,
-            severity=self._resolve_status_notification_severity(next_status),
-            title=self._build_status_notification_title(next_status),
-            message=self._build_status_notification_message(application),
-            action_label="Открыть мои отклики",
-            action_url="/applications",
-            payload={
-                "application_id": str(application.id),
-                "opportunity_id": str(application.opportunity_id),
-                "status": application.status.value,
-            },
-            created_at=now,
-            profile_scope={"profile_role": UserRole.APPLICANT.value},
-        )
+        self._notify_applicant_about_status_change(application=application, created_at=now)
 
         self.db.commit()
         self.db.refresh(application)
@@ -642,3 +629,41 @@ class ApplicationService:
         if application.status == ApplicationStatus.REJECTED:
             return f"Работодатель обновил статус отклика по возможности «{opportunity_title}»."
         return f"Работодатель обновил статус отклика по возможности «{opportunity_title}»."
+
+    def _notify_applicant_about_status_change(self, *, application: Application, created_at: datetime) -> None:
+        preferences = UserRepository(self.db).get_notification_preferences(application.applicant_user_id)
+        title = self._build_status_notification_title(application.status)
+        message = self._build_status_notification_message(application)
+
+        if preferences is not None and preferences.push_publication_changes:
+            NotificationService(self.db).create_notification(
+                user_id=application.applicant_user_id,
+                kind=NotificationKind.APPLICATION,
+                severity=self._resolve_status_notification_severity(application.status),
+                title=title,
+                message=message,
+                action_label="Открыть мои отклики",
+                action_url="/applications",
+                payload={
+                    "application_id": str(application.id),
+                    "opportunity_id": str(application.opportunity_id),
+                    "status": application.status.value,
+                },
+                created_at=created_at,
+                profile_scope={"profile_role": UserRole.APPLICANT.value},
+            )
+
+        if preferences is not None and preferences.email_publication_changes:
+            applicant = self.db.execute(select(User).where(User.id == application.applicant_user_id)).scalar_one_or_none()
+            if applicant is not None and applicant.email:
+                try:
+                    send_email(
+                        recipient=applicant.email,
+                        subject=f"Трамплин: {title}",
+                        body=(
+                            f"{message}\n\n"
+                            "Перейдите в раздел «Мои отклики», чтобы посмотреть детали: /applications"
+                        ),
+                    )
+                except Exception:
+                    return

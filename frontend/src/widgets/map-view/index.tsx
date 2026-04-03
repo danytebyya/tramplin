@@ -32,6 +32,15 @@ type FilterGroup = {
   items: string[];
 };
 
+type StoredMapViewState = {
+  pathname: string;
+  search: string;
+  selectedCity: string;
+  center: [number, number];
+  zoom: number;
+  selectedOpportunityId?: string | null;
+};
+
 type MapViewProps = {
   opportunities: Opportunity[];
   favoriteOpportunityIds: string[];
@@ -102,6 +111,8 @@ const mentorshipDirections = ["Карьерный рост", "Техническ
 const mentorAvailabilityOptions = ["Сейчас свободен", "В течение недели"];
 const mentorExperienceOptions = ["Junior+", "Middle+", "Senior"];
 const popularVacancySkills = ["Python", "JavaScript", "React", "SQL", "Docker"];
+const MAP_RETURN_HASH = "#opportunity-map";
+const MAP_VIEW_STATE_STORAGE_KEY = "tramplin.home.map-view-state";
 const HARD_SKILL_EXCLUDED_CATEGORY_SLUGS = [
   "applicant-soft-skills",
   "spoken-languages",
@@ -241,6 +252,77 @@ function parseNumberInput(value: string) {
 
   const parsedValue = Number(normalizedValue);
   return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function normalizeStoredMapCenter(value: unknown): [number, number] | null {
+  if (Array.isArray(value) && value.length >= 2) {
+    const longitude = Number(value[0]);
+    const latitude = Number(value[1]);
+
+    if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+      return [longitude, latitude];
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+    const longitude = Number(objectValue.lng ?? objectValue.lon ?? objectValue.longitude);
+    const latitude = Number(objectValue.lat ?? objectValue.latitude);
+
+    if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+      return [longitude, latitude];
+    }
+  }
+
+  return null;
+}
+
+function readStoredMapViewState() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.sessionStorage.getItem(MAP_VIEW_STATE_STORAGE_KEY);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsedValue = JSON.parse(rawValue) as Partial<StoredMapViewState>;
+    const center = normalizeStoredMapCenter(parsedValue.center);
+    const zoom = Number(parsedValue.zoom);
+
+    if (
+      typeof parsedValue.pathname !== "string" ||
+      typeof parsedValue.search !== "string" ||
+      typeof parsedValue.selectedCity !== "string" ||
+      center === null ||
+      !Number.isFinite(zoom)
+    ) {
+      return null;
+    }
+
+    return {
+      pathname: parsedValue.pathname,
+      search: parsedValue.search,
+      selectedCity: parsedValue.selectedCity,
+      center,
+      zoom,
+      selectedOpportunityId:
+        typeof parsedValue.selectedOpportunityId === "string" ? parsedValue.selectedOpportunityId : null,
+    } satisfies StoredMapViewState;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredMapViewState(state: StoredMapViewState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(MAP_VIEW_STATE_STORAGE_KEY, JSON.stringify(state));
 }
 
 function parseAmountLabel(value: string) {
@@ -578,6 +660,10 @@ export function MapView({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<DGisMap | null>(null);
   const clustererRef = useRef<Clusterer | null>(null);
+  const detailsPointerDownRef = useRef<{ x: number; y: number; startedAt: number } | null>(null);
+  const hasRestoredStoredViewportRef = useRef(false);
+  const skipNextAutoViewportRef = useRef(false);
+  const preservedViewportOpportunityIdRef = useRef<string | null>(null);
   const hasAlignedInitialViewportRef = useRef(false);
   const previousSelectedOpportunityIdRef = useRef<string | null>(null);
   const onSelectOpportunityRef = useRef(onSelectOpportunity);
@@ -658,16 +744,51 @@ export function MapView({
   const [isEventAddressLoading, setIsEventAddressLoading] = useState(false);
   const [isMentorAddressLoading, setIsMentorAddressLoading] = useState(false);
   const openOpportunityDetails = (opportunityId: string) => {
+    const center = normalizeStoredMapCenter(mapInstanceRef.current?.getCenter());
+    const zoom = mapInstanceRef.current?.getZoom();
+
+    if (center !== null && typeof zoom === "number" && !Number.isNaN(zoom)) {
+      writeStoredMapViewState({
+        pathname: location.pathname,
+        search: location.search,
+        selectedCity,
+        center,
+        zoom,
+        selectedOpportunityId: opportunityId,
+      });
+    }
+
     navigate(`/opportunities/${opportunityId}`, {
       state: {
+        backgroundLocation: location,
+        restoreScrollY: window.scrollY,
         restoreViewMode: "map",
+        restoreSelectedOpportunityId: opportunityId,
         returnTo: {
           pathname: location.pathname,
           search: location.search,
-          hash: location.hash,
+          hash: MAP_RETURN_HASH,
         },
       },
     });
+  };
+  const shouldSkipDetailsActivation = (clientX?: number, clientY?: number) => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim() ?? "";
+
+    if (selectedText.length > 0) {
+      return true;
+    }
+
+    const pointerDown = detailsPointerDownRef.current;
+    if (!pointerDown || typeof clientX !== "number" || typeof clientY !== "number") {
+      return false;
+    }
+
+    const movedDistance = Math.hypot(clientX - pointerDown.x, clientY - pointerDown.y);
+    const pressedFor = Date.now() - pointerDown.startedAt;
+
+    return movedDistance > 6 || pressedFor > 260;
   };
   const handleDetailsKeyDown = (event: KeyboardEvent<HTMLDivElement>, opportunityId: string) => {
     if (event.key !== "Enter" && event.key !== " ") {
@@ -1509,6 +1630,31 @@ export function MapView({
   }, [isMapReady]);
 
   useEffect(() => {
+    if (!mapInstanceRef.current || hasRestoredStoredViewportRef.current) {
+      return;
+    }
+
+    const storedState = readStoredMapViewState();
+
+    if (
+      !storedState ||
+      storedState.pathname !== location.pathname ||
+      storedState.search !== location.search ||
+      storedState.selectedCity !== selectedCity
+    ) {
+      hasRestoredStoredViewportRef.current = true;
+      return;
+    }
+
+    mapInstanceRef.current.setCenter(storedState.center, { duration: 0 });
+    mapInstanceRef.current.setZoom(storedState.zoom, { duration: 0 });
+    hasAlignedInitialViewportRef.current = true;
+    skipNextAutoViewportRef.current = true;
+    preservedViewportOpportunityIdRef.current = storedState.selectedOpportunityId ?? null;
+    hasRestoredStoredViewportRef.current = true;
+  }, [location.pathname, location.search, selectedCity]);
+
+  useEffect(() => {
     setIsDetailsOpen(Boolean(selectedOpportunityId));
   }, [selectedOpportunityId]);
 
@@ -1605,6 +1751,10 @@ export function MapView({
       return;
     }
 
+    if (preservedViewportOpportunityIdRef.current === detailsOpportunity.id) {
+      return;
+    }
+
     mapInstanceRef.current.setCenter(
       [detailsOpportunity.longitude, detailsOpportunity.latitude],
       { duration: 280 },
@@ -1613,11 +1763,53 @@ export function MapView({
   }, [detailsOpportunity, isExpanded]);
 
   useEffect(() => {
+    if (!mapInstanceRef.current) {
+      return;
+    }
+
+    const persistMapViewState = () => {
+      const center = normalizeStoredMapCenter(mapInstanceRef.current?.getCenter());
+      const zoom = mapInstanceRef.current?.getZoom();
+
+      if (center === null || typeof zoom !== "number" || Number.isNaN(zoom)) {
+        return;
+      }
+
+      writeStoredMapViewState({
+        pathname: location.pathname,
+        search: location.search,
+        selectedCity,
+        center,
+        zoom,
+        selectedOpportunityId,
+      });
+    };
+
+    persistMapViewState();
+    mapInstanceRef.current.on("moveend", persistMapViewState);
+
+    return () => {
+      persistMapViewState();
+      mapInstanceRef.current?.off("moveend", persistMapViewState);
+    };
+  }, [location.pathname, location.search, selectedCity, selectedOpportunityId]);
+
+  useEffect(() => {
+    if (skipNextAutoViewportRef.current) {
+      skipNextAutoViewportRef.current = false;
+      return;
+    }
+
     hasAlignedInitialViewportRef.current = false;
   }, [filteredOpportunities]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || selectedOpportunity) {
+      return;
+    }
+
+    if (skipNextAutoViewportRef.current) {
+      skipNextAutoViewportRef.current = false;
       return;
     }
 
@@ -1675,6 +1867,11 @@ export function MapView({
   ]);
 
   useEffect(() => {
+    if (skipNextAutoViewportRef.current) {
+      skipNextAutoViewportRef.current = false;
+      return;
+    }
+
     if (!mapInstanceRef.current || selectedOpportunity || filteredOpportunities.length === 0 || hasAlignedInitialViewportRef.current) {
       return;
     }
@@ -1687,6 +1884,12 @@ export function MapView({
 
   useEffect(() => {
     previousSelectedOpportunityIdRef.current = selectedOpportunityId;
+  }, [selectedOpportunityId]);
+
+  useEffect(() => {
+    if (selectedOpportunityId !== preservedViewportOpportunityIdRef.current) {
+      preservedViewportOpportunityIdRef.current = null;
+    }
   }, [selectedOpportunityId]);
 
   useEffect(() => {
@@ -2410,7 +2613,22 @@ export function MapView({
           className="map-view__details"
           role="link"
           tabIndex={0}
-          onClick={() => openOpportunityDetails(detailsOpportunity.id)}
+          onMouseDown={(event) => {
+            detailsPointerDownRef.current = {
+              x: event.clientX,
+              y: event.clientY,
+              startedAt: Date.now(),
+            };
+          }}
+          onClick={(event) => {
+            if (shouldSkipDetailsActivation(event.clientX, event.clientY)) {
+              detailsPointerDownRef.current = null;
+              return;
+            }
+
+            detailsPointerDownRef.current = null;
+            openOpportunityDetails(detailsOpportunity.id);
+          }}
           onKeyDown={(event) => handleDetailsKeyDown(event, detailsOpportunity.id)}
         >
           <div className="map-view__details-summary">
@@ -2457,11 +2675,13 @@ export function MapView({
                       event.stopPropagation();
                       navigate(`/profiles/${detailsOpportunity.employerPublicId}`, {
                         state: {
+                          restoreScrollY: window.scrollY,
                           restoreViewMode: "map",
+                          restoreSelectedOpportunityId: detailsOpportunity.id,
                           returnTo: {
                             pathname: location.pathname,
                             search: location.search,
-                            hash: location.hash,
+                            hash: MAP_RETURN_HASH,
                           },
                         },
                       });

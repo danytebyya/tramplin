@@ -120,6 +120,192 @@ a {
   padding-bottom: 32px;
 }
 
+.contact-profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  height: 100%;
+  min-width: 0;
+  border-radius: 8px;
+  padding: 24px;
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+
+.contact-profile-card .contact-profile-card__badge {
+  width: 100%;
+}
+
+.contact-profile-card .contact-profile-card__id,
+.contact-profile-card .contact-profile-card__name {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.contact-profile-card .contact-profile-card__id {
+  font-size: var(--type-body-large-size);
+  line-height: var(--type-body-large-line);
+  font-weight: 500;
+}
+
+.contact-profile-card .contact-profile-card__primary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+}
+
+.contact-profile-card .contact-profile-card__avatar-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 102px;
+  height: 102px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #d4d4d8;
+}
+
+.contact-profile-card .contact-profile-card__avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.contact-profile-card .contact-profile-card__name {
+  width: 100%;
+  min-height: var(--type-h2-line);
+  overflow: hidden;
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-profile-card .contact-profile-card__name-link {
+  display: block;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-profile-card .contact-profile-card__name-link:hover {
+  text-decoration: underline;
+}
+
+.contact-profile-card .contact-profile-card__subtitle {
+  display: -webkit-box;
+  width: 100%;
+  min-height: calc(22px * 3);
+  max-height: calc(22px * 3);
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 22px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.contact-profile-card .contact-profile-card__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 22px;
+  width: 100%;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.contact-profile-card .contact-profile-card__status--online {
+  color: var(--color-text-primary);
+}
+
+.contact-profile-card .contact-profile-card__status--offline {
+  color: var(--color-text-secondary);
+}
+
+.contact-profile-card .contact-profile-card__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.7);
+}
+
+.contact-profile-card .contact-profile-card__dot--online {
+  background: #34d399;
+}
+
+.contact-profile-card .contact-profile-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 80px;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+.contact-profile-card .contact-profile-card__tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 4px 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #DBF5FF;
+  color: #12B5DC;
+  font-size: var(--type-body-regular-size);
+  line-height: var(--type-body-regular-line);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-profile-card .contact-profile-card__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  width: 100%;
+  justify-items: center;
+  margin-top: 0;
+  color: var(--color-text-primary);
+  text-align: left;
+}
+
+.contact-profile-card .contact-profile-card__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--type-body-small-size);
+  line-height: var(--type-body-small-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contact-profile-card .contact-profile-card__fact-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  opacity: 0.8;
+}
+
 :is(
     .legal-page,
     .settings-page,

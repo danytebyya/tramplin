@@ -29,6 +29,23 @@ def get_current_user(
     return user
 
 
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if credentials is None:
+        return None
+
+    payload = get_current_access_payload(credentials)
+    user_id = payload.get("sub")
+    user = UserRepository(db).get_by_id(user_id)
+    if user is None:
+        logger.warning("auth.access.user_not_found user_id=%s", user_id)
+        raise AppError(code="AUTH_UNAUTHORIZED", message="Пользователь не найден", status_code=401)
+
+    return user
+
+
 def get_current_access_payload(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> dict:

@@ -386,6 +386,20 @@
   padding: 12px 14px;
 }
 
+.employer-dashboard__office-dropdown-empty--search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.employer-dashboard__office-dropdown-empty-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
 .employer-dashboard__office-add.button {
   width: 100%;
   padding: 12px 16px;

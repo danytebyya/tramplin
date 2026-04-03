@@ -773,6 +773,19 @@
   text-align: center;
 }
 
+.moderation-queue-page__empty--search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.moderation-queue-page__empty-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
 .moderation-queue-page__pagination {
   display: flex;
   align-items: center;

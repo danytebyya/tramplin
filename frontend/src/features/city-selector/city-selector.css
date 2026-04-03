@@ -134,6 +134,20 @@
   line-height: var(--type-body-regular-line);
 }
 
+.city-selector__empty--search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.city-selector__empty-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
 .city-selector__option {
   display: flex;
   width: 100%;

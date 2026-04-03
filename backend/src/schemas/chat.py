@@ -95,6 +95,9 @@ class ChatConversationRead(BaseModel):
     unread_count: int
     counterpart: ChatParticipantRead
     last_message: ChatMessageRead | None = None
+    is_contact: bool = False
+    can_send_message: bool = True
+    can_add_to_contacts: bool = False
 
 
 class ChatConversationListResponse(BaseModel):
@@ -114,7 +117,16 @@ class ChatContactRead(BaseModel):
     public_id: str | None = None
     role: str
     display_name: str
+    relation_status: str = "accepted"
+    request_direction: str | None = None
     company_name: str | None = None
+    subtitle: str | None = None
+    level_label: str | None = None
+    tags: list[str] = []
+    city: str | None = None
+    salary_label: str | None = None
+    format_label: str | None = None
+    employment_label: str | None = None
     employer_id: str | None = None
     public_key_jwk: dict | None = None
     is_online: bool = False

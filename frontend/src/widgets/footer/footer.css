@@ -10,6 +10,11 @@
   --site-footer-accent-strong: var(--color-primary-active);
 }
 
+.site-footer--applicant {
+  --site-footer-accent: var(--color-secondary);
+  --site-footer-accent-strong: var(--color-secondary-active);
+}
+
 .site-footer--curator {
   --site-footer-accent: var(--color-accent);
   --site-footer-accent-strong: var(--color-accent-active);
@@ -123,6 +128,21 @@
   width: 40px;
   height: 40px;
   text-decoration: none;
+  border-radius: 999px;
+  transition:
+    box-shadow var(--transition-base),
+    transform var(--transition-base);
+}
+
+.site-footer__social-link:hover,
+.site-footer__social-link:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--site-footer-accent) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+.site-footer__social-link:active {
+  box-shadow: none;
+  transform: translateY(0);
 }
 
 .site-footer__social-icon {

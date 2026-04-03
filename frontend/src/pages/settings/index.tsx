@@ -17,7 +17,9 @@ import {
 } from "../../features/city-selector";
 import { getAppOrigin, resolveAppUrl } from "../../shared/config/env";
 import {
+  AuthSessionItem,
   AuthSessionListResponse,
+  MeResponse,
   NotificationPreferenceGroup,
   NotificationPreferenceKey,
   changePasswordRequest,
@@ -37,7 +39,7 @@ import {
   revokeOtherSessionsRequest,
   revokeSessionRequest,
   switchAccountContextRequest,
-  updateMeRequest,
+  updateApplicantPrivacySettingsRequest,
   updateNotificationPreferencesRequest,
   updatePreferredCityRequest,
   useAuthStore,
@@ -57,8 +59,6 @@ import {
 } from "../../features/company-verification";
 import {
   DEFAULT_APPLICANT_PRIVACY_SETTINGS,
-  getApplicantPrivacySettings,
-  saveApplicantPrivacySettings,
 } from "../../shared/lib";
 import { abbreviateLegalEntityName } from "../../shared/lib/legal-entity";
 import { Button, Checkbox, Container, Input, Modal, ProfileTabs, Radio, Status } from "../../shared/ui";
@@ -460,6 +460,47 @@ function compareSessionsByPriority(
   return left.id.localeCompare(right.id);
 }
 
+function buildSessionDeduplicationKey(session: AuthSessionItem) {
+  return JSON.stringify({
+    userAgent: session.user_agent?.trim() ?? "",
+    ipAddress: session.ip_address?.trim() ?? "",
+    createdAt: session.created_at,
+    expiresAt: session.expires_at,
+    isCurrent: session.is_current,
+  });
+}
+
+function dedupeActiveSessions(items: AuthSessionItem[]) {
+  const groups = new Map<
+    string,
+    {
+      session: AuthSessionItem;
+      sessionIds: string[];
+    }
+  >();
+
+  items.forEach((session) => {
+    const key = buildSessionDeduplicationKey(session);
+    const existingGroup = groups.get(key);
+
+    if (!existingGroup) {
+      groups.set(key, {
+        session,
+        sessionIds: [session.id],
+      });
+      return;
+    }
+
+    existingGroup.sessionIds.push(session.id);
+
+    if (compareSessionsByPriority(existingGroup.session, session) > 0) {
+      existingGroup.session = session;
+    }
+  });
+
+  return Array.from(groups.values());
+}
+
 function resolveLoginStatus(isSuccess: boolean, failureReason: string | null | undefined) {
   if (isSuccess) {
     return {
@@ -614,7 +655,6 @@ export function SettingsPage() {
   const isCityReady = !isAuthenticated || meStatus !== "pending";
   const displayCity = preferredCity || selectedCity;
   const canManageEmployerStaff = canManageEmployerStaffByState;
-  const isProfileLoading = !user;
   const isNotificationLoading = notificationPreferencesQuery.isPending;
   const isSessionsLoading = sessionsQuery.isPending;
   const isLoginHistoryLoading = loginHistoryQuery.isPending;
@@ -625,12 +665,10 @@ export function SettingsPage() {
     employerStaffQuery.error && (employerStaffQuery.error as any)?.response?.data?.error?.code === "EMPLOYER_STAFF_MANAGEMENT_FORBIDDEN";
   const canViewEmployerStaffSection = canManageEmployerStaff && !isEmployerStaffForbidden;
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [emailNotifications, setEmailNotifications] = useState(() => buildNotificationPreferences(undefined, role));
   const [pushNotifications, setPushNotifications] = useState(() => buildNotificationPreferences(undefined, role));
+  const [notificationPreferencesError, setNotificationPreferencesError] = useState<string | null>(null);
+  const [notificationPreferencesSuccess, setNotificationPreferencesSuccess] = useState<string | null>(null);
   const [profileVisibility, setProfileVisibility] = useState<ApplicantProfileVisibility>(
     DEFAULT_APPLICANT_PRIVACY_SETTINGS.profileVisibility,
   );
@@ -648,26 +686,13 @@ export function SettingsPage() {
     },
   });
 
-  const updateProfileMutation = useMutation({
-    mutationFn: updateMeRequest,
-    onMutate: () => {
-      setProfileError(null);
-      setProfileSuccess(null);
-    },
-    onSuccess: (response) => {
-      queryClient.setQueryData(["auth", "me"], response);
-      setProfileSuccess("Изменения сохранены.");
-    },
-    onError: (error: any) => {
-      setProfileError(
-        error?.response?.data?.error?.message ?? "Не удалось сохранить профиль. Попробуйте еще раз.",
-      );
-    },
-  });
-
   const revokeSessionMutation = useMutation({
-    mutationFn: revokeSessionRequest,
-    onSuccess: (_response, revokedSessionId) => {
+    mutationFn: async (sessionIds: string[]) => {
+      await Promise.all(sessionIds.map((sessionId) => revokeSessionRequest(sessionId)));
+    },
+    onSuccess: (_response, revokedSessionIds) => {
+      const revokedSessionIdSet = new Set(revokedSessionIds);
+
       queryClient.setQueryData<AuthSessionListResponse | undefined>(["auth", "sessions"], (current) => {
         if (!current?.data?.items) {
           return current;
@@ -677,7 +702,7 @@ export function SettingsPage() {
           ...current,
           data: {
             ...current.data,
-            items: current.data.items.filter((session) => session.id !== revokedSessionId),
+            items: current.data.items.filter((session) => !revokedSessionIdSet.has(session.id)),
           },
         };
       });
@@ -707,8 +732,45 @@ export function SettingsPage() {
 
   const updateNotificationPreferencesMutation = useMutation({
     mutationFn: updateNotificationPreferencesRequest,
+    onMutate: () => {
+      setNotificationPreferencesError(null);
+      setNotificationPreferencesSuccess(null);
+    },
     onSuccess: (response) => {
       queryClient.setQueryData(["users", "me", "notification-preferences"], response);
+      setEmailNotifications(buildNotificationPreferences(response.data?.email_notifications, role));
+      setPushNotifications(buildNotificationPreferences(response.data?.push_notifications, role));
+      setNotificationPreferencesSuccess("Настройки уведомлений сохранены.");
+    },
+    onError: (error: any) => {
+      setNotificationPreferencesError(
+        error?.response?.data?.error?.message ?? "Не удалось сохранить настройки уведомлений. Попробуйте еще раз.",
+      );
+    },
+  });
+  const updateApplicantPrivacyMutation = useMutation({
+    mutationFn: updateApplicantPrivacySettingsRequest,
+    onSuccess: (response) => {
+      queryClient.setQueryData<MeResponse | undefined>(["auth", "me"], (current) => {
+        if (!current?.data?.user) {
+          return current;
+        }
+
+        return {
+          ...current,
+          data: {
+            ...current.data,
+            user: {
+              ...current.data.user,
+              applicant_profile: {
+                ...(current.data.user.applicant_profile ?? {}),
+                profile_visibility: response.data?.profile_visibility ?? DEFAULT_APPLICANT_PRIVACY_SETTINGS.profileVisibility,
+                show_resume: response.data?.show_resume ?? DEFAULT_APPLICANT_PRIVACY_SETTINGS.showResume,
+              },
+            },
+          },
+        };
+      });
     },
   });
   const changePasswordMutation = useMutation({
@@ -922,16 +984,6 @@ export function SettingsPage() {
   };
 
   useEffect(() => {
-    setFullName(user?.display_name ?? "");
-    setEmail(user?.email ?? "");
-  }, [user?.display_name, user?.email]);
-
-  useEffect(() => {
-    setProfileError(null);
-    setProfileSuccess(null);
-  }, [fullName, email]);
-
-  useEffect(() => {
     const preferredCity = user?.preferred_city?.trim();
 
     if (!isAuthenticated || !preferredCity) {
@@ -956,15 +1008,13 @@ export function SettingsPage() {
     if (!isApplicant) {
       return;
     }
-
-    const privacySettings = getApplicantPrivacySettings({
-      userId: user?.id,
-      publicId: user?.public_id,
-    });
-
-    setProfileVisibility(privacySettings.profileVisibility);
-    setIsResumeVisible(privacySettings.showResume);
-  }, [isApplicant, user?.id, user?.public_id]);
+    setProfileVisibility(
+      user?.applicant_profile?.profile_visibility ?? DEFAULT_APPLICANT_PRIVACY_SETTINGS.profileVisibility,
+    );
+    setIsResumeVisible(
+      user?.applicant_profile?.show_resume ?? DEFAULT_APPLICANT_PRIVACY_SETTINGS.showResume,
+    );
+  }, [isApplicant, user?.applicant_profile?.profile_visibility, user?.applicant_profile?.show_resume]);
 
   useEffect(() => {
     const settings = moderationSettingsQuery.data?.data;
@@ -1021,13 +1071,6 @@ export function SettingsPage() {
     });
   };
 
-  const handleProfileSave = () => {
-    updateProfileMutation.mutate({
-      display_name: fullName.trim(),
-      email: email.trim(),
-    });
-  };
-
   const handleChangePassword = () => {
     if (!currentPassword.trim()) {
       setSecuritySuccess(null);
@@ -1065,22 +1108,13 @@ export function SettingsPage() {
   };
 
   const handleApplicantPrivacySave = () => {
-    if (!user?.id && !user?.public_id) {
+    if (!isApplicant) {
       return;
     }
-
-    saveApplicantPrivacySettings(
-      {
-        userId: user?.id,
-        publicId: user?.public_id,
-      },
-      {
-        profileVisibility,
-        showResume: isResumeVisible,
-      },
-    );
-    setProfileSuccess("Изменения сохранены.");
-    setProfileError(null);
+    updateApplicantPrivacyMutation.mutate({
+      profile_visibility: profileVisibility,
+      show_resume: isResumeVisible,
+    });
   };
 
   const handleModerationSettingsSave = () => {
@@ -1093,10 +1127,11 @@ export function SettingsPage() {
   };
 
   const sessionItems = useMemo(() => {
-    return [...(sessionsQuery.data?.data?.items ?? [])]
-      .sort(compareSessionsByPriority)
-      .map((session) => ({
+    return dedupeActiveSessions(sessionsQuery.data?.data?.items ?? [])
+      .sort((left, right) => compareSessionsByPriority(left.session, right.session))
+      .map(({ session, sessionIds }) => ({
         id: session.id,
+        sessionIds,
         title: resolveSessionTitle(session.user_agent, session.is_current),
         meta: `IP: ${session.ip_address ?? "Не определён"}`,
         date: formatDate(session.created_at),
@@ -1535,7 +1570,7 @@ export function SettingsPage() {
         <div className="settings-page__panel-actions">
           <Button
             type="button"
-            variant="danger-ghost"
+            variant="danger"
             size="md"
             className="settings-page__account-delete"
             onClick={() => {
@@ -1594,7 +1629,7 @@ export function SettingsPage() {
                           }
                           disabled={session.isCurrent || isSessionActionPending}
                           onClick={() => {
-                            revokeSessionMutation.mutate(session.id);
+                            revokeSessionMutation.mutate(session.sessionIds);
                           }}
                         >
                           Завершить сессию
@@ -2143,61 +2178,6 @@ export function SettingsPage() {
           </section>
         ) : null}
 
-        {isApplicant ? (
-          <section className="settings-page__section">
-            <h2 className="settings-page__section-title">Профиль</h2>
-            <div className="settings-page__panel">
-              <div className="settings-page__panel-header">
-                <h3 className="settings-page__panel-title">Личные данные</h3>
-              </div>
-              <div className="settings-page__panel-body settings-page__panel-body--profile">
-                <label className="settings-page__field">
-                  <span className="settings-page__field-label">ФИО</span>
-                  {isProfileLoading ? (
-                    <SettingsSkeleton className="settings-page__skeleton--input" />
-                  ) : (
-                    <Input
-                      className="input--sm"
-                      value={fullName}
-                      onChange={(event) => setFullName(event.target.value)}
-                      placeholder="Введите имя"
-                    />
-                  )}
-                </label>
-                <label className="settings-page__field">
-                  <span className="settings-page__field-label">E-mail</span>
-                  {isProfileLoading ? (
-                    <SettingsSkeleton className="settings-page__skeleton--input" />
-                  ) : (
-                    <Input
-                      className="input--sm"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      placeholder="Введите email"
-                    />
-                  )}
-                </label>
-              </div>
-              <div className="settings-page__panel-actions">
-                <Button
-                  type="button"
-                  variant={actionVariant}
-                  size="md"
-                  loading={updateProfileMutation.isPending}
-                  disabled={isProfileLoading || !fullName.trim() || !email.trim()}
-                  onClick={handleProfileSave}
-                >
-                  Сохранить изменения
-                </Button>
-                {profileError ? <p className="settings-page__form-message settings-page__form-message--error">{profileError}</p> : null}
-                {profileSuccess ? (
-                  <p className="settings-page__form-message settings-page__form-message--success">{profileSuccess}</p>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        ) : null}
-
         <section className="settings-page__section">
           {isApplicant ? (
             <>
@@ -2303,7 +2283,7 @@ export function SettingsPage() {
               type="button"
               variant={actionVariant}
               size="md"
-              loading={updateNotificationPreferencesMutation.isPending}
+              loading={updateNotificationPreferencesMutation.isPending || updateApplicantPrivacyMutation.isPending}
               onClick={() => {
                 handleNotificationPreferencesSave();
                 if (isApplicant) {
@@ -2313,6 +2293,16 @@ export function SettingsPage() {
             >
               Сохранить настройки
             </Button>
+            {notificationPreferencesError ? (
+              <p className="settings-page__form-message settings-page__form-message--error">
+                {notificationPreferencesError}
+              </p>
+            ) : null}
+            {notificationPreferencesSuccess ? (
+              <p className="settings-page__form-message settings-page__form-message--success">
+                {notificationPreferencesSuccess}
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -2337,56 +2327,6 @@ export function SettingsPage() {
   const renderModerationLayout = () => {
     return (
       <div className="settings-page__sections">
-        <section className="settings-page__card">
-          <div className="settings-page__card-header">
-            <h2 className="settings-page__card-title">Профиль</h2>
-          </div>
-          <div className="settings-page__card-body settings-page__card-body--profile">
-            <label className="settings-page__field">
-              <span className="settings-page__field-label">ФИО</span>
-              {isProfileLoading ? (
-                <SettingsSkeleton className="settings-page__skeleton--input" />
-              ) : (
-                <Input
-                  className="input--sm"
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  placeholder="Введите имя"
-                />
-              )}
-            </label>
-            <label className="settings-page__field">
-              <span className="settings-page__field-label">E-mail</span>
-              {isProfileLoading ? (
-                <SettingsSkeleton className="settings-page__skeleton--input" />
-              ) : (
-                <Input
-                  className="input--sm"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Введите email"
-                />
-              )}
-            </label>
-          </div>
-          <div className="settings-page__card-footer">
-            <Button
-              type="button"
-              variant={actionVariant}
-              size="md"
-              onClick={handleProfileSave}
-              loading={updateProfileMutation.isPending}
-              disabled={isProfileLoading || !fullName.trim() || !email.trim()}
-            >
-              Сохранить изменения
-            </Button>
-            {profileError ? <p className="settings-page__form-message settings-page__form-message--error">{profileError}</p> : null}
-            {profileSuccess ? (
-              <p className="settings-page__form-message settings-page__form-message--success">{profileSuccess}</p>
-            ) : null}
-          </div>
-        </section>
-
         {renderSecurityPanel("card")}
 
         <section className="settings-page__card">
@@ -2417,6 +2357,16 @@ export function SettingsPage() {
             >
               Сохранить настройки
             </Button>
+            {notificationPreferencesError ? (
+              <p className="settings-page__form-message settings-page__form-message--error">
+                {notificationPreferencesError}
+              </p>
+            ) : null}
+            {notificationPreferencesSuccess ? (
+              <p className="settings-page__form-message settings-page__form-message--success">
+                {notificationPreferencesSuccess}
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -2462,7 +2412,7 @@ export function SettingsPage() {
                             }
                             disabled={session.isCurrent || isSessionActionPending}
                             onClick={() => {
-                              revokeSessionMutation.mutate(session.id);
+                              revokeSessionMutation.mutate(session.sessionIds);
                             }}
                           >
                             Завершить сессию

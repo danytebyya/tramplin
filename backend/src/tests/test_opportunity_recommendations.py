@@ -232,6 +232,54 @@ def test_list_recommendation_candidates_returns_real_applicants(client, db_sessi
     assert items[0]["salary_label"] == "от 80 000 ₽"
 
 
+def test_list_recommendation_candidates_excludes_hidden_applicants(client, db_session):
+    employer = _create_verified_employer(
+        db_session,
+        email="recommend-hidden-employer@example.com",
+        inn="7707083983",
+    )
+    hidden_applicant = _create_applicant(
+        db_session,
+        email="hidden-candidate@example.com",
+        display_name="Скрытый кандидат",
+        university="ЧГУ",
+        graduation_year=2024,
+        city="Чебоксары",
+        desired_salary_from=80000,
+        work_formats=["Офлайн"],
+        employment_types=["Full-time"],
+        hard_skills=["Python", "Django"],
+    )
+    hidden_applicant.applicant_profile.profile_visibility = "hidden"  # type: ignore[union-attr]
+    db_session.add(hidden_applicant.applicant_profile)
+    db_session.commit()
+
+    _create_applicant(
+        db_session,
+        email="visible-candidate@example.com",
+        display_name="Открытый кандидат",
+        university="МГУ",
+        graduation_year=2025,
+        city="Москва",
+        desired_salary_from=70000,
+        work_formats=["Удаленно"],
+        employment_types=["Part-time"],
+        hard_skills=["JavaScript"],
+    )
+    opportunity = _create_public_opportunity(db_session, employer_user=employer)
+    access_token = _login(client, email=employer.email, password="EmployerPass123")
+
+    response = client.get(
+        f"/api/v1/opportunities/{opportunity.id}/recommendation-candidates",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    items = response.json()["data"]["items"]
+    assert len(items) == 1
+    assert items[0]["display_name"] == "Открытый кандидат"
+
+
 def test_recommend_opportunity_creates_push_notification_and_updates_counter(client, db_session):
     employer = _create_verified_employer(
         db_session,
@@ -278,9 +326,9 @@ def test_recommend_opportunity_creates_push_notification_and_updates_counter(cli
     assert recommendation_notification.action_url == f"/opportunities/{opportunity.id}"
     assert "Рекомендатель" in recommendation_notification.message
 
-    db_session.refresh(applicant)
-    assert applicant.applicant_profile is not None
-    assert applicant.applicant_profile.recommendations_count == 1
+    refreshed_applicant = db_session.execute(select(User).where(User.id == applicant.id)).scalar_one()
+    assert refreshed_applicant.applicant_profile is not None
+    assert refreshed_applicant.applicant_profile.recommendations_count == 1
 
 
 def test_recommend_opportunity_forbids_recommending_to_self(client, db_session):

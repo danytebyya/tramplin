@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import type { Location as RouterLocation } from "react-router-dom";
 import { ReactElement } from "react";
 
 import { isCompanyInviteReturnTo, meRequest, persistCompanyInviteReturnTo, readCompanyInviteReturnTo, useAuthStore } from "../../features/auth";
@@ -235,165 +236,183 @@ function FallbackRoute() {
 }
 
 export function AppRouter() {
+  const location = useLocation();
+  const backgroundLocation = (location.state as { backgroundLocation?: RouterLocation } | null)?.backgroundLocation;
+
   return (
-    <Routes>
-      <Route path="/" element={<HomeRoute />} />
-      <Route path="/confidential" element={<LegalDocumentPage documentType="confidential" />} />
-      <Route path="/rules" element={<LegalDocumentPage documentType="rules" />} />
-      <Route path="/privacy" element={<Navigate to="/confidential" replace />} />
-      <Route path="/terms" element={<Navigate to="/rules" replace />} />
-      <Route
-        path="/register"
-        element={
-          <GuestOnlyRoute>
-            <AuthPage />
-          </GuestOnlyRoute>
-        }
-      />
-      <Route
-        path="/ui-kit"
-        element={
-          <EmployerRestrictedPublicRoute>
-            <UiKitPage />
-          </EmployerRestrictedPublicRoute>
-        }
-      />
-      <Route
-        path="/login"
-        element={
-          <GuestOnlyRoute>
-            <LoginPage />
-          </GuestOnlyRoute>
-        }
-      />
-      <Route path="/password-recovery" element={<PasswordRecoveryPage />} />
-      <Route
-        path="/onboarding/employer"
-        element={
-          <EmployerOnboardingRoute />
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <SettingsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/employer/opportunities"
-        element={
-          <ProtectedRoute>
-            <OpportunityManagementPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/employer/chat"
-        element={
-          <ProtectedRoute>
-            <EmployerChatPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/employer/responses"
-        element={
-          <ProtectedRoute>
-            <EmployerResponsesPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/moderation/employers"
-        element={
-          <ProtectedRoute>
-            <EmployerVerificationPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/moderation/curators"
-        element={
-          <ProtectedRoute>
-            <CuratorManagementPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/moderation/content"
-        element={
-          <ProtectedRoute>
-            <ContentModerationPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard/applicant"
-        element={
-          <ProtectedRoute>
-            <SeekerDashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/applications"
-        element={
-          <ProtectedRoute>
-            <ApplicationsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/favorites"
-        element={
-          <ProtectedRoute>
-            <FavoritesPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/opportunities/:opportunityId"
-        element={
-          <EmployerRestrictedPublicRoute>
-            <OpportunityDetailsPage />
-          </EmployerRestrictedPublicRoute>
-        }
-      />
-      <Route
-        path="/profiles/:publicId"
-        element={
-          <EmployerRestrictedPublicRoute>
-            <PublicProfilePage />
-          </EmployerRestrictedPublicRoute>
-        }
-      />
-      <Route
-        path="/networking"
-        element={
-          <ProtectedRoute>
-            <NetworkingPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard/employer"
-        element={
-          <ProtectedRoute>
-            <EmployerDashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dashboard/curator"
-        element={
-          <ProtectedRoute>
-            <CuratorDashboardPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="*" element={<FallbackRoute />} />
-    </Routes>
+    <>
+      <Routes location={backgroundLocation ?? location}>
+        <Route path="/" element={<HomeRoute />} />
+        <Route path="/confidential" element={<LegalDocumentPage documentType="confidential" />} />
+        <Route path="/rules" element={<LegalDocumentPage documentType="rules" />} />
+        <Route path="/privacy" element={<Navigate to="/confidential" replace />} />
+        <Route path="/terms" element={<Navigate to="/rules" replace />} />
+        <Route
+          path="/register"
+          element={
+            <GuestOnlyRoute>
+              <AuthPage />
+            </GuestOnlyRoute>
+          }
+        />
+        <Route
+          path="/ui-kit"
+          element={
+            <EmployerRestrictedPublicRoute>
+              <UiKitPage />
+            </EmployerRestrictedPublicRoute>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <GuestOnlyRoute>
+              <LoginPage />
+            </GuestOnlyRoute>
+          }
+        />
+        <Route path="/password-recovery" element={<PasswordRecoveryPage />} />
+        <Route
+          path="/onboarding/employer"
+          element={
+            <EmployerOnboardingRoute />
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/employer/opportunities"
+          element={
+            <ProtectedRoute>
+              <OpportunityManagementPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/employer/chat"
+          element={
+            <ProtectedRoute>
+              <EmployerChatPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/employer/responses"
+          element={
+            <ProtectedRoute>
+              <EmployerResponsesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/moderation/employers"
+          element={
+            <ProtectedRoute>
+              <EmployerVerificationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/moderation/curators"
+          element={
+            <ProtectedRoute>
+              <CuratorManagementPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/moderation/content"
+          element={
+            <ProtectedRoute>
+              <ContentModerationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/applicant"
+          element={
+            <ProtectedRoute>
+              <SeekerDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/applications"
+          element={
+            <ProtectedRoute>
+              <ApplicationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/favorites"
+          element={
+            <ProtectedRoute>
+              <FavoritesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/opportunities/:opportunityId"
+          element={
+            <EmployerRestrictedPublicRoute>
+              <OpportunityDetailsPage />
+            </EmployerRestrictedPublicRoute>
+          }
+        />
+        <Route
+          path="/profiles/:publicId"
+          element={
+            <EmployerRestrictedPublicRoute>
+              <PublicProfilePage />
+            </EmployerRestrictedPublicRoute>
+          }
+        />
+        <Route
+          path="/networking"
+          element={
+            <ProtectedRoute>
+              <NetworkingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/employer"
+          element={
+            <ProtectedRoute>
+              <EmployerDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/curator"
+          element={
+            <ProtectedRoute>
+              <CuratorDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<FallbackRoute />} />
+      </Routes>
+
+      {backgroundLocation ? (
+        <Routes>
+          <Route
+            path="/opportunities/:opportunityId"
+            element={
+              <EmployerRestrictedPublicRoute>
+                <OpportunityDetailsPage />
+              </EmployerRestrictedPublicRoute>
+            }
+          />
+        </Routes>
+      ) : null}
+    </>
   );
 }

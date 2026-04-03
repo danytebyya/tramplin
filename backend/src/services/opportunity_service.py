@@ -24,7 +24,7 @@ from src.models import (
 )
 from src.models.opportunity import EmploymentType, ModerationStatus
 from src.realtime import presence_hub
-from src.repositories import OpportunityRepository
+from src.repositories import ChatRepository, OpportunityRepository
 from src.repositories.user_repository import UserRepository
 from src.schemas.opportunity import (
     EmployerOpportunityRead,
@@ -32,6 +32,7 @@ from src.schemas.opportunity import (
     OpportunityRecommendationCandidateRead,
 )
 from src.services.notification_service import NotificationService
+from src.services.user_service import UserService
 from src.realtime.notification_hub import notification_hub
 from src.utils.errors import AppError
 
@@ -224,7 +225,8 @@ class OpportunityService:
     ) -> list[OpportunityRecommendationCandidateRead]:
         opportunity = self._get_public_opportunity_or_404(opportunity_id)
         candidates = UserRepository(self.repo.db).list_applicant_recommendation_candidates(
-            exclude_user_id=current_user.id
+            exclude_user_id=current_user.id,
+            only_contact_of_user_id=current_user.id if current_user.role == UserRole.APPLICANT else None,
         )
         ranked_candidates = sorted(
             candidates,
@@ -251,6 +253,12 @@ class OpportunityService:
                 message="Пользователь для рекомендации не найден",
                 status_code=404,
             )
+        if not UserService._can_view_applicant_profile(target_user=target_user, viewer=current_user):
+            raise AppError(
+                code="RECOMMENDATION_TARGET_NOT_FOUND",
+                message="Пользователь для рекомендации не найден",
+                status_code=404,
+            )
         if target_user.status != UserStatus.ACTIVE:
             raise AppError(
                 code="RECOMMENDATION_TARGET_NOT_AVAILABLE",
@@ -262,6 +270,15 @@ class OpportunityService:
                 code="RECOMMENDATION_SELF_FORBIDDEN",
                 message="Нельзя рекомендовать вакансию самому себе",
                 status_code=400,
+            )
+        if (
+            current_user.role == UserRole.APPLICANT
+            and ChatRepository(self.repo.db).get_accepted_applicant_contact(str(current_user.id), str(target_user.id)) is None
+        ):
+            raise AppError(
+                code="RECOMMENDATION_CONTACT_REQUIRED",
+                message="Рекомендовать возможность можно только своим контактам",
+                status_code=403,
             )
 
         profile = target_user.applicant_profile

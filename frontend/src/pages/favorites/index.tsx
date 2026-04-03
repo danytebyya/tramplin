@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import { CitySelection, CitySelector, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { Opportunity } from "../../entities/opportunity";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
@@ -990,6 +991,7 @@ export function FavoritesPage() {
           />
         ) : (
           <section className="favorites-page__empty">
+            <img src={sadSearchIcon} alt="" aria-hidden="true" className="favorites-page__empty-icon" />
             <h2 className="favorites-page__empty-title">Ничего не найдено</h2>
             <div className="favorites-page__empty-actions">
               <Button

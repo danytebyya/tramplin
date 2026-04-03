@@ -5,7 +5,8 @@ from sqlalchemy import select
 from src.core.security import create_access_token
 from src.enums import EmployerType, MembershipRole, UserRole, UserStatus
 from src.enums.notifications import NotificationKind
-from src.models import ApplicantProfile, ChatUserKey, Employer, EmployerMembership, Notification, User
+from src.models import ApplicantProfile, ChatUserKey, Employer, EmployerMembership, Notification, Opportunity, User
+from src.models.opportunity import ModerationStatus, OpportunityStatus, OpportunityType, WorkFormat
 from src.services.chat_reminder_service import ChatReminderService
 
 
@@ -75,6 +76,35 @@ def _create_chat_participants(
     )
 
     return applicant, employer_user, employer, applicant_token, employer_token
+
+
+def _create_applicant_pair(db_session, *, left_email: str, right_email: str):
+    left_user = build_user(
+        email=left_email,
+        display_name="Left Applicant",
+        role=UserRole.APPLICANT,
+    )
+    left_user.applicant_profile = ApplicantProfile(full_name="Мария Петрова")
+    right_user = build_user(
+        email=right_email,
+        display_name="Right Applicant",
+        role=UserRole.APPLICANT,
+    )
+    right_user.applicant_profile = ApplicantProfile(full_name="Анна Смирнова")
+    db_session.add_all([left_user, right_user])
+    db_session.commit()
+
+    left_token, _ = create_access_token(
+        subject=str(left_user.id),
+        role=left_user.role.value,
+        active_role=left_user.role.value,
+    )
+    right_token, _ = create_access_token(
+        subject=str(right_user.id),
+        role=right_user.role.value,
+        active_role=right_user.role.value,
+    )
+    return left_user, right_user, left_token, right_token
 
 
 def test_applicant_can_create_conversation_and_exchange_messages(client, db_session):
@@ -204,6 +234,219 @@ def test_chat_message_snapshots_sender_and_recipient_keys(client, db_session):
     assert list_response.status_code == 200
     assert list_response.json()["data"]["items"][0]["sender_public_key_jwk"] == applicant_key
     assert list_response.json()["data"]["items"][0]["recipient_public_key_jwk"] == employer_key
+
+
+def test_hidden_applicant_is_excluded_from_chat_search(client, db_session):
+    applicant, employer_user, employer, _applicant_token, employer_token = _create_chat_participants(
+        db_session,
+        applicant_email="hidden-chat-applicant@example.com",
+        employer_email="hidden-chat-employer@example.com",
+        company_name="Hidden Chat Corp",
+        inn="5555555556",
+    )
+    applicant.applicant_profile.profile_visibility = "hidden"
+    db_session.add(applicant.applicant_profile)
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/chat/search?q=Applicant",
+        headers={"Authorization": f"Bearer {employer_token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["items"] == []
+
+
+def test_applicant_chat_requires_contact_after_first_message(client, db_session):
+    first_user, second_user, first_token, second_token = _create_applicant_pair(
+        db_session,
+        left_email="networking-first@example.com",
+        right_email="networking-second@example.com",
+    )
+
+    create_response = client.post(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {first_token}"},
+        json={"recipient_user_id": str(second_user.id)},
+    )
+    assert create_response.status_code == 200
+    conversation_id = create_response.json()["data"]["conversation"]["id"]
+
+    first_send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {first_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "hello-first-message",
+            "iv": "hello-first-iv",
+            "salt": "hello-first-salt",
+        },
+    )
+    assert first_send_response.status_code == 200
+
+    second_send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {first_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "blocked-second-message",
+            "iv": "blocked-second-iv",
+            "salt": "blocked-second-salt",
+        },
+    )
+    assert second_send_response.status_code == 403
+    assert second_send_response.json()["error"]["code"] == "CHAT_CONTACT_REQUIRED"
+
+    list_conversations_response = client.get(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+    assert list_conversations_response.status_code == 200
+    assert list_conversations_response.json()["data"]["items"][0]["can_add_to_contacts"] is True
+    assert list_conversations_response.json()["data"]["items"][0]["can_send_message"] is False
+
+    add_contact_response = client.post(
+        f"/api/v1/chat/contacts/{first_user.id}",
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+    assert add_contact_response.status_code == 200
+
+    accept_contact_response = client.post(
+        f"/api/v1/chat/contacts/{second_user.id}",
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    assert accept_contact_response.status_code == 200
+
+    reply_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {second_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "reply-after-contact",
+            "iv": "reply-after-contact-iv",
+            "salt": "reply-after-contact-salt",
+        },
+    )
+    assert reply_response.status_code == 200
+
+
+def test_employers_can_send_multiple_messages_without_contacts(client, db_session):
+    applicant, employer_user, employer, _applicant_token, employer_token = _create_chat_participants(
+        db_session,
+        applicant_email="free-chat-applicant@example.com",
+        employer_email="free-chat-employer@example.com",
+        company_name="Free Chat Corp",
+        inn="5555555557",
+    )
+
+    create_response = client.post(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {employer_token}"},
+        json={"recipient_user_id": str(applicant.id)},
+    )
+    assert create_response.status_code == 200
+    conversation_id = create_response.json()["data"]["conversation"]["id"]
+
+    first_send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {employer_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "employer-message-1",
+            "iv": "employer-message-iv-1",
+            "salt": "employer-message-salt-1",
+        },
+    )
+    assert first_send_response.status_code == 200
+
+    second_send_response = client.post(
+        "/api/v1/chat/messages",
+        headers={"Authorization": f"Bearer {employer_token}"},
+        json={
+            "conversation_id": conversation_id,
+            "ciphertext": "employer-message-2",
+            "iv": "employer-message-iv-2",
+            "salt": "employer-message-salt-2",
+        },
+    )
+    assert second_send_response.status_code == 200
+
+
+def test_recommendation_candidates_for_applicant_include_only_contacts(client, db_session):
+    owner_user, contact_user, owner_token, _contact_token = _create_applicant_pair(
+        db_session,
+        left_email="recommend-owner@example.com",
+        right_email="recommend-contact@example.com",
+    )
+    outsider_user = build_user(
+        email="recommend-outsider@example.com",
+        display_name="Outside Applicant",
+        role=UserRole.APPLICANT,
+    )
+    outsider_user.applicant_profile = ApplicantProfile(full_name="Вне Контактов")
+
+    employer_user = build_user(
+        email="recommend-employer@example.com",
+        display_name="Recruiter User",
+        role=UserRole.EMPLOYER,
+    )
+    db_session.add_all([outsider_user, employer_user])
+    db_session.flush()
+
+    employer = Employer(
+        employer_type=EmployerType.COMPANY,
+        display_name="Recommend Corp",
+        legal_name="Recommend Corp LLC",
+        inn="5555555558",
+        created_by=employer_user.id,
+    )
+    db_session.add(employer)
+    db_session.flush()
+    db_session.add(
+        EmployerMembership(
+            employer_id=employer.id,
+            user_id=employer_user.id,
+            membership_role=MembershipRole.OWNER,
+            permissions=["access_chat"],
+            is_primary=True,
+        )
+    )
+    opportunity = Opportunity(
+        employer_id=employer.id,
+        created_by_user_id=employer_user.id,
+        updated_by_user_id=employer_user.id,
+        title="Backend Internship",
+        short_description="Short description",
+        description="Long enough opportunity description",
+        opportunity_type=OpportunityType.INTERNSHIP,
+        business_status=OpportunityStatus.ACTIVE,
+        moderation_status=ModerationStatus.APPROVED,
+        work_format=WorkFormat.REMOTE,
+        is_paid=True,
+    )
+    db_session.add(opportunity)
+    db_session.commit()
+
+    add_contact_response = client.post(
+        f"/api/v1/chat/contacts/{contact_user.id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert add_contact_response.status_code == 200
+
+    accept_contact_response = client.post(
+        f"/api/v1/chat/contacts/{owner_user.id}",
+        headers={"Authorization": f"Bearer {_contact_token}"},
+    )
+    assert accept_contact_response.status_code == 200
+
+    candidates_response = client.get(
+        f"/api/v1/opportunities/{opportunity.id}/recommendation-candidates",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert candidates_response.status_code == 200
+    candidate_ids = [item["user_id"] for item in candidates_response.json()["data"]["items"]]
+    assert str(contact_user.id) in candidate_ids
+    assert str(outsider_user.id) not in candidate_ids
 
 
 def test_chat_websocket_receives_new_message_event(client, db_session):
@@ -452,6 +695,53 @@ def test_applicant_can_search_other_applicants(client, db_session):
     assert len(items) == 1
     assert items[0]["user_id"] == str(second_applicant.id)
     assert items[0]["role"] == UserRole.APPLICANT.value
+
+
+def test_applicant_search_returns_profile_details(client, db_session):
+    first_applicant = build_user(
+        email="search-profile-first@example.com",
+        display_name="First Search Applicant",
+        role=UserRole.APPLICANT,
+    )
+    second_applicant = build_user(
+        email="search-profile-second@example.com",
+        display_name="Second Search Applicant",
+        role=UserRole.APPLICANT,
+    )
+    second_applicant.preferred_city = "Чебоксары"
+    second_applicant.applicant_profile = ApplicantProfile(
+        full_name="Мария Петрова",
+        university="ЧГУ",
+        graduation_year=2024,
+        level="junior",
+        desired_salary_from=80000,
+        employment_types=["Full-time"],
+        work_formats=["Офлайн"],
+        hard_skills=["Python", "Django", "MySQL", "C++"],
+    )
+    db_session.add_all([first_applicant, second_applicant])
+    db_session.commit()
+
+    first_token, _ = create_access_token(
+        subject=str(first_applicant.id),
+        role=first_applicant.role.value,
+        active_role=first_applicant.role.value,
+    )
+
+    search_response = client.get(
+        "/api/v1/chat/search?q=second",
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    assert search_response.status_code == 200
+    items = search_response.json()["data"]["items"]
+    assert len(items) == 1
+    assert items[0]["display_name"] == "Мария Петрова"
+    assert items[0]["subtitle"] == "ЧГУ, выпуск 2024"
+    assert items[0]["city"] == "Чебоксары"
+    assert items[0]["salary_label"] == "от 80 000 ₽"
+    assert items[0]["format_label"] == "Офлайн"
+    assert items[0]["employment_label"] == "Full-time"
+    assert items[0]["tags"][:3] == ["Junior", "Python", "Django"]
 
 
 def test_applicant_can_search_other_applicants_by_public_id(client, db_session):

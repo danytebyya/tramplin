@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from src.core.security import hash_password
 from src.enums import EmployerType, EmployerVerificationRequestStatus, MembershipRole, UserRole, UserStatus
-from src.models import Application, Employer, EmployerMembership, EmployerProfile, Notification, Opportunity, User
+from src.models import Application, Employer, EmployerMembership, EmployerProfile, Notification, Opportunity, User, UserNotificationPreference
 from src.models.opportunity import ModerationStatus, OpportunityStatus, OpportunityType, WorkFormat
 from src.tests.test_moderation_dashboard import _login
 
@@ -232,6 +232,15 @@ def test_applicant_can_list_real_application_details(client, db_session):
 def test_employer_can_list_and_update_application_status(client, db_session, monkeypatch):
     employer = _create_employer_user(db_session, email="review-employer@example.com", inn="7707083915")
     applicant = _create_applicant_user(db_session, email="review-applicant@example.com")
+    db_session.add(
+        UserNotificationPreference(
+            user_id=applicant.id,
+            email_new_verification_requests=True,
+            push_new_verification_requests=True,
+            push_publication_changes=True,
+        )
+    )
+    db_session.commit()
     employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
     applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
 
@@ -332,3 +341,62 @@ def test_applicant_cannot_withdraw_after_employer_decision_that_locks_flow(clien
     )
     assert withdraw_response.status_code == 409
     assert withdraw_response.json()["error"]["code"] == "APPLICATION_WITHDRAW_FORBIDDEN"
+
+
+def test_applicant_status_update_respects_publication_notification_preferences(client, db_session, monkeypatch):
+    employer = _create_employer_user(db_session, email="prefs-employer@example.com", inn="7707083917")
+    applicant = _create_applicant_user(db_session, email="prefs-applicant@example.com")
+    db_session.add(
+        UserNotificationPreference(
+            user_id=applicant.id,
+            email_new_verification_requests=True,
+            push_new_verification_requests=True,
+            email_publication_changes=False,
+            push_publication_changes=False,
+            email_chat_reminders=True,
+            push_chat_reminders=True,
+        )
+    )
+    db_session.commit()
+
+    employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
+    applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
+
+    submit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
+    assert submit_response.status_code == 201
+
+    sent_emails: list[tuple[str, str, str]] = []
+    published_events: list[tuple[list[str], dict]] = []
+
+    def fake_send_email(recipient: str, subject: str, body: str):
+        sent_emails.append((recipient, subject, body))
+
+    def fake_publish(user_ids, payload):
+        published_events.append((list(user_ids), payload))
+
+    monkeypatch.setattr("src.services.application_service.send_email", fake_send_email)
+    monkeypatch.setattr("src.realtime.notification_hub.publish_to_users_sync", fake_publish)
+
+    employer_list_response = client.get(
+        "/api/v1/applications/employer",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+    )
+    application_id = employer_list_response.json()["data"]["items"][0]["id"]
+
+    update_response = client.patch(
+        f"/api/v1/applications/{application_id}/status",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+        json={"status": "accepted"},
+    )
+    assert update_response.status_code == 200
+
+    persisted_notification = db_session.execute(
+        select(Notification).where(Notification.user_id == UUID(str(applicant.id)))
+    ).scalars().all()
+    assert persisted_notification == []
+    assert sent_emails == []
+    assert published_events == []

@@ -47,7 +47,7 @@ export function NetworkingPage() {
         <ChatWorkspace
           title="Чат"
           emptyTitle="Пока нет активного чата"
-          emptyText="Используйте поиск сверху, чтобы найти пользователя, или откройте существующий диалог слева."
+          emptyText="Выберите, кому бы хотели написать."
           preferredEmployerId={preferredEmployerId}
         />
       </Container>

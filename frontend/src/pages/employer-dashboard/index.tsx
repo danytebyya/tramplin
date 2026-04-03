@@ -3,6 +3,7 @@ import { Navigate, UNSAFE_NavigationContext, useNavigate } from "react-router-do
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import {
   CitySelection,
   readRecentAddressQueriesCookie,
@@ -903,7 +904,10 @@ export function EmployerDashboardPage() {
                               ) : null}
                             </>
                           ) : (
-                            <div className="employer-dashboard__office-dropdown-empty">Ничего не найдено</div>
+                            <div className="employer-dashboard__office-dropdown-empty employer-dashboard__office-dropdown-empty--search">
+                              <img src={sadSearchIcon} alt="" aria-hidden="true" className="employer-dashboard__office-dropdown-empty-icon" />
+                              <span>Ничего не найдено</span>
+                            </div>
                           )}
                         </div>
                       ) : null}

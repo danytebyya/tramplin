@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, aliased
 
 from src.models import (
     ApplicantProfile,
+    ApplicantContact,
     ChatConversation,
     ChatConversationReadState,
     ChatMessage,
@@ -106,6 +107,10 @@ class ChatRepository:
             .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())
         )
         return self.db.execute(query).scalars().all()
+
+    def count_messages(self, conversation_id: str) -> int:
+        query = select(func.count(ChatMessage.id)).where(ChatMessage.conversation_id == UUID(str(conversation_id)))
+        return int(self.db.execute(query).scalar() or 0)
 
     def get_conversation(self, conversation_id: str) -> ChatConversation | None:
         return self.db.get(ChatConversation, UUID(str(conversation_id)))
@@ -236,12 +241,15 @@ class ChatRepository:
     def search_applicant_contacts(self, query_text: str, *, exclude_user_id: str) -> Sequence[tuple]:
         applicant_user = aliased(User)
         applicant_key = aliased(ChatUserKey)
+        applicant_profile = aliased(ApplicantProfile)
 
         query = (
             select(
                 applicant_user,
                 applicant_key,
+                applicant_profile,
             )
+            .outerjoin(applicant_profile, applicant_profile.user_id == applicant_user.id)
             .outerjoin(applicant_key, applicant_key.user_id == applicant_user.id)
             .where(
                 applicant_user.role == "applicant",
@@ -249,8 +257,13 @@ class ChatRepository:
                 applicant_user.deleted_at.is_(None),
                 applicant_user.status == UserStatus.ACTIVE,
                 or_(
+                    applicant_profile.user_id.is_(None),
+                    func.coalesce(applicant_profile.profile_visibility, "public") != "hidden",
+                ),
+                or_(
                     func.lower(func.coalesce(applicant_user.public_id, "")).contains(query_text.lower()),
                     func.lower(applicant_user.display_name).contains(query_text.lower()),
+                    func.lower(func.coalesce(applicant_profile.full_name, "")).contains(query_text.lower()),
                 ),
             )
             .order_by(
@@ -259,6 +272,105 @@ class ChatRepository:
             )
         )
         return self.db.execute(query).all()
+
+    def list_applicant_contacts(self, user_id: str) -> Sequence[tuple]:
+        applicant_user = aliased(User)
+        applicant_key = aliased(ChatUserKey)
+        applicant_profile = aliased(ApplicantProfile)
+
+        query = (
+            select(
+                ApplicantContact,
+                applicant_user,
+                applicant_key,
+                applicant_profile,
+            )
+            .join(
+                ApplicantContact,
+                or_(
+                    and_(
+                        ApplicantContact.user_low_id == UUID(str(user_id)),
+                        ApplicantContact.user_high_id == applicant_user.id,
+                    ),
+                    and_(
+                        ApplicantContact.user_high_id == UUID(str(user_id)),
+                        ApplicantContact.user_low_id == applicant_user.id,
+                    ),
+                ),
+            )
+            .outerjoin(applicant_key, applicant_key.user_id == applicant_user.id)
+            .outerjoin(applicant_profile, applicant_profile.user_id == applicant_user.id)
+            .where(
+                applicant_user.role == "applicant",
+                applicant_user.deleted_at.is_(None),
+                applicant_user.status == UserStatus.ACTIVE,
+                or_(
+                    applicant_profile.user_id.is_(None),
+                    func.coalesce(applicant_profile.profile_visibility, "public") != "hidden",
+                ),
+            )
+            .order_by(applicant_user.display_name.asc(), applicant_user.created_at.desc())
+        )
+        return self.db.execute(query).all()
+
+    @staticmethod
+    def _normalize_contact_pair(left_user_id: str, right_user_id: str) -> tuple[str, str]:
+        normalized_ids = sorted([str(left_user_id), str(right_user_id)])
+        return normalized_ids[0], normalized_ids[1]
+
+    def get_applicant_contact(self, left_user_id: str, right_user_id: str) -> ApplicantContact | None:
+        user_low_id, user_high_id = self._normalize_contact_pair(left_user_id, right_user_id)
+        query = select(ApplicantContact).where(
+            ApplicantContact.user_low_id == UUID(str(user_low_id)),
+            ApplicantContact.user_high_id == UUID(str(user_high_id)),
+        )
+        return self.db.execute(query).scalar_one_or_none()
+
+    def get_accepted_applicant_contact(self, left_user_id: str, right_user_id: str) -> ApplicantContact | None:
+        user_low_id, user_high_id = self._normalize_contact_pair(left_user_id, right_user_id)
+        query = select(ApplicantContact).where(
+            ApplicantContact.user_low_id == UUID(str(user_low_id)),
+            ApplicantContact.user_high_id == UUID(str(user_high_id)),
+            ApplicantContact.status == "accepted",
+        )
+        return self.db.execute(query).scalar_one_or_none()
+
+    def create_applicant_contact(
+        self,
+        *,
+        left_user_id: str,
+        right_user_id: str,
+        created_by_user_id: str,
+        status: str = "accepted",
+    ) -> ApplicantContact:
+        user_low_id, user_high_id = self._normalize_contact_pair(left_user_id, right_user_id)
+        existing = self.get_applicant_contact(user_low_id, user_high_id)
+        if existing is not None:
+            existing.created_by_user_id = UUID(str(created_by_user_id))
+            existing.status = status
+            self.db.add(existing)
+            self.db.flush()
+            return existing
+
+        item = ApplicantContact(
+            user_low_id=UUID(str(user_low_id)),
+            user_high_id=UUID(str(user_high_id)),
+            created_by_user_id=UUID(str(created_by_user_id)),
+            status=status,
+        )
+        self.db.add(item)
+        self.db.flush()
+        return item
+
+    def update_applicant_contact_status(self, item: ApplicantContact, *, status: str) -> ApplicantContact:
+        item.status = status
+        self.db.add(item)
+        self.db.flush()
+        return item
+
+    def delete_applicant_contact(self, item: ApplicantContact) -> None:
+        self.db.delete(item)
+        self.db.flush()
 
     def search_employer_contacts(self, query_text: str) -> Sequence[tuple]:
         employer_user = aliased(User)

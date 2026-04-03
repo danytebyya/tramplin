@@ -76,6 +76,9 @@ export type ChatConversation = {
   unreadCount: number;
   counterpart: ChatParticipant;
   lastMessage: ChatMessage | null;
+  isContact: boolean;
+  canSendMessage: boolean;
+  canAddToContacts: boolean;
 };
 
 type ChatConversationApi = {
@@ -84,6 +87,9 @@ type ChatConversationApi = {
   unread_count: number;
   counterpart: ChatParticipantApi;
   last_message?: ChatMessageApi | null;
+  is_contact?: boolean;
+  can_send_message?: boolean;
+  can_add_to_contacts?: boolean;
 };
 
 export type ChatContact = {
@@ -91,8 +97,17 @@ export type ChatContact = {
   publicId: string | null;
   role: string;
   displayName: string;
+  relationStatus: "accepted" | "pending";
+  requestDirection: "incoming" | "outgoing" | null;
   avatarUrl: string | null;
   companyName: string | null;
+  subtitle: string | null;
+  levelLabel: string | null;
+  tags: string[];
+  city: string | null;
+  salaryLabel: string | null;
+  formatLabel: string | null;
+  employmentLabel: string | null;
   employerId: string | null;
   publicKeyJwk: JsonWebKey | null;
   isOnline: boolean;
@@ -106,8 +121,17 @@ type ChatContactApi = {
   public_id?: string | null;
   role: string;
   display_name: string;
+  relation_status?: "accepted" | "pending";
+  request_direction?: "incoming" | "outgoing" | null;
   avatar_url?: string | null;
   company_name?: string | null;
+  subtitle?: string | null;
+  level_label?: string | null;
+  tags?: string[] | null;
+  city?: string | null;
+  salary_label?: string | null;
+  format_label?: string | null;
+  employment_label?: string | null;
   employer_id?: string | null;
   public_key_jwk?: JsonWebKey | null;
   is_online?: boolean;
@@ -167,6 +191,9 @@ function mapConversation(item: ChatConversationApi): ChatConversation {
     unreadCount: item.unread_count,
     counterpart: mapParticipant(item.counterpart),
     lastMessage: item.last_message ? mapMessage(item.last_message) : null,
+    isContact: Boolean(item.is_contact),
+    canSendMessage: item.can_send_message ?? true,
+    canAddToContacts: Boolean(item.can_add_to_contacts),
   };
 }
 
@@ -176,8 +203,17 @@ function mapContact(item: ChatContactApi): ChatContact {
     publicId: item.public_id ?? null,
     role: item.role,
     displayName: item.display_name,
+    relationStatus: item.relation_status ?? "accepted",
+    requestDirection: item.request_direction ?? null,
     avatarUrl: item.avatar_url ?? null,
     companyName: item.company_name ?? null,
+    subtitle: item.subtitle ?? null,
+    levelLabel: item.level_label ?? null,
+    tags: item.tags ?? [],
+    city: item.city ?? null,
+    salaryLabel: item.salary_label ?? null,
+    formatLabel: item.format_label ?? null,
+    employmentLabel: item.employment_label ?? null,
     employerId: item.employer_id ?? null,
     publicKeyJwk: item.public_key_jwk ?? null,
     isOnline: Boolean(item.is_online),
@@ -209,6 +245,18 @@ export async function upsertMyChatKeyRequest(payload: {
 export async function listChatContactsRequest() {
   const response = await apiClient.get<{ data?: { items?: ChatContactApi[] } }>("/chat/contacts");
   return (response.data?.data?.items ?? []).map(mapContact);
+}
+
+export async function addChatContactRequest(targetUserId: string) {
+  const response = await apiClient.post<{ data?: ChatContactApi }>(`/chat/contacts/${targetUserId}`);
+  if (!response.data?.data) {
+    throw new Error("Не удалось добавить контакт");
+  }
+  return mapContact(response.data.data);
+}
+
+export async function rejectChatContactRequest(targetUserId: string) {
+  await apiClient.delete(`/chat/contacts/${targetUserId}`);
 }
 
 export async function searchChatContactsRequest(payload: { query?: string; employerId?: string | null }) {

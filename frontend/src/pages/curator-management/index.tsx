@@ -6,6 +6,7 @@ import { Link, NavLink, Navigate, useNavigate } from "react-router-dom";
 import arrowIcon from "../../assets/icons/arrow.svg";
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import { meRequest, performLogout, useAuthStore } from "../../features/auth";
 import {
   createCuratorRequest,
@@ -1181,7 +1182,12 @@ export function CuratorManagementPage() {
 
             {!isTableLoading && isAuthenticated && paginatedItems.length === 0 ? (
               <div className="curator-management-page__empty">
-                {hasAppliedFilters ? "По выбранным параметрам кураторы не найдены." : "Кураторы пока не добавлены."}
+                {hasAppliedFilters ? (
+                  <>
+                    <img src={sadSearchIcon} alt="" aria-hidden="true" className="curator-management-page__empty-icon" />
+                    <span>По выбранным параметрам кураторы не найдены.</span>
+                  </>
+                ) : "Кураторы пока не добавлены."}
               </div>
             ) : null}
           </div>

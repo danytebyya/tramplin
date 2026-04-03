@@ -34,7 +34,7 @@ import {
 import {
   canViewerAccessApplicantProfile,
   canViewerSeeApplicantResume,
-  getApplicantPrivacySettings,
+  DEFAULT_APPLICANT_PRIVACY_SETTINGS,
   resolveAvatarIcon,
   resolveAvatarUrl,
 } from "../../shared/lib";
@@ -422,6 +422,7 @@ export function PublicProfilePage() {
         restoreScrollY: state.restoreScrollY,
         restoreViewMode: state.restoreViewMode,
       },
+      replace: true,
     };
   }, [location.state]);
 
@@ -445,11 +446,15 @@ export function PublicProfilePage() {
 
   const profile = profileQuery.data?.data;
   const privacySettings = useMemo(
-    () =>
-      getApplicantPrivacySettings({
-        publicId: profile?.public_id,
-      }),
-    [profile?.public_id],
+    () => ({
+      profileVisibility:
+        profile?.applicant_dashboard?.profile?.profile_visibility ??
+        DEFAULT_APPLICANT_PRIVACY_SETTINGS.profileVisibility,
+      showResume:
+        profile?.applicant_dashboard?.profile?.show_resume ??
+        DEFAULT_APPLICANT_PRIVACY_SETTINGS.showResume,
+    }),
+    [profile?.applicant_dashboard?.profile?.profile_visibility, profile?.applicant_dashboard?.profile?.show_resume],
   );
   const isOwner = Boolean(
     profile?.public_id &&

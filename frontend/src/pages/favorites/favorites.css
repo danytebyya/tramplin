@@ -293,6 +293,12 @@
   text-align: center;
 }
 
+.favorites-page__empty-icon {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
 .favorites-page__empty-title {
   margin: 0;
   color: var(--color-text-primary);

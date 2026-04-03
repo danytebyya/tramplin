@@ -6,7 +6,7 @@ import { Navigate, useNavigate, useNavigationType } from "react-router-dom";
 import arrowIcon from "../../assets/icons/arrow.svg";
 import jobIcon from "../../assets/icons/job.svg";
 import locationIcon from "../../assets/icons/location.svg";
-import searchIcon from "../../assets/icons/search.svg";
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import timeIcon from "../../assets/icons/time.svg";
 import {
   CitySelection,
@@ -221,11 +221,11 @@ function resolveStatusClassName(status: EmployerResponseStatus) {
 function resolveLevelClassName(levelLabel: string | null) {
   const normalized = levelLabel?.trim().toLowerCase();
 
-  if (normalized === "middle") {
+  if (normalized === "middle" || normalized === "мидл") {
     return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--warning";
   }
 
-  if (normalized === "senior") {
+  if (normalized === "senior" || normalized === "сеньор") {
     return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--danger";
   }
 
@@ -1212,51 +1212,49 @@ export function EmployerResponsesPage() {
                       <>
                         <div className={layoutClassName}>
                           {visibleResponses.map((response) => (
-                            <article key={`${group.opportunityId}-${response.id}`} className="opportunity-details-page__contact-card employer-responses-page__response-card">
-                              <div className="opportunity-details-page__contact-badge">
-                                <span className="opportunity-details-page__contact-id">ID: {response.id.slice(-6)}</span>
+                            <article key={`${group.opportunityId}-${response.id}`} className="opportunity-details-page__contact-card employer-responses-page__response-card contact-profile-card">
+                              <div className="opportunity-details-page__contact-badge contact-profile-card__badge">
+                                <span className="opportunity-details-page__contact-id contact-profile-card__id">ID: {response.id.slice(-6)}</span>
                               </div>
 
-                              <div className="opportunity-details-page__contact-primary">
-                                <div className="opportunity-details-page__contact-avatar-shell">
-                                  <img src={response.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar" />
+                              <div className="opportunity-details-page__contact-primary contact-profile-card__primary">
+                                <div className="opportunity-details-page__contact-avatar-shell contact-profile-card__avatar-shell">
+                                  <img src={response.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar contact-profile-card__avatar" />
                                 </div>
-                                <h3 className="opportunity-details-page__contact-name">{response.name}</h3>
-                                <p className="opportunity-details-page__contact-subtitle">{response.subtitle}</p>
-                                <p className="opportunity-details-page__contact-status">
-                                  <span className={`opportunity-details-page__contact-dot${response.isOnline ? " opportunity-details-page__contact-dot--online" : ""}`} />
+                                <h3 className="opportunity-details-page__contact-name contact-profile-card__name">{response.name}</h3>
+                                <p className={`opportunity-details-page__contact-status contact-profile-card__status${response.isOnline ? " contact-profile-card__status--online" : " contact-profile-card__status--offline"}`}>
+                                  <span className={`opportunity-details-page__contact-dot contact-profile-card__dot${response.isOnline ? " opportunity-details-page__contact-dot--online contact-profile-card__dot--online" : ""}`} />
                                   {response.isOnline ? "Online" : "Недавно в сети"}
                                 </p>
+                                <p className="opportunity-details-page__contact-subtitle contact-profile-card__subtitle">{response.subtitle}</p>
                               </div>
 
-                              {response.levelLabel || response.tags.length > 0 ? (
-                                <div className="opportunity-details-page__contact-tags">
-                                  {response.levelLabel ? (
-                                    <span className={resolveLevelClassName(response.levelLabel)}>{response.levelLabel}</span>
-                                  ) : null}
-                                  {response.tags.map((tag) => (
-                                    <span key={`${response.id}-${tag}`} className="opportunity-details-page__contact-tag">
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : null}
+                              <div className="opportunity-details-page__contact-tags contact-profile-card__tags">
+                                {response.levelLabel ? (
+                                  <span className={resolveLevelClassName(response.levelLabel)}>{response.levelLabel}</span>
+                                ) : null}
+                                {response.tags.map((tag) => (
+                                  <span key={`${response.id}-${tag}`} className="opportunity-details-page__contact-tag contact-profile-card__tag">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
 
-                              <div className="opportunity-details-page__contact-facts employer-responses-page__contact-meta">
-                                <span className="opportunity-details-page__contact-fact">
-                                  <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                              <div className="opportunity-details-page__contact-facts employer-responses-page__contact-meta contact-profile-card__facts">
+                                <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                  <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                   {response.city}
                                 </span>
-                                <span className="opportunity-details-page__contact-fact">
-                                  <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                  <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                   {response.salaryLabel}
                                 </span>
-                                <span className="opportunity-details-page__contact-fact">
-                                  <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                  <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                   {response.formatLabel}
                                 </span>
-                                <span className="opportunity-details-page__contact-fact">
-                                  <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                  <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                   {response.employmentLabel}
                                 </span>
                               </div>
@@ -1356,7 +1354,7 @@ export function EmployerResponsesPage() {
                       </>
                     ) : (
                       <div className="employer-responses-page__empty-group">
-                        <img src={searchIcon} alt="" aria-hidden="true" className="employer-responses-page__empty-group-icon" />
+                        <img src={sadSearchIcon} alt="" aria-hidden="true" className="employer-responses-page__empty-group-icon" />
                         <p className="employer-responses-page__empty-group-text">По текущим фильтрам отклики не найдены.</p>
                       </div>
                     )}

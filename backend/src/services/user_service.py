@@ -41,6 +41,8 @@ from src.schemas.user import (
     ApplicantDashboardRead,
     ApplicantDashboardStatsRead,
     ApplicantDashboardUpdateRequest,
+    ApplicantPrivacySettingsRead,
+    ApplicantPrivacySettingsUpdateRequest,
     EmployerProfileRead,
     EmployerPublicStatsRead,
     PublicUserProfileRead,
@@ -90,6 +92,75 @@ class UserService:
         self.db.commit()
         self.db.refresh(updated_user)
         return updated_user
+
+    @staticmethod
+    def _normalize_applicant_profile_visibility(value: str | None) -> str:
+        normalized = (value or "public").strip().lower()
+        return normalized if normalized in {"public", "authorized", "hidden"} else "public"
+
+    @classmethod
+    def _get_applicant_privacy_settings_from_profile(
+        cls,
+        profile: ApplicantProfile | None,
+    ) -> ApplicantPrivacySettingsRead:
+        if profile is None:
+            return ApplicantPrivacySettingsRead()
+
+        return ApplicantPrivacySettingsRead(
+            profile_visibility=cls._normalize_applicant_profile_visibility(profile.profile_visibility),
+            show_resume=bool(profile.show_resume),
+        )
+
+    @classmethod
+    def _can_view_applicant_profile(
+        cls,
+        *,
+        target_user: User,
+        viewer: User | None = None,
+    ) -> bool:
+        if target_user.role != UserRole.APPLICANT:
+            return True
+
+        if viewer is not None and str(viewer.id) == str(target_user.id):
+            return True
+
+        settings = cls._get_applicant_privacy_settings_from_profile(target_user.applicant_profile)
+        if settings.profile_visibility == "hidden":
+            return False
+
+        if settings.profile_visibility == "authorized":
+            return viewer is not None
+
+        return True
+
+    def update_applicant_privacy_settings(
+        self,
+        current_user: User,
+        payload: ApplicantPrivacySettingsUpdateRequest,
+    ) -> ApplicantPrivacySettingsRead:
+        if current_user.role != UserRole.APPLICANT:
+            raise AppError(
+                code="USER_ROLE_FORBIDDEN",
+                message="Настройки приватности доступны только соискателю.",
+                status_code=403,
+            )
+
+        user = self.user_repo.get_by_id(current_user.id, with_profiles=True)
+        if user is None:
+            raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
+
+        profile = user.applicant_profile
+        if profile is None:
+            profile = ApplicantProfile(user_id=user.id)
+            user.applicant_profile = profile
+            self.db.add(profile)
+
+        profile.profile_visibility = self._normalize_applicant_profile_visibility(payload.profile_visibility)
+        profile.show_resume = payload.show_resume
+        self.db.add(profile)
+        self.db.commit()
+        self.db.refresh(profile)
+        return self._get_applicant_privacy_settings_from_profile(profile)
 
     def update_profile(self, current_user: User, payload: UserUpdateRequest) -> User:
         normalized_email = payload.email.lower().strip()
@@ -294,7 +365,7 @@ class UserService:
             }
         )
 
-    def get_public_profile(self, public_id: str) -> PublicUserProfileRead:
+    def get_public_profile(self, public_id: str, viewer: User | None = None) -> PublicUserProfileRead:
         normalized_public_id = public_id.strip()
         if not normalized_public_id:
             raise AppError(
@@ -311,6 +382,9 @@ class UserService:
                 user = None
 
         if user is None or user.deleted_at is not None:
+            raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
+
+        if not self._can_view_applicant_profile(target_user=user, viewer=viewer):
             raise AppError(code="USER_NOT_FOUND", message="Пользователь не найден.", status_code=404)
 
         self._register_public_profile_view(user)

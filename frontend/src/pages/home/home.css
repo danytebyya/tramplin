@@ -5,6 +5,7 @@
   --home-accent: var(--color-primary);
   --home-accent-soft: var(--color-primary-light);
   --home-accent-strong: var(--color-primary-active);
+  --home-map-expanded-top-offset: 106px;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -32,7 +33,10 @@ body.home-page--map-floating {
 }
 
 .home-page--map-expanded .header {
-  position: relative;
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
   z-index: 1400;
 }
 
@@ -306,8 +310,9 @@ body.home-page--map-floating {
 
 .home-page__explorer--expanded {
   position: fixed;
-  inset: 106px 0 0;
-  height: calc(100vh - 106px);
+  inset: var(--home-map-expanded-top-offset) 0 0;
+  height: calc(100dvh - var(--home-map-expanded-top-offset));
+  min-height: calc(100vh - var(--home-map-expanded-top-offset));
   z-index: 1200;
   padding: 0;
   gap: 0;
@@ -1080,8 +1085,9 @@ body.home-page--map-floating {
   }
 
   .home-page__explorer--expanded {
-    inset: 106px 0 0;
-    height: calc(100vh - 106px);
+    inset: var(--home-map-expanded-top-offset) 0 0;
+    height: calc(100dvh - var(--home-map-expanded-top-offset));
+    min-height: calc(100vh - var(--home-map-expanded-top-offset));
     padding: 0;
   }
 
@@ -1182,8 +1188,9 @@ body.home-page--map-floating {
   }
 
   .home-page__explorer--expanded {
-    inset: 106px 0 0;
-    height: calc(100vh - 106px);
+    inset: var(--home-map-expanded-top-offset) 0 0;
+    height: calc(100dvh - var(--home-map-expanded-top-offset));
+    min-height: calc(100vh - var(--home-map-expanded-top-offset));
     padding: 0;
     border-radius: 0;
   }
@@ -1253,4 +1260,18 @@ body.home-page--map-floating {
     font-size: 16px;
     line-height: 24px;
   }
+}
+
+.home-page__explorer--expanded .map-view,
+.home-page__explorer--expanded .map-view__map,
+.home-page__explorer--expanded .map-view__canvas,
+.home-page__map-panel-overlay--expanded .map-view,
+.home-page__map-panel-overlay--expanded .map-view__map,
+.home-page__map-panel-overlay--expanded .map-view__canvas,
+.home-page__map-panel-live,
+.home-page__map-panel-overlay--expanded,
+.home-page__explorer--expanded .home-page__explorer-panel,
+.home-page__explorer--expanded .home-page__explorer-summary {
+  height: 100% !important;
+  min-height: 100% !important;
 }

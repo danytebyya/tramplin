@@ -34,8 +34,6 @@ import {
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { readAccessTokenPayload, useAuthStore } from "../../features/auth";
 import {
-  canViewerAccessApplicantProfile,
-  getApplicantPrivacySettings,
   resolveAvatarIcon,
   resolveAvatarUrl,
 } from "../../shared/lib";
@@ -68,6 +66,7 @@ type SuggestedContact = {
 type OpportunityDetailsReturnState = {
   restoreScrollY?: number;
   restoreViewMode?: "list" | "map";
+  restoreSelectedOpportunityId?: string;
   returnTo?: {
     pathname: string;
     search?: string;
@@ -225,11 +224,11 @@ function mapSuggestedContact(candidate: OpportunityRecommendationCandidate): Sug
 function resolveSuggestedContactLevelClassName(levelLabel: string | null) {
   const normalizedLevel = levelLabel?.trim().toLowerCase();
 
-  if (normalizedLevel === "middle") {
+  if (normalizedLevel === "middle" || normalizedLevel === "мидл") {
     return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--warning";
   }
 
-  if (normalizedLevel === "senior") {
+  if (normalizedLevel === "senior" || normalizedLevel === "сеньор") {
     return "opportunity-details-page__contact-level-badge opportunity-details-page__contact-level-badge--danger";
   }
 
@@ -311,8 +310,13 @@ export function OpportunityDetailsPage() {
   const isAuthenticated = Boolean(accessToken || refreshToken);
   const themeRole = resolveThemeRole(activeRole);
   const headerTheme = resolveHeaderTheme(activeRole);
+  const isBackgroundOverlay = Boolean((location.state as { backgroundLocation?: unknown } | null)?.backgroundLocation);
   const backNavigationTarget = useMemo(() => {
     const state = location.state as OpportunityDetailsReturnState | null;
+
+    if ((location.state as { backgroundLocation?: unknown } | null)?.backgroundLocation) {
+      return null;
+    }
 
     if (!state?.returnTo?.pathname) {
       return null;
@@ -323,9 +327,21 @@ export function OpportunityDetailsPage() {
       state: {
         restoreScrollY: state.restoreScrollY,
         restoreViewMode: state.restoreViewMode,
+        restoreSelectedOpportunityId: state.restoreSelectedOpportunityId,
       },
+      replace: true,
     };
   }, [location.state]);
+  const employerProfileNavigationState = useMemo(
+    () => ({
+      returnTo: {
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      },
+    }),
+    [location.hash, location.pathname, location.search],
+  );
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [unauthorizedActionLabel, setUnauthorizedActionLabel] = useState<string | null>(null);
   const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
@@ -449,19 +465,8 @@ export function OpportunityDetailsPage() {
     [opportunity],
   );
   const suggestedContacts = useMemo(
-    () =>
-      (recommendationCandidatesQuery.data ?? [])
-        .map(mapSuggestedContact)
-        .filter((contact) =>
-          canViewerAccessApplicantProfile({
-            settings: getApplicantPrivacySettings({
-              publicId: contact.id !== contact.userId ? contact.id : null,
-              userId: contact.userId,
-            }),
-            isAuthenticated,
-          }),
-        ),
-    [isAuthenticated, recommendationCandidatesQuery.data],
+    () => (recommendationCandidatesQuery.data ?? []).map(mapSuggestedContact),
+    [recommendationCandidatesQuery.data],
   );
   const recommendedContactsTotalPages = Math.max(
     1,
@@ -477,7 +482,12 @@ export function OpportunityDetailsPage() {
     recommendedContactsTotalPages,
   );
   const shouldShowRecommendationsSection =
-    isAuthenticated && (recommendationCandidatesQuery.isPending || suggestedContacts.length > 0);
+    isAuthenticated &&
+    (
+      recommendationCandidatesQuery.isPending ||
+      suggestedContacts.length > 0 ||
+      activeRole === "applicant"
+    );
 
   useEffect(() => {
     setRecommendedContactsPage(1);
@@ -580,7 +590,13 @@ export function OpportunityDetailsPage() {
   }
 
   return (
-    <main className={`opportunity-details-page opportunity-details-page--${themeRole}`}>
+    <main
+      className={[
+        "opportunity-details-page",
+        `opportunity-details-page--${themeRole}`,
+        isBackgroundOverlay ? "opportunity-details-page--overlay" : "",
+      ].filter(Boolean).join(" ")}
+    >
       <Header
         containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
@@ -735,6 +751,11 @@ export function OpportunityDetailsPage() {
                         {recommendationCandidatesQuery.isPending ? (
                           <p className="opportunity-details-page__description-text">Подбираем подходящих кандидатов...</p>
                         ) : null}
+                        {!recommendationCandidatesQuery.isPending && suggestedContacts.length === 0 ? (
+                          <p className="opportunity-details-page__description-text">
+                            Здесь отображаются только ваши контакты из нетворкинга. Добавьте нужных людей в контакты, чтобы рекомендовать им эту возможность.
+                          </p>
+                        ) : null}
 
                         <div className="opportunity-details-page__contacts">
                           {visibleSuggestedContacts.map((contact) => {
@@ -743,61 +764,59 @@ export function OpportunityDetailsPage() {
                               recommendOpportunityMutation.isPending && recommendOpportunityMutation.variables === contact.userId;
 
                             return (
-                              <article key={contact.id} className="opportunity-details-page__contact-card">
-                                <div className="opportunity-details-page__contact-badge">
-                                  <span className="opportunity-details-page__contact-id">ID: {contact.id.slice(-6)}</span>
+                              <article key={contact.id} className="opportunity-details-page__contact-card contact-profile-card">
+                                <div className="opportunity-details-page__contact-badge contact-profile-card__badge">
+                                  <span className="opportunity-details-page__contact-id contact-profile-card__id">ID: {contact.id.slice(-6)}</span>
                                 </div>
 
-                                <div className="opportunity-details-page__contact-primary">
-                                  <div className="opportunity-details-page__contact-avatar-shell">
-                                    <img src={contact.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar" />
+                                <div className="opportunity-details-page__contact-primary contact-profile-card__primary">
+                                  <div className="opportunity-details-page__contact-avatar-shell contact-profile-card__avatar-shell">
+                                    <img src={contact.avatarSrc} alt="" aria-hidden="true" className="opportunity-details-page__contact-avatar contact-profile-card__avatar" />
                                   </div>
-                                  <h3 className="opportunity-details-page__contact-name">
+                                  <h3 className="opportunity-details-page__contact-name contact-profile-card__name">
                                     {contact.id ? (
-                                      <Link to={`/profiles/${contact.id}`} className="opportunity-details-page__contact-link">
+                                      <Link to={`/profiles/${contact.id}`} className="opportunity-details-page__contact-link contact-profile-card__name-link">
                                         {contact.name}
                                       </Link>
                                     ) : (
                                       contact.name
                                     )}
                                   </h3>
-                                  <p className="opportunity-details-page__contact-subtitle">{contact.subtitle}</p>
-                                  <p className="opportunity-details-page__contact-status">
-                                    <span className={`opportunity-details-page__contact-dot${contact.isOnline ? " opportunity-details-page__contact-dot--online" : ""}`} />
+                                  <p className={`opportunity-details-page__contact-status contact-profile-card__status${contact.isOnline ? " contact-profile-card__status--online" : " contact-profile-card__status--offline"}`}>
+                                    <span className={`opportunity-details-page__contact-dot contact-profile-card__dot${contact.isOnline ? " opportunity-details-page__contact-dot--online contact-profile-card__dot--online" : ""}`} />
                                     {contact.isOnline ? "Online" : "Недавно в сети"}
                                   </p>
+                                  <p className="opportunity-details-page__contact-subtitle contact-profile-card__subtitle">{contact.subtitle}</p>
                                 </div>
 
-                                {contact.levelLabel || contact.tags.length > 0 ? (
-                                  <div className="opportunity-details-page__contact-tags">
-                                    {contact.levelLabel ? (
-                                      <span className={resolveSuggestedContactLevelClassName(contact.levelLabel)}>
-                                        {contact.levelLabel}
-                                      </span>
-                                    ) : null}
-                                    {contact.tags.map((tag) => (
-                                      <span key={`${contact.id}-${tag}`} className="opportunity-details-page__contact-tag">
-                                        {tag}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : null}
+                                <div className="opportunity-details-page__contact-tags contact-profile-card__tags">
+                                  {contact.levelLabel ? (
+                                    <span className={resolveSuggestedContactLevelClassName(contact.levelLabel)}>
+                                      {contact.levelLabel}
+                                    </span>
+                                  ) : null}
+                                  {contact.tags.map((tag) => (
+                                    <span key={`${contact.id}-${tag}`} className="opportunity-details-page__contact-tag contact-profile-card__tag">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
 
-                                <div className="opportunity-details-page__contact-facts">
-                                  <span className="opportunity-details-page__contact-fact">
-                                    <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                <div className="opportunity-details-page__contact-facts contact-profile-card__facts">
+                                  <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                    <img src={locationIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                     {contact.city}
                                   </span>
-                                  <span className="opportunity-details-page__contact-fact">
-                                    <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                  <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                    <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                     {contact.salaryLabel}
                                   </span>
-                                  <span className="opportunity-details-page__contact-fact">
-                                    <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                  <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                    <img src={jobIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                     {contact.formatLabel}
                                   </span>
-                                  <span className="opportunity-details-page__contact-fact">
-                                    <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon" />
+                                  <span className="opportunity-details-page__contact-fact contact-profile-card__fact">
+                                    <img src={timeIcon} alt="" aria-hidden="true" className="opportunity-details-page__contact-meta-icon contact-profile-card__fact-icon" />
                                     {contact.employmentLabel}
                                   </span>
                                 </div>
@@ -906,7 +925,11 @@ export function OpportunityDetailsPage() {
                   </div>
                 ) : null}
                 {opportunity.employerPublicId ? (
-                  <Link to={`/profiles/${opportunity.employerPublicId}`} className="opportunity-details-page__company-name-link">
+                  <Link
+                    to={`/profiles/${opportunity.employerPublicId}`}
+                    state={employerProfileNavigationState}
+                    className="opportunity-details-page__company-name-link"
+                  >
                     <h2 className="opportunity-details-page__company-name">{opportunity.companyName}</h2>
                   </Link>
                 ) : (
@@ -968,7 +991,9 @@ export function OpportunityDetailsPage() {
                   fullWidth
                   onClick={() =>
                     opportunity.employerPublicId
-                      ? navigate(`/profiles/${opportunity.employerPublicId}`)
+                      ? navigate(`/profiles/${opportunity.employerPublicId}`, {
+                          state: employerProfileNavigationState,
+                        })
                       : navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`)
                   }
                 >

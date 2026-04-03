@@ -36,6 +36,8 @@ class ApplicantProfile(TimestampMixin, Base):
     linkedin_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     habr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    profile_visibility: Mapped[str] = mapped_column(String(32), nullable=False, default="public")
+    show_resume: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     profile_views_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recommendations_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

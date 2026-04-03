@@ -12,6 +12,7 @@ from src.models.employer_verification import (
 from src.models.email_verification_state import EmailVerificationState
 from src.models.favorite import FavoriteOpportunity
 from src.models.moderation_settings import ModerationSettings
+from src.models.networking import ApplicantContact
 from src.models.notification import Notification
 from src.models.opportunity import (
     EmploymentType,
@@ -66,6 +67,7 @@ __all__ = [
     "EmailVerificationState",
     "FavoriteOpportunity",
     "ModerationSettings",
+    "ApplicantContact",
     "Notification",
     "Location",
     "Tag",

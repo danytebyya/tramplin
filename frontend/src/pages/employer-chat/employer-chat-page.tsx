@@ -60,7 +60,7 @@ export function EmployerChatPage() {
         <ChatWorkspace
           title="Чат"
           emptyTitle="Пока нет активного чата"
-          emptyText="Выберите существующий диалог слева или найдите соискателя через поиск сверху."
+          emptyText="Выберите, кому бы хотели написать."
           preferredRecipientUserId={preferredRecipientUserId}
         />
       </Container>

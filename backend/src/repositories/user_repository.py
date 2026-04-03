@@ -1,9 +1,9 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from src.models import EmployerProfile, User, UserNotificationPreference
+from src.models import ApplicantContact, ApplicantProfile, EmployerProfile, User, UserNotificationPreference
 from src.enums import UserRole, UserStatus
 
 
@@ -34,14 +34,20 @@ class UserRepository:
         self,
         *,
         exclude_user_id: str | UUID | None = None,
+        only_contact_of_user_id: str | UUID | None = None,
         limit: int = 100,
     ) -> list[User]:
         stmt = (
             select(User)
+            .outerjoin(ApplicantProfile, ApplicantProfile.user_id == User.id)
             .where(
                 User.deleted_at.is_(None),
                 User.role == UserRole.APPLICANT,
                 User.status == UserStatus.ACTIVE,
+                or_(
+                    ApplicantProfile.user_id.is_(None),
+                    func.coalesce(ApplicantProfile.profile_visibility, "public") != "hidden",
+                ),
             )
             .options(selectinload(User.applicant_profile))
             .order_by(User.created_at.desc())
@@ -49,6 +55,22 @@ class UserRepository:
         )
         if exclude_user_id is not None:
             stmt = stmt.where(User.id != UUID(str(exclude_user_id)))
+        if only_contact_of_user_id is not None:
+            current_user_id = UUID(str(only_contact_of_user_id))
+            stmt = stmt.join(
+                ApplicantContact,
+                or_(
+                    and_(
+                        ApplicantContact.user_low_id == current_user_id,
+                        ApplicantContact.user_high_id == User.id,
+                    ),
+                    and_(
+                        ApplicantContact.user_high_id == current_user_id,
+                        ApplicantContact.user_low_id == User.id,
+                    ),
+                ),
+            )
+            stmt = stmt.where(ApplicantContact.status == "accepted")
         return list(self.db.execute(stmt).scalars().all())
 
     def add(self, user: User) -> User:

@@ -9,6 +9,9 @@ type ChatRealtimeEvent = {
   message?: Record<string, unknown>;
   user_id?: string;
   read_at?: string;
+  actor_user_id?: string;
+  target_user_id?: string;
+  relation_status?: string;
 };
 
 type Listener = (event: ChatRealtimeEvent) => void;

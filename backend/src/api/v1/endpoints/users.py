@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.orm import Session
 
 from src.api.serializers.user import serialize_user
-from src.api.deps import get_current_user
+from src.api.deps import get_current_user, get_optional_current_user
 from src.db import get_db
 from src.models import User
 from src.schemas.auth import RegisterRequest
 from src.schemas.user import (
     ApplicantDashboardUpdateRequest,
+    ApplicantPrivacySettingsUpdateRequest,
     UserNotificationPreferencesUpdateRequest,
     UserPreferredCityUpdateRequest,
     UserUpdateRequest,
@@ -44,8 +45,12 @@ def read_me(current_user: User = Depends(get_current_user)) -> dict:
 
 
 @router.get("/public/{public_id}", status_code=status.HTTP_200_OK)
-def read_public_profile(public_id: str, db: Session = Depends(get_db)) -> dict:
-    payload = UserService(db).get_public_profile(public_id)
+def read_public_profile(
+    public_id: str,
+    current_user: User | None = Depends(get_optional_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = UserService(db).get_public_profile(public_id, viewer=current_user)
     return success_response(payload.model_dump(mode="json"))
 
 
@@ -85,6 +90,16 @@ def update_applicant_dashboard(
     db: Session = Depends(get_db),
 ) -> dict:
     response = UserService(db).update_applicant_dashboard(current_user, payload)
+    return success_response(response.model_dump(mode="json"))
+
+
+@router.put("/me/applicant-privacy", status_code=status.HTTP_200_OK)
+def update_applicant_privacy(
+    payload: ApplicantPrivacySettingsUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    response = UserService(db).update_applicant_privacy_settings(current_user, payload)
     return success_response(response.model_dump(mode="json"))
 
 

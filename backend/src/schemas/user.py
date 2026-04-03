@@ -5,6 +5,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from src.enums import EmployerType, EmployerVerificationStatus, UserRole, UserStatus
 
+ApplicantProfileVisibility = str
+
 
 class ApplicantProfileRead(BaseModel):
     full_name: str | None = None
@@ -28,6 +30,8 @@ class ApplicantProfileRead(BaseModel):
     linkedin_url: str | None = None
     habr_url: str | None = None
     avatar_url: str | None = None
+    profile_visibility: ApplicantProfileVisibility = "public"
+    show_resume: bool = True
     profile_views_count: int = 0
     recommendations_count: int = 0
     model_config = {"from_attributes": True}
@@ -257,6 +261,21 @@ class PublicUserProfileRead(BaseModel):
 
 class UserPreferredCityUpdateRequest(BaseModel):
     preferred_city: str
+
+
+class ApplicantPrivacySettingsRead(BaseModel):
+    profile_visibility: ApplicantProfileVisibility = "public"
+    show_resume: bool = True
+
+
+class ApplicantPrivacySettingsUpdateRequest(ApplicantPrivacySettingsRead):
+    @field_validator("profile_visibility")
+    @classmethod
+    def validate_profile_visibility(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"public", "authorized", "hidden"}:
+            raise ValueError("Недопустимое значение видимости профиля")
+        return normalized
 
 
 class UserUpdateRequest(BaseModel):

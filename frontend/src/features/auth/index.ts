@@ -134,6 +134,8 @@ export type MeResponse = {
         linkedin_url?: string | null;
         habr_url?: string | null;
         avatar_url?: string | null;
+        profile_visibility?: "public" | "authorized" | "hidden" | null;
+        show_resume?: boolean | null;
         profile_views_count?: number | null;
         recommendations_count?: number | null;
       } | null;
@@ -293,6 +295,13 @@ export type UserNotificationPreferencesResponse = {
   data?: {
     email_notifications?: NotificationPreferenceGroup;
     push_notifications?: NotificationPreferenceGroup;
+  };
+};
+
+export type ApplicantPrivacySettingsResponse = {
+  data?: {
+    profile_visibility?: "public" | "authorized" | "hidden";
+    show_resume?: boolean;
   };
 };
 
@@ -503,6 +512,14 @@ export async function updateNotificationPreferencesRequest(payload: {
     "/users/me/notification-preferences",
     payload,
   );
+  return response.data;
+}
+
+export async function updateApplicantPrivacySettingsRequest(payload: {
+  profile_visibility: "public" | "authorized" | "hidden";
+  show_resume: boolean;
+}) {
+  const response = await apiClient.put<ApplicantPrivacySettingsResponse>("/users/me/applicant-privacy", payload);
   return response.data;
 }
 

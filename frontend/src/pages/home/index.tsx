@@ -115,15 +115,23 @@ function cloneMapSnapshot(source: HTMLElement) {
 }
 
 export function HomePage() {
-  const MAP_EXPANDED_TOP_OFFSET = 106;
+  const DEFAULT_MAP_EXPANDED_TOP_OFFSET = 106;
   const MAP_EXPAND_TRANSITION_MS = 520;
   const DEFAULT_CITY = "Чебоксары";
   const navigate = useNavigate();
   const location = useLocation();
+  const initialNavigationState = location.state as {
+    restoreViewMode?: "list" | "map";
+    restoreSelectedOpportunityId?: string;
+  } | null;
   const queryClient = useQueryClient();
-  const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [viewMode, setViewMode] = useState<"map" | "list">(
+    () => initialNavigationState?.restoreViewMode ?? "map",
+  );
   const [mapExpandMode, setMapExpandMode] = useState<"collapsed" | "expanding" | "expanded" | "collapsing">("collapsed");
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(
+    () => initialNavigationState?.restoreSelectedOpportunityId ?? null,
+  );
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? DEFAULT_CITY);
   const [searchQuery, setSearchQuery] = useState("");
   const [toolbarFilters, setToolbarFilters] = useState<OpportunityToolbarFilters>({
@@ -140,6 +148,7 @@ export function HomePage() {
   const [shouldMountMap, setShouldMountMap] = useState(false);
   const [mapPanelFrameStyle, setMapPanelFrameStyle] = useState<CSSProperties | undefined>(undefined);
   const [mapPanelPlaceholderHeight, setMapPanelPlaceholderHeight] = useState<number | null>(null);
+  const [mapExpandedTopOffset, setMapExpandedTopOffset] = useState(DEFAULT_MAP_EXPANDED_TOP_OFFSET);
   const [unauthorizedActionLabel, setUnauthorizedActionLabel] = useState<string | null>(null);
   const [pendingWithdrawOpportunityId, setPendingWithdrawOpportunityId] = useState<string | null>(null);
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
@@ -152,6 +161,7 @@ export function HomePage() {
   const expandedFromScrollYRef = useRef(0);
   const pendingRestoreScrollYRef = useRef<number | null>(null);
   const pendingProfileReturnScrollYRef = useRef<number | null>(null);
+  const shouldSkipMapHashScrollRef = useRef(false);
   const mapTransitionTimeoutRef = useRef<number | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
@@ -452,12 +462,31 @@ export function HomePage() {
           : undefined;
   const heroLogo = roleName === "applicant" ? logoSecondary : logoPrimary;
 
-  const getExpandedRect = () => ({
-    top: MAP_EXPANDED_TOP_OFFSET,
+  const resolveMapExpandedTopOffset = () => {
+    const headerTop = document.querySelector<HTMLElement>(".home-page > .header .header__top");
+    const header = document.querySelector<HTMLElement>(".home-page > .header");
+
+    if (headerTop) {
+      return Math.max(Math.round(headerTop.offsetHeight), 0);
+    }
+
+    if (header) {
+      return Math.max(Math.round(header.offsetHeight), 0);
+    }
+
+    return DEFAULT_MAP_EXPANDED_TOP_OFFSET;
+  };
+
+  const getExpandedRect = () => {
+    const topOffset = resolveMapExpandedTopOffset();
+
+    return {
+      top: topOffset,
     left: 0,
     width: window.innerWidth,
-    height: Math.max(window.innerHeight - MAP_EXPANDED_TOP_OFFSET, 0),
-  });
+      height: Math.max(window.innerHeight - topOffset, 0),
+    };
+  };
 
   const getFloatingFrameStyle = (rect: Pick<DOMRect, "top" | "left" | "width" | "height">, borderRadius: string): CSSProperties => {
     return {
@@ -620,6 +649,19 @@ export function HomePage() {
   }, [isMapCollapsing, isMapExpandedLayout, isMapFloating]);
 
   useEffect(() => {
+    const syncMapExpandedTopOffset = () => {
+      setMapExpandedTopOffset(resolveMapExpandedTopOffset());
+    };
+
+    syncMapExpandedTopOffset();
+    window.addEventListener("resize", syncMapExpandedTopOffset);
+
+    return () => {
+      window.removeEventListener("resize", syncMapExpandedTopOffset);
+    };
+  }, [isMapExpandedLayout]);
+
+  useEffect(() => {
     if (!isMapExpanded || mapExpandMode === "expanded") {
       return;
     }
@@ -665,11 +707,20 @@ export function HomePage() {
   }, [mapExpandMode]);
 
   useEffect(() => {
-    const navigationState = location.state as { restoreScrollY?: number; restoreViewMode?: "list" | "map" } | null;
+    const navigationState = location.state as {
+      restoreScrollY?: number;
+      restoreViewMode?: "list" | "map";
+      restoreSelectedOpportunityId?: string;
+    } | null;
     const restoreScrollY = navigationState?.restoreScrollY;
     const restoreViewMode = navigationState?.restoreViewMode;
+    const restoreSelectedOpportunityId = navigationState?.restoreSelectedOpportunityId;
 
-    if (typeof restoreScrollY !== "number" && !restoreViewMode) {
+    if (
+      typeof restoreScrollY !== "number" &&
+      !restoreViewMode &&
+      typeof restoreSelectedOpportunityId !== "string"
+    ) {
       return;
     }
 
@@ -677,9 +728,17 @@ export function HomePage() {
       setViewMode(restoreViewMode);
     }
 
+    if (typeof restoreSelectedOpportunityId === "string") {
+      setSelectedOpportunityId(restoreSelectedOpportunityId);
+    }
+
     if (typeof restoreScrollY === "number") {
       pendingProfileReturnScrollYRef.current = restoreScrollY;
     }
+
+    shouldSkipMapHashScrollRef.current =
+      restoreViewMode === "map" &&
+      (typeof restoreScrollY === "number" || typeof restoreSelectedOpportunityId === "string");
 
     navigate(`${location.pathname}${location.search}${location.hash}`, {
       replace: true,
@@ -726,6 +785,11 @@ export function HomePage() {
 
   useEffect(() => {
     if (isModerationRole || location.hash !== "#opportunity-map") {
+      return;
+    }
+
+    if (shouldSkipMapHashScrollRef.current) {
+      shouldSkipMapHashScrollRef.current = false;
       return;
     }
 
@@ -956,12 +1020,15 @@ export function HomePage() {
   );
 
   return (
-    <main className={homePageClassName}>
+    <main
+      className={homePageClassName}
+      style={{ "--home-map-expanded-top-offset": `${mapExpandedTopOffset}px` } as CSSProperties}
+    >
       <Header
         containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
-        theme={landingTheme}
-        variant={isModerationRole ? "default" : "landing"}
+        theme={isMapExpandedLayout ? "employer" : landingTheme}
+        variant={isModerationRole || isMapExpandedLayout ? "default" : "landing"}
         city={isCityReady ? displayCity : undefined}
         onCityChange={isCityReady ? handleCityChange : undefined}
         isAuthenticated={isAuthenticated}

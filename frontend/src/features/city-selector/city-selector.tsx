@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import { Input } from "../../shared/ui";
 import { cn } from "../../shared/lib";
 import { CitySuggestion, getCitySuggestions } from "./api";
@@ -191,7 +192,10 @@ export function CitySelector({ value, className, onChange }: CitySelectorProps) 
               ) : null}
 
               {!isLoading && !hasError && suggestions.length === 0 ? (
-                <div className="city-selector__empty">Ничего не найдено.</div>
+                <div className="city-selector__empty city-selector__empty--search">
+                  <img src={sadSearchIcon} alt="" aria-hidden="true" className="city-selector__empty-icon" />
+                  <span>Ничего не найдено.</span>
+                </div>
               ) : null}
 
               {!isLoading &&

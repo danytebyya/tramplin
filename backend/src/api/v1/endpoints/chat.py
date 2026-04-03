@@ -51,6 +51,28 @@ def list_chat_contacts(
     return success_response(payload.model_dump(mode="json"))
 
 
+@router.post("/contacts/{target_user_id}", status_code=status.HTTP_200_OK)
+def add_chat_contact(
+    target_user_id: str,
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = ChatService(db).add_contact(current_user, target_user_id, access_payload=access_payload)
+    return success_response(payload.model_dump(mode="json"))
+
+
+@router.delete("/contacts/{target_user_id}", status_code=status.HTTP_200_OK)
+def reject_chat_contact(
+    target_user_id: str,
+    access_payload: dict = Depends(get_current_access_payload),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    ChatService(db).reject_contact(current_user, target_user_id, access_payload=access_payload)
+    return success_response({"target_user_id": target_user_id})
+
+
 @router.get("/search", status_code=status.HTTP_200_OK)
 def search_chat_contacts(
     q: str = Query(default=""),
