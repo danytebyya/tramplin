@@ -92,6 +92,23 @@ const PAGE_SIZE = 10;
 const CARD_TAGS_INITIAL_COUNT = 3;
 const MODAL_TAGS_INITIAL_COUNT = 8;
 const MODAL_TAGS_STEP = 12;
+
+function formatOpportunityPaymentLabel(value: string): string {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  const numericCandidate = trimmedValue.replace(/[₽\s\u00A0]/g, "");
+
+  if (!/^\d+$/.test(numericCandidate)) {
+    return trimmedValue;
+  }
+
+  return `${Number(numericCandidate).toLocaleString("ru-RU")} ₽`;
+}
+
 const opportunityTypeOptions = [
   { value: "vacancy", label: "Вакансия" },
   { value: "internship", label: "Стажировка" },
@@ -1081,7 +1098,7 @@ export function OpportunityManagementPage() {
     setCreateOpportunityDescription(record.description);
     setCreateOpportunityCity(record.city);
     setCreateOpportunityCityPoint({ lon: record.longitude, lat: record.latitude });
-    setCreateOpportunitySalary(record.salaryLabel);
+    setCreateOpportunitySalary(formatOpportunityPaymentLabel(record.salaryLabel));
     setCreateOpportunityTagQuery("");
     setCreateOpportunityTags(record.tags);
     setCreateOpportunityLevel(
@@ -1311,13 +1328,15 @@ export function OpportunityManagementPage() {
       return;
     }
 
+    const normalizedSalaryLabel = formatOpportunityPaymentLabel(createOpportunitySalary);
+
     const apiPayload = {
       title: createOpportunityTitle.trim(),
       description: createOpportunityDescription.trim(),
       opportunity_type: createOpportunityType,
       city: createOpportunityCity.trim(),
       address: createOpportunityAddress.trim(),
-      salary_label: createOpportunitySalary.trim(),
+      salary_label: normalizedSalaryLabel,
       tags: createOpportunityTags,
       format: createOpportunityType === "mentorship" ? "online" : createOpportunityFormat,
       level_label: createOpportunityType === "vacancy" || createOpportunityType === "internship" ? createOpportunityLevel : null,
@@ -2079,6 +2098,9 @@ export function OpportunityManagementPage() {
               onChange={(event) => {
                 setCreateOpportunitySalary(event.target.value);
                 setFormErrors((current) => ({ ...current, salary: undefined }));
+              }}
+              onBlur={() => {
+                setCreateOpportunitySalary((current) => formatOpportunityPaymentLabel(current));
               }}
               placeholder={createOpportunityType === "event" ? "Например: Бесплатно / 1 500 ₽" : "Input"}
               className="input--sm opportunity-management-page__modal-input"
