@@ -53,8 +53,24 @@ jobs:
             npm run build
 
             sudo systemctl restart tramplin-backend
-            sleep 3
+            for attempt in $(seq 1 30); do
+              if ! sudo systemctl is-active --quiet tramplin-backend; then
+                sleep 2
+                continue
+              fi
 
-            curl -f http://127.0.0.1:8000/api/v1/platform/stats > /dev/null
+              if curl -fsS http://127.0.0.1:8000/api/v1/platform/stats > /dev/null; then
+                break
+              fi
+
+              if [ "$attempt" -eq 30 ]; then
+                echo "tramplin-backend failed readiness check after restart"
+                sudo systemctl status tramplin-backend --no-pager || true
+                sudo journalctl -u tramplin-backend -n 200 --no-pager || true
+                exit 1
+              fi
+
+              sleep 2
+            done
 
             sudo systemctl reload nginx
