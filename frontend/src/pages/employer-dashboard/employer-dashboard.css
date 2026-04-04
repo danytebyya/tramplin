@@ -467,10 +467,6 @@
   padding-top: 24px;
 }
 
-.employer-dashboard__leave-modal {
-  gap: 24px;
-}
-
 .employer-dashboard__save-button.button {
   width: 100%;
 }
@@ -513,8 +509,14 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
   cursor: pointer;
+  transition: color 180ms ease;
+}
+
+.employer-dashboard__summary-edit:hover,
+.employer-dashboard__summary-edit:focus-visible {
+  color: var(--color-text-primary);
 }
 
 .employer-dashboard__summary-metric {

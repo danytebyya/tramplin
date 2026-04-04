@@ -1,5 +1,6 @@
-import { ChangeEvent, FocusEvent, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, UNSAFE_NavigationContext, useNavigate } from "react-router-dom";
+import { ChangeEvent, FocusEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { NavigateFunction, NavigateOptions } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -27,7 +28,7 @@ import {
 } from "../../features/auth";
 import { listEmployerOpportunitiesRequest } from "../../features/opportunity";
 import type { Opportunity } from "../../entities/opportunity";
-import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import { prepareAvatarFile, resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
 import { Button, Container, Input, Modal, ProfileTabs, VerifiedTooltip } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { OpportunityFilters } from "../../widgets/filters";
@@ -202,7 +203,6 @@ export function EmployerDashboardPage() {
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.role);
   const accessToken = useAuthStore((state) => state.accessToken);
-  const navigationContext = useContext(UNSAFE_NavigationContext);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [formState, setFormState] = useState<EmployerProfileFormState>(EMPTY_FORM_STATE);
   const [isFormInitialized, setIsFormInitialized] = useState(false);
@@ -227,7 +227,8 @@ export function EmployerDashboardPage() {
   const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
   const [opportunityViewMode, setOpportunityViewMode] = useState<"map" | "list">("map");
   const [selectedOpportunityId, setSelectedOpportunityId] = useState<string | null>(null);
-  const pendingNavigationTxRef = useRef<{ retry: () => void } | null>(null);
+  const pendingNavigationActionRef = useRef<(() => void) | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   const employerAccess = getEmployerAccessState(role, accessToken);
 
   const meQuery = useQuery({
@@ -278,8 +279,6 @@ export function EmployerDashboardPage() {
   if (!employerAccess.canManageCompanyProfile) {
     return <Navigate to={resolveEmployerFallbackRoute(employerAccess)} replace />;
   }
-
-  const profileMenuItems = buildEmployerProfileMenuItems(navigate, employerAccess);
 
   const handleCityChange = (nextCity: CitySelection) => {
     setSelectedCity(nextCity.name);
@@ -375,7 +374,7 @@ export function EmployerDashboardPage() {
       const easedProgress = 1 - Math.pow(1 - progress, 3);
       const nextValue = Math.round(startValue + (targetValue - startValue) * easedProgress);
 
-      setDisplayedProfileCompletion(nextValue);
+      setDisplayedProfileCompletion(Math.min(Math.max(nextValue, 0), 100));
 
       if (progress < 1) {
         frameId = window.requestAnimationFrame(animate);
@@ -386,24 +385,6 @@ export function EmployerDashboardPage() {
 
     return () => window.cancelAnimationFrame(frameId);
   }, [profileCompletion]);
-
-  useEffect(() => {
-    if (!hasUnsavedChanges) {
-      return;
-    }
-
-    const navigator = navigationContext.navigator as { block?: (blocker: (tx: { retry: () => void }) => void) => () => void };
-    if (typeof navigator.block !== "function") {
-      return;
-    }
-
-    const unblock = navigator.block((tx) => {
-      pendingNavigationTxRef.current = tx;
-      setIsLeaveConfirmModalOpen(true);
-    });
-
-    return unblock;
-  }, [hasUnsavedChanges, navigationContext.navigator]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) {
@@ -421,6 +402,89 @@ export function EmployerDashboardPage() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, [hasUnsavedChanges]);
+
+  const attemptGuardedNavigation = useCallback(
+    (action: () => void) => {
+      if (!hasUnsavedChanges) {
+        action();
+        return;
+      }
+
+      pendingNavigationActionRef.current = action;
+      setIsLeaveConfirmModalOpen(true);
+    },
+    [hasUnsavedChanges],
+  );
+
+  const guardedNavigate = useCallback<NavigateFunction>(
+    ((to: Parameters<NavigateFunction>[0], options?: NavigateOptions) => {
+      attemptGuardedNavigation(() => {
+        if (typeof to === "number") {
+          navigate(to);
+          return;
+        }
+
+        navigate(to, options);
+      });
+    }) as NavigateFunction,
+    [attemptGuardedNavigation, navigate],
+  );
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      return;
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) {
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+
+      if (!anchor) {
+        return;
+      }
+
+      if (anchor.target && anchor.target !== "_self") {
+        return;
+      }
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+        return;
+      }
+
+      const url = new URL(anchor.href, window.location.origin);
+
+      if (url.origin !== window.location.origin) {
+        return;
+      }
+
+      const nextPath = `${url.pathname}${url.search}${url.hash}`;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+      if (nextPath === currentPath) {
+        return;
+      }
+
+      event.preventDefault();
+      attemptGuardedNavigation(() => navigate(nextPath));
+    };
+
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [attemptGuardedNavigation, hasUnsavedChanges, navigate]);
+
+  const profileMenuItems = buildEmployerProfileMenuItems(guardedNavigate, employerAccess);
 
   const isProfileLoading = meQuery.isLoading || verificationDraftQuery.isLoading;
   const saveErrorMessage = "Не удалось сохранить изменения";
@@ -530,9 +594,8 @@ export function EmployerDashboardPage() {
       return;
     }
 
+    setIsOfficeAddressSuggestionsLoading(true);
     const timeoutId = window.setTimeout(() => {
-      setIsOfficeAddressSuggestionsLoading(true);
-
       void getAddressSuggestions(activeQuery, preferredCity)
         .then((items) => {
           setOfficeAddressSuggestions(items);
@@ -552,7 +615,7 @@ export function EmployerDashboardPage() {
     avatarInputRef.current?.click();
   };
 
-  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -564,16 +627,24 @@ export function EmployerDashboardPage() {
       return;
     }
 
-    setPendingAvatarFile(file);
-    setIsAvatarMarkedForDeletion(false);
-    setAvatarPreviewUrl((currentValue) => {
-      if (currentValue) {
-        URL.revokeObjectURL(currentValue);
-      }
+    try {
+      setAvatarError(null);
+      const preparedFile = await prepareAvatarFile(file);
 
-      return URL.createObjectURL(file);
-    });
-    event.target.value = "";
+      setPendingAvatarFile(preparedFile);
+      setIsAvatarMarkedForDeletion(false);
+      setAvatarPreviewUrl((currentValue) => {
+        if (currentValue) {
+          URL.revokeObjectURL(currentValue);
+        }
+
+        return URL.createObjectURL(preparedFile);
+      });
+    } catch {
+      setAvatarError("Не удалось обработать аватар. Попробуйте другое изображение.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const handleDeleteAvatar = () => {
@@ -724,16 +795,16 @@ export function EmployerDashboardPage() {
 
   const handleCloseLeaveConfirmModal = () => {
     setIsLeaveConfirmModalOpen(false);
-    pendingNavigationTxRef.current = null;
+    pendingNavigationActionRef.current = null;
   };
 
   const handleSaveAndLeave = async () => {
     try {
       await handleSubmit();
       setIsLeaveConfirmModalOpen(false);
-      const pendingTx = pendingNavigationTxRef.current;
-      pendingNavigationTxRef.current = null;
-      pendingTx?.retry();
+      const pendingAction = pendingNavigationActionRef.current;
+      pendingNavigationActionRef.current = null;
+      pendingAction?.();
     } catch {
       return;
     }
@@ -750,7 +821,7 @@ export function EmployerDashboardPage() {
 
       <Container className="employer-dashboard__shell">
         <ProfileTabs
-          navigate={navigate}
+          navigate={guardedNavigate}
           audience="employer"
           current="company-profile"
           employerAccess={employerAccess}
@@ -1025,6 +1096,10 @@ export function EmployerDashboardPage() {
               </div>
             ) : null}
 
+            {avatarError ? (
+              <p className="employer-dashboard__save-error">{avatarError}</p>
+            ) : null}
+
             {saveEmployerProfileMutation.isError ? (
               <p className="employer-dashboard__save-error">{saveErrorMessage}</p>
             ) : null}
@@ -1257,18 +1332,21 @@ export function EmployerDashboardPage() {
         isOpen={isLeaveConfirmModalOpen}
         onClose={handleCloseLeaveConfirmModal}
         size="small"
-        panelClassName="employer-dashboard__leave-modal-panel"
         titleAccentColor="var(--color-primary)"
         closeOnBackdrop={false}
       >
-        <div className="modal__body employer-dashboard__leave-modal">
-          <p className="modal__text employer-dashboard__leave-modal-text">
+        <div className="modal__body">
+          <p className="modal__text">
             Если перейти на другую страницу сейчас, все несохранённые данные сотрутся.
           </p>
+          {avatarError ? (
+            <p className="modal__error employer-dashboard__save-error">{avatarError}</p>
+          ) : null}
+
           {saveEmployerProfileMutation.isError ? (
             <p className="modal__error employer-dashboard__save-error">{saveErrorMessage}</p>
           ) : null}
-          <div className="modal__actions employer-dashboard__leave-modal-actions">
+          <div className="modal__actions">
             <Button
               type="button"
               variant="cancel"

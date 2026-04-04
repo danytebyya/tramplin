@@ -19,7 +19,12 @@ import {
   withdrawOpportunityApplicationRequest,
 } from "../../features/applications";
 import { useAuthStore } from "../../features/auth";
-import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
+import {
+  buildOpportunityExplorerRoute,
+  buildOpportunitySearchText,
+  normalizeOpportunitySearchText,
+  opportunityCategoryLinks,
+} from "../../shared/lib";
 import { Button, Checkbox, Container, Input, ProfileTabs, Radio } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
@@ -30,8 +35,6 @@ import "./favorites.css";
 type FavoriteSortField = "title" | "company" | "rating" | "published";
 type FavoriteSortDirection = "asc" | "desc";
 type FavoriteStatsKey = "total" | "vacancy" | "internship" | "event" | "mentorship";
-type OpportunityCategoryFilter = "all" | Opportunity["kind"];
-
 const favoriteMetricDefinitions: Array<{ key: FavoriteStatsKey; label: string }> = [
   { key: "total", label: "Всего:" },
   { key: "vacancy", label: "Вакансии:" },
@@ -40,29 +43,50 @@ const favoriteMetricDefinitions: Array<{ key: FavoriteStatsKey; label: string }>
   { key: "mentorship", label: "Менторство:" },
 ];
 
-const ALL_TIME_PUBLICATION_OPTION = "За всё время";
+const ALL_TIME_PUBLICATION_OPTION = "За все время";
 const levelOptions = ["Junior", "Middle", "Senior"];
 const formatOptions = ["Офлайн", "Гибрид", "Удалённо"];
 const employmentOptions = ["Полная занятость", "Частичная занятость", "Проектная работа", "Стажировка"];
-const publicationOptions = [ALL_TIME_PUBLICATION_OPTION, "За сегодня", "За 3 дня", "За неделю"];
+const publicationOptions = ["За неделю", "За месяц", ALL_TIME_PUBLICATION_OPTION];
 const companyOptions = ["Только верифицированные компании", "Только с рейтингом 4,5 и выше"];
-
-const sortFieldOptions: Array<{ value: FavoriteSortField; label: string }> = [
-  { value: "title", label: "По названию" },
-  { value: "company", label: "По компании" },
-  { value: "rating", label: "По рейтингу" },
-  { value: "published", label: "По дате публикации" },
-];
-const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label: string }> = [
-  { value: "all", label: "Все" },
-  { value: "vacancy", label: "Вакансии" },
-  { value: "internship", label: "Стажировки" },
-  { value: "event", label: "Мероприятия" },
-  { value: "mentorship", label: "Менторские программы" },
-];
 
 function normalizeFilterText(value: string) {
   return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+}
+
+function matchesFavoritesSearch(opportunity: Opportunity, query: string) {
+  const normalizedQuery = normalizeOpportunitySearchText(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const searchableText = buildOpportunitySearchText(opportunity);
+  if (searchableText.includes(normalizedQuery)) {
+    return true;
+  }
+
+  const fallbackSearchText = normalizeOpportunitySearchText(
+    [
+      opportunity.title,
+      opportunity.companyName,
+      opportunity.description,
+      opportunity.locationLabel,
+      opportunity.city,
+      opportunity.address,
+      opportunity.salaryLabel,
+      opportunity.levelLabel,
+      opportunity.employmentLabel,
+      opportunity.eventType,
+      opportunity.mentorshipDirection,
+      opportunity.mentorExperience,
+      ...opportunity.tags,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  return fallbackSearchText.includes(normalizedQuery);
 }
 
 function normalizeFormatOption(value: string): Opportunity["format"] | null {
@@ -150,16 +174,12 @@ function matchesPublicationPeriod(value: string | null | undefined, periods: str
   const oneDayMs = 24 * 60 * 60 * 1000;
 
   return periods.some((period) => {
-    if (period === "За сегодня") {
-      return elapsedMs <= oneDayMs;
-    }
-
-    if (period === "За 3 дня") {
-      return elapsedMs <= oneDayMs * 3;
-    }
-
     if (period === "За неделю") {
       return elapsedMs <= oneDayMs * 7;
+    }
+
+    if (period === "За месяц") {
+      return elapsedMs <= oneDayMs * 30;
     }
 
     return false;
@@ -180,6 +200,10 @@ function resolveThemeRole(role: string | null) {
   }
 
   return "applicant";
+}
+
+function easeOutQuad(value: number) {
+  return 1 - (1 - value) * (1 - value);
 }
 
 export function FavoritesPage() {
@@ -357,6 +381,104 @@ export function FavoritesPage() {
     };
   }, [isFilterOpen, isSortOpen]);
 
+  useEffect(() => {
+    if (!isFilterOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const filtersElement = filtersRef.current;
+      if (!filtersElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = filtersElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isFilterOpen]);
+
+  useEffect(() => {
+    if (!isSortOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const sortingElement = sortingRef.current;
+      if (!sortingElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = sortingElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isSortOpen]);
+
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
   const isFavoritesLoading =
     opportunitiesQuery.isPending ||
@@ -417,7 +539,7 @@ export function FavoritesPage() {
     const normalizedEmployment = appliedEmployment.map(normalizeEmploymentOption);
 
     return favoriteOpportunities.filter((opportunity) => {
-      if (!matchesOpportunitySearch(opportunity, normalizedSearch)) {
+      if (!matchesFavoritesSearch(opportunity, normalizedSearch)) {
         return false;
       }
 
@@ -425,45 +547,8 @@ export function FavoritesPage() {
         return false;
       }
 
-      if (normalizedLevels.length > 0 && !normalizedLevels.includes(normalizeLevelOption(opportunity.levelLabel))) {
-        return false;
-      }
-
-      if (normalizedFormats.length > 0 && !normalizedFormats.includes(opportunity.format)) {
-        return false;
-      }
-
-      if (
-        normalizedEmployment.length > 0 &&
-        !normalizedEmployment.includes(normalizeEmploymentOption(opportunity.employmentLabel))
-      ) {
-        return false;
-      }
-
       if (!matchesPublicationPeriod(opportunity.publishedAt, appliedPublicationPeriods)) {
         return false;
-      }
-
-      if (
-        appliedCompanyOptions.includes("Только верифицированные компании") &&
-        !opportunity.companyVerified
-      ) {
-        return false;
-      }
-
-      if (
-        appliedCompanyOptions.includes("Только с рейтингом 4,5 и выше") &&
-        (opportunity.companyRating ?? 0) < 4.5
-      ) {
-        return false;
-      }
-
-      if (appliedTags.length > 0) {
-        const normalizedTags = opportunity.tags.map((tag) => normalizeFilterText(tag));
-        const hasMatchingTag = appliedTags.some((tag) => normalizedTags.includes(normalizeFilterText(tag)));
-        if (!hasMatchingTag) {
-          return false;
-        }
       }
 
       return true;
@@ -476,7 +561,6 @@ export function FavoritesPage() {
     appliedLevels,
     appliedPublicationPeriods,
     appliedSearch,
-    appliedTags,
     favoriteOpportunities,
   ]);
 
@@ -540,12 +624,7 @@ export function FavoritesPage() {
 
   const applyFilters = () => {
     setAppliedKinds(selectedKinds);
-    setAppliedLevels(selectedLevels);
-    setAppliedFormats(selectedFormats);
-    setAppliedEmployment(selectedEmployment);
     setAppliedPublicationPeriods(selectedPublicationPeriods);
-    setAppliedCompanyOptions(selectedCompanyOptions);
-    setAppliedTags(selectedTags);
     setIsFilterOpen(false);
   };
 
@@ -603,11 +682,7 @@ export function FavoritesPage() {
               {opportunityCategoryLinks.map((item) => (
                 <Link
                   key={item.value}
-                  to={{
-                    pathname: "/",
-                    search: item.value === "all" ? "" : `?category=${item.value}`,
-                    hash: "#opportunity-map",
-                  }}
+                  to={buildOpportunityExplorerRoute(item.value)}
                   className="header__category-link"
                 >
                   {item.label}
@@ -675,13 +750,28 @@ export function FavoritesPage() {
                   setIsFilterOpen((current) => !current);
                 }}
               >
-                <span className="favorites-page__icon favorites-page__icon--filter" aria-hidden="true" />
+                <span className="favorites-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isFilterOpen
+                        ? "favorites-page__icon favorites-page__icon--filter favorites-page__icon--hidden"
+                        : "favorites-page__icon favorites-page__icon--filter"
+                    }
+                  />
+                  <span
+                    className={
+                      isFilterOpen
+                        ? "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--visible"
+                        : "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isFilterOpen ? (
-                <div className="favorites-page__popover">
+                <div className="favorites-page__popover favorites-page__popover--filters">
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
                       <h2 className="favorites-page__popover-title">Фильтры</h2>
                       <button type="button" className="favorites-page__popover-reset" onClick={resetFilters}>
                         Сбросить
@@ -690,18 +780,13 @@ export function FavoritesPage() {
                   </div>
 
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Тип возможностей</h3>
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">Тип</h3>
+                      <button type="button" className="favorites-page__popover-reset" onClick={() => setSelectedKinds(["all"])}>
+                        Сбросить
+                      </button>
                     </div>
-                    <div className="favorites-page__option-list">
-                      <label className="favorites-page__option">
-                        <Checkbox
-                          checked={selectedKinds.includes("all")}
-                          onChange={() => toggleKindValue("all", setSelectedKinds, selectedKinds)}
-                          variant="secondary"
-                        />
-                        <span>Все</span>
-                      </label>
+                    <div className="favorites-page__option-list favorites-page__option-list--grid">
                       <label className="favorites-page__option">
                         <Checkbox
                           checked={selectedKinds.includes("vacancy")}
@@ -738,139 +823,26 @@ export function FavoritesPage() {
                   </div>
 
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Уровень</h3>
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">Дата добавления</h3>
+                      <button type="button" className="favorites-page__popover-reset" onClick={() => setSelectedPublicationPeriods([ALL_TIME_PUBLICATION_OPTION])}>
+                        Сбросить
+                      </button>
                     </div>
-                    <div className="favorites-page__option-list">
-                      {levelOptions.map((option) => (
-                        <label key={option} className="favorites-page__option">
-                          <Checkbox
-                            checked={selectedLevels.includes(option)}
-                            onChange={() => toggleMultiValue(option, selectedLevels, setSelectedLevels)}
-                            variant="secondary"
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Формат</h3>
-                    </div>
-                    <div className="favorites-page__option-list">
-                      {formatOptions.map((option) => (
-                        <label key={option} className="favorites-page__option">
-                          <Checkbox
-                            checked={selectedFormats.includes(option)}
-                            onChange={() => toggleMultiValue(option, selectedFormats, setSelectedFormats)}
-                            variant="secondary"
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Занятость</h3>
-                    </div>
-                    <div className="favorites-page__option-list">
-                      {employmentOptions.map((option) => (
-                        <label key={option} className="favorites-page__option">
-                          <Checkbox
-                            checked={selectedEmployment.includes(option)}
-                            onChange={() => toggleMultiValue(option, selectedEmployment, setSelectedEmployment)}
-                            variant="secondary"
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Дата публикации</h3>
-                    </div>
-                    <div className="favorites-page__option-list">
+                    <div className="favorites-page__option-list favorites-page__option-list--grid">
                       {publicationOptions.map((option) => (
                         <label key={option} className="favorites-page__option">
-                          <Checkbox
+                          <Radio
                             checked={selectedPublicationPeriods.includes(option)}
-                            onChange={() => {
-                              if (option === ALL_TIME_PUBLICATION_OPTION) {
-                                setSelectedPublicationPeriods([ALL_TIME_PUBLICATION_OPTION]);
-                                return;
-                              }
-
-                              const nextValues = selectedPublicationPeriods.includes(option)
-                                ? selectedPublicationPeriods.filter(
-                                  (item) =>
-                                    item !== option &&
-                                    item !== ALL_TIME_PUBLICATION_OPTION &&
-                                    item !== "За все время",
-                                )
-                                : [
-                                  ...selectedPublicationPeriods.filter(
-                                    (item) =>
-                                      item !== ALL_TIME_PUBLICATION_OPTION &&
-                                      item !== "За все время",
-                                  ),
-                                  option,
-                                ];
-
-                              setSelectedPublicationPeriods(
-                                nextValues.length > 0 ? nextValues : [ALL_TIME_PUBLICATION_OPTION],
-                              );
-                            }}
+                            onChange={() => setSelectedPublicationPeriods([option])}
                             variant="secondary"
+                            name="favorites-publication-period"
                           />
                           <span>{option}</span>
                         </label>
                       ))}
                     </div>
                   </div>
-
-                  <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Компания</h3>
-                    </div>
-                    <div className="favorites-page__option-list">
-                      {companyOptions.map((option) => (
-                        <label key={option} className="favorites-page__option">
-                          <Checkbox
-                            checked={selectedCompanyOptions.includes(option)}
-                            onChange={() => toggleMultiValue(option, selectedCompanyOptions, setSelectedCompanyOptions)}
-                            variant="secondary"
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {tagOptions.length > 0 ? (
-                    <div className="favorites-page__popover-section">
-                      <div className="favorites-page__popover-head">
-                        <h3 className="favorites-page__popover-group-title">Теги</h3>
-                      </div>
-                      <div className="favorites-page__option-list favorites-page__option-list--tags">
-                        {tagOptions.map((option) => (
-                          <label key={option} className="favorites-page__option">
-                            <Checkbox
-                              checked={selectedTags.includes(option)}
-                              onChange={() => toggleMultiValue(option, selectedTags, setSelectedTags)}
-                              variant="secondary"
-                            />
-                            <span>{option}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
 
                   <div className="favorites-page__popover-footer">
                     <Button type="button" variant="secondary" size="sm" fullWidth onClick={applyFilters}>
@@ -895,20 +867,30 @@ export function FavoritesPage() {
                   setIsSortOpen((current) => !current);
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  className={
-                    appliedSortDirection === "desc"
-                      ? "favorites-page__icon favorites-page__icon--sorting"
-                      : "favorites-page__icon favorites-page__icon--sorting favorites-page__icon--ascending"
-                  }
-                />
+                <span className="favorites-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isSortOpen
+                        ? `favorites-page__icon ${appliedSortDirection === "desc" ? "favorites-page__icon--sorting" : "favorites-page__icon--sorting favorites-page__icon--ascending"} favorites-page__icon--hidden`
+                        : appliedSortDirection === "desc"
+                          ? "favorites-page__icon favorites-page__icon--sorting"
+                          : "favorites-page__icon favorites-page__icon--sorting favorites-page__icon--ascending"
+                    }
+                  />
+                  <span
+                    className={
+                      isSortOpen
+                        ? "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--visible"
+                        : "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isSortOpen ? (
                 <div className="favorites-page__popover favorites-page__popover--compact">
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
                       <h2 className="favorites-page__popover-title">Сортировка</h2>
                       <button type="button" className="favorites-page__popover-reset" onClick={resetSorting}>
                         Сбросить
@@ -917,37 +899,85 @@ export function FavoritesPage() {
                   </div>
 
                   <div className="favorites-page__popover-section">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">По названию</h3>
+                      <button
+                        type="button"
+                        className="favorites-page__popover-reset"
+                        onClick={() => {
+                          setSelectedSortField("title");
+                          setSelectedSortDirection("asc");
+                        }}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
                     <div className="favorites-page__option-list">
-                      {sortFieldOptions.map((option) => (
-                        <label key={option.value} className="favorites-page__option">
-                          <Radio
-                            checked={selectedSortField === option.value}
-                            onChange={() => setSelectedSortField(option.value)}
-                            variant="secondary"
-                          />
-                          <span>{option.label}</span>
-                        </label>
-                      ))}
+                      <label className="favorites-page__option">
+                        <Radio
+                          checked={selectedSortField === "title" && selectedSortDirection === "asc"}
+                          onChange={() => {
+                            setSelectedSortField("title");
+                            setSelectedSortDirection("asc");
+                          }}
+                          variant="secondary"
+                          name="favorites-sort-title"
+                        />
+                        <span>А-Я</span>
+                      </label>
+                      <label className="favorites-page__option">
+                        <Radio
+                          checked={selectedSortField === "title" && selectedSortDirection === "desc"}
+                          onChange={() => {
+                            setSelectedSortField("title");
+                            setSelectedSortDirection("desc");
+                          }}
+                          variant="secondary"
+                          name="favorites-sort-title"
+                        />
+                        <span>Я-А</span>
+                      </label>
                     </div>
                   </div>
 
                   <div className="favorites-page__popover-section">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">По дате добавления</h3>
+                      <button
+                        type="button"
+                        className="favorites-page__popover-reset"
+                        onClick={() => {
+                          setSelectedSortField("published");
+                          setSelectedSortDirection("desc");
+                        }}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
                     <div className="favorites-page__option-list">
                       <label className="favorites-page__option">
                         <Radio
-                          checked={selectedSortDirection === "asc"}
-                          onChange={() => setSelectedSortDirection("asc")}
+                          checked={selectedSortField === "published" && selectedSortDirection === "desc"}
+                          onChange={() => {
+                            setSelectedSortField("published");
+                            setSelectedSortDirection("desc");
+                          }}
                           variant="secondary"
+                          name="favorites-sort-date"
                         />
-                        <span>{selectedSortField === "rating" || selectedSortField === "published" ? "По возрастанию" : "А-Я"}</span>
+                        <span>Сначала новые</span>
                       </label>
                       <label className="favorites-page__option">
                         <Radio
-                          checked={selectedSortDirection === "desc"}
-                          onChange={() => setSelectedSortDirection("desc")}
+                          checked={selectedSortField === "published" && selectedSortDirection === "asc"}
+                          onChange={() => {
+                            setSelectedSortField("published");
+                            setSelectedSortDirection("asc");
+                          }}
                           variant="secondary"
+                          name="favorites-sort-date"
                         />
-                        <span>{selectedSortField === "rating" || selectedSortField === "published" ? "По убыванию" : "Я-А"}</span>
+                        <span>Сначала старые</span>
                       </label>
                     </div>
                   </div>
@@ -957,7 +987,7 @@ export function FavoritesPage() {
                       Показать результаты
                     </Button>
                     <Button type="button" variant="secondary-outline" size="sm" fullWidth onClick={resetSorting}>
-                      Сбросить сортировку
+                      Сбросить параметры
                     </Button>
                   </div>
                 </div>
@@ -993,16 +1023,6 @@ export function FavoritesPage() {
           <section className="favorites-page__empty">
             <img src={sadSearchIcon} alt="" aria-hidden="true" className="favorites-page__empty-icon" />
             <h2 className="favorites-page__empty-title">Ничего не найдено</h2>
-            <div className="favorites-page__empty-actions">
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() => navigate("/#opportunity-map")}
-              >
-                Перейти к возможностям
-              </Button>
-            </div>
           </section>
         )}
       </Container>

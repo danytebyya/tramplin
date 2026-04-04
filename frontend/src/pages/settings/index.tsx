@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, NavLink, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, NavLink, NavigateFunction, NavigateOptions, useNavigate, useSearchParams } from "react-router-dom";
 
 import deleteIcon from "../../assets/icons/delete.svg";
 import editIcon from "../../assets/icons/edit.svg";
@@ -47,6 +47,7 @@ import {
 import { NotificationMenu } from "../../features/notifications";
 import {
   getModerationSettingsRequest,
+  updateCuratorRequest,
   updateModerationSettingsRequest,
 } from "../../features/moderation";
 import {
@@ -565,10 +566,17 @@ export function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [moderationProfileFullName, setModerationProfileFullName] = useState("");
+  const [moderationProfileEmail, setModerationProfileEmail] = useState("");
+  const [moderationProfileError, setModerationProfileError] = useState<string | null>(null);
+  const [moderationProfileSuccess, setModerationProfileSuccess] = useState<string | null>(null);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [securitySuccess, setSecuritySuccess] = useState<string | null>(null);
   const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
   const [deleteAccountError, setDeleteAccountError] = useState<string | null>(null);
+  const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
+  const [isRevokeOtherSessionsModalOpen, setIsRevokeOtherSessionsModalOpen] = useState(false);
+  const [leaveConfirmError, setLeaveConfirmError] = useState<string | null>(null);
   const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -580,6 +588,7 @@ export function SettingsPage() {
   );
   const [staffInviteAcceptError, setStaffInviteAcceptError] = useState<string | null>(null);
   const autoAcceptedInviteTokenRef = useRef<string | null>(null);
+  const pendingNavigationActionRef = useRef<(() => void) | null>(null);
 
   const inviteToken = searchParams.get("invite_token");
   const inviteMode = searchParams.get("mode");
@@ -713,6 +722,7 @@ export function SettingsPage() {
   const revokeOtherSessionsMutation = useMutation({
     mutationFn: revokeOtherSessionsRequest,
     onSuccess: () => {
+      setIsRevokeOtherSessionsModalOpen(false);
       queryClient.setQueryData<AuthSessionListResponse | undefined>(["auth", "sessions"], (current) => {
         if (!current?.data?.items) {
           return current;
@@ -771,6 +781,48 @@ export function SettingsPage() {
           },
         };
       });
+    },
+  });
+  const updateModerationProfileMutation = useMutation({
+    mutationFn: async ({
+      curatorId,
+      payload,
+    }: {
+      curatorId: string;
+      payload: {
+        full_name: string;
+        email: string;
+        role: "junior" | "curator" | "admin";
+      };
+    }) => updateCuratorRequest(curatorId, payload),
+    onMutate: () => {
+      setModerationProfileError(null);
+      setModerationProfileSuccess(null);
+    },
+    onSuccess: (_response, variables) => {
+      queryClient.setQueryData<MeResponse | undefined>(["auth", "me"], (current) => {
+        if (!current?.data?.user) {
+          return current;
+        }
+
+        return {
+          ...current,
+          data: {
+            ...current.data,
+            user: {
+              ...current.data.user,
+              display_name: variables.payload.full_name,
+              email: variables.payload.email,
+            },
+          },
+        };
+      });
+      setModerationProfileSuccess("Профиль сохранён.");
+    },
+    onError: (error: any) => {
+      setModerationProfileError(
+        error?.response?.data?.error?.message ?? "Не удалось сохранить профиль. Попробуйте еще раз.",
+      );
     },
   });
   const changePasswordMutation = useMutation({
@@ -1017,6 +1069,15 @@ export function SettingsPage() {
   }, [isApplicant, user?.applicant_profile?.profile_visibility, user?.applicant_profile?.show_resume]);
 
   useEffect(() => {
+    if (!isModerationRole) {
+      return;
+    }
+
+    setModerationProfileFullName(user?.display_name?.trim() ?? "");
+    setModerationProfileEmail(user?.email?.trim() ?? "");
+  }, [isModerationRole, user?.display_name, user?.email]);
+
+  useEffect(() => {
     const settings = moderationSettingsQuery.data?.data;
     if (!settings) {
       return;
@@ -1071,22 +1132,28 @@ export function SettingsPage() {
     });
   };
 
-  const handleChangePassword = () => {
+  const getPasswordValidationError = () => {
     if (!currentPassword.trim()) {
-      setSecuritySuccess(null);
-      setSecurityError("Введите текущий пароль");
-      return;
+      return "Введите текущий пароль";
     }
 
     if (!newPassword.trim()) {
-      setSecuritySuccess(null);
-      setSecurityError("Введите новый пароль");
-      return;
+      return "Введите новый пароль";
     }
 
     if (newPassword !== confirmPassword) {
+      return "Новый пароль и подтверждение не совпадают";
+    }
+
+    return null;
+  };
+
+  const handleChangePassword = () => {
+    const validationError = getPasswordValidationError();
+
+    if (validationError) {
       setSecuritySuccess(null);
-      setSecurityError("Новый пароль и подтверждение не совпадают");
+      setSecurityError(validationError);
       return;
     }
 
@@ -1114,6 +1181,38 @@ export function SettingsPage() {
     updateApplicantPrivacyMutation.mutate({
       profile_visibility: profileVisibility,
       show_resume: isResumeVisible,
+    });
+  };
+
+  const handleModerationProfileSave = () => {
+    const curatorId = user?.id;
+    const normalizedFullName = moderationProfileFullName.trim();
+    const normalizedEmail = moderationProfileEmail.trim();
+
+    setModerationProfileSuccess(null);
+
+    if (!curatorId) {
+      setModerationProfileError("Не удалось определить профиль пользователя.");
+      return;
+    }
+
+    if (!normalizedFullName) {
+      setModerationProfileError("Введите ФИО.");
+      return;
+    }
+
+    if (!normalizedEmail) {
+      setModerationProfileError("Введите E-mail.");
+      return;
+    }
+
+    updateModerationProfileMutation.mutate({
+      curatorId,
+      payload: {
+        full_name: normalizedFullName,
+        email: normalizedEmail,
+        role: role === "admin" || role === "curator" || role === "junior" ? role : "curator",
+      },
     });
   };
 
@@ -1268,6 +1367,72 @@ export function SettingsPage() {
       ? "Введите корректный email"
       : null;
   const resolvedInviteEmailError = inviteEmailError ?? inviteEmailServerError;
+  const initialEmailNotifications = useMemo(
+    () => buildNotificationPreferences(notificationPreferencesQuery.data?.data?.email_notifications, role),
+    [notificationPreferencesQuery.data?.data?.email_notifications, role],
+  );
+  const initialPushNotifications = useMemo(
+    () => buildNotificationPreferences(notificationPreferencesQuery.data?.data?.push_notifications, role),
+    [notificationPreferencesQuery.data?.data?.push_notifications, role],
+  );
+  const hasUnsavedNotificationPreferencesChanges =
+    JSON.stringify(emailNotifications) !== JSON.stringify(initialEmailNotifications) ||
+    JSON.stringify(pushNotifications) !== JSON.stringify(initialPushNotifications);
+  const initialApplicantProfileVisibility =
+    user?.applicant_profile?.profile_visibility ?? DEFAULT_APPLICANT_PRIVACY_SETTINGS.profileVisibility;
+  const initialApplicantResumeVisibility =
+    user?.applicant_profile?.show_resume ?? DEFAULT_APPLICANT_PRIVACY_SETTINGS.showResume;
+  const hasUnsavedApplicantPrivacyChanges =
+    isApplicant &&
+    (
+      profileVisibility !== initialApplicantProfileVisibility ||
+      isResumeVisible !== initialApplicantResumeVisibility
+    );
+  const hasUnsavedModerationSettingsChanges =
+    isModerationRole &&
+    (
+      vacancyReviewHours !== String(moderationSettingsQuery.data?.data?.vacancy_review_hours ?? 24) ||
+      internshipReviewHours !== String(moderationSettingsQuery.data?.data?.internship_review_hours ?? 24) ||
+      eventReviewHours !== String(moderationSettingsQuery.data?.data?.event_review_hours ?? 24) ||
+      mentorshipReviewHours !== String(moderationSettingsQuery.data?.data?.mentorship_review_hours ?? 24)
+    );
+  const hasUnsavedModerationProfileChanges =
+    isModerationRole &&
+    (
+      moderationProfileFullName !== (user?.display_name?.trim() ?? "") ||
+      moderationProfileEmail !== (user?.email?.trim() ?? "")
+    );
+  const hasUnsavedSecurityChanges =
+    currentPassword.length > 0 || newPassword.length > 0 || confirmPassword.length > 0;
+  const hasUnsavedSettingsChanges =
+    hasUnsavedModerationProfileChanges ||
+    hasUnsavedNotificationPreferencesChanges ||
+    hasUnsavedApplicantPrivacyChanges ||
+    hasUnsavedModerationSettingsChanges ||
+    hasUnsavedSecurityChanges;
+  const isLeaveSavePending =
+    updateModerationProfileMutation.isPending ||
+    updateNotificationPreferencesMutation.isPending ||
+    updateApplicantPrivacyMutation.isPending ||
+    changePasswordMutation.isPending ||
+    updateModerationSettingsMutation.isPending;
+
+  useEffect(() => {
+    if (!hasUnsavedSettingsChanges) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedSettingsChanges]);
 
   const syncActiveEmployerSession = async () => {
     if (!activeEmployerContextId) {
@@ -1329,8 +1494,220 @@ export function SettingsPage() {
     setIsDeleteAccountModalOpen(false);
   };
 
+  const openRevokeOtherSessionsModal = () => {
+    if (isSessionActionPending || !hasOtherSessions) {
+      return;
+    }
+
+    setIsRevokeOtherSessionsModalOpen(true);
+  };
+
+  const closeRevokeOtherSessionsModal = () => {
+    if (revokeOtherSessionsMutation.isPending) {
+      return;
+    }
+
+    setIsRevokeOtherSessionsModalOpen(false);
+  };
+
+  const handleConfirmRevokeOtherSessions = () => {
+    revokeOtherSessionsMutation.mutate();
+  };
+
   const handleDeleteAccount = () => {
     deleteCurrentUserMutation.mutate();
+  };
+
+  const attemptGuardedNavigation = useCallback(
+    (action: () => void) => {
+      if (!hasUnsavedSettingsChanges) {
+        action();
+        return;
+      }
+
+      setLeaveConfirmError(null);
+      pendingNavigationActionRef.current = action;
+      setIsLeaveConfirmModalOpen(true);
+    },
+    [hasUnsavedSettingsChanges],
+  );
+
+  const guardedNavigate = useCallback<NavigateFunction>(
+    ((to: Parameters<NavigateFunction>[0], options?: NavigateOptions) => {
+      attemptGuardedNavigation(() => {
+        if (typeof to === "number") {
+          navigate(to);
+          return;
+        }
+
+        navigate(to, options);
+      });
+    }) as NavigateFunction,
+    [attemptGuardedNavigation, navigate],
+  );
+
+  useEffect(() => {
+    if (!hasUnsavedSettingsChanges) {
+      return;
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) {
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+
+      if (!anchor) {
+        return;
+      }
+
+      if (anchor.target && anchor.target !== "_self") {
+        return;
+      }
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+        return;
+      }
+
+      const url = new URL(anchor.href, window.location.origin);
+
+      if (url.origin !== window.location.origin) {
+        return;
+      }
+
+      const nextPath = `${url.pathname}${url.search}${url.hash}`;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+      if (nextPath === currentPath) {
+        return;
+      }
+
+      event.preventDefault();
+      attemptGuardedNavigation(() => navigate(nextPath));
+    };
+
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [attemptGuardedNavigation, hasUnsavedSettingsChanges, navigate]);
+
+  const saveSettingsChanges = async () => {
+    setLeaveConfirmError(null);
+
+    if (hasUnsavedSecurityChanges) {
+      const validationError = getPasswordValidationError();
+
+      if (validationError) {
+        setSecuritySuccess(null);
+        setSecurityError(validationError);
+        setLeaveConfirmError(validationError);
+        return false;
+      }
+    }
+
+    try {
+      if (hasUnsavedModerationProfileChanges) {
+        const curatorId = user?.id;
+        const normalizedFullName = moderationProfileFullName.trim();
+        const normalizedEmail = moderationProfileEmail.trim();
+
+        if (!curatorId) {
+          setModerationProfileError("Не удалось определить профиль пользователя.");
+          setLeaveConfirmError("Не удалось определить профиль пользователя.");
+          return false;
+        }
+
+        if (!normalizedFullName) {
+          setModerationProfileError("Введите ФИО.");
+          setLeaveConfirmError("Введите ФИО.");
+          return false;
+        }
+
+        if (!normalizedEmail) {
+          setModerationProfileError("Введите E-mail.");
+          setLeaveConfirmError("Введите E-mail.");
+          return false;
+        }
+
+        await updateModerationProfileMutation.mutateAsync({
+          curatorId,
+          payload: {
+            full_name: normalizedFullName,
+            email: normalizedEmail,
+            role: role === "admin" || role === "curator" || role === "junior" ? role : "curator",
+          },
+        });
+      }
+
+      if (hasUnsavedNotificationPreferencesChanges) {
+        await updateNotificationPreferencesMutation.mutateAsync({
+          email_notifications: mapNotificationPreferencesToPayload(emailNotifications, role),
+          push_notifications: mapNotificationPreferencesToPayload(pushNotifications, role),
+        });
+      }
+
+      if (hasUnsavedApplicantPrivacyChanges) {
+        await updateApplicantPrivacyMutation.mutateAsync({
+          profile_visibility: profileVisibility,
+          show_resume: isResumeVisible,
+        });
+      }
+
+      if (hasUnsavedModerationSettingsChanges) {
+        await updateModerationSettingsMutation.mutateAsync({
+          vacancy_review_hours: Math.max(Number(vacancyReviewHours) || 0, 1),
+          internship_review_hours: Math.max(Number(internshipReviewHours) || 0, 1),
+          event_review_hours: Math.max(Number(eventReviewHours) || 0, 1),
+          mentorship_review_hours: Math.max(Number(mentorshipReviewHours) || 0, 1),
+        });
+      }
+
+      if (hasUnsavedSecurityChanges) {
+        await changePasswordMutation.mutateAsync({
+          current_password: currentPassword,
+          new_password: newPassword,
+        });
+      }
+
+      return true;
+    } catch (error: any) {
+      setLeaveConfirmError(
+        error?.response?.data?.error?.message ?? "Не удалось сохранить изменения. Попробуйте еще раз.",
+      );
+      return false;
+    }
+  };
+
+  const handleCloseLeaveConfirmModal = () => {
+    if (isLeaveSavePending) {
+      return;
+    }
+
+    setLeaveConfirmError(null);
+    setIsLeaveConfirmModalOpen(false);
+    pendingNavigationActionRef.current = null;
+  };
+
+  const handleSaveAndLeave = async () => {
+    const isSaved = await saveSettingsChanges();
+
+    if (!isSaved) {
+      return;
+    }
+
+    setIsLeaveConfirmModalOpen(false);
+    const pendingAction = pendingNavigationActionRef.current;
+    pendingNavigationActionRef.current = null;
+    pendingAction?.();
   };
 
   useEffect(() => {
@@ -1373,10 +1750,10 @@ export function SettingsPage() {
   ].join(" ");
 
   const profileMenuItems = isModerationRole
-    ? buildModerationProfileMenuItems()
+    ? buildModerationProfileMenuItems(guardedNavigate)
     : role === "employer"
-      ? buildEmployerProfileMenuItems(navigate, employerAccess)
-      : buildApplicantProfileMenuItems(navigate);
+      ? buildEmployerProfileMenuItems(guardedNavigate, employerAccess)
+      : buildApplicantProfileMenuItems(guardedNavigate);
   const handleCityChange = (city: string | CitySelection) => {
     const nextCity = typeof city === "string" ? city : city.name;
     setSelectedCity(nextCity);
@@ -1393,7 +1770,7 @@ export function SettingsPage() {
     if (role === "employer") {
       return (
         <ProfileTabs
-          navigate={navigate}
+          navigate={guardedNavigate}
           audience="employer"
           current="settings"
           employerAccess={employerAccess}
@@ -1407,7 +1784,7 @@ export function SettingsPage() {
 
     return (
       <ProfileTabs
-        navigate={navigate}
+        navigate={guardedNavigate}
         audience="applicant"
         current="settings"
         tabsClassName="settings-page__tabs"
@@ -1608,6 +1985,7 @@ export function SettingsPage() {
                         <SettingsSkeleton className="settings-page__skeleton--session-line" />
                         <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
                         <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                        <SettingsSkeleton className="settings-page__skeleton--session-action" />
                       </div>
                     </div>
                   ))
@@ -1646,7 +2024,7 @@ export function SettingsPage() {
                   size="md"
                   loading={revokeOtherSessionsMutation.isPending}
                   disabled={isSessionActionPending}
-                  onClick={() => revokeOtherSessionsMutation.mutate()}
+                  onClick={openRevokeOtherSessionsModal}
                 >
                   Завершить все другие сессии
                 </Button>
@@ -1747,7 +2125,14 @@ export function SettingsPage() {
                     ? Array.from({ length: 2 }, (_, index) => (
                         <article key={`staff-skeleton-${index}`} className="settings-page__staff-card">
                           <div className="settings-page__staff-card-summary">
-                            <SettingsSkeleton className="settings-page__skeleton--session-line" />
+                            <div className="settings-page__staff-card-title-group">
+                              <SettingsSkeleton className="settings-page__skeleton--staff-title" />
+                              <SettingsSkeleton className="settings-page__skeleton--staff-subtitle" />
+                            </div>
+                            <div className="settings-page__staff-actions" aria-hidden="true">
+                              <SettingsSkeleton className="settings-page__skeleton--icon-button" />
+                              <SettingsSkeleton className="settings-page__skeleton--icon-button" />
+                            </div>
                           </div>
                         </article>
                       ))
@@ -2327,6 +2712,62 @@ export function SettingsPage() {
   const renderModerationLayout = () => {
     return (
       <div className="settings-page__sections">
+        <section className="settings-page__card">
+          <div className="settings-page__card-header">
+            <h2 className="settings-page__card-title">Профиль</h2>
+          </div>
+          <div className="settings-page__card-body settings-page__card-body--profile">
+            <label className="settings-page__field">
+              <span className="settings-page__field-label">ФИО</span>
+              <Input
+                className="input--sm"
+                value={moderationProfileFullName}
+                onChange={(event) => {
+                  setModerationProfileFullName(event.target.value);
+                  setModerationProfileError(null);
+                  setModerationProfileSuccess(null);
+                }}
+                placeholder="Введите ФИО"
+              />
+            </label>
+            <label className="settings-page__field">
+              <span className="settings-page__field-label">E-mail</span>
+              <Input
+                className="input--sm"
+                type="email"
+                value={moderationProfileEmail}
+                onChange={(event) => {
+                  setModerationProfileEmail(event.target.value);
+                  setModerationProfileError(null);
+                  setModerationProfileSuccess(null);
+                }}
+                placeholder="Введите E-mail"
+              />
+            </label>
+          </div>
+          <div className="settings-page__card-footer">
+            <Button
+              type="button"
+              variant={actionVariant}
+              size="md"
+              loading={updateModerationProfileMutation.isPending}
+              onClick={handleModerationProfileSave}
+            >
+              Сохранить изменения
+            </Button>
+            {moderationProfileError ? (
+              <p className="settings-page__form-message settings-page__form-message--error">
+                {moderationProfileError}
+              </p>
+            ) : null}
+            {moderationProfileSuccess ? (
+              <p className="settings-page__form-message settings-page__form-message--success">
+                {moderationProfileSuccess}
+              </p>
+            ) : null}
+          </div>
+        </section>
+
         {renderSecurityPanel("card")}
 
         <section className="settings-page__card">
@@ -2391,6 +2832,7 @@ export function SettingsPage() {
                           <SettingsSkeleton className="settings-page__skeleton--session-line" />
                           <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
                           <SettingsSkeleton className="settings-page__skeleton--session-line settings-page__skeleton--session-line-short" />
+                          <SettingsSkeleton className="settings-page__skeleton--session-action" />
                         </div>
                       </div>
                     ))
@@ -2429,7 +2871,7 @@ export function SettingsPage() {
                     size="md"
                     loading={revokeOtherSessionsMutation.isPending}
                     disabled={isSessionActionPending}
-                    onClick={() => revokeOtherSessionsMutation.mutate()}
+                    onClick={openRevokeOtherSessionsModal}
                   >
                     Завершить все другие сессии
                   </Button>
@@ -2593,6 +3035,82 @@ export function SettingsPage() {
         isPending={deleteCurrentUserMutation.isPending}
         error={deleteAccountError}
       />
+
+      <Modal
+        title="Завершить другие сессии"
+        isOpen={isRevokeOtherSessionsModalOpen}
+        onClose={closeRevokeOtherSessionsModal}
+        size="small"
+        titleAccentColor={modalTitleAccentColor}
+      >
+        <div className="modal__body">
+          <p className="modal__text">
+            Будут завершены все активные сессии, кроме текущей на этом устройстве.
+          </p>
+          <div className="modal__actions">
+            <Button
+              type="button"
+              variant="cancel"
+              size="md"
+              onClick={closeRevokeOtherSessionsModal}
+              disabled={revokeOtherSessionsMutation.isPending}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              variant={actionVariant}
+              size="md"
+              onClick={handleConfirmRevokeOtherSessions}
+              loading={revokeOtherSessionsMutation.isPending}
+              disabled={revokeOtherSessionsMutation.isPending}
+            >
+              Завершить
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title="Несохраненные изменения"
+        isOpen={isLeaveConfirmModalOpen}
+        onClose={handleCloseLeaveConfirmModal}
+        size="small"
+        titleAccentColor={modalTitleAccentColor}
+        closeOnBackdrop={false}
+      >
+        <div className="modal__body">
+          <p className="modal__text">
+            Если перейти на другую страницу сейчас, все несохранённые данные сотрутся.
+          </p>
+          {leaveConfirmError ? (
+            <p className="modal__error settings-page__form-message settings-page__form-message--error">
+              {leaveConfirmError}
+            </p>
+          ) : null}
+          <div className="modal__actions">
+            <Button
+              type="button"
+              variant="cancel"
+              size="md"
+              onClick={handleCloseLeaveConfirmModal}
+              disabled={isLeaveSavePending}
+            >
+              Отменить
+            </Button>
+            <Button
+              type="button"
+              variant={actionVariant}
+              size="md"
+              onClick={() => void handleSaveAndLeave()}
+              loading={isLeaveSavePending}
+              disabled={isLeaveSavePending}
+            >
+              Сохранить и выйти
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Footer theme={themeRole} />
     </main>

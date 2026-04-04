@@ -1,5 +1,5 @@
-import { type ChangeEvent, type CSSProperties, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { type ChangeEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { NavigateFunction, NavigateOptions } from "react-router-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,8 +37,8 @@ import {
   OpportunityTagCatalogCategory,
   listOpportunityTagCatalogRequest,
 } from "../../features/opportunity/api";
-import { resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
-import { Badge, Button, Checkbox, Container, Input, Modal, ProfileTabs, Select } from "../../shared/ui";
+import { prepareAvatarFile, resolveAvatarIcon, resolveAvatarUrl } from "../../shared/lib";
+import { Badge, Button, Checkbox, Container, DateInput, Input, Modal, ProfileTabs, Select } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
 import "./seeker-dashboard.css";
@@ -395,6 +395,15 @@ function buildProfileFormState(user: SeekerUser | undefined, state: DashboardSta
 }
 
 function calculateProfileCompletion(state: DashboardState, formState: ProfileFormState) {
+  const hasAnyProfileLink =
+    state.profile.githubUrl.trim().length > 0 ||
+    state.profile.gitlabUrl.trim().length > 0 ||
+    state.profile.bitbucketUrl.trim().length > 0 ||
+    state.profile.linkedinUrl.trim().length > 0 ||
+    state.profile.portfolioUrl.trim().length > 0 ||
+    state.profile.habrUrl.trim().length > 0 ||
+    state.profile.resumeUrl.trim().length > 0;
+
   const weightedFields = [
     { filled: formState.fullName.trim().length > 0, weight: 1 },
     { filled: formState.email.trim().length > 0, weight: 1 },
@@ -407,13 +416,7 @@ function calculateProfileCompletion(state: DashboardState, formState: ProfileFor
     { filled: state.profile.hardSkills.length > 0, weight: 2 },
     { filled: state.profile.softSkills.length > 0, weight: 2 },
     { filled: state.profile.languages.length > 0, weight: 2 },
-    { filled: state.profile.githubUrl.trim().length > 0, weight: 1 },
-    { filled: state.profile.gitlabUrl.trim().length > 0, weight: 1 },
-    { filled: state.profile.bitbucketUrl.trim().length > 0, weight: 1 },
-    { filled: state.profile.linkedinUrl.trim().length > 0, weight: 1 },
-    { filled: state.profile.portfolioUrl.trim().length > 0, weight: 1 },
-    { filled: state.profile.habrUrl.trim().length > 0, weight: 1 },
-    { filled: state.profile.resumeUrl.trim().length > 0, weight: 1 },
+    { filled: hasAnyProfileLink, weight: 1 },
     { filled: state.profile.desiredSalaryFrom.trim().length > 0, weight: 2 },
     { filled: state.preferredCity.trim().length > 0, weight: 1 },
     { filled: state.profile.preferredLocation.trim().length > 0, weight: 2 },
@@ -429,6 +432,35 @@ function calculateProfileCompletion(state: DashboardState, formState: ProfileFor
     0,
   );
   return Math.round((filledWeight / totalWeight) * 100);
+}
+
+function hasProjectDraftContent(draft: ProjectDraft) {
+  return (
+    draft.title.trim().length > 0 ||
+    draft.description.trim().length > 0 ||
+    draft.technologies.trim().length > 0 ||
+    draft.periodLabel.trim().length > 0 ||
+    draft.roleName.trim().length > 0 ||
+    draft.repositoryUrl.trim().length > 0
+  );
+}
+
+function hasAchievementDraftContent(draft: AchievementDraft) {
+  return (
+    draft.title.trim().length > 0 ||
+    draft.eventName.trim().length > 0 ||
+    draft.projectName.trim().length > 0 ||
+    draft.award.trim().length > 0
+  );
+}
+
+function hasCertificateDraftContent(draft: CertificateDraft) {
+  return (
+    draft.title.trim().length > 0 ||
+    draft.organizationName.trim().length > 0 ||
+    draft.issuedAt.trim().length > 0 ||
+    draft.credentialUrl.trim().length > 0
+  );
 }
 
 function buildPayload(state: DashboardState) {
@@ -533,44 +565,11 @@ function SkillTagSelector({
   onSelect,
   onRemove,
 }: SkillTagSelectorProps) {
-  const searchRef = useRef<HTMLDivElement | null>(null);
-  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setDropdownStyle(null);
-      return;
-    }
-
-    const updateDropdownPosition = () => {
-      const rect = searchRef.current?.getBoundingClientRect();
-      if (!rect) {
-        return;
-      }
-
-      setDropdownStyle({
-        position: "fixed",
-        top: rect.bottom + 8,
-        left: rect.left,
-        width: rect.width,
-      });
-    };
-
-    updateDropdownPosition();
-    window.addEventListener("resize", updateDropdownPosition);
-    window.addEventListener("scroll", updateDropdownPosition, true);
-
-    return () => {
-      window.removeEventListener("resize", updateDropdownPosition);
-      window.removeEventListener("scroll", updateDropdownPosition, true);
-    };
-  }, [isOpen, options.length, query, selected.length]);
-
   return (
     <label ref={fieldRef} className="seeker-dashboard__field seeker-dashboard__field--skill-select">
       <span className="seeker-dashboard__field-label">{label}</span>
       <div className="seeker-dashboard__skill-selector">
-        <div ref={searchRef} className="seeker-dashboard__skill-search">
+        <div className="seeker-dashboard__skill-search">
           <Input
             className="input--secondary input--sm"
             value={query}
@@ -596,37 +595,29 @@ function SkillTagSelector({
             ))}
           </div>
         ) : null}
-        {isOpen && dropdownStyle && typeof document !== "undefined"
-          ? createPortal(
-              <div
-                className="seeker-dashboard__skill-dropdown seeker-dashboard__skill-dropdown--portal"
-                style={dropdownStyle}
-                role="listbox"
-                aria-label={label}
-              >
-                {isLoading ? (
-                  <div className="seeker-dashboard__skill-dropdown-empty">Загружаем список...</div>
-                ) : options.length > 0 ? (
-                  options.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className="seeker-dashboard__skill-dropdown-option"
-                      onClick={() => onSelect(item)}
-                    >
-                      {item}
-                    </button>
-                  ))
-                ) : (
-                  <div className="seeker-dashboard__skill-dropdown-empty seeker-dashboard__search-empty">
-                    <img src={sadSearchIcon} alt="" aria-hidden="true" className="seeker-dashboard__search-empty-icon" />
-                    <span>Ничего не найдено</span>
-                  </div>
-                )}
-              </div>,
-              document.body,
-            )
-          : null}
+        {isOpen ? (
+          <div className="seeker-dashboard__skill-dropdown" role="listbox" aria-label={label}>
+            {isLoading ? (
+              <div className="seeker-dashboard__skill-dropdown-empty">Загружаем список...</div>
+            ) : options.length > 0 ? (
+              options.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className="seeker-dashboard__skill-dropdown-option"
+                  onClick={() => onSelect(item)}
+                >
+                  {item}
+                </button>
+              ))
+            ) : (
+              <div className="seeker-dashboard__skill-dropdown-empty seeker-dashboard__search-empty">
+                <img src={sadSearchIcon} alt="" aria-hidden="true" className="seeker-dashboard__search-empty-icon" />
+                <span>Ничего не найдено</span>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </label>
   );
@@ -656,7 +647,18 @@ export function SeekerDashboardPage() {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [isAvatarMarkedForDeletion, setIsAvatarMarkedForDeletion] = useState(false);
+  const [isDeleteAvatarModalOpen, setIsDeleteAvatarModalOpen] = useState(false);
+  const [isLeaveConfirmModalOpen, setIsLeaveConfirmModalOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingNavigationActionRef = useRef<(() => void) | null>(null);
+  const todayIso = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }, []);
 
   const [activeEditor, setActiveEditor] = useState<SectionMode>(null);
   const [aboutDraft, setAboutDraft] = useState("");
@@ -767,7 +769,10 @@ export function SeekerDashboardPage() {
   const uploadApplicantAvatarMutation = useMutation({
     mutationFn: uploadApplicantAvatarRequest,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
+      ]);
       await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
       setAvatarPreviewUrl((currentValue) => {
         if (currentValue) {
@@ -779,15 +784,22 @@ export function SeekerDashboardPage() {
   });
   const deleteApplicantAvatarMutation = useMutation({
     mutationFn: deleteApplicantAvatarRequest,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
+        queryClient.invalidateQueries({ queryKey: ["auth", "contexts"] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ["auth", "me"], type: "active" });
+    },
   });
 
   const user = meQuery.data?.data?.user;
-  const profileMenuItems = buildApplicantProfileMenuItems(navigate);
   const persistedApplicantAvatarUrl = resolveAvatarUrl(user?.applicant_profile?.avatar_url);
   const applicantAvatar =
     avatarPreviewUrl ??
     (isAvatarMarkedForDeletion ? null : persistedApplicantAvatarUrl) ??
     resolveAvatarIcon("applicant");
+  const hasApplicantAvatar = Boolean(pendingAvatarFile || (!isAvatarMarkedForDeletion && persistedApplicantAvatarUrl));
   const profilePublicId = user?.public_id ?? user?.id ?? "000000";
   const confirmIcon = <img src={checkMarkIcon} alt="" aria-hidden="true" className="seeker-dashboard__confirm-icon" />;
   const hardSkillOptions = useMemo(
@@ -928,7 +940,7 @@ export function SeekerDashboardPage() {
     avatarInputRef.current?.click();
   };
 
-  const handleAvatarChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -940,32 +952,48 @@ export function SeekerDashboardPage() {
       return;
     }
 
-    setPendingAvatarFile(file);
-    setIsAvatarMarkedForDeletion(false);
-    setAvatarPreviewUrl((currentValue) => {
-      if (currentValue) {
-        URL.revokeObjectURL(currentValue);
-      }
+    try {
+      setSaveError(null);
+      const preparedFile = await prepareAvatarFile(file);
 
-      return URL.createObjectURL(file);
-    });
+      setPendingAvatarFile(preparedFile);
+      setIsAvatarMarkedForDeletion(false);
+      setAvatarPreviewUrl((currentValue) => {
+        if (currentValue) {
+          URL.revokeObjectURL(currentValue);
+        }
 
-    event.target.value = "";
+        return URL.createObjectURL(preparedFile);
+      });
+    } catch {
+      setSaveError("Не удалось обработать аватар. Попробуйте другое изображение.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const handleDeleteAvatar = () => {
-    if (!pendingAvatarFile && !persistedApplicantAvatarUrl) {
+    if (!hasApplicantAvatar) {
+      return;
+    }
+
+    setIsDeleteAvatarModalOpen(true);
+  };
+
+  const handleDeleteAvatarConfirm = () => {
+    if (!hasApplicantAvatar) {
       return;
     }
 
     setPendingAvatarFile(null);
-    setIsAvatarMarkedForDeletion(true);
+    setIsAvatarMarkedForDeletion(Boolean(persistedApplicantAvatarUrl));
     setAvatarPreviewUrl((currentValue) => {
       if (currentValue) {
         URL.revokeObjectURL(currentValue);
       }
       return null;
     });
+    setIsDeleteAvatarModalOpen(false);
   };
 
   useEffect(() => {
@@ -1086,10 +1114,9 @@ export function SeekerDashboardPage() {
     }
 
     let isActive = true;
+    setIsUniversitySuggestionsLoading(true);
+    setUniversitySuggestionsError(null);
     const timeoutId = window.setTimeout(() => {
-      setIsUniversitySuggestionsLoading(true);
-      setUniversitySuggestionsError(null);
-
       void getUniversitySuggestions(normalizedQuery, profileForm.city.trim())
         .then((items) => {
           if (!isActive) {
@@ -1129,10 +1156,9 @@ export function SeekerDashboardPage() {
     }
 
     let isActive = true;
+    setIsCitySuggestionsLoading(true);
+    setCitySuggestionsError(null);
     const timeoutId = window.setTimeout(() => {
-      setIsCitySuggestionsLoading(true);
-      setCitySuggestionsError(null);
-
       void getCitySuggestions(normalizedQuery)
         .then((items) => {
           if (!isActive) {
@@ -1172,10 +1198,9 @@ export function SeekerDashboardPage() {
     }
 
     let isActive = true;
+    setIsPreferredLocationSuggestionsLoading(true);
+    setPreferredLocationSuggestionsError(null);
     const timeoutId = window.setTimeout(() => {
-      setIsPreferredLocationSuggestionsLoading(true);
-      setPreferredLocationSuggestionsError(null);
-
       void getCitySuggestions(normalizedQuery)
         .then((items) => {
           if (!isActive) {
@@ -1230,7 +1255,7 @@ export function SeekerDashboardPage() {
       const progress = Math.min((timestamp - animationStart) / animationDuration, 1);
       const easedProgress = 1 - Math.pow(1 - progress, 3);
       const nextValue = Math.round(startValue + (targetValue - startValue) * easedProgress);
-      setDisplayedProfileCompletion(nextValue);
+      setDisplayedProfileCompletion(Math.min(Math.max(nextValue, 0), 100));
 
       if (progress < 1) {
         frameId = window.requestAnimationFrame(animate);
@@ -1239,7 +1264,7 @@ export function SeekerDashboardPage() {
 
     frameId = window.requestAnimationFrame(animate);
     return () => window.cancelAnimationFrame(frameId);
-  }, [displayedProfileCompletion, profileCompletion]);
+  }, [profileCompletion]);
 
   const initialProfileSeed = useMemo(() => {
     if (!dashboardState || !user) {
@@ -1251,7 +1276,220 @@ export function SeekerDashboardPage() {
   const currentProfileSeed = JSON.stringify(profileForm);
   const hasUnsavedProfileChanges = Boolean(initialProfileSeed) && initialProfileSeed !== currentProfileSeed;
   const hasPendingAvatarChanges = Boolean(pendingAvatarFile) || isAvatarMarkedForDeletion;
-  const hasUnsavedApplicantChanges = hasUnsavedProfileChanges || hasPendingAvatarChanges;
+  const editingProject = editingProjectId
+    ? dashboardState?.projects.find((item) => item.id === editingProjectId) ?? null
+    : null;
+  const editingAchievement = editingAchievementId
+    ? dashboardState?.achievements.find((item) => item.id === editingAchievementId) ?? null
+    : null;
+  const editingCertificate = editingCertificateId
+    ? dashboardState?.certificates.find((item) => item.id === editingCertificateId) ?? null
+    : null;
+  const hasUnsavedAboutChanges = dashboardState ? aboutDraft.trim() !== dashboardState.profile.about.trim() : false;
+  const hasUnsavedSkillsChanges =
+    dashboardState ?
+    JSON.stringify({
+      level: skillsDraft.level,
+      hardSkills: skillsDraft.hardSkills,
+      softSkills: skillsDraft.softSkills,
+      languages: skillsDraft.languages,
+    }) !==
+      JSON.stringify({
+        level: dashboardState.profile.level,
+        hardSkills: dashboardState.profile.hardSkills,
+        softSkills: dashboardState.profile.softSkills,
+        languages: dashboardState.profile.languages,
+      }) : false;
+  const hasUnsavedLinksChanges =
+    dashboardState ?
+    JSON.stringify({
+      githubUrl: linksDraft.githubUrl.trim(),
+      gitlabUrl: linksDraft.gitlabUrl.trim(),
+      bitbucketUrl: linksDraft.bitbucketUrl.trim(),
+      linkedinUrl: linksDraft.linkedinUrl.trim(),
+      portfolioUrl: linksDraft.portfolioUrl.trim(),
+      habrUrl: linksDraft.habrUrl.trim(),
+      resumeUrl: linksDraft.resumeUrl.trim(),
+    }) !==
+      JSON.stringify({
+        githubUrl: dashboardState.profile.githubUrl.trim(),
+        gitlabUrl: dashboardState.profile.gitlabUrl.trim(),
+        bitbucketUrl: dashboardState.profile.bitbucketUrl.trim(),
+        linkedinUrl: dashboardState.profile.linkedinUrl.trim(),
+        portfolioUrl: dashboardState.profile.portfolioUrl.trim(),
+        habrUrl: dashboardState.profile.habrUrl.trim(),
+        resumeUrl: dashboardState.profile.resumeUrl.trim(),
+      }) : false;
+  const hasUnsavedCareerChanges =
+    dashboardState ?
+    JSON.stringify({
+      desiredSalaryFrom: careerDraft.desiredSalaryFrom.replace(/\D+/g, ""),
+      preferredLocation: (careerDraft.preferredLocation ?? "").trim(),
+      employmentTypes: careerDraft.employmentTypes,
+      workFormats: careerDraft.workFormats,
+    }) !==
+      JSON.stringify({
+        desiredSalaryFrom: dashboardState.profile.desiredSalaryFrom.replace(/\D+/g, ""),
+        preferredLocation: dashboardState.profile.preferredLocation.trim(),
+        employmentTypes: dashboardState.profile.employmentTypes,
+        workFormats: dashboardState.profile.workFormats,
+      }) : false;
+  const hasUnsavedProjectEditChanges =
+    editingProjectId !== null &&
+    JSON.stringify(projectDraft) !==
+      JSON.stringify(
+        editingProject
+          ? {
+              title: editingProject.title,
+              description: editingProject.description,
+              technologies: editingProject.technologies,
+              periodLabel: editingProject.periodLabel,
+              roleName: editingProject.roleName,
+              repositoryUrl: editingProject.repositoryUrl,
+            }
+          : EMPTY_PROJECT_DRAFT,
+      );
+  const hasUnsavedAchievementEditChanges =
+    editingAchievementId !== null &&
+    JSON.stringify(achievementDraft) !==
+      JSON.stringify(
+        editingAchievement
+          ? {
+              title: editingAchievement.title,
+              eventName: editingAchievement.eventName,
+              projectName: editingAchievement.projectName,
+              award: editingAchievement.award,
+            }
+          : EMPTY_ACHIEVEMENT_DRAFT,
+      );
+  const hasUnsavedCertificateEditChanges =
+    editingCertificateId !== null &&
+    JSON.stringify(certificateDraft) !==
+      JSON.stringify(
+        editingCertificate
+          ? {
+              title: editingCertificate.title,
+              organizationName: editingCertificate.organizationName,
+              issuedAt: editingCertificate.issuedAt,
+              credentialUrl: editingCertificate.credentialUrl,
+            }
+          : EMPTY_CERTIFICATE_DRAFT,
+      );
+  const hasUnsavedModalDraftChanges =
+    (activeModal === "project" && hasProjectDraftContent(modalProjectDraft)) ||
+    (activeModal === "achievement" && hasAchievementDraftContent(modalAchievementDraft)) ||
+    (activeModal === "certificate" && hasCertificateDraftContent(modalCertificateDraft));
+  const hasUnsavedApplicantChanges =
+    hasUnsavedProfileChanges ||
+    hasPendingAvatarChanges ||
+    hasUnsavedAboutChanges ||
+    hasUnsavedSkillsChanges ||
+    hasUnsavedLinksChanges ||
+    hasUnsavedCareerChanges ||
+    hasUnsavedProjectEditChanges ||
+    hasUnsavedAchievementEditChanges ||
+    hasUnsavedCertificateEditChanges ||
+    hasUnsavedModalDraftChanges;
+
+  useEffect(() => {
+    if (!hasUnsavedApplicantChanges) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedApplicantChanges]);
+
+  const attemptGuardedNavigation = useCallback(
+    (action: () => void) => {
+      if (!hasUnsavedApplicantChanges) {
+        action();
+        return;
+      }
+
+      pendingNavigationActionRef.current = action;
+      setIsLeaveConfirmModalOpen(true);
+    },
+    [hasUnsavedApplicantChanges],
+  );
+
+  const guardedNavigate = useCallback<NavigateFunction>(
+    ((to: Parameters<NavigateFunction>[0], options?: NavigateOptions) => {
+      attemptGuardedNavigation(() => {
+        if (typeof to === "number") {
+          navigate(to);
+          return;
+        }
+
+        navigate(to, options);
+      });
+    }) as NavigateFunction,
+    [attemptGuardedNavigation, navigate],
+  );
+
+  useEffect(() => {
+    if (!hasUnsavedApplicantChanges) {
+      return;
+    }
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) {
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+
+      if (!anchor) {
+        return;
+      }
+
+      if (anchor.target && anchor.target !== "_self") {
+        return;
+      }
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+        return;
+      }
+
+      const url = new URL(anchor.href, window.location.origin);
+
+      if (url.origin !== window.location.origin) {
+        return;
+      }
+
+      const nextPath = `${url.pathname}${url.search}${url.hash}`;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+      if (nextPath === currentPath) {
+        return;
+      }
+
+      event.preventDefault();
+      attemptGuardedNavigation(() => navigate(nextPath));
+    };
+
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [attemptGuardedNavigation, hasUnsavedApplicantChanges, navigate]);
+
+  const profileMenuItems = buildApplicantProfileMenuItems(guardedNavigate);
 
   const resetPendingAvatarState = () => {
     setPendingAvatarFile(null);
@@ -1302,9 +1540,9 @@ export function SeekerDashboardPage() {
     ]);
   }
 
-  const handleProfileSave = async () => {
+  const saveApplicantProfile = async () => {
     if (!dashboardState) {
-      return;
+      return false;
     }
 
     const normalizedCourse = profileForm.course.trim();
@@ -1312,13 +1550,13 @@ export function SeekerDashboardPage() {
 
     if (normalizedCourse.length > 0 && !/^[1-5]$/.test(normalizedCourse)) {
       setCourseValidationError("Можно указать курс только от 1 до 5.");
-      return;
+      return false;
     }
 
     if (normalizedCity.length > 0 && !citySelectionConfirmed) {
       setCityValidationError("Нужно выбрать город из списка.");
       setIsCityDropdownOpen(true);
-      return;
+      return false;
     }
 
     setSaveError(null);
@@ -1348,9 +1586,15 @@ export function SeekerDashboardPage() {
       }
 
       resetPendingAvatarState();
+      return true;
     } catch {
       setSaveError("Не удалось сохранить профиль.");
+      return false;
     }
+  };
+
+  const handleProfileSave = async () => {
+    await saveApplicantProfile();
   };
 
   const handleAboutSave = async () => {
@@ -1695,6 +1939,24 @@ export function SeekerDashboardPage() {
     }
   };
 
+  const handleCloseLeaveConfirmModal = () => {
+    setIsLeaveConfirmModalOpen(false);
+    pendingNavigationActionRef.current = null;
+  };
+
+  const handleSaveAndLeave = async () => {
+    const isSaved = await saveApplicantProfile();
+
+    if (!isSaved) {
+      return;
+    }
+
+    setIsLeaveConfirmModalOpen(false);
+    const pendingAction = pendingNavigationActionRef.current;
+    pendingNavigationActionRef.current = null;
+    pendingAction?.();
+  };
+
   if (role !== "applicant") {
     return <Navigate to="/" replace />;
   }
@@ -1718,7 +1980,7 @@ export function SeekerDashboardPage() {
 
       <Container className="seeker-dashboard__shell">
         <ProfileTabs
-          navigate={navigate}
+          navigate={guardedNavigate}
           audience="applicant"
           current="profile"
           tabsClassName="seeker-dashboard__tabs"
@@ -1744,7 +2006,7 @@ export function SeekerDashboardPage() {
                   />
                   <span className="seeker-dashboard__avatar-shell">
                     <img src={applicantAvatar} alt="" aria-hidden="true" className="seeker-dashboard__avatar-image" />
-                    {pendingAvatarFile || persistedApplicantAvatarUrl ? (
+                    {hasApplicantAvatar ? (
                       <button
                         type="button"
                         className="seeker-dashboard__avatar-overlay"
@@ -2015,9 +2277,7 @@ export function SeekerDashboardPage() {
                           employmentTypes: dashboardState.profile.employmentTypes,
                           workFormats: dashboardState.profile.workFormats,
                         });
-                        setPreferredLocationSelectionConfirmed(
-                          (dashboardState.profile.preferredLocation ?? "").trim().length === 0,
-                        );
+                        setPreferredLocationSelectionConfirmed(true);
                         setPreferredLocationValidationError(null);
                         setActiveEditor("career-interests");
                       }}
@@ -2424,42 +2684,54 @@ export function SeekerDashboardPage() {
                   </>
                 ) : (
                   <>
-                    <div className="seeker-dashboard__link-panel">
-                      <span className="seeker-dashboard__link-label">GitHub</span>
-                      <a href={dashboardState.profile.githubUrl || "#"} className="seeker-dashboard__link-value">
-                        {formatLinkLabel(dashboardState.profile.githubUrl, "github.com")}
-                      </a>
-                    </div>
-                    <div className="seeker-dashboard__link-panel">
-                      <span className="seeker-dashboard__link-label">GitLab</span>
-                      <a href={dashboardState.profile.gitlabUrl || "#"} className="seeker-dashboard__link-value">
-                        {formatLinkLabel(dashboardState.profile.gitlabUrl, "gitlab.com")}
-                      </a>
-                    </div>
-                    <div className="seeker-dashboard__link-panel">
-                      <span className="seeker-dashboard__link-label">Bitbucket</span>
-                      <a href={dashboardState.profile.bitbucketUrl || "#"} className="seeker-dashboard__link-value">
-                        {formatLinkLabel(dashboardState.profile.bitbucketUrl, "bitbucket.org")}
-                      </a>
-                    </div>
-                    <div className="seeker-dashboard__link-panel">
-                      <span className="seeker-dashboard__link-label">LinkedIn</span>
-                      <a href={dashboardState.profile.linkedinUrl || "#"} className="seeker-dashboard__link-value">
-                        {formatLinkLabel(dashboardState.profile.linkedinUrl, "linkedin.com")}
-                      </a>
-                    </div>
-                    <div className="seeker-dashboard__link-panel">
-                      <span className="seeker-dashboard__link-label">Портфолио</span>
-                      <a href={dashboardState.profile.portfolioUrl || "#"} className="seeker-dashboard__link-value">
-                        {formatLinkLabel(dashboardState.profile.portfolioUrl, "portfolio.example")}
-                      </a>
-                    </div>
-                    <div className="seeker-dashboard__link-panel">
-                      <span className="seeker-dashboard__link-label">Хабр</span>
-                      <a href={dashboardState.profile.habrUrl || "#"} className="seeker-dashboard__link-value">
-                        {formatLinkLabel(dashboardState.profile.habrUrl, "habr.com")}
-                      </a>
-                    </div>
+                    {dashboardState.profile.githubUrl ? (
+                      <div className="seeker-dashboard__link-panel">
+                        <span className="seeker-dashboard__link-label">GitHub</span>
+                        <a href={dashboardState.profile.githubUrl} className="seeker-dashboard__link-value">
+                          {formatLinkLabel(dashboardState.profile.githubUrl, "github.com")}
+                        </a>
+                      </div>
+                    ) : null}
+                    {dashboardState.profile.gitlabUrl ? (
+                      <div className="seeker-dashboard__link-panel">
+                        <span className="seeker-dashboard__link-label">GitLab</span>
+                        <a href={dashboardState.profile.gitlabUrl} className="seeker-dashboard__link-value">
+                          {formatLinkLabel(dashboardState.profile.gitlabUrl, "gitlab.com")}
+                        </a>
+                      </div>
+                    ) : null}
+                    {dashboardState.profile.bitbucketUrl ? (
+                      <div className="seeker-dashboard__link-panel">
+                        <span className="seeker-dashboard__link-label">Bitbucket</span>
+                        <a href={dashboardState.profile.bitbucketUrl} className="seeker-dashboard__link-value">
+                          {formatLinkLabel(dashboardState.profile.bitbucketUrl, "bitbucket.org")}
+                        </a>
+                      </div>
+                    ) : null}
+                    {dashboardState.profile.linkedinUrl ? (
+                      <div className="seeker-dashboard__link-panel">
+                        <span className="seeker-dashboard__link-label">LinkedIn</span>
+                        <a href={dashboardState.profile.linkedinUrl} className="seeker-dashboard__link-value">
+                          {formatLinkLabel(dashboardState.profile.linkedinUrl, "linkedin.com")}
+                        </a>
+                      </div>
+                    ) : null}
+                    {dashboardState.profile.portfolioUrl ? (
+                      <div className="seeker-dashboard__link-panel">
+                        <span className="seeker-dashboard__link-label">Портфолио</span>
+                        <a href={dashboardState.profile.portfolioUrl} className="seeker-dashboard__link-value">
+                          {formatLinkLabel(dashboardState.profile.portfolioUrl, "portfolio.example")}
+                        </a>
+                      </div>
+                    ) : null}
+                    {dashboardState.profile.habrUrl ? (
+                      <div className="seeker-dashboard__link-panel">
+                        <span className="seeker-dashboard__link-label">Хабр</span>
+                        <a href={dashboardState.profile.habrUrl} className="seeker-dashboard__link-value">
+                          {formatLinkLabel(dashboardState.profile.habrUrl, "habr.com")}
+                        </a>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </div>
@@ -2491,24 +2763,26 @@ export function SeekerDashboardPage() {
                           {confirmIcon}
                         </Button>
                       ) : (
-                        <button type="button" className="seeker-dashboard__icon-button" onClick={() => handleProjectEdit(project)}>
-                          <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
-                        </button>
+                        <>
+                          <button type="button" className="seeker-dashboard__icon-button" onClick={() => handleProjectEdit(project)}>
+                            <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
+                          </button>
+                          <button
+                            type="button"
+                            className="seeker-dashboard__icon-button"
+                            onClick={() =>
+                              setPendingDelete({
+                                kind: "project",
+                                id: project.id,
+                                title: "Удаление проекта",
+                                entityLabel: project.title || "этот проект",
+                              })
+                            }
+                          >
+                            <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
+                          </button>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        className="seeker-dashboard__icon-button"
-                        onClick={() =>
-                          setPendingDelete({
-                            kind: "project",
-                            id: project.id,
-                            title: "Удаление проекта",
-                            entityLabel: project.title || "этот проект",
-                          })
-                        }
-                      >
-                        <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
-                      </button>
                     </div>
                   </div>
                   <div className="seeker-dashboard__portfolio-set-entry-body">
@@ -2536,27 +2810,7 @@ export function SeekerDashboardPage() {
                           />
                         </label>
                         <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__portfolio-set-entry-label">Период:</span>
-                          <Input
-                            className="input--secondary input--sm"
-                            value={projectDraft.periodLabel}
-                            onChange={(event) =>
-                              setProjectDraft((current) => ({ ...current, periodLabel: event.target.value }))
-                            }
-                          />
-                        </label>
-                        <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__portfolio-set-entry-label">Роль:</span>
-                          <Input
-                            className="input--secondary input--sm"
-                            value={projectDraft.roleName}
-                            onChange={(event) =>
-                              setProjectDraft((current) => ({ ...current, roleName: event.target.value }))
-                            }
-                          />
-                        </label>
-                        <label className="seeker-dashboard__field">
-                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка на проект:</span>
                           <Input
                             className="input--secondary input--sm"
                             value={projectDraft.repositoryUrl}
@@ -2575,13 +2829,15 @@ export function SeekerDashboardPage() {
                         <div className="seeker-dashboard__portfolio-set-entry-detail">
                           <span className="seeker-dashboard__portfolio-set-entry-label">Технологии:</span>
                           <p className="seeker-dashboard__paragraph">{project.technologies}</p>
-                          <p className="seeker-dashboard__paragraph">{`Период: ${project.periodLabel}`}</p>
-                          <p className="seeker-dashboard__paragraph">{`Роль: ${project.roleName}`}</p>
                         </div>
-                        <div className="seeker-dashboard__portfolio-set-entry-detail">
-                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
-                          <p className="seeker-dashboard__paragraph">{project.repositoryUrl}</p>
-                        </div>
+                        {project.repositoryUrl ? (
+                          <div className="seeker-dashboard__portfolio-set-entry-detail">
+                            <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка на проект:</span>
+                            <a href={project.repositoryUrl} className="seeker-dashboard__link-value">
+                              {formatLinkLabel(project.repositoryUrl, "Посмотреть")}
+                            </a>
+                          </div>
+                        ) : null}
                       </>
                     )}
                   </div>
@@ -2614,24 +2870,26 @@ export function SeekerDashboardPage() {
                           {confirmIcon}
                         </Button>
                       ) : (
-                        <button type="button" className="seeker-dashboard__icon-button" onClick={() => handleAchievementEdit(item)}>
-                          <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
-                        </button>
+                        <>
+                          <button type="button" className="seeker-dashboard__icon-button" onClick={() => handleAchievementEdit(item)}>
+                            <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
+                          </button>
+                          <button
+                            type="button"
+                            className="seeker-dashboard__icon-button"
+                            onClick={() =>
+                              setPendingDelete({
+                                kind: "achievement",
+                                id: item.id,
+                                title: "Удаление достижения",
+                                entityLabel: item.title || "это достижение",
+                              })
+                            }
+                          >
+                            <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
+                          </button>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        className="seeker-dashboard__icon-button"
-                        onClick={() =>
-                          setPendingDelete({
-                            kind: "achievement",
-                            id: item.id,
-                            title: "Удаление достижения",
-                            entityLabel: item.title || "это достижение",
-                          })
-                        }
-                      >
-                        <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
-                      </button>
                     </div>
                   </div>
                   <div className="seeker-dashboard__portfolio-set-entry-body">
@@ -2732,48 +2990,73 @@ export function SeekerDashboardPage() {
                           {confirmIcon}
                         </Button>
                       ) : (
-                        <button type="button" className="seeker-dashboard__icon-button" onClick={() => handleCertificateEdit(item)}>
-                          <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
-                        </button>
+                        <>
+                          <button type="button" className="seeker-dashboard__icon-button" onClick={() => handleCertificateEdit(item)}>
+                            <img src={editIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
+                          </button>
+                          <button
+                            type="button"
+                            className="seeker-dashboard__icon-button"
+                            onClick={() =>
+                              setPendingDelete({
+                                kind: "certificate",
+                                id: item.id,
+                                title: "Удаление сертификата",
+                                entityLabel: item.title || "этот сертификат",
+                              })
+                            }
+                          >
+                            <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
+                          </button>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        className="seeker-dashboard__icon-button"
-                        onClick={() =>
-                          setPendingDelete({
-                            kind: "certificate",
-                            id: item.id,
-                            title: "Удаление сертификата",
-                            entityLabel: item.title || "этот сертификат",
-                          })
-                        }
-                      >
-                        <img src={deleteIcon} alt="" aria-hidden="true" className="seeker-dashboard__icon" />
-                      </button>
                     </div>
                   </div>
                   <div className="seeker-dashboard__portfolio-set-entry-body">
                     {editingCertificateId === item.id ? (
                       <>
-                        {[
-                          ["Организация", "organizationName"],
-                          ["Дата", "issuedAt"],
-                          ["Ссылка", "credentialUrl"],
-                        ].map(([label, key]) => (
-                          <label key={key} className="seeker-dashboard__field">
-                            <span className="seeker-dashboard__portfolio-set-entry-label">{`${label}:`}</span>
-                            <Input
-                              className="input--secondary input--sm"
-                              value={certificateDraft[key as keyof CertificateDraft]}
-                              onChange={(event) =>
-                                setCertificateDraft((current) => ({
-                                  ...current,
-                                  [key]: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                        ))}
+                        <label className="seeker-dashboard__field">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Организация:</span>
+                          <Input
+                            className="input--secondary input--sm"
+                            value={certificateDraft.organizationName}
+                            onChange={(event) =>
+                              setCertificateDraft((current) => ({
+                                ...current,
+                                organizationName: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="seeker-dashboard__field">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Дата:</span>
+                          <DateInput
+                            className="date-input--sm"
+                            variant="secondary"
+                            value={certificateDraft.issuedAt}
+                            max={todayIso}
+                            placeholder="ДД.ММ.ГГГГ"
+                            onChange={(value) =>
+                              setCertificateDraft((current) => ({
+                                ...current,
+                                issuedAt: value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="seeker-dashboard__field">
+                          <span className="seeker-dashboard__portfolio-set-entry-label">Ссылка:</span>
+                          <Input
+                            className="input--secondary input--sm"
+                            value={certificateDraft.credentialUrl}
+                            onChange={(event) =>
+                              setCertificateDraft((current) => ({
+                                ...current,
+                                credentialUrl: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
                       </>
                     ) : (
                       <>
@@ -2816,13 +3099,13 @@ export function SeekerDashboardPage() {
         }}
         titleAccentColor="var(--color-secondary)"
       >
-        <div className="modal__form seeker-dashboard__modal-form">
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Название проекта</span>
+        <div className="modal__form">
+          <label className="modal__field">
+            <span className="modal__field-label">Название проекта</span>
             <Input className="input--secondary input--sm" value={modalProjectDraft.title} onChange={(event) => setModalProjectDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название проекта" />
           </label>
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Описание</span>
+          <label className="modal__field">
+            <span className="modal__field-label">Описание</span>
             <textarea className="modal__textarea seeker-dashboard__textarea seeker-dashboard__textarea--sm" value={modalProjectDraft.description} onChange={(event) => setModalProjectDraft((current) => ({ ...current, description: event.target.value }))} rows={4} placeholder="Описание" />
           </label>
           <SkillTagSelector
@@ -2842,11 +3125,11 @@ export function SeekerDashboardPage() {
             onSelect={addProjectTechnologyValue}
             onRemove={removeProjectTechnologyValue}
           />
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Ссылка</span>
+          <label className="modal__field">
+            <span className="modal__field-label">Ссылка на проект</span>
             <Input className="input--secondary input--sm" value={modalProjectDraft.repositoryUrl} onChange={(event) => setModalProjectDraft((current) => ({ ...current, repositoryUrl: event.target.value }))} placeholder="Ссылка" />
           </label>
-          <div className="modal__actions seeker-dashboard__modal-actions">
+          <div className="modal__actions">
             <Button
               type="button"
               variant="secondary-outline"
@@ -2882,17 +3165,17 @@ export function SeekerDashboardPage() {
         onClose={() => setActiveModal(null)}
         titleAccentColor="var(--color-secondary)"
       >
-        <div className="modal__form seeker-dashboard__modal-form">
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Название</span>
+        <div className="modal__form">
+          <label className="modal__field">
+            <span className="modal__field-label">Название</span>
             <Input className="input--secondary input--sm" value={modalAchievementDraft.title} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
           </label>
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Мероприятие</span>
+          <label className="modal__field">
+            <span className="modal__field-label">Мероприятие</span>
             <Input className="input--secondary input--sm" value={modalAchievementDraft.eventName} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, eventName: event.target.value }))} placeholder="Мероприятие" />
           </label>
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Проект</span>
+          <label className="modal__field">
+            <span className="modal__field-label">Проект</span>
             <Select
               className="seeker-dashboard__select"
               variant="secondary"
@@ -2913,11 +3196,11 @@ export function SeekerDashboardPage() {
               }
             />
           </label>
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Награда</span>
+          <label className="modal__field">
+            <span className="modal__field-label">Награда</span>
             <Input className="input--secondary input--sm" value={modalAchievementDraft.award} onChange={(event) => setModalAchievementDraft((current) => ({ ...current, award: event.target.value }))} placeholder="Награда" />
           </label>
-          <div className="modal__actions seeker-dashboard__modal-actions">
+          <div className="modal__actions">
             <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setActiveModal(null)}>
               Отмена
             </Button>
@@ -2941,24 +3224,31 @@ export function SeekerDashboardPage() {
         onClose={() => setActiveModal(null)}
         titleAccentColor="var(--color-secondary)"
       >
-        <div className="modal__form seeker-dashboard__modal-form">
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Название</span>
+        <div className="modal__form">
+          <label className="modal__field">
+            <span className="modal__field-label">Название</span>
             <Input className="input--secondary input--sm" value={modalCertificateDraft.title} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Название" />
           </label>
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Организация</span>
+          <label className="modal__field">
+            <span className="modal__field-label">Организация</span>
             <Input className="input--secondary input--sm" value={modalCertificateDraft.organizationName} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, organizationName: event.target.value }))} placeholder="Организация" />
           </label>
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Дата</span>
-            <Input className="input--secondary input--sm" value={modalCertificateDraft.issuedAt} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, issuedAt: event.target.value }))} placeholder="Дата в формате YYYY-MM-DD" />
+          <label className="modal__field">
+            <span className="modal__field-label">Дата</span>
+            <DateInput
+              className="date-input--sm seeker-dashboard__certificate-date-input"
+              variant="secondary"
+              value={modalCertificateDraft.issuedAt}
+              max={todayIso}
+              placeholder="ДД.ММ.ГГГГ"
+              onChange={(value) => setModalCertificateDraft((current) => ({ ...current, issuedAt: value }))}
+            />
           </label>
-          <label className="modal__field seeker-dashboard__field">
-            <span className="modal__field-label seeker-dashboard__field-label">Ссылка</span>
+          <label className="modal__field">
+            <span className="modal__field-label">Ссылка</span>
             <Input className="input--secondary input--sm" value={modalCertificateDraft.credentialUrl} onChange={(event) => setModalCertificateDraft((current) => ({ ...current, credentialUrl: event.target.value }))} placeholder="Ссылка" />
           </label>
-          <div className="modal__actions seeker-dashboard__modal-actions">
+          <div className="modal__actions">
             <Button type="button" variant="secondary-outline" size="md" fullWidth onClick={() => setActiveModal(null)}>
               Отмена
             </Button>
@@ -2991,7 +3281,7 @@ export function SeekerDashboardPage() {
         size="small"
         titleAccentColor="var(--color-danger)"
       >
-        <div className="modal__body seeker-dashboard__modal-form">
+        <div className="modal__body">
           <p className="modal__text seeker-dashboard__paragraph">
             {pendingDelete?.kind === "project"
               ? `Вы уверены, что хотите удалить проект «${pendingDelete.entityLabel}»?`
@@ -3001,12 +3291,68 @@ export function SeekerDashboardPage() {
                   ? `Вы уверены, что хотите удалить сертификат «${pendingDelete.entityLabel}»?`
                   : "Вы уверены, что хотите удалить элемент?"}
           </p>
-          <div className="modal__actions seeker-dashboard__modal-actions">
+          <div className="modal__actions">
             <Button type="button" variant="cancel" size="md" fullWidth onClick={() => setPendingDelete(null)}>
               Отмена
             </Button>
             <Button type="button" variant="danger" size="md" fullWidth onClick={() => void handlePendingDeleteConfirm()}>
               Удалить
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title="Удалить аватар"
+        isOpen={isDeleteAvatarModalOpen}
+        onClose={() => setIsDeleteAvatarModalOpen(false)}
+        size="small"
+        titleAccentColor="var(--color-danger)"
+      >
+        <div className="modal__body">
+          <p className="modal__text seeker-dashboard__paragraph">
+            Вы уверены, что хотите удалить аватар?
+          </p>
+          <div className="modal__actions">
+            <Button type="button" variant="cancel" size="md" fullWidth onClick={() => setIsDeleteAvatarModalOpen(false)}>
+              Отмена
+            </Button>
+            <Button type="button" variant="danger" size="md" fullWidth onClick={handleDeleteAvatarConfirm}>
+              Удалить
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title="Несохраненные изменения"
+        isOpen={isLeaveConfirmModalOpen}
+        onClose={handleCloseLeaveConfirmModal}
+        size="small"
+        titleAccentColor="var(--color-secondary)"
+        closeOnBackdrop={false}
+      >
+        <div className="modal__body">
+          <p className="modal__text seeker-dashboard__paragraph">
+            Если перейти на другую страницу сейчас, все несохранённые данные сотрутся.
+          </p>
+          {saveError ? <p className="modal__error seeker-dashboard__save-error">{saveError}</p> : null}
+          <div className="modal__actions">
+            <Button type="button" variant="cancel" size="md" onClick={handleCloseLeaveConfirmModal}>
+              Отменить
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => void handleSaveAndLeave()}
+              loading={
+                saveDashboardMutation.isPending ||
+                uploadApplicantAvatarMutation.isPending ||
+                deleteApplicantAvatarMutation.isPending
+              }
+            >
+              Сохранить и выйти
             </Button>
           </div>
         </div>

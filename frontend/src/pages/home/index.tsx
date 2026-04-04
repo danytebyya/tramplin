@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -27,8 +27,16 @@ import {
 } from "../../features/applications";
 import { getEmployerAccessState, meRequest, updatePreferredCityRequest, useAuthStore } from "../../features/auth";
 import { ModerationDashboardContent } from "../curator-dashboard";
-import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
+import {
+  buildOpportunityExplorerRoute,
+  matchesOpportunitySearch,
+  normalizeOpportunitySearchText,
+  opportunityCategoryLinks,
+  OPPORTUNITY_EXPLORER_PATH,
+  resolveOpportunityCategoryFilter,
+} from "../../shared/lib";
 import { Button, Container } from "../../shared/ui";
+import { BackNavigation } from "../../widgets/back-navigation";
 import { OpportunityFilters } from "../../widgets/filters";
 import type { OpportunityToolbarFilters } from "../../widgets/filters";
 import { Footer } from "../../widgets/footer";
@@ -51,30 +59,69 @@ import logoPrimary from "../../assets/icons/logo-primary.svg";
 import logoSecondary from "../../assets/icons/logo-secondary.svg";
 import securityIcon from "../../assets/icons/security.svg";
 import "./home.css";
+import type { OpportunityCategoryFilter } from "../../shared/lib";
 
-type OpportunityCategoryFilter = "all" | Opportunity["kind"];
-
-const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label: string }> = [
-  { value: "all", label: "Все" },
-  { value: "vacancy", label: "Вакансии" },
-  { value: "internship", label: "Стажировки" },
-  { value: "event", label: "Мероприятия" },
-  { value: "mentorship", label: "Менторские программы" },
-];
-
-function resolveOpportunityCategoryFilter(search: string): OpportunityCategoryFilter {
-  const category = new URLSearchParams(search).get("category");
-
-  if (
-    category === "vacancy" ||
-    category === "internship" ||
-    category === "event" ||
-    category === "mentorship"
-  ) {
-    return category;
+function getApplicationStatusPriority(status: BackendApplicationStatus) {
+  if (status === "withdrawn" || status === "canceled") {
+    return 5;
   }
 
-  return "all";
+  if (status === "rejected") {
+    return 4;
+  }
+
+  if (status === "accepted" || status === "offer" || status === "interview") {
+    return 3;
+  }
+
+  if (status === "reserved" || status === "shortlisted") {
+    return 2;
+  }
+
+  return 1;
+}
+
+function resolveLatestApplicationByOpportunity(
+  items: Array<{
+    opportunity_id: string;
+    status: BackendApplicationStatus;
+    submitted_at: string;
+    status_changed_at: string;
+    id?: string;
+  }>,
+) {
+  return items.reduce<Record<string, { status: BackendApplicationStatus; updatedAt: number; submittedAt: number; order: number }>>((result, item, index) => {
+    const rawUpdatedAt = new Date(item.status_changed_at || item.submitted_at).getTime();
+    const rawSubmittedAt = new Date(item.submitted_at).getTime();
+    const updatedAt = Number.isNaN(rawUpdatedAt) ? 0 : rawUpdatedAt;
+    const submittedAt = Number.isNaN(rawSubmittedAt) ? 0 : rawSubmittedAt;
+    const currentEntry = result[item.opportunity_id];
+    const nextPriority = getApplicationStatusPriority(item.status);
+    const currentPriority = currentEntry ? getApplicationStatusPriority(currentEntry.status) : 0;
+
+    const shouldReplace =
+      !currentEntry ||
+      submittedAt > currentEntry.submittedAt ||
+      (submittedAt === currentEntry.submittedAt && updatedAt > currentEntry.updatedAt) ||
+      (submittedAt === currentEntry.submittedAt &&
+        updatedAt === currentEntry.updatedAt &&
+        nextPriority > currentPriority) ||
+      (submittedAt === currentEntry.submittedAt &&
+        updatedAt === currentEntry.updatedAt &&
+        nextPriority === currentPriority &&
+        index > currentEntry.order);
+
+    if (shouldReplace) {
+      result[item.opportunity_id] = {
+        status: item.status,
+        updatedAt,
+        submittedAt,
+        order: index,
+      };
+    }
+
+    return result;
+  }, {});
 }
 
 function cloneMapSnapshot(source: HTMLElement) {
@@ -114,7 +161,11 @@ function cloneMapSnapshot(source: HTMLElement) {
   return snapshot;
 }
 
-export function HomePage() {
+type HomePageProps = {
+  mode?: "landing" | "explorer";
+};
+
+export function HomePage({ mode = "landing" }: HomePageProps) {
   const DEFAULT_MAP_EXPANDED_TOP_OFFSET = 106;
   const MAP_EXPAND_TRANSITION_MS = 520;
   const DEFAULT_CITY = "Чебоксары";
@@ -123,6 +174,11 @@ export function HomePage() {
   const initialNavigationState = location.state as {
     restoreViewMode?: "list" | "map";
     restoreSelectedOpportunityId?: string;
+    returnTo?: {
+      pathname: string;
+      search?: string;
+      hash?: string;
+    };
   } | null;
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<"map" | "list">(
@@ -133,7 +189,8 @@ export function HomePage() {
     () => initialNavigationState?.restoreSelectedOpportunityId ?? null,
   );
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? DEFAULT_CITY);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [headerSearchQuery, setHeaderSearchQuery] = useState("");
+  const [opportunitySearchQuery, setOpportunitySearchQuery] = useState("");
   const [toolbarFilters, setToolbarFilters] = useState<OpportunityToolbarFilters>({
     city: "",
     levels: [],
@@ -161,10 +218,27 @@ export function HomePage() {
   const expandedFromScrollYRef = useRef(0);
   const pendingRestoreScrollYRef = useRef<number | null>(null);
   const pendingProfileReturnScrollYRef = useRef<number | null>(null);
+  const pendingExplorerMapScrollRef = useRef(false);
   const shouldSkipMapHashScrollRef = useRef(false);
   const mapTransitionTimeoutRef = useRef<number | null>(null);
+  const explorerMapScrollTimeoutRef = useRef<number | null>(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isProfileMenuPinned, setIsProfileMenuPinned] = useState(false);
+  const [explorerBackNavigationTarget, setExplorerBackNavigationTarget] = useState<{
+    to: string;
+    replace: false;
+  } | null>(() => {
+    const returnTo = initialNavigationState?.returnTo;
+
+    if (!returnTo?.pathname) {
+      return null;
+    }
+
+    return {
+      to: `${returnTo.pathname}${returnTo.search ?? ""}${returnTo.hash ?? ""}`,
+      replace: false,
+    };
+  });
   const accessToken = useAuthStore((state) => state.accessToken);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const role = useAuthStore((state) => state.role);
@@ -260,20 +334,24 @@ export function HomePage() {
     },
   });
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
+  const latestApplicationByOpportunityId = useMemo(
+    () => resolveLatestApplicationByOpportunity(myApplicationsQuery.data?.data?.items ?? []),
+    [myApplicationsQuery.data?.data?.items],
+  );
   const appliedOpportunityIds = useMemo(
     () =>
-      (myApplicationsQuery.data?.data?.items ?? [])
-        .filter((item) => item.status !== "rejected" && item.status !== "withdrawn" && item.status !== "canceled")
-        .map((item) => item.opportunity_id),
-    [myApplicationsQuery.data?.data?.items],
+      Object.entries(latestApplicationByOpportunityId)
+        .filter(([, item]) => item.status !== "rejected" && item.status !== "withdrawn" && item.status !== "canceled")
+        .map(([opportunityId]) => opportunityId),
+    [latestApplicationByOpportunityId],
   );
   const applicationStatusByOpportunityId = useMemo(
     () =>
-      (myApplicationsQuery.data?.data?.items ?? []).reduce<Record<string, BackendApplicationStatus>>((result, item) => {
-        result[item.opportunity_id] = item.status;
+      Object.entries(latestApplicationByOpportunityId).reduce<Record<string, BackendApplicationStatus>>((result, [opportunityId, item]) => {
+        result[opportunityId] = item.status;
         return result;
       }, {}),
-    [myApplicationsQuery.data?.data?.items],
+    [latestApplicationByOpportunityId],
   );
   const opportunityStats = useMemo(() => {
     return opportunities.reduce(
@@ -312,7 +390,7 @@ export function HomePage() {
       ? opportunities
       : opportunities.filter((opportunity) => opportunity.kind === selectedCategoryFilter);
 
-    const normalizedQuery = normalizeOpportunitySearchText(searchQuery);
+    const normalizedQuery = normalizeOpportunitySearchText(opportunitySearchQuery);
     const normalizedFilterCity = toolbarFilters.city.trim().toLocaleLowerCase("ru-RU");
     const normalizeFormatLabel = (format: Opportunity["format"]) =>
       format === "office" ? "Офлайн" : format === "hybrid" ? "Гибрид" : "Удалённо";
@@ -386,7 +464,7 @@ export function HomePage() {
     });
 
     return sortedItems;
-  }, [opportunities, searchQuery, selectedCategoryFilter, toolbarFilters]);
+  }, [opportunities, opportunitySearchQuery, selectedCategoryFilter, toolbarFilters]);
   const platformCounts = platformStatsQuery.data ?? {
     companiesCount: 0,
     applicantsCount: 0,
@@ -449,6 +527,11 @@ export function HomePage() {
   ];
   const isOpportunityDataLoading = !isModerationRole && opportunitiesQuery.isPending;
   const isPlatformStatsLoading = !isModerationRole && (platformStatsQuery.isPending || opportunitiesQuery.isPending);
+  const isExplorerPage = mode === "explorer";
+  const shouldShowExplorerBackNavigation = isExplorerPage && Boolean(explorerBackNavigationTarget);
+  const explorerTitle = selectedCategoryFilter === "all"
+    ? "Все возможности"
+    : opportunityCategoryLinks.find((item) => item.value === selectedCategoryFilter)?.label ?? "Все";
   const preferredCity = currentUserQuery.data?.data?.user?.preferred_city?.trim() || "";
   const isCityReady = !isAuthenticated || isModerationRole || currentUserQuery.status !== "pending";
   const displayCity = preferredCity || selectedCity;
@@ -513,6 +596,13 @@ export function HomePage() {
     if (mapTransitionTimeoutRef.current !== null) {
       window.clearTimeout(mapTransitionTimeoutRef.current);
       mapTransitionTimeoutRef.current = null;
+    }
+  };
+
+  const clearExplorerMapScrollTimeout = () => {
+    if (explorerMapScrollTimeoutRef.current !== null) {
+      window.clearTimeout(explorerMapScrollTimeoutRef.current);
+      explorerMapScrollTimeoutRef.current = null;
     }
   };
 
@@ -616,12 +706,13 @@ export function HomePage() {
   };
 
   const profileMenuItems = isModerationRole
-    ? buildModerationProfileMenuItems()
+    ? buildModerationProfileMenuItems(navigate)
     : roleName === "employer"
       ? buildEmployerProfileMenuItems(navigate, employerAccess)
       : buildApplicantProfileMenuItems(navigate);
   const homePageClassName = [
     "home-page",
+    isExplorerPage ? "home-page--explorer-only" : "",
     roleName === "applicant" ? "home-page--applicant" : "",
     roleName === "employer" ? "home-page--employer" : "",
     roleName === "curator" ? "home-page--curator" : "",
@@ -630,7 +721,7 @@ export function HomePage() {
     isMapExpandedLayout ? "home-page--map-expanded" : "",
     isMapCollapsing ? "home-page--map-folding" : "",
   ]
-    .filter(Boolean)
+      .filter(Boolean)
     .join(" ");
   const explorerClassName = isMapExpandedLayout
     ? "home-page__explorer home-page__explorer--expanded"
@@ -687,6 +778,7 @@ export function HomePage() {
 
   useEffect(() => () => {
     clearMapTransitionTimeout();
+    clearExplorerMapScrollTimeout();
     clearProfileMenuCloseTimeout();
   }, []);
 
@@ -711,10 +803,16 @@ export function HomePage() {
       restoreScrollY?: number;
       restoreViewMode?: "list" | "map";
       restoreSelectedOpportunityId?: string;
+      returnTo?: {
+        pathname: string;
+        search?: string;
+        hash?: string;
+      };
     } | null;
     const restoreScrollY = navigationState?.restoreScrollY;
     const restoreViewMode = navigationState?.restoreViewMode;
     const restoreSelectedOpportunityId = navigationState?.restoreSelectedOpportunityId;
+    const returnTo = navigationState?.returnTo;
 
     if (
       typeof restoreScrollY !== "number" &&
@@ -732,6 +830,22 @@ export function HomePage() {
       setSelectedOpportunityId(restoreSelectedOpportunityId);
     }
 
+    if (returnTo?.pathname) {
+      setExplorerBackNavigationTarget({
+        to: `${returnTo.pathname}${returnTo.search ?? ""}${returnTo.hash ?? ""}`,
+        replace: false,
+      });
+    }
+
+    if (
+      isExplorerPage &&
+      restoreViewMode === "map" &&
+      typeof restoreSelectedOpportunityId === "string" &&
+      typeof restoreScrollY !== "number"
+    ) {
+      pendingExplorerMapScrollRef.current = true;
+    }
+
     if (typeof restoreScrollY === "number") {
       pendingProfileReturnScrollYRef.current = restoreScrollY;
     }
@@ -744,7 +858,30 @@ export function HomePage() {
       replace: true,
       state: null,
     });
-  }, [location.hash, location.pathname, location.search, location.state, navigate]);
+  }, [isExplorerPage, location.hash, location.pathname, location.search, location.state, navigate]);
+
+  useLayoutEffect(() => {
+    const navigationState = location.state as {
+      restoreViewMode?: "list" | "map";
+      restoreSelectedOpportunityId?: string;
+      returnTo?: {
+        pathname: string;
+        search?: string;
+        hash?: string;
+      };
+    } | null;
+
+    if (
+      !isExplorerPage ||
+      navigationState?.restoreViewMode !== "map" ||
+      typeof navigationState?.restoreSelectedOpportunityId !== "string" ||
+      !navigationState?.returnTo?.pathname
+    ) {
+      return;
+    }
+
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [isExplorerPage, location.state]);
 
   useEffect(() => {
     if (pendingProfileReturnScrollYRef.current === null || opportunitiesQuery.isPending) {
@@ -761,6 +898,42 @@ export function HomePage() {
       });
     });
   }, [opportunitiesQuery.isPending, displayedOpportunities.length]);
+
+  useEffect(() => {
+    if (!isExplorerPage || !pendingExplorerMapScrollRef.current || opportunitiesQuery.isPending) {
+      return;
+    }
+
+    const target = mapSectionRef.current;
+    if (!target) {
+      return;
+    }
+
+    pendingExplorerMapScrollRef.current = false;
+
+    clearExplorerMapScrollTimeout();
+
+    const scrollToExplorerHeader = () => {
+      const top = target.getBoundingClientRect().top + window.scrollY - 12;
+      window.scrollTo({
+        top: Math.max(top, 0),
+        behavior: "auto",
+      });
+    };
+
+    window.requestAnimationFrame(() => {
+      scrollToExplorerHeader();
+    });
+
+    explorerMapScrollTimeoutRef.current = window.setTimeout(() => {
+      scrollToExplorerHeader();
+      explorerMapScrollTimeoutRef.current = null;
+    }, 180);
+
+    return () => {
+      clearExplorerMapScrollTimeout();
+    };
+  }, [displayedOpportunities.length, isExplorerPage, opportunitiesQuery.isPending]);
 
   useEffect(() => {
     if (selectedOpportunityId && !displayedOpportunities.some((opportunity) => opportunity.id === selectedOpportunityId)) {
@@ -813,7 +986,7 @@ export function HomePage() {
       return;
     }
 
-    if (location.hash === "#opportunity-map") {
+    if (isExplorerPage || location.hash === "#opportunity-map") {
       setShouldMountMap(true);
       return;
     }
@@ -842,7 +1015,7 @@ export function HomePage() {
     return () => {
       observer.disconnect();
     };
-  }, [location.hash, shouldMountMap]);
+  }, [isExplorerPage, location.hash, shouldMountMap]);
 
   useEffect(() => {
     const preferredCity = currentUserQuery.data?.data?.user?.preferred_city?.trim();
@@ -968,20 +1141,7 @@ export function HomePage() {
     navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`);
   };
   const handleFindOpportunity = () => {
-    if (!isAuthenticated) {
-      navigate("/register?role=applicant");
-      return;
-    }
-
-    const filtersElement = document.querySelector(".opportunity-filters");
-
-    if (!filtersElement) {
-      document.getElementById("opportunity-map")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-
-    const top = filtersElement.getBoundingClientRect().top + window.scrollY - 10;
-    window.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+    navigate(buildOpportunityExplorerRoute(selectedCategoryFilter));
   };
   const handleCreateOpportunity = () => {
     if (!isAuthenticated) {
@@ -995,23 +1155,21 @@ export function HomePage() {
   const categoryNavigation = (
     <>
       <nav className="header__categories" aria-label="Категории">
-        {opportunityCategoryLinks.map((item) => (
-          <Link
-            key={item.value}
-            to={{
-              pathname: "/",
-              search: item.value === "all" ? "" : `?category=${item.value}`,
-              hash: "#opportunity-map",
-            }}
-            className={
-              selectedCategoryFilter === item.value
-                ? "header__category-link active"
-                : "header__category-link"
-            }
-            aria-current={selectedCategoryFilter === item.value ? "page" : undefined}
-          >
-            {item.label}
-          </Link>
+                {opportunityCategoryLinks.map((item) => (
+                  <Link
+                    key={item.value}
+                    to={buildOpportunityExplorerRoute(item.value)}
+                    className={
+                      location.pathname === OPPORTUNITY_EXPLORER_PATH && selectedCategoryFilter === item.value
+                        ? "header__category-link active"
+                        : "header__category-link"
+                    }
+                    aria-current={
+                      location.pathname === OPPORTUNITY_EXPLORER_PATH && selectedCategoryFilter === item.value ? "page" : undefined
+                    }
+                  >
+                    {item.label}
+                  </Link>
         ))}
       </nav>
 
@@ -1028,7 +1186,7 @@ export function HomePage() {
         containerClassName="home-page__shell"
         profileMenuItems={profileMenuItems}
         theme={isMapExpandedLayout ? "employer" : landingTheme}
-        variant={isModerationRole || isMapExpandedLayout ? "default" : "landing"}
+        variant={isModerationRole || isMapExpandedLayout || isExplorerPage ? "default" : "landing"}
         city={isCityReady ? displayCity : undefined}
         onCityChange={isCityReady ? handleCityChange : undefined}
         isAuthenticated={isAuthenticated}
@@ -1070,15 +1228,153 @@ export function HomePage() {
             categoryNavigation
           )
         }
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
+        searchValue={headerSearchQuery}
+        onSearchChange={setHeaderSearchQuery}
       />
 
       {isModerationRole ? (
         <ModerationDashboardContent footerTheme={isAdmin ? "admin" : "curator"} />
       ) : null}
 
-      {isModerationRole ? null : (
+      {isModerationRole ? null : isExplorerPage ? (
+        <>
+          <section className="home-page__section-groups">
+            <Container className="home-page__shell home-page__section-groups-shell">
+              {shouldShowExplorerBackNavigation ? (
+                explorerBackNavigationTarget ? (
+                  <BackNavigation className="home-page__back-navigation" {...explorerBackNavigationTarget} fallbackTo="/" />
+                ) : (
+                  <BackNavigation className="home-page__back-navigation" fallbackTo="/" />
+                )
+              ) : null}
+              <div ref={mapSectionRef} className="home-page__map-section" id="opportunity-map">
+                <div className="home-page__map-section-head">
+                  <div className="home-page__section-heading home-page__section-heading--compact">
+                    <h1 className="home-page__section-title">{explorerTitle}</h1>
+                  </div>
+                </div>
+
+                <div className="home-page__map-shell">
+                  <div className={explorerClassName}>
+                    <OpportunityFilters
+                      viewMode={viewMode}
+                      isMapExpanded={isMapExpandedLayout}
+                      roleName={roleName}
+                      searchValue={opportunitySearchQuery}
+                      onSearchChange={setOpportunitySearchQuery}
+                      filterValue={toolbarFilters}
+                      onFilterChange={setToolbarFilters}
+                      onViewModeChange={setViewMode}
+                    />
+
+                    <div
+                      className={
+                        viewMode === "list"
+                          ? "home-page__explorer-summary home-page__explorer-summary--list"
+                          : "home-page__explorer-summary"
+                      }
+                    >
+                      <div
+                        className={
+                          viewMode === "map"
+                            ? [
+                                "home-page__explorer-panel",
+                                "home-page__explorer-panel--active",
+                                isMapFloating ? "home-page__explorer-panel--map-floating" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")
+                            : "home-page__explorer-panel home-page__explorer-panel--hidden"
+                        }
+                        ref={viewMode === "map" ? mapPanelShellRef : undefined}
+                        style={
+                          viewMode === "map" && isMapFloating && mapPanelPlaceholderHeight !== null
+                            ? { minHeight: `${mapPanelPlaceholderHeight}px` }
+                            : undefined
+                        }
+                        aria-hidden={viewMode !== "map"}
+                      >
+                        <div
+                          className={
+                            isMapFloating
+                              ? `home-page__map-panel-overlay home-page__map-panel-overlay--${mapExpandMode}`
+                              : "home-page__map-panel-overlay"
+                          }
+                        >
+                          <div
+                            ref={mapPanelLiveRef}
+                            className={
+                              isMapTransitioning
+                                ? "home-page__map-panel-live home-page__map-panel-live--hidden"
+                                : "home-page__map-panel-live"
+                            }
+                          >
+                            {shouldMountMap ? (
+                              <MapView
+                                opportunities={displayedOpportunities}
+                                favoriteOpportunityIds={favoriteOpportunityIds}
+                                appliedOpportunityIds={appliedOpportunityIds}
+                                applicationStatusByOpportunityId={applicationStatusByOpportunityId}
+                                selectedOpportunityId={selectedOpportunityId}
+                                selectedCity={selectedCity}
+                                searchQuery={opportunitySearchQuery}
+                                selectedCityViewport={selectedCityViewport}
+                                isExpanded={isMapExpanded}
+                                isTransitioning={isMapTransitioning}
+                                roleName={roleName}
+                                onSelectOpportunity={setSelectedOpportunityId}
+                                onToggleFavorite={handleToggleFavorite}
+                                onSelectCity={handleCityChange}
+                                onCloseDetails={() => setSelectedOpportunityId(null)}
+                                onToggleExpand={handleToggleMapExpand}
+                                onApply={handleApplyOpportunity}
+                              />
+                            ) : (
+                              <div className="home-page__map-lazy-placeholder" aria-hidden="true" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        className={
+                          viewMode === "list"
+                            ? "home-page__explorer-panel home-page__explorer-panel--active"
+                            : "home-page__explorer-panel home-page__explorer-panel--hidden"
+                        }
+                        aria-hidden={viewMode !== "list"}
+                      >
+                        <OpportunityList
+                          opportunities={displayedOpportunities}
+                          favoriteOpportunityIds={favoriteOpportunityIds}
+                          appliedOpportunityIds={appliedOpportunityIds}
+                          applicationStatusByOpportunityId={applicationStatusByOpportunityId}
+                          roleName={roleName}
+                          isLoading={isOpportunityDataLoading}
+                          onToggleFavorite={handleToggleFavorite}
+                          onApply={handleApplyOpportunity}
+                          onWrite={handleWriteToEmployer}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </Container>
+          </section>
+
+          <div
+            className={
+              isMapTransitioning
+                ? `home-page__map-panel-proxy home-page__map-panel-proxy--${mapExpandMode}`
+                : "home-page__map-panel-proxy home-page__map-panel-proxy--hidden"
+            }
+            style={mapPanelFrameStyle}
+          >
+            <div ref={mapPanelProxyContentRef} className="home-page__map-panel-summary" />
+          </div>
+        </>
+      ) : (
         <>
           <section className="home-page__hero">
             <Container className="home-page__shell home-page__hero-shell">
@@ -1196,8 +1492,8 @@ export function HomePage() {
                       viewMode={viewMode}
                       isMapExpanded={isMapExpandedLayout}
                       roleName={roleName}
-                      searchValue={searchQuery}
-                      onSearchChange={setSearchQuery}
+                      searchValue={opportunitySearchQuery}
+                      onSearchChange={setOpportunitySearchQuery}
                       filterValue={toolbarFilters}
                       onFilterChange={setToolbarFilters}
                       onViewModeChange={setViewMode}
@@ -1253,7 +1549,7 @@ export function HomePage() {
                                 applicationStatusByOpportunityId={applicationStatusByOpportunityId}
                                 selectedOpportunityId={selectedOpportunityId}
                                 selectedCity={selectedCity}
-                                searchQuery={searchQuery}
+                                searchQuery={opportunitySearchQuery}
                                 selectedCityViewport={selectedCityViewport}
                                 isExpanded={isMapExpanded}
                                 isTransitioning={isMapTransitioning}
@@ -1295,16 +1591,18 @@ export function HomePage() {
                   </div>
                 </div>
 
-                <div className="home-page__highlights-showcase">
-                  {mapHighlights.map((highlight) => (
-                    <article key={highlight.accent} className="home-page__highlight-card">
-                      <p className="home-page__highlight-text">
-                        <span className="home-page__highlight-accent">{highlight.accent}</span>
-                        {highlight.text}
-                      </p>
-                    </article>
-                  ))}
-                </div>
+                {viewMode === "map" ? (
+                  <div className="home-page__highlights-showcase">
+                    {mapHighlights.map((highlight) => (
+                      <article key={highlight.accent} className="home-page__highlight-card">
+                        <p className="home-page__highlight-text">
+                          <span className="home-page__highlight-accent">{highlight.accent}</span>
+                          {highlight.text}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <section className="home-page__directions-section">

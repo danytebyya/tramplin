@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import { CitySelection, CitySelector, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { Opportunity } from "../../entities/opportunity";
 import { listOpportunitiesRequest } from "../../entities/opportunity/api";
@@ -19,7 +20,13 @@ import {
 } from "../../features/favorites";
 import { useAuthStore } from "../../features/auth";
 import { useNotificationsRealtime } from "../../features/notifications";
-import { matchesOpportunitySearch, normalizeOpportunitySearchText } from "../../shared/lib";
+import {
+  buildOpportunityExplorerRoute,
+  buildOpportunitySearchText,
+  normalizeOpportunitySearchText,
+  opportunityCategoryLinks,
+  OPPORTUNITY_EXPLORER_PATH,
+} from "../../shared/lib";
 import { Badge, Button, Checkbox, Container, Input, ProfileTabs, Radio, Status, VerifiedTooltip } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildApplicantProfileMenuItems, Header } from "../../widgets/header";
@@ -27,9 +34,9 @@ import "../favorites/favorites.css";
 import "../settings/settings.css";
 import "./applications.css";
 
-type OpportunityCategoryFilter = "all" | Opportunity["kind"];
 type ApplicantApplicationStatus = "accepted" | "pending" | "reserve" | "rejected" | "withdrawn";
 type ApplicationMetricKey = "total" | ApplicantApplicationStatus;
+type ApplicationSortField = "title" | "published";
 type ApplicationSortDirection = "asc" | "desc";
 
 type ApplicantApplicationItem = {
@@ -55,67 +62,71 @@ const metricDefinitions: Array<{ key: ApplicationMetricKey; label: string }> = [
   { key: "rejected", label: "Отклонено:" },
 ];
 
-const levelOptions = ["Junior", "Middle", "Senior"];
-const formatOptions = ["Офлайн", "Гибрид", "Удалённо"];
-const companyOptions = ["Только верифицированные компании", "Только с рейтингом 4,5 и выше"];
+const ALL_TIME_PUBLICATION_OPTION = "За все время";
+const publicationOptions = ["За неделю", "За месяц", ALL_TIME_PUBLICATION_OPTION];
 const applicationStatusOptions: Array<{ value: ApplicantApplicationStatus; label: string }> = [
   { value: "accepted", label: "Принято" },
   { value: "pending", label: "На рассмотрении" },
-  { value: "reserve", label: "В резерве" },
   { value: "rejected", label: "Отклонено" },
-  { value: "withdrawn", label: "Отозвано соискателем" },
 ];
 
-const opportunityCategoryLinks: Array<{ value: OpportunityCategoryFilter; label: string }> = [
-  { value: "all", label: "Все" },
-  { value: "vacancy", label: "Вакансии" },
-  { value: "internship", label: "Стажировки" },
-  { value: "event", label: "Мероприятия" },
-  { value: "mentorship", label: "Менторские программы" },
-];
+function matchesApplicationsSearch(item: ApplicantApplicationItem, query: string) {
+  const normalizedQuery = normalizeOpportunitySearchText(query);
 
-function normalizeFilterText(value: string) {
-  return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const statusMeta = resolveApplicationStatusMeta(item.status);
+  const searchableText = normalizeOpportunitySearchText([
+    buildOpportunitySearchText(item.opportunity),
+    statusMeta.label,
+    item.statusMessage,
+    item.employerComment,
+    item.interviewFormat,
+    item.contactEmail,
+  ].filter(Boolean).join(" "));
+
+  return searchableText.includes(normalizedQuery);
 }
 
-function normalizeFormatOption(value: string): Opportunity["format"] | null {
-  const normalized = normalizeFilterText(value);
-
-  if (normalized.includes("гибрид")) {
-    return "hybrid";
+function matchesPublicationPeriod(value: string | null | undefined, periods: string[]) {
+  if (
+    periods.length === 0 ||
+    periods.includes(ALL_TIME_PUBLICATION_OPTION) ||
+    periods.includes("За все время")
+  ) {
+    return true;
   }
 
-  if (normalized.includes("удален")) {
-    return "remote";
+  if (!value) {
+    return false;
   }
 
-  if (normalized.includes("оффлайн") || normalized.includes("офлайн")) {
-    return "office";
+  const publishedAt = new Date(value);
+  if (Number.isNaN(publishedAt.getTime())) {
+    return false;
   }
 
-  return null;
+  const now = Date.now();
+  const elapsedMs = now - publishedAt.getTime();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+
+  return periods.some((period) => {
+    if (period === "За неделю") {
+      return elapsedMs <= oneDayMs * 7;
+    }
+
+    if (period === "За месяц") {
+      return elapsedMs <= oneDayMs * 30;
+    }
+
+    return false;
+  });
 }
 
-function normalizeLevelOption(value: string) {
-  const normalized = normalizeFilterText(value);
-
-  if (normalized.includes("junior")) {
-    return "junior";
-  }
-
-  if (normalized.includes("middle")) {
-    return "middle";
-  }
-
-  if (normalized.includes("senior")) {
-    return "senior";
-  }
-
-  if (normalized.includes("стаж")) {
-    return "intern";
-  }
-
-  return normalized;
+function easeOutQuad(value: number) {
+  return 1 - (1 - value) * (1 - value);
 }
 
 function formatCount(value: number) {
@@ -230,7 +241,11 @@ function buildApplicationDetails(
 
 function openEmployerContacts(opportunity: Opportunity, navigate: ReturnType<typeof useNavigate>) {
   if (opportunity.employerPublicId) {
-    navigate(`/profiles/${opportunity.employerPublicId}`);
+    navigate(`/profiles/${opportunity.employerPublicId}`, {
+      state: {
+        ownerRole: "employer",
+      },
+    });
     return;
   }
 
@@ -266,6 +281,7 @@ function toggleKindValue(
 }
 
 export function ApplicationsPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const filtersRef = useRef<HTMLDivElement | null>(null);
@@ -284,12 +300,10 @@ export function ApplicationsPage() {
   const [appliedKinds, setAppliedKinds] = useState<Array<Opportunity["kind"] | "all">>(["all"]);
   const [selectedStatuses, setSelectedStatuses] = useState<ApplicantApplicationStatus[]>([]);
   const [appliedStatuses, setAppliedStatuses] = useState<ApplicantApplicationStatus[]>([]);
-  const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
-  const [appliedLevels, setAppliedLevels] = useState<string[]>([]);
-  const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
-  const [appliedFormats, setAppliedFormats] = useState<string[]>([]);
-  const [selectedCompanyOptions, setSelectedCompanyOptions] = useState<string[]>([]);
-  const [appliedCompanyOptions, setAppliedCompanyOptions] = useState<string[]>([]);
+  const [selectedPublicationPeriods, setSelectedPublicationPeriods] = useState<string[]>([ALL_TIME_PUBLICATION_OPTION]);
+  const [appliedPublicationPeriods, setAppliedPublicationPeriods] = useState<string[]>([ALL_TIME_PUBLICATION_OPTION]);
+  const [selectedSortField, setSelectedSortField] = useState<ApplicationSortField>("published");
+  const [appliedSortField, setAppliedSortField] = useState<ApplicationSortField>("published");
   const [selectedSortDirection, setSelectedSortDirection] = useState<ApplicationSortDirection>("desc");
   const [appliedSortDirection, setAppliedSortDirection] = useState<ApplicationSortDirection>("desc");
   const [expandedApplicationIds, setExpandedApplicationIds] = useState<string[]>([]);
@@ -392,6 +406,104 @@ export function ApplicationsPage() {
     };
   }, [isFilterOpen, isSortOpen]);
 
+  useEffect(() => {
+    if (!isFilterOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const filtersElement = filtersRef.current;
+      if (!filtersElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = filtersElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isFilterOpen]);
+
+  useEffect(() => {
+    if (!isSortOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const sortingElement = sortingRef.current;
+      if (!sortingElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = sortingElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isSortOpen]);
+
   const favoriteOpportunityIds = favoriteOpportunitiesQuery.data?.data?.items ?? [];
   const appliedOpportunityIds = useMemo(
     () => (myApplicationsQuery.data?.data?.items ?? []).map((item) => item.opportunity_id),
@@ -424,36 +536,13 @@ export function ApplicationsPage() {
     [appliedOpportunities, applicationRecordMap],
   );
 
-  const tagOptions = useMemo(() => {
-    const tagMap = new Map<string, string>();
-
-    applicationItems.forEach((item) => {
-      item.opportunity.tags.forEach((tag) => {
-        const normalized = tag.trim();
-        if (!normalized) {
-          return;
-        }
-        tagMap.set(normalized.toLocaleLowerCase("ru-RU"), normalized);
-      });
-    });
-
-    return Array.from(tagMap.values()).sort((left, right) => left.localeCompare(right, "ru"));
-  }, [applicationItems]);
-
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [appliedTags, setAppliedTags] = useState<string[]>([]);
-
   const filteredApplications = useMemo(() => {
     const normalizedSearch = normalizeOpportunitySearchText(appliedSearch);
-    const normalizedFormats = appliedFormats
-      .map(normalizeFormatOption)
-      .filter((item): item is Opportunity["format"] => Boolean(item));
-    const normalizedLevels = appliedLevels.map(normalizeLevelOption);
 
     return applicationItems.filter((item) => {
       const { opportunity } = item;
 
-      if (!matchesOpportunitySearch(opportunity, normalizedSearch)) {
+      if (!matchesApplicationsSearch(item, normalizedSearch)) {
         return false;
       }
 
@@ -465,55 +554,30 @@ export function ApplicationsPage() {
         return false;
       }
 
-      if (normalizedLevels.length > 0 && !normalizedLevels.includes(normalizeLevelOption(opportunity.levelLabel))) {
+      if (!matchesPublicationPeriod(item.submittedAt, appliedPublicationPeriods)) {
         return false;
-      }
-
-      if (normalizedFormats.length > 0 && !normalizedFormats.includes(opportunity.format)) {
-        return false;
-      }
-
-      if (
-        appliedCompanyOptions.includes("Только верифицированные компании") &&
-        !opportunity.companyVerified
-      ) {
-        return false;
-      }
-
-      if (
-        appliedCompanyOptions.includes("Только с рейтингом 4,5 и выше") &&
-        (opportunity.companyRating ?? 0) < 4.5
-      ) {
-        return false;
-      }
-
-      if (appliedTags.length > 0) {
-        const normalizedTags = opportunity.tags.map((tag) => normalizeFilterText(tag));
-        const hasMatchingTag = appliedTags.some((tag) => normalizedTags.includes(normalizeFilterText(tag)));
-        if (!hasMatchingTag) {
-          return false;
-        }
       }
 
       return true;
     });
   }, [
     applicationItems,
-    appliedCompanyOptions,
-    appliedFormats,
     appliedKinds,
-    appliedLevels,
+    appliedPublicationPeriods,
     appliedSearch,
     appliedStatuses,
-    appliedTags,
   ]);
 
   const sortedApplications = useMemo(() => {
     return [...filteredApplications].sort((left, right) => {
-      const comparison = new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime();
+      const comparison =
+        appliedSortField === "published"
+          ? new Date(left.submittedAt).getTime() - new Date(right.submittedAt).getTime()
+          : left.opportunity.title.localeCompare(right.opportunity.title, "ru");
       return appliedSortDirection === "asc" ? comparison : -comparison;
     });
-  }, [appliedSortDirection, filteredApplications]);
+  }, [appliedSortDirection, appliedSortField, filteredApplications]);
+  const hasSearchResults = appliedSearch.trim().length > 0 && sortedApplications.length === 0;
 
   const stats = useMemo(() => {
     return applicationItems.reduce(
@@ -547,14 +611,12 @@ export function ApplicationsPage() {
   const applyFilters = () => {
     setAppliedKinds(selectedKinds);
     setAppliedStatuses(selectedStatuses);
-    setAppliedLevels(selectedLevels);
-    setAppliedFormats(selectedFormats);
-    setAppliedCompanyOptions(selectedCompanyOptions);
-    setAppliedTags(selectedTags);
+    setAppliedPublicationPeriods(selectedPublicationPeriods);
     setIsFilterOpen(false);
   };
 
   const applySorting = () => {
+    setAppliedSortField(selectedSortField);
     setAppliedSortDirection(selectedSortDirection);
     setIsSortOpen(false);
   };
@@ -564,18 +626,14 @@ export function ApplicationsPage() {
     setAppliedKinds(["all"]);
     setSelectedStatuses([]);
     setAppliedStatuses([]);
-    setSelectedLevels([]);
-    setAppliedLevels([]);
-    setSelectedFormats([]);
-    setAppliedFormats([]);
-    setSelectedCompanyOptions([]);
-    setAppliedCompanyOptions([]);
-    setSelectedTags([]);
-    setAppliedTags([]);
+    setSelectedPublicationPeriods([ALL_TIME_PUBLICATION_OPTION]);
+    setAppliedPublicationPeriods([ALL_TIME_PUBLICATION_OPTION]);
     setIsFilterOpen(false);
   };
 
   const resetSorting = () => {
+    setSelectedSortField("published");
+    setAppliedSortField("published");
     setSelectedSortDirection("desc");
     setAppliedSortDirection("desc");
     setIsSortOpen(false);
@@ -623,12 +681,9 @@ export function ApplicationsPage() {
               {opportunityCategoryLinks.map((item) => (
                 <Link
                   key={item.value}
-                  to={{
-                    pathname: "/",
-                    search: item.value === "all" ? "" : `?category=${item.value}`,
-                    hash: "#opportunity-map",
-                  }}
+                  to={buildOpportunityExplorerRoute(item.value)}
                   className="header__category-link"
+                  aria-current={location.pathname === OPPORTUNITY_EXPLORER_PATH ? "page" : undefined}
                 >
                   {item.label}
                 </Link>
@@ -695,13 +750,28 @@ export function ApplicationsPage() {
                   setIsFilterOpen((current) => !current);
                 }}
               >
-                <span className="favorites-page__icon favorites-page__icon--filter" aria-hidden="true" />
+                <span className="favorites-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isFilterOpen
+                        ? "favorites-page__icon favorites-page__icon--filter favorites-page__icon--hidden"
+                        : "favorites-page__icon favorites-page__icon--filter"
+                    }
+                  />
+                  <span
+                    className={
+                      isFilterOpen
+                        ? "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--visible"
+                        : "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isFilterOpen ? (
                 <div className="favorites-page__popover">
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
                       <h2 className="favorites-page__popover-title">Фильтры</h2>
                       <button type="button" className="favorites-page__popover-reset" onClick={resetFilters}>
                         Сбросить
@@ -710,36 +780,13 @@ export function ApplicationsPage() {
                   </div>
 
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Статус отклика</h3>
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">Тип</h3>
+                      <button type="button" className="favorites-page__popover-reset" onClick={() => setSelectedKinds(["all"])}>
+                        Сбросить
+                      </button>
                     </div>
-                    <div className="favorites-page__option-list">
-                      {applicationStatusOptions.map((option) => (
-                        <label key={option.value} className="favorites-page__option">
-                          <Checkbox
-                            checked={selectedStatuses.includes(option.value)}
-                            onChange={() => toggleMultiValue(option.value, selectedStatuses, setSelectedStatuses)}
-                            variant="secondary"
-                          />
-                          <span>{option.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Тип возможностей</h3>
-                    </div>
-                    <div className="favorites-page__option-list">
-                      <label className="favorites-page__option">
-                        <Checkbox
-                          checked={selectedKinds.includes("all")}
-                          onChange={() => toggleKindValue("all", setSelectedKinds, selectedKinds)}
-                          variant="secondary"
-                        />
-                        <span>Все</span>
-                      </label>
+                    <div className="favorites-page__option-list favorites-page__option-list--grid">
                       <label className="favorites-page__option">
                         <Checkbox
                           checked={selectedKinds.includes("vacancy")}
@@ -776,82 +823,58 @@ export function ApplicationsPage() {
                   </div>
 
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Уровень</h3>
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">Статус</h3>
+                      <button type="button" className="favorites-page__popover-reset" onClick={() => setSelectedStatuses([])}>
+                        Сбросить
+                      </button>
                     </div>
-                    <div className="favorites-page__option-list">
-                      {levelOptions.map((option) => (
-                        <label key={option} className="favorites-page__option">
+                    <div className="favorites-page__option-list favorites-page__option-list--grid">
+                      {applicationStatusOptions.map((option) => (
+                        <label key={option.value} className="favorites-page__option">
                           <Checkbox
-                            checked={selectedLevels.includes(option)}
-                            onChange={() => toggleMultiValue(option, selectedLevels, setSelectedLevels)}
+                            checked={selectedStatuses.includes(option.value)}
+                            onChange={() => toggleMultiValue(option.value, selectedStatuses, setSelectedStatuses)}
                             variant="secondary"
                           />
-                          <span>{option}</span>
+                          <span>{option.label}</span>
                         </label>
                       ))}
                     </div>
                   </div>
 
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Формат</h3>
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">Дата добавления</h3>
+                      <button
+                        type="button"
+                        className="favorites-page__popover-reset"
+                        onClick={() => setSelectedPublicationPeriods([ALL_TIME_PUBLICATION_OPTION])}
+                      >
+                        Сбросить
+                      </button>
                     </div>
-                    <div className="favorites-page__option-list">
-                      {formatOptions.map((option) => (
+                    <div className="favorites-page__option-list favorites-page__option-list--grid">
+                      {publicationOptions.map((option) => (
                         <label key={option} className="favorites-page__option">
-                          <Checkbox
-                            checked={selectedFormats.includes(option)}
-                            onChange={() => toggleMultiValue(option, selectedFormats, setSelectedFormats)}
+                          <Radio
+                            checked={selectedPublicationPeriods.includes(option)}
+                            onChange={() => setSelectedPublicationPeriods([option])}
                             variant="secondary"
+                            name="applications-publication-period"
                           />
                           <span>{option}</span>
                         </label>
                       ))}
                     </div>
                   </div>
-
-                  <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
-                      <h3 className="favorites-page__popover-group-title">Компания</h3>
-                    </div>
-                    <div className="favorites-page__option-list">
-                      {companyOptions.map((option) => (
-                        <label key={option} className="favorites-page__option">
-                          <Checkbox
-                            checked={selectedCompanyOptions.includes(option)}
-                            onChange={() => toggleMultiValue(option, selectedCompanyOptions, setSelectedCompanyOptions)}
-                            variant="secondary"
-                          />
-                          <span>{option}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {tagOptions.length > 0 ? (
-                    <div className="favorites-page__popover-section">
-                      <div className="favorites-page__popover-head">
-                        <h3 className="favorites-page__popover-group-title">Теги</h3>
-                      </div>
-                      <div className="favorites-page__option-list favorites-page__option-list--tags">
-                        {tagOptions.map((option) => (
-                          <label key={option} className="favorites-page__option">
-                            <Checkbox
-                              checked={selectedTags.includes(option)}
-                              onChange={() => toggleMultiValue(option, selectedTags, setSelectedTags)}
-                              variant="secondary"
-                            />
-                            <span>{option}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
 
                   <div className="favorites-page__popover-footer">
-                    <Button type="button" variant="secondary" size="sm" onClick={applyFilters}>
-                      Применить
+                    <Button type="button" variant="secondary" size="sm" fullWidth onClick={applyFilters}>
+                      Показать результаты
+                    </Button>
+                    <Button type="button" variant="secondary-outline" size="sm" fullWidth onClick={resetFilters}>
+                      Сбросить фильтры
                     </Button>
                   </div>
                 </div>
@@ -869,20 +892,30 @@ export function ApplicationsPage() {
                   setIsSortOpen((current) => !current);
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  className={
-                    appliedSortDirection === "desc"
-                      ? "favorites-page__icon favorites-page__icon--sorting"
-                      : "favorites-page__icon favorites-page__icon--sorting favorites-page__icon--ascending"
-                  }
-                />
+                <span className="favorites-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isSortOpen
+                        ? `favorites-page__icon ${appliedSortDirection === "desc" ? "favorites-page__icon--sorting" : "favorites-page__icon--sorting favorites-page__icon--ascending"} favorites-page__icon--hidden`
+                        : appliedSortDirection === "desc"
+                          ? "favorites-page__icon favorites-page__icon--sorting"
+                          : "favorites-page__icon favorites-page__icon--sorting favorites-page__icon--ascending"
+                    }
+                  />
+                  <span
+                    className={
+                      isSortOpen
+                        ? "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--visible"
+                        : "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isSortOpen ? (
                 <div className="favorites-page__popover favorites-page__popover--compact">
                   <div className="favorites-page__popover-section">
-                    <div className="favorites-page__popover-head">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
                       <h2 className="favorites-page__popover-title">Сортировка</h2>
                       <button type="button" className="favorites-page__popover-reset" onClick={resetSorting}>
                         Сбросить
@@ -891,22 +924,83 @@ export function ApplicationsPage() {
                   </div>
 
                   <div className="favorites-page__popover-section">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">По названию</h3>
+                      <button
+                        type="button"
+                        className="favorites-page__popover-reset"
+                        onClick={() => {
+                          setSelectedSortField("title");
+                          setSelectedSortDirection("asc");
+                        }}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
                     <div className="favorites-page__option-list">
                       <label className="favorites-page__option">
                         <Radio
-                          checked={selectedSortDirection === "desc"}
-                          onChange={() => setSelectedSortDirection("desc")}
+                          checked={selectedSortField === "title" && selectedSortDirection === "asc"}
+                          onChange={() => {
+                            setSelectedSortField("title");
+                            setSelectedSortDirection("asc");
+                          }}
                           variant="secondary"
-                          name="applications-sort-direction"
+                          name="applications-sort-title"
+                        />
+                        <span>А-Я</span>
+                      </label>
+                      <label className="favorites-page__option">
+                        <Radio
+                          checked={selectedSortField === "title" && selectedSortDirection === "desc"}
+                          onChange={() => {
+                            setSelectedSortField("title");
+                            setSelectedSortDirection("desc");
+                          }}
+                          variant="secondary"
+                          name="applications-sort-title"
+                        />
+                        <span>Я-А</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="favorites-page__popover-section">
+                    <div className="favorites-page__popover-head favorites-page__popover-head--stacked">
+                      <h3 className="favorites-page__popover-group-title">По дате добавления</h3>
+                      <button
+                        type="button"
+                        className="favorites-page__popover-reset"
+                        onClick={() => {
+                          setSelectedSortField("published");
+                          setSelectedSortDirection("desc");
+                        }}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                    <div className="favorites-page__option-list">
+                      <label className="favorites-page__option">
+                        <Radio
+                          checked={selectedSortField === "published" && selectedSortDirection === "desc"}
+                          onChange={() => {
+                            setSelectedSortField("published");
+                            setSelectedSortDirection("desc");
+                          }}
+                          variant="secondary"
+                          name="applications-sort-published"
                         />
                         <span>Сначала новые</span>
                       </label>
                       <label className="favorites-page__option">
                         <Radio
-                          checked={selectedSortDirection === "asc"}
-                          onChange={() => setSelectedSortDirection("asc")}
+                          checked={selectedSortField === "published" && selectedSortDirection === "asc"}
+                          onChange={() => {
+                            setSelectedSortField("published");
+                            setSelectedSortDirection("asc");
+                          }}
                           variant="secondary"
-                          name="applications-sort-direction"
+                          name="applications-sort-published"
                         />
                         <span>Сначала старые</span>
                       </label>
@@ -915,7 +1009,10 @@ export function ApplicationsPage() {
 
                   <div className="favorites-page__popover-footer">
                     <Button type="button" variant="secondary" size="sm" fullWidth onClick={applySorting}>
-                      Применить
+                      Показать результаты
+                    </Button>
+                    <Button type="button" variant="secondary-outline" size="sm" fullWidth onClick={resetSorting}>
+                      Сбросить параметры
                     </Button>
                   </div>
                 </div>
@@ -941,7 +1038,7 @@ export function ApplicationsPage() {
               const statusMeta = resolveApplicationStatusMeta(item.status);
               const isFavorite = favoriteOpportunityIds.includes(opportunity.id);
               const isExpanded = expandedApplicationIds.includes(opportunity.id);
-              const canWithdraw = item.status !== "accepted" && item.status !== "rejected" && item.status !== "withdrawn";
+              const canWithdraw = item.status !== "rejected" && item.status !== "withdrawn";
 
               return (
                 <article key={opportunity.id} className="applications-page__card">
@@ -1135,7 +1232,26 @@ export function ApplicationsPage() {
                         </div>
                       </section>
 
-                      {canWithdraw ? (
+                      {item.status === "accepted" ? (
+                        <div className="applications-page__detail-actions">
+                          <Button
+                            type="button"
+                            variant="secondary-outline"
+                            size="md"
+                            onClick={() => navigate(`/networking?employerId=${encodeURIComponent(opportunity.employerId)}`)}
+                          >
+                            Перенести собеседование
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger-outline"
+                            size="md"
+                            onClick={() => setPendingWithdrawOpportunityId(opportunity.id)}
+                          >
+                            Отказаться от вакансии
+                          </Button>
+                        </div>
+                      ) : canWithdraw ? (
                         <div className="applications-page__detail-actions">
                           <Button
                             type="button"
@@ -1153,6 +1269,11 @@ export function ApplicationsPage() {
               );
             })}
           </section>
+        ) : hasSearchResults ? (
+          <section className="favorites-page__empty">
+            <img src={sadSearchIcon} alt="" aria-hidden="true" className="favorites-page__empty-icon" />
+            <h2 className="favorites-page__empty-title">Ничего не найдено</h2>
+          </section>
         ) : (
           <section className="favorites-page__empty">
             <h2 className="favorites-page__empty-title">Откликов пока нет</h2>
@@ -1160,7 +1281,7 @@ export function ApplicationsPage() {
               Когда вы откликнетесь на вакансии, стажировки или мероприятия, они появятся здесь со статусом и историей обновлений.
             </p>
             <div className="favorites-page__empty-actions">
-              <Button type="button" variant="secondary" onClick={() => navigate("/")}>
+              <Button type="button" variant="secondary" onClick={() => navigate(OPPORTUNITY_EXPLORER_PATH)}>
                 Найти возможность
               </Button>
             </div>

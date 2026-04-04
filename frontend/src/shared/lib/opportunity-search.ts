@@ -118,6 +118,22 @@ function tokenizeOpportunitySearchText(value: string) {
     .filter(Boolean);
 }
 
+function isSubsequenceMatch(query: string, target: string) {
+  if (query.length < 3 || target.length < query.length || query[0] !== target[0]) {
+    return false;
+  }
+
+  let queryIndex = 0;
+
+  for (let targetIndex = 0; targetIndex < target.length && queryIndex < query.length; targetIndex += 1) {
+    if (target[targetIndex] === query[queryIndex]) {
+      queryIndex += 1;
+    }
+  }
+
+  return queryIndex === query.length;
+}
+
 export function matchesOpportunitySearch(opportunity: Opportunity, query: string) {
   const normalizedQuery = normalizeOpportunitySearchText(query);
 
@@ -140,7 +156,7 @@ export function matchesOpportunitySearch(opportunity: Opportunity, query: string
     return tokenVariants.some((variant) =>
       searchableTokens.some(
         (searchableToken) =>
-          searchableToken.startsWith(variant) || variant.startsWith(searchableToken),
+          searchableToken.startsWith(variant) || isSubsequenceMatch(variant, searchableToken),
       ),
     );
   });

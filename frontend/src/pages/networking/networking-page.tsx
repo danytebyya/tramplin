@@ -17,10 +17,6 @@ export function NetworkingPage() {
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const preferredEmployerId = new URLSearchParams(location.search).get("employerId");
 
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-  }, [preferredEmployerId]);
-
   if (role !== "applicant") {
     return <Navigate to="/" replace />;
   }
@@ -31,6 +27,21 @@ export function NetworkingPage() {
     setSelectedCity(nextCity.name);
     writeSelectedCityCookie(nextCity.name);
   };
+
+  useEffect(() => {
+    if (location.hash !== "#chat-contacts") {
+      return;
+    }
+
+    const targetElement = document.getElementById("chat-contacts");
+    if (!targetElement) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [location.hash]);
 
   return (
     <main className="networking-page settings-page settings-page--applicant">

@@ -657,6 +657,20 @@ export function MapView({
 }: MapViewProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const shouldForceSelectedOpportunityViewport = Boolean(
+    (location.state as {
+      restoreViewMode?: "list" | "map";
+      restoreSelectedOpportunityId?: string;
+      returnTo?: { pathname?: string };
+    } | null)?.returnTo?.pathname &&
+    (location.state as {
+      restoreViewMode?: "list" | "map";
+      restoreSelectedOpportunityId?: string;
+    } | null)?.restoreViewMode === "map" &&
+    typeof (location.state as {
+      restoreSelectedOpportunityId?: string;
+    } | null)?.restoreSelectedOpportunityId === "string",
+  );
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<DGisMap | null>(null);
   const clustererRef = useRef<Clusterer | null>(null);
@@ -1121,15 +1135,14 @@ export function MapView({
     ? applicationStatusByOpportunityId[selectedOpportunity.id]
     : undefined;
   const selectedOpportunityStatusMeta =
-    selectedOpportunityStatus === "withdrawn"
-      ? { label: "Отозвано", variant: "secondary-outline" as const }
-      : selectedOpportunityStatus === "rejected"
+    selectedOpportunityStatus === "rejected"
       ? { label: "Отклонено", variant: "danger-outline" as const }
       : selectedOpportunityStatus === "interview" || selectedOpportunityStatus === "offer" || selectedOpportunityStatus === "accepted"
         ? { label: "Одобрено", variant: "secondary-outline" as const }
         : null;
-  const shouldDisableSelectedOpportunityApply =
-    roleName !== "employer" && !isSelectedOpportunityApplied && selectedOpportunityStatusMeta !== null;
+  const shouldShowSelectedOpportunityStatus =
+    roleName !== "employer" && selectedOpportunityStatusMeta !== null;
+  const shouldDisableSelectedOpportunityApply = shouldShowSelectedOpportunityStatus;
   const themeVariant = roleName === "applicant" ? "secondary" : roleName === "curator" ? "accent" : "primary";
   const badgeThemeVariant = roleName === "applicant" ? "secondary" : roleName === "curator" ? "info" : "primary";
   const outlineThemeVariant = themeVariant === "secondary" ? "secondary-outline" : themeVariant === "accent" ? "accent-outline" : "primary-outline";
@@ -1751,7 +1764,7 @@ export function MapView({
       return;
     }
 
-    if (preservedViewportOpportunityIdRef.current === detailsOpportunity.id) {
+    if (!shouldForceSelectedOpportunityViewport && preservedViewportOpportunityIdRef.current === detailsOpportunity.id) {
       return;
     }
 
@@ -1760,7 +1773,7 @@ export function MapView({
       { duration: 280 },
     );
     mapInstanceRef.current.setZoom(isExpanded ? 15.8 : 14.9, { duration: 280 });
-  }, [detailsOpportunity, isExpanded]);
+  }, [detailsOpportunity, isExpanded, shouldForceSelectedOpportunityViewport]);
 
   useEffect(() => {
     if (!mapInstanceRef.current) {
@@ -2675,6 +2688,7 @@ export function MapView({
                       event.stopPropagation();
                       navigate(`/profiles/${detailsOpportunity.employerPublicId}`, {
                         state: {
+                          ownerRole: "employer",
                           restoreScrollY: window.scrollY,
                           restoreViewMode: "map",
                           restoreSelectedOpportunityId: detailsOpportunity.id,
@@ -2725,7 +2739,7 @@ export function MapView({
               <Button
                 type="button"
                 variant={
-                  shouldDisableSelectedOpportunityApply
+                  shouldShowSelectedOpportunityStatus
                     ? selectedOpportunityStatusMeta.variant
                     : roleName !== "employer" && isSelectedOpportunityApplied
                       ? "danger-outline"
@@ -2742,7 +2756,7 @@ export function MapView({
                   onApply?.(detailsOpportunity.id);
                 }}
               >
-                {shouldDisableSelectedOpportunityApply
+                {shouldShowSelectedOpportunityStatus
                   ? selectedOpportunityStatusMeta.label
                   : roleName !== "employer" && isSelectedOpportunityApplied
                     ? "Отозвать отклик"

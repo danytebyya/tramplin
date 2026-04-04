@@ -19,6 +19,7 @@ from src.models import (
     Tag,
     TagType,
     User,
+    UserNotificationPreference,
     WorkFormat,
 )
 from src.models.opportunity import EmploymentType, ModerationStatus, OpportunityType
@@ -299,6 +300,13 @@ def test_recommend_opportunity_creates_push_notification_and_updates_counter(cli
         hard_skills=["Python", "Django"],
     )
     opportunity = _create_public_opportunity(db_session, employer_user=employer)
+    db_session.add(
+        UserNotificationPreference(
+            user_id=applicant.id,
+            push_daily_digest=True,
+        )
+    )
+    db_session.commit()
 
     employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
     applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
@@ -329,6 +337,51 @@ def test_recommend_opportunity_creates_push_notification_and_updates_counter(cli
     refreshed_applicant = db_session.execute(select(User).where(User.id == applicant.id)).scalar_one()
     assert refreshed_applicant.applicant_profile is not None
     assert refreshed_applicant.applicant_profile.recommendations_count == 1
+
+
+def test_recommend_opportunity_skips_push_notification_when_daily_digest_disabled(client, db_session):
+    employer = _create_verified_employer(
+        db_session,
+        email="recommend-employer-push-disabled@example.com",
+        inn="7707083991",
+    )
+    applicant = _create_applicant(
+        db_session,
+        email="recommended-applicant-disabled@example.com",
+        display_name="Мария Петрова",
+        university="ЧГУ",
+        graduation_year=2024,
+        city="Чебоксары",
+        desired_salary_from=80000,
+        work_formats=["Офлайн"],
+        employment_types=["Full-time"],
+        hard_skills=["Python", "Django"],
+    )
+    opportunity = _create_public_opportunity(db_session, employer_user=employer)
+    db_session.add(
+        UserNotificationPreference(
+            user_id=applicant.id,
+            push_daily_digest=False,
+        )
+    )
+    db_session.commit()
+
+    employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
+
+    response = client.post(
+        f"/api/v1/opportunities/{opportunity.id}/recommend",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+        json={"target_user_id": str(applicant.id)},
+    )
+
+    assert response.status_code == 200
+    notification = db_session.execute(
+        select(Notification).where(Notification.user_id == applicant.id)
+    ).scalars().all()
+    assert not any(
+        item.payload and item.payload.get("notification_type") == "opportunity_recommendation"
+        for item in notification
+    )
 
 
 def test_recommend_opportunity_forbids_recommending_to_self(client, db_session):

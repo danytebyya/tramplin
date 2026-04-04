@@ -34,6 +34,7 @@ import {
 import { CitySelection, readSelectedCityCookie, writeSelectedCityCookie } from "../../features/city-selector";
 import { readAccessTokenPayload, useAuthStore } from "../../features/auth";
 import {
+  buildOpportunityExplorerRoute,
   resolveAvatarIcon,
   resolveAvatarUrl,
 } from "../../shared/lib";
@@ -334,6 +335,7 @@ export function OpportunityDetailsPage() {
   }, [location.state]);
   const employerProfileNavigationState = useMemo(
     () => ({
+      ownerRole: "employer" as const,
       returnTo: {
         pathname: location.pathname,
         search: location.search,
@@ -451,9 +453,7 @@ export function OpportunityDetailsPage() {
   const themedButtonVariant = resolveOpportunitySolidVariant(themeRole);
   const themedOutlineButtonVariant = resolveOpportunityOutlineVariant(themeRole);
   const disabledApplyMeta =
-    opportunityStatus === "withdrawn"
-      ? { label: "Отклик отозван", variant: themedOutlineButtonVariant }
-      : opportunityStatus === "rejected"
+    opportunityStatus === "rejected"
       ? { label: "Работодатель отклонил отклик", variant: "danger-outline" as const }
       : opportunityStatus === "interview" || opportunityStatus === "offer" || opportunityStatus === "accepted"
         ? { label: "Работодатель принял отклик", variant: themedOutlineButtonVariant }
@@ -485,8 +485,7 @@ export function OpportunityDetailsPage() {
     isAuthenticated &&
     (
       recommendationCandidatesQuery.isPending ||
-      suggestedContacts.length > 0 ||
-      activeRole === "applicant"
+      suggestedContacts.length > 0
     );
 
   useEffect(() => {
@@ -512,7 +511,7 @@ export function OpportunityDetailsPage() {
         canAccessChat: true,
       })
     : activeRole === "junior" || activeRole === "curator" || activeRole === "admin"
-      ? buildModerationProfileMenuItems()
+      ? buildModerationProfileMenuItems(navigate)
       : buildApplicantProfileMenuItems(navigate);
 
   const handleCityChange = (city: CitySelection) => {
@@ -615,7 +614,13 @@ export function OpportunityDetailsPage() {
             >
               Вход
             </Button>
-            <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              className="header__action-button header__action-button--register"
+              onClick={() => navigate("/register")}
+            >
               Регистрация
             </Button>
           </>
@@ -750,11 +755,6 @@ export function OpportunityDetailsPage() {
                         <h2 className="opportunity-details-page__section-title">Контакты, подходящие под эту возможность</h2>
                         {recommendationCandidatesQuery.isPending ? (
                           <p className="opportunity-details-page__description-text">Подбираем подходящих кандидатов...</p>
-                        ) : null}
-                        {!recommendationCandidatesQuery.isPending && suggestedContacts.length === 0 ? (
-                          <p className="opportunity-details-page__description-text">
-                            Здесь отображаются только ваши контакты из нетворкинга. Добавьте нужных людей в контакты, чтобы рекомендовать им эту возможность.
-                          </p>
                         ) : null}
 
                         <div className="opportunity-details-page__contacts">
@@ -973,10 +973,15 @@ export function OpportunityDetailsPage() {
                     </span>
                   </p>
                   <Link
-                    to={{
-                      pathname: "/",
-                      search: opportunity.kind ? `?category=${opportunity.kind}` : "",
-                      hash: "#opportunity-map",
+                    to={buildOpportunityExplorerRoute("all")}
+                    state={{
+                      restoreViewMode: "map",
+                      restoreSelectedOpportunityId: opportunity.id,
+                      returnTo: {
+                        pathname: location.pathname,
+                        search: location.search,
+                        hash: location.hash,
+                      },
                     }}
                     className="opportunity-details-page__map-link"
                   >

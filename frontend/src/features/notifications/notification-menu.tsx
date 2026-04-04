@@ -66,6 +66,19 @@ function updateNotificationsCache(
   };
 }
 
+function resolveNotificationActionUrl(actionUrl: string, role: string | null) {
+  const normalizedActionUrl =
+    actionUrl === "/#dashboard" && (role === "junior" || role === "curator" || role === "admin")
+      ? "/dashboard/curator#dashboard"
+      : actionUrl;
+
+  if (normalizedActionUrl === "/networking") {
+    return "/networking#chat-contacts";
+  }
+
+  return normalizedActionUrl;
+}
+
 export function NotificationMenu({
   className,
   buttonClassName,
@@ -299,10 +312,7 @@ export function NotificationMenu({
       return;
     }
 
-    const resolvedActionUrl =
-      actionUrl === "/#dashboard" && (role === "junior" || role === "curator" || role === "admin")
-        ? "/dashboard/curator#dashboard"
-        : actionUrl;
+    const resolvedActionUrl = resolveNotificationActionUrl(actionUrl, role);
     const shouldAllowEmployerChangesRequested =
       resolvedActionUrl.startsWith("/onboarding/employer?mode=changes-requested");
 

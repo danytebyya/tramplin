@@ -36,6 +36,7 @@ export type ApplicationApplicant = {
   display_name: string;
   subtitle: string;
   is_online: boolean;
+  last_seen_at?: string | null;
   city: string;
   salary_label: string;
   format_label: string;

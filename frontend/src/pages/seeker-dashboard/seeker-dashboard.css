@@ -474,13 +474,6 @@
   gap: 16px;
 }
 
-.seeker-dashboard__paragraph {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--type-body-regular-size);
-  line-height: 30px;
-}
-
 .seeker-dashboard__skill-group,
 .seeker-dashboard__link-panel,
 .seeker-dashboard__project-detail {
@@ -507,6 +500,7 @@
 .seeker-dashboard__tag-list .badge {
   font-size: var(--type-body-regular-size);
   line-height: var(--type-body-regular-line);
+  font-weight: 400;
 }
 
 .seeker-dashboard__level-badge .badge__label {
@@ -600,7 +594,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden auto;
-  max-height: 240px;
+  max-height: 180px;
   border-radius: 8px;
   background: var(--color-bg-primary);
   box-shadow: var(--shadow-sm);
@@ -640,6 +634,7 @@
   align-items: center;
   gap: 8px;
   text-align: center;
+  color: var(--color-text-primary);
 }
 
 .seeker-dashboard__search-empty-icon {
@@ -753,11 +748,22 @@
   line-height: var(--type-body-small-line);
 }
 
+.seeker-dashboard__certificate-date-input .date-input__popover {
+  width: auto;
+  left: auto;
+  right: 0;
+  justify-content: flex-end;
+}
+
+.seeker-dashboard__certificate-date-input .date-input__calendar {
+  width: min(100%, 248px);
+}
+
 .seeker-dashboard__textarea {
   display: block;
   width: 100%;
   min-height: 240px;
-  resize: vertical;
+  resize: none;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: #ffffff;
@@ -767,7 +773,7 @@
   font: inherit;
   line-height: var(--type-body-regular-line);
   outline: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
+  transition: border-color 160ms ease, color 160ms ease;
   appearance: none;
 }
 
@@ -775,9 +781,9 @@
   border-color: var(--color-border-hover);
 }
 
-.seeker-dashboard__textarea:focus {
-  border-color: var(--color-secondary-500);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-secondary-500) 16%, transparent);
+.seeker-dashboard__textarea:focus,
+.seeker-dashboard__textarea:focus-visible {
+  border-color: var(--color-secondary);
 }
 
 .seeker-dashboard__textarea::placeholder {
@@ -822,14 +828,6 @@
   width: 100%;
 }
 
-.seeker-dashboard__modal-form {
-  gap: 16px;
-}
-
-.seeker-dashboard__modal-actions {
-  gap: 16px;
-}
-
 .seeker-dashboard__icon-button {
   display: inline-flex;
   align-items: center;
@@ -839,17 +837,33 @@
   border: none;
   border-radius: 999px;
   background: transparent;
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 0;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease;
 }
 
 .seeker-dashboard__icon-button:hover {
+  color: var(--color-text-primary);
   background: color-mix(in srgb, var(--color-secondary-500) 10%, transparent);
+}
+
+.seeker-dashboard__icon-button:focus-visible {
+  color: var(--color-text-primary);
 }
 
 .seeker-dashboard__icon {
   width: 17px;
   height: 17px;
+  opacity: 0.72;
+  transition: opacity 180ms ease;
+}
+
+.seeker-dashboard__icon-button:hover .seeker-dashboard__icon,
+.seeker-dashboard__icon-button:focus-visible .seeker-dashboard__icon {
+  opacity: 1;
 }
 
 .seeker-dashboard__confirm-icon {

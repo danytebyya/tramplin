@@ -44,6 +44,7 @@ from src.schemas.company import (
     EmployerStaffMemberRead,
 )
 from src.realtime.notification_hub import notification_hub
+from src.repositories.user_repository import UserRepository
 from src.services.email_service import send_email
 from src.services.notification_service import NotificationService
 from src.utils.errors import AppError
@@ -608,17 +609,19 @@ class EmployerService:
                 actor=current_user,
             )
         else:
-            NotificationService(self.db).create_notification(
-                user_id=removed_user.id,
-                kind=NotificationKind.SYSTEM,
-                severity=NotificationSeverity.WARNING,
-                title="Доступ к компании отозван",
-                message=f"Ваш рабочий профиль был отвязан от компании {employer.display_name}.",
-                action_label="Открыть настройки",
-                action_url="/settings",
-                payload={"company_id": str(employer.id), "event": "company_membership_removed"},
-                profile_scope={"profile_role": UserRole.APPLICANT.value},
-            )
+            preferences = UserRepository(self.db).get_notification_preferences(str(removed_user.id))
+            if preferences is None or preferences.push_publication_changes:
+                NotificationService(self.db).create_notification(
+                    user_id=removed_user.id,
+                    kind=NotificationKind.SYSTEM,
+                    severity=NotificationSeverity.WARNING,
+                    title="Доступ к компании отозван",
+                    message=f"Ваш рабочий профиль был отвязан от компании {employer.display_name}.",
+                    action_label="Открыть настройки",
+                    action_url="/settings",
+                    payload={"company_id": str(employer.id), "event": "company_membership_removed"},
+                    profile_scope={"profile_role": UserRole.APPLICANT.value},
+                )
         self.db.commit()
         notification_hub.publish_to_users_sync(
             [str(removed_user.id)],

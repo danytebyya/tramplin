@@ -37,6 +37,8 @@
   --settings-accent: var(--color-accent);
   --settings-accent-soft: rgba(245, 158, 11, 0.18);
   --settings-accent-strong: var(--color-accent-active);
+  --input-color-focus: var(--color-accent);
+  --date-input-accent: var(--color-accent);
   --header-top-gradient:
     linear-gradient(
       90deg,
@@ -72,6 +74,20 @@
   --notification-menu-primary: var(--color-accent);
   --notification-menu-secondary: var(--color-accent-hover);
   --notification-menu-accent: var(--color-accent-active);
+}
+
+.settings-page--curator .header__category-link:hover,
+.settings-page--curator .header__category-link.active,
+.settings-page--curator .header__category-link[aria-current="page"],
+.settings-page--admin .header__category-link:hover,
+.settings-page--admin .header__category-link.active,
+.settings-page--admin .header__category-link[aria-current="page"] {
+  color: var(--color-accent);
+}
+
+.settings-page--curator .header__category-link:active,
+.settings-page--admin .header__category-link:active {
+  color: var(--color-accent-active);
 }
 
 .settings-page__shell.page-shell {
@@ -592,6 +608,26 @@
   width: 100%;
 }
 
+.settings-page--curator .settings-page__field .input:focus,
+.settings-page--curator .settings-page__field .input:focus-visible,
+.settings-page--admin .settings-page__field .input:focus,
+.settings-page--admin .settings-page__field .input:focus-visible,
+.settings-page--curator .settings-page__review-input.input:focus,
+.settings-page--curator .settings-page__review-input.input:focus-visible,
+.settings-page--admin .settings-page__review-input.input:focus,
+.settings-page--admin .settings-page__review-input.input:focus-visible,
+.settings-page--curator .select:focus,
+.settings-page--curator .select:focus-visible,
+.settings-page--admin .select:focus,
+.settings-page--admin .select:focus-visible,
+.settings-page--curator .date-input__field:focus,
+.settings-page--curator .date-input__field:focus-visible,
+.settings-page--admin .date-input__field:focus,
+.settings-page--admin .date-input__field:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
 .settings-page__group {
   display: flex;
   flex-direction: column;
@@ -922,8 +958,7 @@
 
 .settings-page__skeleton--mark-label {
   width: min(320px, 100%);
-  height: 14px;
-  margin-top: 3px;
+  height: var(--type-body-small-line);
 }
 
 .settings-page__skeleton--dot {
@@ -935,11 +970,16 @@
 .settings-page__skeleton--session-line,
 .settings-page__skeleton--history-line {
   width: 100%;
-  height: 14px;
+  height: var(--type-body-regular-line);
 }
 
 .settings-page__skeleton--session-line-short {
   width: 160px;
+}
+
+.settings-page__skeleton--session-action {
+  width: 188px;
+  height: var(--type-body-regular-line);
 }
 
 .settings-page__skeleton--history-status {
@@ -949,7 +989,7 @@
 
 .settings-page__skeleton--review-label {
   width: 320px;
-  height: 16px;
+  height: var(--type-body-regular-line);
 }
 
 .settings-page__skeleton--review-input {
@@ -959,7 +999,23 @@
 
 .settings-page__skeleton--review-suffix {
   width: 26px;
-  height: 16px;
+  height: var(--type-body-regular-line);
+}
+
+.settings-page__skeleton--staff-title {
+  width: min(280px, 100%);
+  height: var(--type-body-regular-line);
+}
+
+.settings-page__skeleton--staff-subtitle {
+  width: 148px;
+  height: var(--type-caption-line);
+}
+
+.settings-page__skeleton--icon-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
 }
 
 @keyframes settings-skeleton-shimmer {

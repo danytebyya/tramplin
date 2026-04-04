@@ -12,6 +12,7 @@ from src.models import ApplicantProfile, ChatConversation, ChatConversationReadS
 from src.realtime.chat_hub import chat_hub
 from src.realtime.presence_hub import presence_hub
 from src.repositories.chat_repository import ChatRepository
+from src.repositories.user_repository import UserRepository
 from src.schemas.chat import (
     ChatContactListResponse,
     ChatContactRead,
@@ -227,13 +228,28 @@ class ChatService:
         )
         items: list[ChatConversationRead] = []
         for row in rows:
-            counterpart_user_id = self._resolve_counterpart_user_id(conversation=row, current_user=current_user)
-            counterpart_user = self.repo.get_user(counterpart_user_id)
-            if counterpart_user is None:
+            try:
+                counterpart_user_id = self._resolve_counterpart_user_id(conversation=row, current_user=current_user)
+                counterpart_user = self.repo.get_user(counterpart_user_id)
+                if counterpart_user is None:
+                    logger.warning(
+                        "chat.list_conversations.skip_missing_counterpart conversation_id=%s current_user_id=%s counterpart_user_id=%s",
+                        row.id,
+                        current_user.id,
+                        counterpart_user_id,
+                    )
+                    continue
+                if not UserService._can_view_applicant_profile(target_user=counterpart_user, viewer=current_user):
+                    continue
+                items.append(self._map_conversation_row(scope=scope, current_user=current_user, conversation=row))
+            except Exception:
+                logger.exception(
+                    "chat.list_conversations.skip_invalid_row conversation_id=%s current_user_id=%s",
+                    row.id,
+                    current_user.id,
+                )
+                self.db.rollback()
                 continue
-            if not UserService._can_view_applicant_profile(target_user=counterpart_user, viewer=current_user):
-                continue
-            items.append(self._map_conversation_row(scope=scope, current_user=current_user, conversation=row))
         return ChatConversationListResponse(
             items=items
         )
@@ -993,6 +1009,11 @@ class ChatService:
         sender_user: User,
         sender_profile: ApplicantProfile | None,
     ) -> None:
+        preferences = UserRepository(self.db).get_notification_preferences(str(recipient_user.id))
+        if preferences is not None and not preferences.push_chat_reminders:
+            self.db.commit()
+            return
+
         sender_name = self._resolve_contact_display_name(user=sender_user, profile=sender_profile)
         NotificationService(self.db).create_notification(
             user_id=recipient_user.id,
@@ -1018,6 +1039,11 @@ class ChatService:
         actor_profile: ApplicantProfile | None,
         accepted: bool,
     ) -> None:
+        preferences = UserRepository(self.db).get_notification_preferences(str(recipient_user.id))
+        if preferences is not None and not preferences.push_chat_reminders:
+            self.db.commit()
+            return
+
         actor_name = self._resolve_contact_display_name(user=actor_user, profile=actor_profile)
         NotificationService(self.db).create_notification(
             user_id=recipient_user.id,

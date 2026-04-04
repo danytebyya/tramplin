@@ -4,8 +4,10 @@ import { performLogout } from "../../features/auth";
 import { EmployerAccessState } from "../../features/auth";
 import { HeaderProfileMenuItem } from "./header-profile-menu";
 
-export function buildModerationProfileMenuItems(): HeaderProfileMenuItem[] {
+export function buildModerationProfileMenuItems(navigate: NavigateFunction): HeaderProfileMenuItem[] {
   return [
+    { label: "Профиль", onClick: () => navigate("/dashboard/curator") },
+    { label: "Настройки", onClick: () => navigate("/settings") },
     { label: "Выход", isDanger: true, onClick: () => void performLogout({ redirectTo: "/" }) },
   ];
 }

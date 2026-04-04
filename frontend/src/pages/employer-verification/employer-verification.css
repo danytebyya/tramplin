@@ -78,7 +78,7 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
+  gap: 24px;
   align-items: start;
   margin-bottom: 24px;
 }
@@ -135,7 +135,7 @@
 .company-review-page__toolbar-actions {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 24px;
 }
 
 .company-review-page__bulk-bar-shell {
@@ -243,11 +243,25 @@
   -webkit-mask-size: contain;
 }
 
-.company-review-page__icon-button--filter::before {
-  content: "";
+.company-review-page__icon-stack {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.company-review-page__icon-stack .company-review-page__icon {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+.company-review-page__icon--filter {
   width: 17px;
   height: 17px;
-  background-color: var(--employer-verification-icon-color);
   mask-image: url("../../assets/icons/filter.svg");
   mask-repeat: no-repeat;
   mask-position: center;
@@ -258,13 +272,32 @@
   -webkit-mask-size: contain;
 }
 
-.company-review-page__icon-button--sorting .company-review-page__icon {
+.company-review-page__icon--sorting {
   mask-image: url("../../assets/icons/sorting.svg");
   -webkit-mask-image: url("../../assets/icons/sorting.svg");
 }
 
+.company-review-page__icon--filter-open {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  mask-image: url("../../assets/icons/arrow.svg");
+  -webkit-mask-image: url("../../assets/icons/arrow.svg");
+  transform: rotate(180deg);
+}
+
 .company-review-page__icon--ascending {
   transform: rotate(180deg);
+}
+
+.company-review-page__icon--hidden {
+  opacity: 0;
+  transform: scale(0.88);
+}
+
+.company-review-page__icon--visible {
+  opacity: 1;
+  transform: rotate(180deg) scale(1);
 }
 
 .company-review-page__filters-popover,
@@ -328,13 +361,13 @@
 .company-review-page__filters-options--choices {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0 8px;
 }
 
 .company-review-page__filters-options--radio {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0 8px;
 }
 
 .company-review-page__filter-option {
@@ -343,7 +376,7 @@
   gap: 10px;
   color: var(--color-text-primary);
   cursor: pointer;
-  padding: 5px 0;
+  padding: 10px 10px 10px 0;
 }
 
 .company-review-page__filters-footer {
@@ -767,18 +800,17 @@
 .company-review-page__detail-actions {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: flex-start;
   justify-content: flex-start;
   gap: 16px;
-  width: 100%;
   padding: 0;
 }
 
 .company-review-page__detail-actions-group {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 16px;
-  width: 100%;
 }
 
 .company-review-page__detail-section--actions {
@@ -790,19 +822,15 @@
 }
 
 .company-review-page__detail-action-request.button {
-  width: 100%;
+  width: auto;
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
   padding: 12px 16px;
 }
 
-.company-review-page__detail-actions-group .button {
-  flex: 1 1 0;
-}
-
 .company-review-page__decision-button.button {
   gap: 0;
-  width: 100%;
+  width: auto;
   font-size: var(--type-caption-size);
   line-height: var(--type-caption-line);
 }

@@ -176,8 +176,53 @@ def test_applicant_can_withdraw_application(client, db_session):
         headers={"Authorization": f"Bearer {applicant_access_token}"},
         json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
     )
+    assert resubmit_response.status_code == 201
+    assert resubmit_response.json()["data"]["status"] == "submitted"
+
+    history_after_resubmit = client.get(
+        "/api/v1/applications/mine",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+    )
+    assert history_after_resubmit.status_code == 200
+    items = history_after_resubmit.json()["data"]["items"]
+    assert items[0]["status"] == "submitted"
+    assert any(item["status"] == "withdrawn" for item in items)
+
+
+def test_applicant_cannot_resubmit_after_employer_rejection(client, db_session):
+    employer = _create_employer_user(db_session, email="reject-employer@example.com", inn="7707083920")
+    applicant = _create_applicant_user(db_session, email="reject-applicant@example.com")
+    employer_access_token = _login(client, email=employer.email, password="EmployerPass123")
+    applicant_access_token = _login(client, email=applicant.email, password="ApplicantPass123")
+
+    submit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
+    assert submit_response.status_code == 201
+
+    employer_items_response = client.get(
+        "/api/v1/applications/employer",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+    )
+    assert employer_items_response.status_code == 200
+    application_id = employer_items_response.json()["data"]["items"][0]["id"]
+
+    reject_response = client.patch(
+        f"/api/v1/applications/{application_id}/status",
+        headers={"Authorization": f"Bearer {employer_access_token}"},
+        json={"status": "rejected"},
+    )
+    assert reject_response.status_code == 200
+
+    resubmit_response = client.post(
+        "/api/v1/applications",
+        headers={"Authorization": f"Bearer {applicant_access_token}"},
+        json={"opportunity_id": employer._test_opportunity_id},  # type: ignore[attr-defined]
+    )
     assert resubmit_response.status_code == 409
-    assert resubmit_response.json()["error"]["code"] == "APPLICATION_ALREADY_EXISTS"
+    assert resubmit_response.json()["error"]["code"] == "APPLICATION_REAPPLY_FORBIDDEN"
 
 
 def test_employer_opportunity_stats_show_real_application_count(client, db_session):
@@ -339,8 +384,8 @@ def test_applicant_cannot_withdraw_after_employer_decision_that_locks_flow(clien
         f"/api/v1/applications/{employer._test_opportunity_id}",  # type: ignore[attr-defined]
         headers={"Authorization": f"Bearer {applicant_access_token}"},
     )
-    assert withdraw_response.status_code == 409
-    assert withdraw_response.json()["error"]["code"] == "APPLICATION_WITHDRAW_FORBIDDEN"
+    assert withdraw_response.status_code == 200
+    assert withdraw_response.json()["data"]["status"] == "withdrawn"
 
 
 def test_applicant_status_update_respects_publication_notification_preferences(client, db_session, monkeypatch):

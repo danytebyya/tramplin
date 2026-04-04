@@ -5,7 +5,7 @@ from sqlalchemy import select
 from src.core.security import create_access_token
 from src.enums import EmployerType, MembershipRole, UserRole, UserStatus
 from src.enums.notifications import NotificationKind
-from src.models import ApplicantProfile, ChatUserKey, Employer, EmployerMembership, Notification, Opportunity, User
+from src.models import ApplicantProfile, ChatConversation, ChatUserKey, Employer, EmployerMembership, Notification, Opportunity, User, UserNotificationPreference
 from src.models.opportunity import ModerationStatus, OpportunityStatus, OpportunityType, WorkFormat
 from src.services.chat_reminder_service import ChatReminderService
 
@@ -328,6 +328,32 @@ def test_applicant_chat_requires_contact_after_first_message(client, db_session)
         },
     )
     assert reply_response.status_code == 200
+
+
+def test_contact_request_skips_push_notification_when_chat_reminders_disabled(client, db_session):
+    first_user, second_user, _first_token, second_token = _create_applicant_pair(
+        db_session,
+        left_email="networking-disabled-first@example.com",
+        right_email="networking-disabled-second@example.com",
+    )
+    db_session.add(
+        UserNotificationPreference(
+            user_id=first_user.id,
+            push_chat_reminders=False,
+        )
+    )
+    db_session.commit()
+
+    response = client.post(
+        f"/api/v1/chat/contacts/{first_user.id}",
+        headers={"Authorization": f"Bearer {second_token}"},
+    )
+
+    assert response.status_code == 200
+    notifications = db_session.execute(
+        select(Notification).where(Notification.user_id == first_user.id)
+    ).scalars().all()
+    assert not any(item.payload and item.payload.get("category") == "contact_request" for item in notifications)
 
 
 def test_employers_can_send_multiple_messages_without_contacts(client, db_session):
@@ -663,6 +689,45 @@ def test_empty_conversation_is_hidden_from_conversation_list(client, db_session)
     )
     assert conversations_response.status_code == 200
     assert conversations_response.json()["data"]["items"] == []
+
+
+def test_applicant_duplicate_null_scope_conversations_do_not_break_listing_or_recreate(client, db_session):
+    first_user, second_user, first_token, _second_token = _create_applicant_pair(
+        db_session,
+        left_email="duplicate-first@example.com",
+        right_email="duplicate-second@example.com",
+    )
+
+    first_id, second_id = sorted([first_user.id, second_user.id], key=str)
+    duplicate_a = ChatConversation(
+        applicant_user_id=first_id,
+        employer_user_id=second_id,
+        employer_id=None,
+        created_by_user_id=first_user.id,
+    )
+    duplicate_b = ChatConversation(
+        applicant_user_id=first_id,
+        employer_user_id=second_id,
+        employer_id=None,
+        created_by_user_id=second_user.id,
+    )
+    db_session.add_all([duplicate_a, duplicate_b])
+    db_session.commit()
+
+    list_response = client.get(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {first_token}"},
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["items"] == []
+
+    create_response = client.post(
+        "/api/v1/chat/conversations",
+        headers={"Authorization": f"Bearer {first_token}"},
+        json={"recipient_user_id": str(second_user.id)},
+    )
+    assert create_response.status_code == 200
+    assert create_response.json()["data"]["conversation"]["id"] in {str(duplicate_a.id), str(duplicate_b.id)}
 
 
 def test_applicant_can_search_other_applicants(client, db_session):

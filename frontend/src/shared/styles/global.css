@@ -31,6 +31,10 @@ body,
   min-height: 100%;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-family-base);
   font-size: var(--type-body-regular-size);
@@ -761,7 +765,7 @@ a {
 
 .button--accent-outline {
   background: var(--color-bg-primary);
-  color: var(--color-accent-active);
+  color: var(--color-accent);
   border-color: var(--color-accent);
 }
 
@@ -1349,7 +1353,7 @@ a {
 
 .date-input__field:focus,
 .date-input__field:focus-visible {
-  border-color: var(--color-primary);
+  border-color: var(--date-input-accent);
   outline: none;
   color: var(--color-text-primary);
 }
@@ -1419,7 +1423,7 @@ a {
   padding: 12px;
   border-radius: 12px;
   background: var(--color-bg-primary);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-sm);
 }
 
 .date-input__calendar-header {
@@ -1740,10 +1744,10 @@ a {
   z-index: 20;
   width: 100%;
   overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  border-radius: 16px;
+  padding: 8px 0;
+  border-radius: 8px;
   background: var(--color-bg-primary);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .select__option {
@@ -1812,10 +1816,10 @@ a {
   right: 12px;
   width: 24px;
   height: 24px;
-  padding: 0;
+  padding: 8px 0;
   border: 0;
   outline: none;
-  border-radius: 50%;
+  border-radius: 8px;
   background: transparent;
   box-shadow: none;
   cursor: pointer;
@@ -1990,12 +1994,11 @@ a {
 .toggle-mark:not(:checked):focus,
 .toggle-mark:not(:checked):focus-visible {
   outline: none;
-  border-color: var(--color-border-hover);
 }
 
 .toggle-mark.toggle-mark--error:not(:checked):focus,
 .toggle-mark.toggle-mark--error:not(:checked):focus-visible {
-  border-color: var(--color-danger);
+  outline: none;
 }
 
 .toggle-mark:checked {
@@ -2021,24 +2024,18 @@ a {
 .toggle-mark:checked:focus,
 .toggle-mark:checked:focus-visible {
   outline: none;
-  border-color: var(--color-primary-hover);
-  background-color: var(--color-primary-hover);
 }
 
 .toggle-mark--secondary:checked:not(:disabled):hover,
 .toggle-mark--secondary:checked:focus,
 .toggle-mark--secondary:checked:focus-visible {
   outline: none;
-  border-color: var(--color-secondary-hover);
-  background-color: var(--color-secondary-hover);
 }
 
 .toggle-mark--accent:checked:not(:disabled):hover,
 .toggle-mark--accent:checked:focus,
 .toggle-mark--accent:checked:focus-visible {
   outline: none;
-  border-color: var(--color-accent-hover);
-  background-color: var(--color-accent-hover);
 }
 
 .toggle-mark:disabled {
@@ -2097,17 +2094,16 @@ a {
 .radio:focus,
 .radio:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .radio--secondary:focus,
 .radio--secondary:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--color-secondary);
+  outline: none;
 }
 
 .radio--accent:focus,
 .radio--accent:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--color-accent-active);
+  outline: none;
 }
 
 .radio--secondary:checked {

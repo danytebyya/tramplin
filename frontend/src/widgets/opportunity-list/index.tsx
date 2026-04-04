@@ -1,6 +1,7 @@
 import { KeyboardEvent, MouseEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+import sadSearchIcon from "../../assets/icons/sad-search.png";
 import { Opportunity } from "../../entities/opportunity";
 import type { BackendApplicationStatus } from "../../features/applications";
 import { Badge, Button, VerifiedTooltip } from "../../shared/ui";
@@ -64,10 +65,6 @@ export function OpportunityList({
         : "primary-outline";
 
   const resolveStatusButtonMeta = (status: BackendApplicationStatus | undefined) => {
-    if (status === "withdrawn") {
-      return { label: "Отклик отозван", variant: "secondary-outline" as const };
-    }
-
     if (status === "rejected") {
       return { label: "Работодатель отклонил отклик", variant: "danger-outline" as const };
     }
@@ -141,6 +138,17 @@ export function OpportunityList({
     );
   }
 
+  if (opportunities.length === 0) {
+    return (
+      <section className="opportunity-list opportunity-list--empty" aria-label="Список возможностей">
+        <div className="opportunity-list__empty">
+          <img src={sadSearchIcon} alt="" aria-hidden="true" className="opportunity-list__empty-icon" />
+          <h2 className="opportunity-list__empty-title">Ничего не найдено</h2>
+        </div>
+      </section>
+    );
+  }
+
   const openOpportunity = (opportunityId: string) => {
     navigate(`/opportunities/${opportunityId}`, {
       state: {
@@ -160,6 +168,7 @@ export function OpportunityList({
     if (opportunity.employerPublicId) {
       navigate(`/profiles/${opportunity.employerPublicId}`, {
         state: {
+          ownerRole: "employer",
           restoreScrollY: window.scrollY,
           restoreViewMode: "list",
           returnTo: {
@@ -206,7 +215,8 @@ export function OpportunityList({
         const isFavorite = favoriteOpportunityIds.includes(opportunity.id);
         const isApplied = appliedOpportunityIds.includes(opportunity.id);
         const statusButtonMeta = resolveStatusButtonMeta(applicationStatusByOpportunityId[opportunity.id]);
-        const shouldDisableAction = roleName !== "employer" && !isApplied && statusButtonMeta !== null;
+        const shouldShowStatusButton = roleName !== "employer" && statusButtonMeta !== null;
+        const shouldDisableAction = shouldShowStatusButton;
 
         return (
           <article
@@ -279,13 +289,13 @@ export function OpportunityList({
                   <Button
                     type="button"
                     variant={
-                      shouldDisableAction
+                      shouldShowStatusButton
                         ? statusButtonMeta.variant
                         : roleName !== "employer" && isApplied
                           ? "danger-outline"
                           : solidThemeVariant
                     }
-                    size="sm"
+                    size="md"
                     disabled={shouldDisableAction}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -295,7 +305,7 @@ export function OpportunityList({
                       onApply?.(opportunity.id);
                     }}
                   >
-                    {shouldDisableAction
+                    {shouldShowStatusButton
                       ? statusButtonMeta.label
                       : roleName !== "employer" && isApplied
                         ? "Отозвать отклик"
@@ -345,7 +355,7 @@ export function OpportunityList({
                 <Button
                   type="button"
                   variant={outlineThemeVariant}
-                  size="sm"
+                  size="md"
                   onClick={(event) => {
                     event.stopPropagation();
                     openEmployerProfile(opportunity);
@@ -356,7 +366,7 @@ export function OpportunityList({
                 <Button
                   type="button"
                   variant={solidThemeVariant}
-                  size="sm"
+                  size="md"
                   onClick={(event) => {
                     event.stopPropagation();
                     onWrite?.(opportunity);

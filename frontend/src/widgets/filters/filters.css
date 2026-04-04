@@ -243,7 +243,7 @@
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  max-height: min(75vh, 900px);
+  max-height: min(var(--opportunity-filters-popover-max-height, 75vh), 900px);
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;

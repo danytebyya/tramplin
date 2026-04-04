@@ -58,6 +58,10 @@ const sortFieldOptions: Array<{ value: VerificationSortField; label: string }> =
 
 const EMPTY_VERIFICATION_ITEMS: EmployerVerificationRequestItem[] = [];
 
+function easeOutQuad(value: number) {
+  return 1 - (1 - value) * (1 - value);
+}
+
 function resolveStatusMeta(status: EmployerVerificationRequestStatus) {
   if (status === "approved") {
     return { label: "Одобрено", variant: "approved" as const };
@@ -97,6 +101,18 @@ function formatFileSize(value: number) {
 
   const sizeInMb = value / (1024 * 1024);
   return `${sizeInMb.toFixed(1).replace(".", ",")} МБ`;
+}
+
+function hasSelectedText() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return Boolean(window.getSelection()?.toString().trim());
+}
+
+function stopCheckboxEvent(event: ReactMouseEvent<HTMLInputElement>) {
+  event.stopPropagation();
 }
 
 function isImageDocument(mimeType: string) {
@@ -386,10 +402,24 @@ function VerificationDocumentCard({
   const [fileBlob, setFileBlob] = useState<Blob | null>(null);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const objectUrlRef = useRef<string | null>(null);
   const resolvedFileUrl = resolveDocumentUrl(fileUrl);
 
   useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!resolvedFileUrl) {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
       setBlobUrl(null);
       setFileBlob(null);
       setIsUnavailable(true);
@@ -398,7 +428,6 @@ function VerificationDocumentCard({
     }
 
     let cancelled = false;
-    let nextObjectUrl: string | null = null;
 
     setBlobUrl(null);
     setFileBlob(null);
@@ -425,12 +454,30 @@ function VerificationDocumentCard({
             ? response.data.slice(0, response.data.size, normalizedMimeType)
             : response.data;
 
-        nextObjectUrl = URL.createObjectURL(normalizedBlob);
+        const nextObjectUrl = URL.createObjectURL(normalizedBlob);
+
+        if (cancelled) {
+          URL.revokeObjectURL(nextObjectUrl);
+          return;
+        }
+
+        const previousObjectUrl = objectUrlRef.current;
+        objectUrlRef.current = nextObjectUrl;
         setFileBlob(normalizedBlob);
         setBlobUrl(nextObjectUrl);
         setIsLoading(false);
+
+        if (previousObjectUrl) {
+          window.setTimeout(() => {
+            URL.revokeObjectURL(previousObjectUrl);
+          }, 0);
+        }
       } catch {
         if (!cancelled) {
+          if (objectUrlRef.current) {
+            URL.revokeObjectURL(objectUrlRef.current);
+            objectUrlRef.current = null;
+          }
           setFileBlob(null);
           setBlobUrl(null);
           setIsUnavailable(true);
@@ -441,11 +488,8 @@ function VerificationDocumentCard({
 
     return () => {
       cancelled = true;
-      if (nextObjectUrl) {
-        URL.revokeObjectURL(nextObjectUrl);
-      }
     };
-  }, [resolvedFileUrl]);
+  }, [fileName, mimeType, resolvedFileUrl]);
 
   const content = (
     <>
@@ -508,13 +552,10 @@ function EmployerVerificationRowSkeleton() {
   return (
     <article className="company-review-page__request company-review-page__request--skeleton" aria-hidden="true">
       <div className="company-review-page__request-summary">
-        <div className="company-review-page__request-select">
-          <span className="company-review-page__skeleton company-review-page__skeleton--mark" />
-        </div>
+        <div className="company-review-page__request-select" />
         <div className="company-review-page__request-overview">
           <div className="company-review-page__request-company">
             <span className="company-review-page__skeleton company-review-page__skeleton--title" />
-            <span className="company-review-page__skeleton company-review-page__skeleton--actions" />
           </div>
           <span className="company-review-page__skeleton company-review-page__skeleton--cell" />
           <span className="company-review-page__skeleton company-review-page__skeleton--cell" />
@@ -825,8 +866,17 @@ export function EmployerVerificationPage() {
   const total = verificationRequestsQuery.data?.data?.total ?? 0;
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
   const pageNumbers = buildPageNumbers(page, totalPages);
-  const allRowsSelected = sortedItems.length > 0 && selectedIds.length === sortedItems.length;
+  const selectableItems = useMemo(
+    () => sortedItems.filter((item) => item.status === "pending" || item.status === "suspended"),
+    [sortedItems],
+  );
+  const allRowsSelected =
+    selectableItems.length > 0 && selectableItems.every((item) => selectedIds.includes(item.id));
   const currentExpandedItem = sortedItems.find((item) => item.id === expandedRequestId) ?? null;
+  const selectedRequests = useMemo(() => {
+    const selectedIdSet = new Set(selectedIds);
+    return sortedItems.filter((item) => selectedIdSet.has(item.id));
+  }, [selectedIds, sortedItems]);
   const hasAppliedFilters =
     appliedSearch.length > 0 ||
     !appliedStatuses.includes("all") ||
@@ -836,6 +886,12 @@ export function EmployerVerificationPage() {
     rejectMutation.isPending ||
     requestChangesMutation.isPending ||
     bulkActionMutation.isPending;
+  const isBulkRequestChangesDisabled =
+    anyMutationPending || selectedRequests.some((item) => item.status === "suspended");
+  const isBulkRejectDisabled =
+    anyMutationPending || selectedRequests.some((item) => item.status === "rejected");
+  const isBulkApproveDisabled =
+    anyMutationPending || selectedRequests.some((item) => item.status === "approved");
   const isTableLoading = verificationRequestsQuery.isPending;
 
   if (!canAccessEmployerVerification) {
@@ -940,6 +996,104 @@ export function EmployerVerificationPage() {
     };
   }, [isFilterOpen, isSortOpen]);
 
+  useEffect(() => {
+    if (!isFilterOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const filtersElement = filtersRef.current;
+      if (!filtersElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = filtersElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isFilterOpen]);
+
+  useEffect(() => {
+    if (!isSortOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const sortingElement = sortingRef.current;
+      if (!sortingElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = sortingElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isSortOpen]);
+
   useEffect(() => () => {
     clearProfileMenuCloseTimeout();
   }, []);
@@ -948,7 +1102,7 @@ export function EmployerVerificationPage() {
     setSelectedIds([]);
   }, [verificationRequestsQuery.data?.data?.items, appliedSortDirection, appliedSortField]);
 
-  const profileMenuItems = buildModerationProfileMenuItems();
+  const profileMenuItems = buildModerationProfileMenuItems(navigate);
 
   const applyFilters = () => {
     setAppliedSearch(search.trim());
@@ -1009,6 +1163,11 @@ export function EmployerVerificationPage() {
   };
 
   const toggleSelectedId = (requestId: string) => {
+    const targetItem = sortedItems.find((item) => item.id === requestId);
+    if (!targetItem || (targetItem.status !== "pending" && targetItem.status !== "suspended")) {
+      return;
+    }
+
     setSelectedIds((current) =>
       current.includes(requestId)
         ? current.filter((item) => item !== requestId)
@@ -1017,7 +1176,7 @@ export function EmployerVerificationPage() {
   };
 
   const toggleSelectAll = () => {
-    setSelectedIds(allRowsSelected ? [] : sortedItems.map((item) => item.id));
+    setSelectedIds(allRowsSelected ? [] : selectableItems.map((item) => item.id));
   };
 
   const handleExpand = (item: EmployerVerificationRequestItem) => {
@@ -1029,6 +1188,10 @@ export function EmployerVerificationPage() {
   const handleRowClick = (event: ReactMouseEvent<HTMLElement>, item: EmployerVerificationRequestItem) => {
     const target = event.target as HTMLElement;
     if (target.closest("button, a, input, textarea, select, label")) {
+      return;
+    }
+
+    if (hasSelectedText()) {
       return;
     }
 
@@ -1124,7 +1287,16 @@ export function EmployerVerificationPage() {
                   setIsSortOpen(false);
                   setIsFilterOpen((current) => !current);
                 }}
-              />
+              >
+                <span
+                  className={
+                    isFilterOpen
+                      ? "company-review-page__icon company-review-page__icon--filter-open"
+                      : "company-review-page__icon company-review-page__icon--filter"
+                  }
+                  aria-hidden="true"
+                />
+              </button>
 
               {isFilterOpen ? (
                 <div className="company-review-page__filters-popover">
@@ -1228,14 +1400,24 @@ export function EmployerVerificationPage() {
                   setIsSortOpen((current) => !current);
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  className={
-                    appliedSortDirection === "desc"
-                      ? "company-review-page__icon company-review-page__icon--descending"
-                      : "company-review-page__icon company-review-page__icon--ascending"
-                  }
-                />
+                <span className="company-review-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isSortOpen
+                        ? `company-review-page__icon ${appliedSortDirection === "desc" ? "company-review-page__icon--sorting" : "company-review-page__icon--sorting company-review-page__icon--ascending"} company-review-page__icon--hidden`
+                        : appliedSortDirection === "desc"
+                          ? "company-review-page__icon company-review-page__icon--sorting"
+                          : "company-review-page__icon company-review-page__icon--sorting company-review-page__icon--ascending"
+                    }
+                  />
+                  <span
+                    className={
+                      isSortOpen
+                        ? "company-review-page__icon company-review-page__icon--filter-open company-review-page__icon--visible"
+                        : "company-review-page__icon company-review-page__icon--filter-open company-review-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isSortOpen ? (
@@ -1272,22 +1454,22 @@ export function EmployerVerificationPage() {
                     <div className="company-review-page__filters-options company-review-page__filters-options--radio">
                       <label className="company-review-page__filter-option">
                         <Radio
-                          checked={selectedSortDirection === "desc"}
-                          onChange={() => setSelectedSortDirection("desc")}
-                          variant="accent"
-                        />
-                        <span>
-                          {selectedSortField === "alphabet" ? "Я-А" : "Сначала новые"}
-                        </span>
-                      </label>
-                      <label className="company-review-page__filter-option">
-                        <Radio
                           checked={selectedSortDirection === "asc"}
                           onChange={() => setSelectedSortDirection("asc")}
                           variant="accent"
                         />
                         <span>
                           {selectedSortField === "alphabet" ? "А-Я" : "Сначала старые"}
+                        </span>
+                      </label>
+                      <label className="company-review-page__filter-option">
+                        <Radio
+                          checked={selectedSortDirection === "desc"}
+                          onChange={() => setSelectedSortDirection("desc")}
+                          variant="accent"
+                        />
+                        <span>
+                          {selectedSortField === "alphabet" ? "Я-А" : "Сначала новые"}
                         </span>
                       </label>
                     </div>
@@ -1335,9 +1517,9 @@ export function EmployerVerificationPage() {
                 className="company-review-page__bulk-bar-button company-review-page__bulk-bar-button--request"
                 onClick={() => handleBulkAction("request-changes")}
                 loading={bulkActionMutation.isPending}
-                disabled={anyMutationPending}
+                disabled={isBulkRequestChangesDisabled}
               >
-                Запросить информацию
+                Запросить правки
               </Button>
               <Button
                 type="button"
@@ -1346,7 +1528,7 @@ export function EmployerVerificationPage() {
                 className="company-review-page__bulk-bar-button"
                 onClick={() => handleBulkAction("reject")}
                 loading={bulkActionMutation.isPending}
-                disabled={anyMutationPending}
+                disabled={isBulkRejectDisabled}
               >
                 Отклонить
               </Button>
@@ -1357,7 +1539,7 @@ export function EmployerVerificationPage() {
                 className="company-review-page__bulk-bar-button"
                 onClick={() => handleBulkAction("approve")}
                 loading={bulkActionMutation.isPending}
-                disabled={anyMutationPending}
+                disabled={isBulkApproveDisabled}
               >
                 Одобрить
               </Button>
@@ -1366,9 +1548,16 @@ export function EmployerVerificationPage() {
         </div>
 
         <section className="company-review-page__requests">
-          <div className="company-review-page__table-head">
-            <div className="company-review-page__table-cell company-review-page__table-cell--check">
-              <Checkbox checked={allRowsSelected} onChange={toggleSelectAll} variant="accent" />
+            <div className="company-review-page__table-head">
+              <div className="company-review-page__table-cell company-review-page__table-cell--check">
+              <Checkbox
+                checked={allRowsSelected}
+                onChange={toggleSelectAll}
+                onClick={stopCheckboxEvent}
+                onMouseDown={stopCheckboxEvent}
+                variant="accent"
+                disabled={selectableItems.length === 0}
+              />
             </div>
             <div className="company-review-page__table-cell">Работодатель</div>
             <div className="company-review-page__table-cell">ИНН</div>
@@ -1385,6 +1574,7 @@ export function EmployerVerificationPage() {
               const statusMeta = resolveStatusMeta(item.status);
               const isExpanded = expandedRequestId === item.id;
               const isVerifiedItem = item.status === "approved";
+              const isSelectable = item.status === "pending" || item.status === "suspended";
 
               return (
                 <article
@@ -1405,7 +1595,10 @@ export function EmployerVerificationPage() {
                       <Checkbox
                         checked={selectedIds.includes(item.id)}
                         onChange={() => toggleSelectedId(item.id)}
+                        onClick={stopCheckboxEvent}
+                        onMouseDown={stopCheckboxEvent}
                         variant="accent"
+                        disabled={!isSelectable}
                       />
                     </div>
 
@@ -1413,7 +1606,13 @@ export function EmployerVerificationPage() {
                       className="company-review-page__request-overview"
                       role="button"
                       tabIndex={0}
-                      onClick={() => handleExpand(item)}
+                      onClick={() => {
+                        if (hasSelectedText()) {
+                          return;
+                        }
+
+                        handleExpand(item);
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
@@ -1557,7 +1756,7 @@ export function EmployerVerificationPage() {
                                 loading={requestChangesMutation.isPending && currentExpandedItem?.id === item.id}
                                 disabled={anyMutationPending}
                               >
-                                Запросить дополнительную информацию
+                                Запросить правки
                               </Button>
                               <div className="company-review-page__detail-actions-group">
                                 <Button
@@ -1602,7 +1801,7 @@ export function EmployerVerificationPage() {
             ) : null}
           </div>
 
-          {!isTableLoading && sortedItems.length > 0 ? (
+          {!isTableLoading && sortedItems.length > 0 && totalPages > 1 ? (
             <nav className="company-review-page__pagination" aria-label="Пагинация">
               <button
                 type="button"

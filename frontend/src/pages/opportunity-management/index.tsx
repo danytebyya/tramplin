@@ -622,6 +622,7 @@ export function OpportunityManagementPage() {
   const [formErrors, setFormErrors] = useState<OpportunityFormErrors>({});
   const statusMenuRef = useRef<HTMLDivElement | null>(null);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const cityInputRef = useRef<HTMLInputElement | null>(null);
@@ -749,6 +750,10 @@ export function OpportunityManagementPage() {
     setPage(1);
   }, [searchValue, appliedSortDirection, appliedSortField, appliedStatuses]);
 
+  const scrollToToolbar = () => {
+    toolbarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   useEffect(() => {
     const normalizedQuery = createOpportunityCity.trim();
 
@@ -856,6 +861,7 @@ export function OpportunityManagementPage() {
     setAppliedStatuses(selectedStatuses);
     setIsStatusMenuOpen(false);
     setPage(1);
+    scrollToToolbar();
   };
 
   const resetFilters = () => {
@@ -863,6 +869,7 @@ export function OpportunityManagementPage() {
     setAppliedStatuses(["all"]);
     setIsStatusMenuOpen(false);
     setPage(1);
+    scrollToToolbar();
   };
 
   const applySorting = () => {
@@ -870,6 +877,7 @@ export function OpportunityManagementPage() {
     setAppliedSortDirection(selectedSortDirection);
     setIsSortMenuOpen(false);
     setPage(1);
+    scrollToToolbar();
   };
 
   const resetSorting = () => {
@@ -879,6 +887,7 @@ export function OpportunityManagementPage() {
     setAppliedSortDirection("desc");
     setIsSortMenuOpen(false);
     setPage(1);
+    scrollToToolbar();
   };
 
   const serverItems = useMemo<OpportunityManagementItem[]>(
@@ -1376,7 +1385,7 @@ export function OpportunityManagementPage() {
           </article>
         </section>
 
-        <section className="opportunity-management-page__toolbar" aria-label="Управление списком возможностей">
+        <section ref={toolbarRef} className="opportunity-management-page__toolbar" aria-label="Управление списком возможностей">
           <label className="opportunity-management-page__search header__search" aria-label="Поиск по возможностям">
             <Input
               type="search"
@@ -1394,10 +1403,30 @@ export function OpportunityManagementPage() {
                 aria-label="Фильтрация"
                 aria-expanded={isStatusMenuOpen}
                 onClick={() => {
+                  if (!isStatusMenuOpen) {
+                    scrollToToolbar();
+                  }
                   setIsSortMenuOpen(false);
                   setIsStatusMenuOpen((current) => !current);
                 }}
-              />
+              >
+                <span className="opportunity-management-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isStatusMenuOpen
+                        ? "opportunity-management-page__icon opportunity-management-page__icon--filter opportunity-management-page__icon--hidden"
+                        : "opportunity-management-page__icon opportunity-management-page__icon--filter"
+                    }
+                  />
+                  <span
+                    className={
+                      isStatusMenuOpen
+                        ? "opportunity-management-page__icon opportunity-management-page__icon--filter-open opportunity-management-page__icon--visible"
+                        : "opportunity-management-page__icon opportunity-management-page__icon--filter-open opportunity-management-page__icon--hidden"
+                    }
+                  />
+                </span>
+              </button>
 
               {isStatusMenuOpen ? (
                 <div className="opportunity-management-page__filters-popover">
@@ -1458,18 +1487,31 @@ export function OpportunityManagementPage() {
                 aria-label="Сортировка"
                 aria-expanded={isSortMenuOpen}
                 onClick={() => {
+                  if (!isSortMenuOpen) {
+                    scrollToToolbar();
+                  }
                   setIsStatusMenuOpen(false);
                   setIsSortMenuOpen((current) => !current);
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  className={
-                    appliedSortDirection === "desc"
-                      ? "opportunity-management-page__icon opportunity-management-page__icon--descending"
-                      : "opportunity-management-page__icon opportunity-management-page__icon--ascending"
-                  }
-                />
+                <span className="opportunity-management-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isSortMenuOpen
+                        ? `opportunity-management-page__icon ${appliedSortDirection === "desc" ? "opportunity-management-page__icon--descending" : "opportunity-management-page__icon--ascending"} opportunity-management-page__icon--hidden`
+                        : appliedSortDirection === "desc"
+                          ? "opportunity-management-page__icon opportunity-management-page__icon--descending"
+                          : "opportunity-management-page__icon opportunity-management-page__icon--ascending"
+                    }
+                  />
+                  <span
+                    className={
+                      isSortMenuOpen
+                        ? "opportunity-management-page__icon opportunity-management-page__icon--filter-open opportunity-management-page__icon--visible"
+                        : "opportunity-management-page__icon opportunity-management-page__icon--filter-open opportunity-management-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isSortMenuOpen ? (
@@ -1701,7 +1743,10 @@ export function OpportunityManagementPage() {
                 <button
                   type="button"
                   className="opportunity-management-page__pager-button"
-                  onClick={() => setPage((currentValue) => Math.max(1, currentValue - 1))}
+                  onClick={() => {
+                    setPage((currentValue) => Math.max(1, currentValue - 1));
+                    scrollToToolbar();
+                  }}
                   disabled={currentPage === 1}
                   aria-label="Предыдущая страница"
                 >
@@ -1722,7 +1767,10 @@ export function OpportunityManagementPage() {
                           ? "opportunity-management-page__pagination-page opportunity-management-page__pagination-page--active"
                           : "opportunity-management-page__pagination-page"
                       }
-                      onClick={() => setPage(item)}
+                      onClick={() => {
+                        setPage(item);
+                        scrollToToolbar();
+                      }}
                     >
                       {item}
                     </button>
@@ -1735,7 +1783,10 @@ export function OpportunityManagementPage() {
                 <button
                   type="button"
                   className="opportunity-management-page__pager-button"
-                  onClick={() => setPage((currentValue) => Math.min(totalPages, currentValue + 1))}
+                  onClick={() => {
+                    setPage((currentValue) => Math.min(totalPages, currentValue + 1));
+                    scrollToToolbar();
+                  }}
                   disabled={currentPage === totalPages}
                   aria-label="Следующая страница"
                 >
@@ -1811,7 +1862,6 @@ export function OpportunityManagementPage() {
         isOpen={isCreateOpportunityModalOpen}
         onClose={closeCreateOpportunityModal}
         title={formMode === "edit" ? "Редактирование возможности" : "Создание возможности"}
-        panelClassName="opportunity-management-page__modal-panel"
         titleAccentColor="var(--color-primary)"
         closeOnBackdrop={false}
       >

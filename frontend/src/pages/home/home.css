@@ -664,7 +664,20 @@ body.home-page--map-floating {
 }
 
 .home-page__section-groups {
-  padding: 64px 0;
+  position: relative;
+  padding: 24px 0;
+}
+
+.home-page__back-navigation {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+}
+
+.home-page__back-navigation .back-navigation__button {
+  top: 0;
 }
 
 .home-page__section-groups-shell {

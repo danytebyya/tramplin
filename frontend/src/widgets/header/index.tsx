@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { CitySelection, CitySelector } from "../../features/city-selector";
 import { readAccessTokenPayload, useAuthStore } from "../../features/auth";
 import { NotificationMenu } from "../../features/notifications";
-import { cn } from "../../shared/lib";
+import { buildOpportunityExplorerRoute, cn, opportunityCategoryLinks } from "../../shared/lib";
 import { Container } from "../../shared/ui";
 import logoPrimary from "../../assets/icons/logo-primary.svg";
 import logoPrimarySm from "../../assets/icons/logo-primary-sm.svg";
@@ -12,17 +12,6 @@ import logoSecondary from "../../assets/icons/logo-secondary.svg";
 import logoSecondarySm from "../../assets/icons/logo-secondary-sm.svg";
 import { HeaderProfileMenu, HeaderProfileMenuItem } from "./header-profile-menu";
 import "./header.css";
-
-const opportunityCategoryLinks: Array<{
-  value: "all" | "vacancy" | "internship" | "event" | "mentorship";
-  label: string;
-}> = [
-  { value: "all", label: "Все" },
-  { value: "vacancy", label: "Вакансии" },
-  { value: "internship", label: "Стажировки" },
-  { value: "event", label: "Мероприятия" },
-  { value: "mentorship", label: "Менторские программы" },
-];
 
 type HeaderProps = {
   containerClassName?: string;
@@ -78,11 +67,13 @@ export function Header({
   const activeRole = readAccessTokenPayload(accessToken)?.active_role ?? role;
   const resolvedTheme =
     theme ??
-    (activeRole === "curator" || activeRole === "junior" || activeRole === "admin"
-      ? "curator"
-      : activeRole === "employer"
-        ? "employer"
-        : "applicant");
+    (!isAuthenticated
+      ? undefined
+      : activeRole === "curator" || activeRole === "junior" || activeRole === "admin"
+        ? "curator"
+        : activeRole === "employer"
+          ? "employer"
+          : "applicant");
   const headerRoleClassName =
     resolvedTheme === "applicant"
       ? "header--applicant"
@@ -100,12 +91,17 @@ export function Header({
   const shouldUsePrimaryLandingLogo = variant === "landing" && !isAuthenticated;
   const shouldUsePrimaryGuestLogo = variant !== "landing" && !isAuthenticated && theme === undefined;
   const isPrimaryTheme =
-    shouldUsePrimaryLandingLogo || shouldUsePrimaryGuestLogo || resolvedTheme === "employer" || resolvedTheme === "curator";
+    shouldUsePrimaryLandingLogo ||
+    shouldUsePrimaryGuestLogo ||
+    resolvedTheme === "employer" ||
+    resolvedTheme === "curator";
   const defaultLogoSource = isPrimaryTheme ? logoPrimary : logoSecondary;
   const landingLogoSource = isPrimaryTheme ? logoPrimarySm : logoSecondarySm;
   const logoSource = variant === "landing" ? landingLogoSource : defaultLogoSource;
   const brandSubtitle =
-    variant === "landing" && (resolvedTheme === "applicant" || resolvedTheme === "employer")
+    !resolvedTheme
+      ? null
+      : variant === "landing" && (resolvedTheme === "applicant" || resolvedTheme === "employer")
       ? null
       : resolveHeaderBrandSubtitle(resolvedTheme, isAuthenticated);
 
@@ -164,11 +160,7 @@ export function Header({
                 {opportunityCategoryLinks.map((item) => (
                   <Link
                     key={item.value}
-                    to={{
-                      pathname: "/",
-                      search: item.value === "all" ? "" : `?category=${item.value}`,
-                      hash: "#opportunity-map",
-                    }}
+                    to={buildOpportunityExplorerRoute(item.value)}
                     className="header__category-link"
                   >
                     {item.label}

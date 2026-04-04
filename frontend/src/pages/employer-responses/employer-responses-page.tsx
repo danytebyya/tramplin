@@ -28,7 +28,7 @@ import {
   type EmployerApplicationUiStatus,
 } from "../../features/applications";
 import { useNotificationsRealtime } from "../../features/notifications";
-import { createApplicantChatRequest, resolveAvatarIcon, updateApplicantChatRequestStatus } from "../../shared/lib";
+import { createApplicantChatRequest, formatPresenceStatus, resolveAvatarIcon, updateApplicantChatRequestStatus } from "../../shared/lib";
 import { Button, Checkbox, Container, DateInput, Input, Modal, ProfileTabs, Radio, Status } from "../../shared/ui";
 import { Footer } from "../../widgets/footer";
 import { buildEmployerProfileMenuItems, Header } from "../../widgets/header";
@@ -42,6 +42,18 @@ type ResponseSortField = "date" | "name" | "status";
 type ResponseSortDirection = "asc" | "desc";
 type OpportunityKindFilter = "all" | "vacancy" | "internship" | "event" | "mentorship";
 type GroupSortField = "date" | "title" | "count";
+type ResponseDatePreset = "all" | "today" | "3days" | "week" | "custom";
+type RangeSelectionStep = "start" | "end";
+type RangeCalendarCell = {
+  isoValue: string;
+  label: number;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  isWeekend: boolean;
+  isRangeStart: boolean;
+  isRangeEnd: boolean;
+  isInRange: boolean;
+};
 type ResponseCard = {
   applicationId: string;
   id: string;
@@ -50,6 +62,7 @@ type ResponseCard = {
   name: string;
   subtitle: string;
   isOnline: boolean;
+  lastSeenAt: string | null;
   levelLabel: string | null;
   tags: string[];
   city: string;
@@ -79,16 +92,16 @@ type ResponseGroup = {
 
 type EmployerResponsesPageSnapshot = {
   opportunitySearch: string;
-  selectedKinds: OpportunityKindFilter[];
   expandedOpportunityIds: string[];
   groupPage: number;
   cardPages: Record<string, number>;
   groupSearch: Record<string, string>;
   groupStatuses: Record<string, EmployerResponseStatus[]>;
+  groupDatePresets: Record<string, ResponseDatePreset>;
+  groupDateFrom: Record<string, string>;
+  groupDateTo: Record<string, string>;
   groupSortFields: Record<string, ResponseSortField>;
   groupSortDirections: Record<string, ResponseSortDirection>;
-  mainSortField: GroupSortField;
-  mainSortDirection: ResponseSortDirection;
   scrollY: number;
 };
 
@@ -106,22 +119,15 @@ const metricDefinitions: Array<{ key: EmployerResponseMetricKey; label: string }
 const responseStatusOptions: Array<{ value: EmployerResponseStatus; label: string }> = [
   { value: "new", label: "Новый" },
   { value: "accepted", label: "Принято" },
-  { value: "reserve", label: "В резерве" },
   { value: "rejected", label: "Отклонено" },
+  { value: "reserve", label: "В резерве" },
 ];
 
-const opportunityKindOptions: Array<{ value: OpportunityKindFilter; label: string }> = [
-  { value: "all", label: "Все возможности" },
-  { value: "vacancy", label: "Вакансии" },
-  { value: "internship", label: "Стажировки" },
-  { value: "event", label: "Мероприятия" },
-  { value: "mentorship", label: "Менторские программы" },
-];
-
-const groupSortOptions: Array<{ value: GroupSortField; label: string }> = [
-  { value: "date", label: "По дате публикации" },
-  { value: "title", label: "По названию" },
-  { value: "count", label: "По числу откликов" },
+const responseDatePresetOptions: Array<{ value: ResponseDatePreset; label: string }> = [
+  { value: "today", label: "За сегодня" },
+  { value: "3days", label: "За 3 дня" },
+  { value: "week", label: "За неделю" },
+  { value: "custom", label: "За произвольный период" },
 ];
 
 const responseSortOptions: Array<{ value: ResponseSortField; label: string }> = [
@@ -160,6 +166,165 @@ function formatDate(value: string | null | undefined) {
 
 function normalizeText(value: string) {
   return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+}
+
+function formatDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatIsoDate(date: Date) {
+  return [
+    date.getFullYear(),
+    formatDatePart(date.getMonth() + 1),
+    formatDatePart(date.getDate()),
+  ].join("-");
+}
+
+function formatDisplayDate(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  const [year, month, day] = value.split("-");
+
+  if (!year || !month || !day) {
+    return "";
+  }
+
+  return `${day}.${month}.${year}`;
+}
+
+function formatRangeDisplayValue(dateFrom: string, dateTo: string) {
+  if (dateFrom && dateTo) {
+    return `${formatDisplayDate(dateFrom)} - ${formatDisplayDate(dateTo)}`;
+  }
+
+  if (dateFrom) {
+    return `${formatDisplayDate(dateFrom)} -`;
+  }
+
+  return "";
+}
+
+function parseIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function buildRangeCalendarCells(visibleMonth: Date, dateFrom: string, dateTo: string) {
+  const firstDay = startOfMonth(visibleMonth);
+  const firstWeekday = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(firstDay);
+
+  gridStart.setDate(firstDay.getDate() - firstWeekday);
+
+  const todayValue = formatIsoDate(new Date());
+  const rangeStart = dateFrom && dateTo && dateFrom <= dateTo ? dateFrom : dateTo && !dateFrom ? dateTo : dateFrom;
+  const rangeEnd = dateFrom && dateTo && dateFrom <= dateTo ? dateTo : dateFrom && dateTo ? dateFrom : dateTo;
+  const items: RangeCalendarCell[] = [];
+
+  for (let index = 0; index < 42; index += 1) {
+    const current = new Date(gridStart);
+    current.setDate(gridStart.getDate() + index);
+
+    const isoValue = formatIsoDate(current);
+    const dayOfWeek = (current.getDay() + 6) % 7;
+
+    items.push({
+      isoValue,
+      label: current.getDate(),
+      isCurrentMonth: current.getMonth() === visibleMonth.getMonth(),
+      isToday: isoValue === todayValue,
+      isWeekend: dayOfWeek >= 5,
+      isRangeStart: Boolean(rangeStart) && isoValue === rangeStart,
+      isRangeEnd: Boolean(rangeEnd) && isoValue === rangeEnd,
+      isInRange: Boolean(rangeStart && rangeEnd && isoValue >= rangeStart && isoValue <= rangeEnd),
+    });
+  }
+
+  return items;
+}
+
+function getStartOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function getEndOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).getTime();
+}
+
+function isResponseAppliedInRange(
+  appliedAt: string,
+  preset: ResponseDatePreset,
+  dateFrom: string,
+  dateTo: string,
+) {
+  const appliedAtDate = new Date(appliedAt);
+
+  if (Number.isNaN(appliedAtDate.getTime())) {
+    return false;
+  }
+
+  const appliedAtMs = appliedAtDate.getTime();
+  const now = new Date();
+
+  if (preset === "all") {
+    return true;
+  }
+
+  if (preset === "today") {
+    return appliedAtMs >= getStartOfDay(now);
+  }
+
+  if (preset === "3days") {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 2);
+    return appliedAtMs >= getStartOfDay(start);
+  }
+
+  if (preset === "week") {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 6);
+    return appliedAtMs >= getStartOfDay(start);
+  }
+
+  if (!dateFrom && !dateTo) {
+    return true;
+  }
+
+  if (dateFrom) {
+    const fromDate = new Date(dateFrom);
+    if (!Number.isNaN(fromDate.getTime()) && appliedAtMs < getStartOfDay(fromDate)) {
+      return false;
+    }
+  }
+
+  if (dateTo) {
+    const toDate = new Date(dateTo);
+    if (!Number.isNaN(toDate.getTime()) && appliedAtMs > getEndOfDay(toDate)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function buildPaginationItems(currentPage: number, totalPages: number) {
@@ -265,6 +430,7 @@ function mapApplicationToResponseCard(item: ApplicationDetails): ResponseCard | 
     name: item.applicant.display_name,
     subtitle: item.applicant.subtitle,
     isOnline: item.applicant.is_online,
+    lastSeenAt: item.applicant.last_seen_at ?? null,
     levelLabel: isLevelTag ? firstTag : null,
     tags: isLevelTag ? remainingTags : item.applicant.tags,
     city: item.applicant.city,
@@ -307,18 +473,16 @@ export function EmployerResponsesPage() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [opportunitySearch, setOpportunitySearch] = useState("");
-  const [selectedKinds, setSelectedKinds] = useState<OpportunityKindFilter[]>(["all"]);
   const [expandedOpportunityIds, setExpandedOpportunityIds] = useState<string[]>([]);
   const [groupPage, setGroupPage] = useState(1);
   const [cardPages, setCardPages] = useState<Record<string, number>>({});
   const [groupSearch, setGroupSearch] = useState<Record<string, string>>({});
   const [groupStatuses, setGroupStatuses] = useState<Record<string, EmployerResponseStatus[]>>({});
+  const [groupDatePresets, setGroupDatePresets] = useState<Record<string, ResponseDatePreset>>({});
+  const [groupDateFrom, setGroupDateFrom] = useState<Record<string, string>>({});
+  const [groupDateTo, setGroupDateTo] = useState<Record<string, string>>({});
   const [groupSortFields, setGroupSortFields] = useState<Record<string, ResponseSortField>>({});
   const [groupSortDirections, setGroupSortDirections] = useState<Record<string, ResponseSortDirection>>({});
-  const [isMainFilterOpen, setIsMainFilterOpen] = useState(false);
-  const [isMainSortOpen, setIsMainSortOpen] = useState(false);
-  const [mainSortField, setMainSortField] = useState<GroupSortField>("date");
-  const [mainSortDirection, setMainSortDirection] = useState<ResponseSortDirection>("desc");
   const [editingResponseContext, setEditingResponseContext] = useState<{
     opportunityId: string;
     opportunityTitle: string;
@@ -335,10 +499,12 @@ export function EmployerResponsesPage() {
   const [draftComment, setDraftComment] = useState("");
   const [openedFilterGroupId, setOpenedFilterGroupId] = useState<string | null>(null);
   const [openedSortGroupId, setOpenedSortGroupId] = useState<string | null>(null);
-  const mainFiltersRef = useRef<HTMLDivElement | null>(null);
-  const mainSortingRef = useRef<HTMLDivElement | null>(null);
+  const [rangeSelectionStep, setRangeSelectionStep] = useState<RangeSelectionStep>("start");
+  const [rangeVisibleMonth, setRangeVisibleMonth] = useState<Date>(() => startOfMonth(new Date()));
   const filterRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const sortRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const mainToolbarRef = useRef<HTMLElement | null>(null);
+  const groupToolbarRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const employerAccess = getEmployerAccessState(role, accessToken);
 
   const applicationsQuery = useQuery({
@@ -399,16 +565,16 @@ export function EmployerResponsesPage() {
       const snapshot = JSON.parse(rawSnapshot) as Partial<EmployerResponsesPageSnapshot>;
 
       setOpportunitySearch(snapshot.opportunitySearch ?? "");
-      setSelectedKinds(snapshot.selectedKinds?.length ? snapshot.selectedKinds : ["all"]);
       setExpandedOpportunityIds(snapshot.expandedOpportunityIds ?? []);
       setGroupPage(snapshot.groupPage ?? 1);
       setCardPages(snapshot.cardPages ?? {});
       setGroupSearch(snapshot.groupSearch ?? {});
       setGroupStatuses(snapshot.groupStatuses ?? {});
+      setGroupDatePresets(snapshot.groupDatePresets ?? {});
+      setGroupDateFrom(snapshot.groupDateFrom ?? {});
+      setGroupDateTo(snapshot.groupDateTo ?? {});
       setGroupSortFields(snapshot.groupSortFields ?? {});
       setGroupSortDirections(snapshot.groupSortDirections ?? {});
-      setMainSortField(snapshot.mainSortField ?? "date");
-      setMainSortDirection(snapshot.mainSortDirection ?? "desc");
 
       window.requestAnimationFrame(() => {
         window.scrollTo({ top: snapshot.scrollY ?? 0, behavior: "auto" });
@@ -426,16 +592,16 @@ export function EmployerResponsesPage() {
 
     const snapshot: EmployerResponsesPageSnapshot = {
       opportunitySearch,
-      selectedKinds,
       expandedOpportunityIds,
       groupPage,
       cardPages,
       groupSearch,
       groupStatuses,
+      groupDatePresets,
+      groupDateFrom,
+      groupDateTo,
       groupSortFields,
       groupSortDirections,
-      mainSortField,
-      mainSortDirection,
       scrollY: window.scrollY,
     };
 
@@ -445,13 +611,13 @@ export function EmployerResponsesPage() {
     expandedOpportunityIds,
     groupPage,
     groupSearch,
+    groupDateFrom,
+    groupDatePresets,
+    groupDateTo,
     groupSortDirections,
     groupSortFields,
     groupStatuses,
-    mainSortDirection,
-    mainSortField,
     opportunitySearch,
-    selectedKinds,
   ]);
 
   useEffect(() => {
@@ -502,20 +668,12 @@ export function EmployerResponsesPage() {
   });
 
   useEffect(() => {
-    if (!openedFilterGroupId && !openedSortGroupId && !isMainFilterOpen && !isMainSortOpen) {
+    if (!openedFilterGroupId && !openedSortGroupId) {
       return;
     }
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-
-      if (isMainFilterOpen && !mainFiltersRef.current?.contains(target)) {
-        setIsMainFilterOpen(false);
-      }
-
-      if (isMainSortOpen && !mainSortingRef.current?.contains(target)) {
-        setIsMainSortOpen(false);
-      }
 
       if (openedFilterGroupId && !filterRefs.current[openedFilterGroupId]?.contains(target)) {
         setOpenedFilterGroupId(null);
@@ -528,8 +686,6 @@ export function EmployerResponsesPage() {
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsMainFilterOpen(false);
-        setIsMainSortOpen(false);
         setOpenedFilterGroupId(null);
         setOpenedSortGroupId(null);
       }
@@ -542,11 +698,22 @@ export function EmployerResponsesPage() {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [isMainFilterOpen, isMainSortOpen, openedFilterGroupId, openedSortGroupId]);
+  }, [openedFilterGroupId, openedSortGroupId]);
 
   useEffect(() => {
     setGroupPage(1);
-  }, [mainSortDirection, mainSortField, opportunitySearch, selectedKinds]);
+  }, [opportunitySearch]);
+
+  const scrollToElement = (element: HTMLElement | null) => {
+    element?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const openedFilterDateFrom = openedFilterGroupId ? (groupDateFrom[openedFilterGroupId] ?? "") : "";
+  const openedFilterDateTo = openedFilterGroupId ? (groupDateTo[openedFilterGroupId] ?? "") : "";
+  const rangeCalendarCells = useMemo(
+    () => buildRangeCalendarCells(rangeVisibleMonth, openedFilterDateFrom, openedFilterDateTo),
+    [openedFilterDateFrom, openedFilterDateTo, rangeVisibleMonth],
+  );
 
   const responseGroups = useMemo<ResponseGroup[]>(() => {
     const groups = new Map<string, ResponseGroup>();
@@ -616,36 +783,19 @@ export function EmployerResponsesPage() {
 
   const filteredGroups = useMemo(() => {
     const normalizedSearch = normalizeText(opportunitySearch);
-    const activeKinds = selectedKinds.includes("all") ? [] : selectedKinds;
 
     const nextGroups = availableGroups.filter((group) => {
       if (normalizedSearch && !normalizeText(group.title).includes(normalizedSearch)) {
         return false;
       }
 
-      if (activeKinds.length > 0 && !activeKinds.includes(group.kind)) {
-        return false;
-      }
-
       return true;
     });
 
-    return nextGroups.sort((left, right) => {
-      const multiplier = mainSortDirection === "asc" ? 1 : -1;
-
-      if (mainSortField === "title") {
-        return left.title.localeCompare(right.title, "ru") * multiplier;
-      }
-
-      if (mainSortField === "count") {
-        return (left.responses.length - right.responses.length) * multiplier;
-      }
-
-      return (
-        (new Date(left.publishedAt ?? 0).getTime() - new Date(right.publishedAt ?? 0).getTime()) * multiplier
-      );
-    });
-  }, [availableGroups, mainSortDirection, mainSortField, opportunitySearch, selectedKinds]);
+    return nextGroups.sort(
+      (left, right) => new Date(right.publishedAt ?? 0).getTime() - new Date(left.publishedAt ?? 0).getTime(),
+    );
+  }, [availableGroups, opportunitySearch]);
 
   const totalGroupPages = Math.max(1, Math.ceil(filteredGroups.length / OPPORTUNITY_GROUPS_PER_PAGE));
   const visibleGroups = filteredGroups.slice(
@@ -661,29 +811,20 @@ export function EmployerResponsesPage() {
 
   const profileMenuItems = buildEmployerProfileMenuItems(navigate, employerAccess);
 
-  const handleToggleKind = (value: OpportunityKindFilter) => {
-    if (value === "all") {
-      setSelectedKinds(["all"]);
-      return;
-    }
-
-    setSelectedKinds((current) => {
-      const normalized = current.filter((item) => item !== "all");
-      if (normalized.includes(value)) {
-        const nextValues = normalized.filter((item) => item !== value);
-        return nextValues.length > 0 ? nextValues : ["all"];
-      }
-
-      return [...normalized, value];
-    });
-  };
-
   const handleToggleGroup = (opportunityId: string) => {
+    const isExpanded = expandedOpportunityIds.includes(opportunityId);
+
     setExpandedOpportunityIds((current) =>
       current.includes(opportunityId)
         ? current.filter((item) => item !== opportunityId)
         : [...current, opportunityId],
     );
+
+    if (!isExpanded) {
+      window.requestAnimationFrame(() => {
+        scrollToElement(groupToolbarRefs.current[opportunityId]);
+      });
+    }
   };
 
   const handleToggleStatus = (opportunityId: string, status: EmployerResponseStatus) => {
@@ -697,6 +838,69 @@ export function EmployerResponsesPage() {
       };
     });
     setCardPages((current) => ({ ...current, [opportunityId]: 1 }));
+  };
+
+  const handleResetGroupFilters = (opportunityId: string) => {
+    setGroupStatuses((current) => ({ ...current, [opportunityId]: [] }));
+    setGroupDatePresets((current) => ({ ...current, [opportunityId]: "all" }));
+    setGroupDateFrom((current) => ({ ...current, [opportunityId]: "" }));
+    setGroupDateTo((current) => ({ ...current, [opportunityId]: "" }));
+    setCardPages((current) => ({ ...current, [opportunityId]: 1 }));
+    setRangeSelectionStep("start");
+    setRangeVisibleMonth(startOfMonth(new Date()));
+  };
+
+  const handleApplyGroupFilters = (opportunityId: string) => {
+    setOpenedFilterGroupId(null);
+    setCardPages((current) => ({ ...current, [opportunityId]: 1 }));
+  };
+
+  const handleOpenGroupFilter = (opportunityId: string) => {
+    const isOpening = openedFilterGroupId !== opportunityId;
+
+    if (isOpening) {
+      const nextFrom = groupDateFrom[opportunityId] ?? "";
+      const nextTo = groupDateTo[opportunityId] ?? "";
+      const anchorDate = parseIsoDate(nextTo || nextFrom) ?? new Date();
+
+      scrollToElement(groupToolbarRefs.current[opportunityId]);
+      setRangeVisibleMonth(startOfMonth(anchorDate));
+      setRangeSelectionStep(nextFrom && !nextTo ? "end" : "start");
+    }
+
+    setOpenedSortGroupId(null);
+    setOpenedFilterGroupId((current) => current === opportunityId ? null : opportunityId);
+  };
+
+  const handleCustomRangePresetSelect = (opportunityId: string) => {
+    const nextFrom = groupDateFrom[opportunityId] ?? "";
+    const nextTo = groupDateTo[opportunityId] ?? "";
+    const anchorDate = parseIsoDate(nextTo || nextFrom) ?? new Date();
+
+    setGroupDatePresets((current) => ({ ...current, [opportunityId]: "custom" }));
+    setRangeVisibleMonth(startOfMonth(anchorDate));
+    setRangeSelectionStep(nextFrom && !nextTo ? "end" : "start");
+  };
+
+  const handleRangeDateSelect = (opportunityId: string, isoValue: string) => {
+    const currentFrom = groupDateFrom[opportunityId] ?? "";
+    const currentTo = groupDateTo[opportunityId] ?? "";
+
+    if (rangeSelectionStep === "start" || !currentFrom || (currentFrom && currentTo)) {
+      setGroupDateFrom((current) => ({ ...current, [opportunityId]: isoValue }));
+      setGroupDateTo((current) => ({ ...current, [opportunityId]: "" }));
+      setRangeSelectionStep("end");
+      return;
+    }
+
+    if (isoValue < currentFrom) {
+      setGroupDateFrom((current) => ({ ...current, [opportunityId]: isoValue }));
+      setGroupDateTo((current) => ({ ...current, [opportunityId]: currentFrom }));
+    } else {
+      setGroupDateTo((current) => ({ ...current, [opportunityId]: isoValue }));
+    }
+
+    setRangeSelectionStep("start");
   };
 
   const handleWriteMessage = (response: ResponseCard) => {
@@ -832,7 +1036,7 @@ export function EmployerResponsesPage() {
           </section>
 
           <section className="employer-responses-page__section">
-            <section className="favorites-page__toolbar">
+            <section ref={mainToolbarRef} className="favorites-page__toolbar employer-responses-page__main-toolbar">
               <label className="favorites-page__search" aria-label="Поиск по вакансиям">
                 <Input
                   type="search"
@@ -843,129 +1047,6 @@ export function EmployerResponsesPage() {
                   onChange={(event) => setOpportunitySearch(event.target.value)}
                 />
               </label>
-
-              <div className="favorites-page__toolbar-actions">
-                <div ref={mainFiltersRef} className="favorites-page__filters">
-                  <button
-                    type="button"
-                    className="favorites-page__icon-button favorites-page__icon-button--filter"
-                    aria-label="Фильтры по возможностям"
-                    aria-expanded={isMainFilterOpen}
-                    onClick={() => {
-                      setIsMainSortOpen(false);
-                      setIsMainFilterOpen((current) => !current);
-                    }}
-                  >
-                    <span className="favorites-page__icon favorites-page__icon--filter" aria-hidden="true" />
-                  </button>
-
-                  {isMainFilterOpen ? (
-                    <div className="favorites-page__popover favorites-page__popover--compact">
-                      <div className="favorites-page__popover-section">
-                        <div className="favorites-page__popover-head">
-                          <h2 className="favorites-page__popover-title">Фильтры</h2>
-                          <button type="button" className="favorites-page__popover-reset" onClick={() => setSelectedKinds(["all"])}>
-                            Сбросить
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="favorites-page__popover-section">
-                        <div className="favorites-page__option-list">
-                          {opportunityKindOptions.map((option) => (
-                            <label key={option.value} className="favorites-page__option">
-                              <Checkbox
-                                checked={selectedKinds.includes(option.value)}
-                                onChange={() => handleToggleKind(option.value)}
-                                variant="secondary"
-                              />
-                              <span>{option.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div ref={mainSortingRef} className="favorites-page__sorting">
-                  <button
-                    type="button"
-                    className="favorites-page__icon-button favorites-page__icon-button--sorting"
-                    aria-label="Сортировка возможностей"
-                    aria-expanded={isMainSortOpen}
-                    onClick={() => {
-                      setIsMainFilterOpen(false);
-                      setIsMainSortOpen((current) => !current);
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={
-                        mainSortDirection === "desc"
-                          ? "favorites-page__icon favorites-page__icon--sorting"
-                          : "favorites-page__icon favorites-page__icon--sorting favorites-page__icon--ascending"
-                      }
-                    />
-                  </button>
-
-                  {isMainSortOpen ? (
-                    <div className="favorites-page__popover favorites-page__popover--compact">
-                      <div className="favorites-page__popover-section">
-                        <div className="favorites-page__popover-head">
-                          <h2 className="favorites-page__popover-title">Сортировка</h2>
-                          <button
-                            type="button"
-                            className="favorites-page__popover-reset"
-                            onClick={() => {
-                              setMainSortField("date");
-                              setMainSortDirection("desc");
-                            }}
-                          >
-                            Сбросить
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="favorites-page__popover-section">
-                        <div className="favorites-page__option-list">
-                          {groupSortOptions.map((option) => (
-                            <label key={option.value} className="favorites-page__option">
-                              <Radio
-                                checked={mainSortField === option.value}
-                                onChange={() => setMainSortField(option.value)}
-                                variant="secondary"
-                              />
-                              <span>{option.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="favorites-page__popover-section">
-                        <div className="favorites-page__option-list">
-                          <label className="favorites-page__option">
-                            <Radio
-                              checked={mainSortDirection === "asc"}
-                              onChange={() => setMainSortDirection("asc")}
-                              variant="secondary"
-                            />
-                            <span>{mainSortField === "title" ? "А-Я" : "По возрастанию"}</span>
-                          </label>
-                          <label className="favorites-page__option">
-                            <Radio
-                              checked={mainSortDirection === "desc"}
-                              onChange={() => setMainSortDirection("desc")}
-                              variant="secondary"
-                            />
-                            <span>{mainSortField === "title" ? "Я-А" : "По убыванию"}</span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
             </section>
           </section>
 
@@ -983,6 +1064,9 @@ export function EmployerResponsesPage() {
           {visibleGroups.map((group) => {
             const isExpanded = expandedOpportunityIds.includes(group.opportunityId);
             const selectedStatuses = groupStatuses[group.opportunityId] ?? [];
+            const selectedDatePreset = groupDatePresets[group.opportunityId] ?? "all";
+            const selectedDateFrom = groupDateFrom[group.opportunityId] ?? "";
+            const selectedDateTo = groupDateTo[group.opportunityId] ?? "";
             const groupSortField = groupSortFields[group.opportunityId] ?? "date";
             const groupSortDirection = groupSortDirections[group.opportunityId] ?? "desc";
             const normalizedGroupSearch = normalizeText(groupSearch[group.opportunityId] ?? "");
@@ -1002,6 +1086,10 @@ export function EmployerResponsesPage() {
                 }
 
                 if (selectedStatuses.length > 0 && !selectedStatuses.includes(response.status)) {
+                  return false;
+                }
+
+                if (!isResponseAppliedInRange(response.appliedAt, selectedDatePreset, selectedDateFrom, selectedDateTo)) {
                   return false;
                 }
 
@@ -1055,7 +1143,12 @@ export function EmployerResponsesPage() {
                   aria-hidden={!isExpanded}
                 >
                   <div className="employer-responses-page__group-body">
-                    <div className="favorites-page__toolbar employer-responses-page__group-toolbar">
+                    <div
+                      ref={(node) => {
+                        groupToolbarRefs.current[group.opportunityId] = node;
+                      }}
+                      className="favorites-page__toolbar employer-responses-page__group-toolbar"
+                    >
                       <label className="favorites-page__search" aria-label={`Поиск откликов по ${group.title}`}>
                         <Input
                           type="search"
@@ -1082,12 +1175,24 @@ export function EmployerResponsesPage() {
                             className="favorites-page__icon-button favorites-page__icon-button--filter"
                             aria-label="Фильтры откликов"
                             aria-expanded={openedFilterGroupId === group.opportunityId}
-                            onClick={() => {
-                              setOpenedSortGroupId(null);
-                              setOpenedFilterGroupId((current) => current === group.opportunityId ? null : group.opportunityId);
-                            }}
+                            onClick={() => handleOpenGroupFilter(group.opportunityId)}
                           >
-                            <span className="favorites-page__icon favorites-page__icon--filter" aria-hidden="true" />
+                            <span className="favorites-page__icon-stack" aria-hidden="true">
+                              <span
+                                className={
+                                  openedFilterGroupId === group.opportunityId
+                                    ? "favorites-page__icon favorites-page__icon--filter favorites-page__icon--hidden"
+                                    : "favorites-page__icon favorites-page__icon--filter"
+                                }
+                              />
+                              <span
+                                className={
+                                  openedFilterGroupId === group.opportunityId
+                                    ? "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--visible"
+                                    : "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--hidden"
+                                }
+                              />
+                            </span>
                           </button>
 
                           {openedFilterGroupId === group.opportunityId ? (
@@ -1112,12 +1217,151 @@ export function EmployerResponsesPage() {
                                       <Checkbox
                                         checked={selectedStatuses.includes(option.value)}
                                         onChange={() => handleToggleStatus(group.opportunityId, option.value)}
-                                        variant="secondary"
+                                        variant="primary"
                                       />
                                       <span>{option.label}</span>
                                     </label>
                                   ))}
                                 </div>
+                              </div>
+
+                              <div className="favorites-page__popover-section">
+                                <div className="favorites-page__popover-head">
+                                  <h3 className="favorites-page__popover-group-title">Дата отклика</h3>
+                                  <button
+                                    type="button"
+                                    className="favorites-page__popover-reset"
+                                    onClick={() => {
+                                      setGroupDatePresets((current) => ({ ...current, [group.opportunityId]: "all" }));
+                                      setGroupDateFrom((current) => ({ ...current, [group.opportunityId]: "" }));
+                                      setGroupDateTo((current) => ({ ...current, [group.opportunityId]: "" }));
+                                    }}
+                                  >
+                                    Сбросить
+                                  </button>
+                                </div>
+
+                                <div className="employer-responses-page__filter-options employer-responses-page__filter-options--date">
+                                  {responseDatePresetOptions.map((option) => (
+                                    <label key={option.value} className="favorites-page__option employer-responses-page__filter-option">
+                                      <Radio
+                                        checked={selectedDatePreset === option.value}
+                                        onChange={() => {
+                                          if (option.value === "custom") {
+                                            handleCustomRangePresetSelect(group.opportunityId);
+                                            return;
+                                          }
+
+                                          setGroupDatePresets((current) => ({ ...current, [group.opportunityId]: option.value }));
+                                          setRangeSelectionStep("start");
+                                        }}
+                                        variant="primary"
+                                      />
+                                      <span>{option.label}</span>
+                                    </label>
+                                  ))}
+                                </div>
+
+                                {selectedDatePreset === "custom" ? (
+                                  <div className="employer-responses-page__range-picker">
+                                    <button
+                                      type="button"
+                                      className="employer-responses-page__filter-date-range"
+                                      onClick={() => {
+                                        setRangeVisibleMonth(startOfMonth(parseIsoDate(selectedDateTo || selectedDateFrom) ?? new Date()));
+                                      }}
+                                    >
+                                      <span
+                                        className={
+                                          selectedDateFrom || selectedDateTo
+                                            ? "employer-responses-page__filter-date-value"
+                                            : "employer-responses-page__filter-date-value employer-responses-page__filter-date-value--placeholder"
+                                        }
+                                      >
+                                        {formatRangeDisplayValue(selectedDateFrom, selectedDateTo) || "дд.мм.гггг - дд.мм.гггг"}
+                                      </span>
+                                      <span aria-hidden="true" className="employer-responses-page__filter-date-icon" />
+                                    </button>
+
+                                    <div className="employer-responses-page__range-calendar">
+                                      <div className="date-input__calendar employer-responses-page__range-calendar-surface">
+                                        <div className="date-input__calendar-header">
+                                          <button
+                                            type="button"
+                                            className="date-input__calendar-nav date-input__calendar-nav--prev"
+                                            aria-label="Предыдущий месяц"
+                                            onClick={() => setRangeVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+                                          />
+                                          <div className="date-input__calendar-month">
+                                            {
+                                              [
+                                                "Январь",
+                                                "Февраль",
+                                                "Март",
+                                                "Апрель",
+                                                "Май",
+                                                "Июнь",
+                                                "Июль",
+                                                "Август",
+                                                "Сентябрь",
+                                                "Октябрь",
+                                                "Ноябрь",
+                                                "Декабрь",
+                                              ][rangeVisibleMonth.getMonth()]
+                                            } {rangeVisibleMonth.getFullYear()}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            className="date-input__calendar-nav date-input__calendar-nav--next"
+                                            aria-label="Следующий месяц"
+                                            onClick={() => setRangeVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                                          />
+                                        </div>
+
+                                        <div className="date-input__calendar-days date-input__calendar-days--weekdays">
+                                          {["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map((item, index) => (
+                                            <span
+                                              key={item}
+                                              className={`date-input__calendar-weekday${index >= 5 ? " date-input__calendar-weekday--weekend" : ""}`}
+                                            >
+                                              {item}
+                                            </span>
+                                          ))}
+                                        </div>
+
+                                        <div className="date-input__calendar-days">
+                                          {rangeCalendarCells.map((item) => (
+                                            <button
+                                              key={item.isoValue}
+                                              type="button"
+                                              className={[
+                                                "date-input__calendar-day",
+                                                !item.isCurrentMonth ? "date-input__calendar-day--outside" : "",
+                                                item.isWeekend ? "date-input__calendar-day--weekend" : "",
+                                                item.isToday ? "date-input__calendar-day--today" : "",
+                                                item.isInRange ? "employer-responses-page__range-day--in-range" : "",
+                                                item.isRangeStart ? "date-input__calendar-day--selected employer-responses-page__range-day--start" : "",
+                                                item.isRangeEnd ? "date-input__calendar-day--selected employer-responses-page__range-day--end" : "",
+                                              ].filter(Boolean).join(" ")}
+                                              onClick={() => handleRangeDateSelect(group.opportunityId, item.isoValue)}
+                                            >
+                                              {item.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="favorites-page__popover-footer employer-responses-page__filter-footer">
+                                <Button type="button" variant="primary" size="sm" fullWidth onClick={() => handleApplyGroupFilters(group.opportunityId)}>
+                                  Показать результаты
+                                </Button>
+                                <Button type="button" variant="primary-outline" size="sm" fullWidth onClick={() => handleResetGroupFilters(group.opportunityId)}>
+                                  Сбросить фильтры
+                                </Button>
                               </div>
                             </div>
                           ) : null}
@@ -1135,18 +1379,31 @@ export function EmployerResponsesPage() {
                             aria-label="Сортировка откликов"
                             aria-expanded={openedSortGroupId === group.opportunityId}
                             onClick={() => {
+                              if (openedSortGroupId !== group.opportunityId) {
+                                scrollToElement(groupToolbarRefs.current[group.opportunityId]);
+                              }
                               setOpenedFilterGroupId(null);
                               setOpenedSortGroupId((current) => current === group.opportunityId ? null : group.opportunityId);
                             }}
                           >
-                            <span
-                              aria-hidden="true"
-                              className={
-                                groupSortDirection === "desc"
-                                  ? "favorites-page__icon favorites-page__icon--sorting"
-                                  : "favorites-page__icon favorites-page__icon--sorting favorites-page__icon--ascending"
-                              }
-                            />
+                            <span className="favorites-page__icon-stack" aria-hidden="true">
+                              <span
+                                className={
+                                  openedSortGroupId === group.opportunityId
+                                    ? `favorites-page__icon ${groupSortDirection === "desc" ? "favorites-page__icon--sorting" : "favorites-page__icon--sorting favorites-page__icon--ascending"} favorites-page__icon--hidden`
+                                    : groupSortDirection === "desc"
+                                      ? "favorites-page__icon favorites-page__icon--sorting"
+                                      : "favorites-page__icon favorites-page__icon--sorting favorites-page__icon--ascending"
+                                }
+                              />
+                              <span
+                                className={
+                                  openedSortGroupId === group.opportunityId
+                                    ? "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--visible"
+                                    : "favorites-page__icon favorites-page__icon--filter-open favorites-page__icon--hidden"
+                                }
+                              />
+                            </span>
                           </button>
 
                           {openedSortGroupId === group.opportunityId ? (
@@ -1174,7 +1431,7 @@ export function EmployerResponsesPage() {
                                       <Radio
                                         checked={groupSortField === option.value}
                                         onChange={() => setGroupSortFields((current) => ({ ...current, [group.opportunityId]: option.value }))}
-                                        variant="secondary"
+                                        variant="primary"
                                       />
                                       <span>{option.label}</span>
                                     </label>
@@ -1188,7 +1445,7 @@ export function EmployerResponsesPage() {
                                     <Radio
                                       checked={groupSortDirection === "asc"}
                                       onChange={() => setGroupSortDirections((current) => ({ ...current, [group.opportunityId]: "asc" }))}
-                                      variant="secondary"
+                                      variant="primary"
                                     />
                                     <span>{groupSortField === "name" ? "А-Я" : "По возрастанию"}</span>
                                   </label>
@@ -1196,7 +1453,7 @@ export function EmployerResponsesPage() {
                                     <Radio
                                       checked={groupSortDirection === "desc"}
                                       onChange={() => setGroupSortDirections((current) => ({ ...current, [group.opportunityId]: "desc" }))}
-                                      variant="secondary"
+                                      variant="primary"
                                     />
                                     <span>{groupSortField === "name" ? "Я-А" : "По убыванию"}</span>
                                   </label>
@@ -1224,7 +1481,7 @@ export function EmployerResponsesPage() {
                                 <h3 className="opportunity-details-page__contact-name contact-profile-card__name">{response.name}</h3>
                                 <p className={`opportunity-details-page__contact-status contact-profile-card__status${response.isOnline ? " contact-profile-card__status--online" : " contact-profile-card__status--offline"}`}>
                                   <span className={`opportunity-details-page__contact-dot contact-profile-card__dot${response.isOnline ? " opportunity-details-page__contact-dot--online contact-profile-card__dot--online" : ""}`} />
-                                  {response.isOnline ? "Online" : "Недавно в сети"}
+                                  {formatPresenceStatus({ isOnline: response.isOnline, lastSeenAt: response.lastSeenAt })}
                                 </p>
                                 <p className="opportunity-details-page__contact-subtitle contact-profile-card__subtitle">{response.subtitle}</p>
                               </div>
@@ -1293,7 +1550,11 @@ export function EmployerResponsesPage() {
                                   disabled={!response.publicId}
                                   onClick={() => {
                                     if (response.publicId) {
-                                      navigate(`/profiles/${response.publicId}`);
+                                      navigate(`/profiles/${response.publicId}`, {
+                                        state: {
+                                          ownerRole: "applicant",
+                                        },
+                                      });
                                     }
                                   }}
                                 >
@@ -1309,7 +1570,10 @@ export function EmployerResponsesPage() {
                             <button
                               type="button"
                               className="opportunity-details-page__pagination-arrow"
-                              onClick={() => setCardPages((current) => ({ ...current, [group.opportunityId]: Math.max(1, safePage - 1) }))}
+                              onClick={() => {
+                                setCardPages((current) => ({ ...current, [group.opportunityId]: Math.max(1, safePage - 1) }));
+                                scrollToElement(groupToolbarRefs.current[group.opportunityId]);
+                              }}
                               disabled={safePage === 1}
                               aria-label="Предыдущая страница"
                             >
@@ -1330,7 +1594,10 @@ export function EmployerResponsesPage() {
                                       ? "opportunity-details-page__pagination-page opportunity-details-page__pagination-page--active"
                                       : "opportunity-details-page__pagination-page"
                                   }
-                                  onClick={() => setCardPages((current) => ({ ...current, [group.opportunityId]: item }))}
+                                  onClick={() => {
+                                    setCardPages((current) => ({ ...current, [group.opportunityId]: item }));
+                                    scrollToElement(groupToolbarRefs.current[group.opportunityId]);
+                                  }}
                                 >
                                   {item}
                                 </button>
@@ -1343,7 +1610,10 @@ export function EmployerResponsesPage() {
                             <button
                               type="button"
                               className="opportunity-details-page__pagination-arrow"
-                              onClick={() => setCardPages((current) => ({ ...current, [group.opportunityId]: Math.min(totalPages, safePage + 1) }))}
+                              onClick={() => {
+                                setCardPages((current) => ({ ...current, [group.opportunityId]: Math.min(totalPages, safePage + 1) }));
+                                scrollToElement(groupToolbarRefs.current[group.opportunityId]);
+                              }}
                               disabled={safePage === totalPages}
                               aria-label="Следующая страница"
                             >
@@ -1372,7 +1642,10 @@ export function EmployerResponsesPage() {
             <button
               type="button"
               className="opportunity-details-page__pagination-arrow"
-              onClick={() => setGroupPage((current) => Math.max(1, current - 1))}
+              onClick={() => {
+                setGroupPage((current) => Math.max(1, current - 1));
+                scrollToElement(mainToolbarRef.current);
+              }}
               disabled={groupPage === 1}
               aria-label="Предыдущая страница вакансий"
             >
@@ -1393,7 +1666,10 @@ export function EmployerResponsesPage() {
                       ? "opportunity-details-page__pagination-page opportunity-details-page__pagination-page--active"
                       : "opportunity-details-page__pagination-page"
                   }
-                  onClick={() => setGroupPage(item)}
+                  onClick={() => {
+                    setGroupPage(item);
+                    scrollToElement(mainToolbarRef.current);
+                  }}
                 >
                   {item}
                 </button>
@@ -1406,7 +1682,10 @@ export function EmployerResponsesPage() {
             <button
               type="button"
               className="opportunity-details-page__pagination-arrow"
-              onClick={() => setGroupPage((current) => Math.min(totalGroupPages, current + 1))}
+              onClick={() => {
+                setGroupPage((current) => Math.min(totalGroupPages, current + 1));
+                scrollToElement(mainToolbarRef.current);
+              }}
               disabled={groupPage === totalGroupPages}
               aria-label="Следующая страница вакансий"
             >

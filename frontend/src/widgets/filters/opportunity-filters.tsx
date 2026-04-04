@@ -160,6 +160,49 @@ export function OpportunityFilters({
   const sortRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!isFiltersOpen && !isSortOpen) {
+      return;
+    }
+
+    const spacing = 24;
+    const dropdownOffset = 10;
+
+    const updatePopoverMaxHeight = (element: HTMLDivElement | null) => {
+      if (!element) {
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const availableHeight = Math.max(window.innerHeight - rect.bottom - dropdownOffset - spacing, 220);
+      element.style.setProperty("--opportunity-filters-popover-max-height", `${availableHeight}px`);
+    };
+
+    const syncPopoverBounds = () => {
+      if (isFiltersOpen) {
+        updatePopoverMaxHeight(filtersRef.current);
+      }
+
+      if (isSortOpen) {
+        updatePopoverMaxHeight(sortRef.current);
+      }
+    };
+
+    syncPopoverBounds();
+
+    const handleViewportChange = () => {
+      window.requestAnimationFrame(syncPopoverBounds);
+    };
+
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, { passive: true });
+
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange);
+    };
+  }, [isFiltersOpen, isSortOpen]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 

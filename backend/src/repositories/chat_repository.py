@@ -131,7 +131,8 @@ class ChatRepository:
             query = query.where(ChatConversation.employer_id == UUID(str(employer_id)))
         else:
             query = query.where(ChatConversation.employer_id.is_(None))
-        return self.db.execute(query).scalar_one_or_none()
+        query = query.order_by(ChatConversation.last_message_at.desc().nullslast(), ChatConversation.created_at.desc())
+        return self.db.execute(query).scalars().first()
 
     def create_conversation(
         self,

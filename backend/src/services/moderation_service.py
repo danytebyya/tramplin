@@ -757,7 +757,7 @@ class ModerationService:
             filtered_items,
             key=lambda item: (
                 self._content_status_sort_weight(status_by_opportunity_id[str(item.id)]),
-                -self._normalize_datetime(item.created_at).timestamp(),
+                -self._content_submission_datetime(item).timestamp(),
             ),
         )
 
@@ -780,7 +780,7 @@ class ModerationService:
                 item
                 for item in opportunities
                 if item.moderation_status == ModerationStatus.PENDING_REVIEW
-                and self._normalize_datetime(item.created_at)
+                and self._content_submission_datetime(item)
                 <= self._get_opportunity_overdue_threshold(now, item.opportunity_type, moderation_settings)
             ]
         )
@@ -1934,7 +1934,7 @@ class ModerationService:
                 else "Компания"
             ),
             author_email=opportunity.contact_email,
-            submitted_at=self._normalize_datetime(opportunity.created_at).isoformat(),
+            submitted_at=self._content_submission_datetime(opportunity).isoformat(),
             kind=kind,
             status=status,
             priority=priority,
@@ -1946,6 +1946,15 @@ class ModerationService:
             checklist=checklist,
             moderator_comment=opportunity.moderation_reason,
         )
+
+    def _content_submission_datetime(self, opportunity) -> datetime:
+        created_at = self._normalize_datetime(opportunity.created_at)
+        updated_at = self._normalize_datetime(opportunity.updated_at)
+
+        if opportunity.moderation_status == ModerationStatus.PENDING_REVIEW:
+            return updated_at if updated_at >= created_at else created_at
+
+        return created_at
 
     def _get_opportunity_or_raise(self, opportunity_id: str):
         opportunity = self.repo.get_opportunity_by_id(opportunity_id)

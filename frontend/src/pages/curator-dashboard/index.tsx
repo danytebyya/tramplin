@@ -411,7 +411,7 @@ export function CuratorDashboardPage() {
     }, 40);
   };
 
-  const profileMenuItems = buildModerationProfileMenuItems();
+  const profileMenuItems = buildModerationProfileMenuItems(navigate);
 
   return (
     <main className={`curator-dashboard-page curator-dashboard-page--${themeRole}`}>

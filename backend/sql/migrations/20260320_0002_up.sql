@@ -585,9 +585,9 @@ CREATE TABLE IF NOT EXISTS applications (
 
 CREATE INDEX IF NOT EXISTS ix_applications_opportunity_status ON applications (opportunity_id, status, submitted_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS ix_applications_applicant_status ON applications (applicant_user_id, status, submitted_at DESC) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_applications_single_active ON applications (opportunity_id, applicant_user_id)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_applications_single_blocking ON applications (opportunity_id, applicant_user_id)
 WHERE deleted_at IS NULL
-  AND status NOT IN ('withdrawn', 'rejected', 'canceled');
+  AND status NOT IN ('withdrawn'::application_status, 'canceled'::application_status);
 
 CREATE TABLE IF NOT EXISTS application_status_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

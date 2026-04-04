@@ -4,6 +4,7 @@ import maxIcon from "../../assets/auth/max.png";
 import vkIcon from "../../assets/auth/vk.png";
 import logoPrimaryBlack from "../../assets/icons/logo-primary-black.svg";
 import logoSecondaryBlack from "../../assets/icons/logo-secondary-black.svg";
+import { buildOpportunityExplorerRoute } from "../../shared/lib";
 import { Container } from "../../shared/ui";
 import "./footer.css";
 
@@ -51,21 +52,21 @@ export function Footer({
             <div className="site-footer__section">
               <h2 className="site-footer__title">Категории</h2>
               <div className="site-footer__links">
-                <a href={toHref(hashPrefix, "#all")} className="site-footer__link">
+                <Link to={buildOpportunityExplorerRoute("all")} className="site-footer__link">
                   Все
-                </a>
-                <a href={toHref(hashPrefix, "#vacancies")} className="site-footer__link">
+                </Link>
+                <Link to={buildOpportunityExplorerRoute("vacancy")} className="site-footer__link">
                   Вакансии
-                </a>
-                <a href={toHref(hashPrefix, "#internships")} className="site-footer__link">
+                </Link>
+                <Link to={buildOpportunityExplorerRoute("internship")} className="site-footer__link">
                   Стажировки
-                </a>
-                <a href={toHref(hashPrefix, "#events")} className="site-footer__link">
+                </Link>
+                <Link to={buildOpportunityExplorerRoute("event")} className="site-footer__link">
                   Мероприятия
-                </a>
-                <a href={toHref(hashPrefix, "#mentorship")} className="site-footer__link">
+                </Link>
+                <Link to={buildOpportunityExplorerRoute("mentorship")} className="site-footer__link">
                   Менторство
-                </a>
+                </Link>
               </div>
             </div>
 

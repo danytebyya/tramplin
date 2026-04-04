@@ -3,6 +3,7 @@ export function cn(...classNames: Array<string | undefined | false | null>): str
 }
 
 export { resolveAvatarIcon, resolveAvatarUrl } from "./avatar";
+export { prepareAvatarFile } from "./avatar-file";
 export { abbreviateLegalEntityName } from "./legal-entity";
 export {
   buildOpportunitySearchText,
@@ -10,6 +11,13 @@ export {
   matchesOpportunitySearch,
   normalizeOpportunitySearchText,
 } from "./opportunity-search";
+export {
+  buildOpportunityExplorerRoute,
+  opportunityCategoryLinks,
+  OPPORTUNITY_EXPLORER_PATH,
+  resolveOpportunityCategoryFilter,
+} from "./opportunity-navigation";
+export type { OpportunityCategoryFilter } from "./opportunity-navigation";
 export { formatPresenceStatus } from "./presence";
 export {
   canViewerAccessApplicantProfile,

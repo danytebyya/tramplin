@@ -611,6 +611,33 @@
   color: var(--color-bg-primary);
 }
 
+.header:not(.header--landing) .header__action-button.button.header__action-button--register {
+  border-color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--color-primary);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.header:not(.header--landing) .header__action-button.button.header__action-button--register:not(.button--loading):not(:disabled):hover {
+  border-color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 1);
+  color: var(--color-primary-hover);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.16);
+}
+
+.header:not(.header--landing) .header__action-button.button.header__action-button--register:not(.button--loading):not(:disabled):active {
+  border-color: rgba(255, 255, 255, 0.9);
+  background: rgba(248, 250, 252, 0.98);
+  color: var(--color-primary-active);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.header:not(.header--landing) .header__action-button.button.header__action-button--register:not(.button--loading):focus-visible {
+  border-color: rgba(255, 255, 255, 0.96);
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--color-primary);
+}
+
 .header__bottom {
   position: relative;
   z-index: 10;

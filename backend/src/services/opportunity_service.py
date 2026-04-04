@@ -290,21 +290,24 @@ class OpportunityService:
         profile.recommendations_count = (profile.recommendations_count or 0) + 1
         self.repo.db.add(profile)
 
-        NotificationService(self.repo.db).create_notification(
-            user_id=target_user.id,
-            kind=NotificationKind.OPPORTUNITY,
-            severity=NotificationSeverity.INFO,
-            title="Вам порекомендовали вакансию",
-            message=f"{current_user.display_name} порекомендовал вам вакансию «{opportunity.title}».",
-            action_label="Перейти",
-            action_url=f"/opportunities/{opportunity.id}",
-            payload={
-                "notification_type": "opportunity_recommendation",
-                "opportunity_id": str(opportunity.id),
-                "recommended_by_user_id": str(current_user.id),
-                "recommended_by_name": current_user.display_name,
-            },
-        )
+        preferences = UserRepository(self.repo.db).get_notification_preferences(str(target_user.id))
+        if preferences is None or preferences.push_daily_digest:
+            NotificationService(self.repo.db).create_notification(
+                user_id=target_user.id,
+                kind=NotificationKind.OPPORTUNITY,
+                severity=NotificationSeverity.INFO,
+                title="Вам порекомендовали вакансию",
+                message=f"{current_user.display_name} порекомендовал вам вакансию «{opportunity.title}».",
+                action_label="Перейти",
+                action_url=f"/opportunities/{opportunity.id}",
+                payload={
+                    "notification_type": "opportunity_recommendation",
+                    "opportunity_id": str(opportunity.id),
+                    "recommended_by_user_id": str(current_user.id),
+                    "recommended_by_name": current_user.display_name,
+                },
+                profile_scope={"profile_role": UserRole.APPLICANT.value},
+            )
         self.repo.db.commit()
 
     def _serialize_public_opportunity(self, opportunity: Opportunity, index: int) -> dict:

@@ -6,6 +6,34 @@
   margin: -12px;
 }
 
+.opportunity-list--empty {
+  margin: 0;
+  padding: 0;
+}
+
+.opportunity-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.opportunity-list__empty-icon {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.opportunity-list__empty-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+  font-weight: 400;
+}
+
 .opportunity-list__card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;

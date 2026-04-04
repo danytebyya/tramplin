@@ -53,6 +53,10 @@ const sortFieldOptions: Array<{ value: ContentSortField; label: string }> = [
   { value: "alphabet", label: "По алфавиту" },
 ];
 
+function easeOutQuad(value: number) {
+  return 1 - (1 - value) * (1 - value);
+}
+
 function buildPageNumbers(currentPage: number, totalPages: number) {
   if (totalPages <= 5) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -107,10 +111,22 @@ function formatSubmissionDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function hasSelectedText() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return Boolean(window.getSelection()?.toString().trim());
+}
+
+function stopCheckboxEvent(event: ReactMouseEvent<HTMLInputElement>) {
+  event.stopPropagation();
+}
+
 function ContentModerationMetricSkeleton({ label }: { label: string }) {
   return (
-    <article className="moderation-queue-page__metric-card" aria-hidden="true">
-      <span className="moderation-queue-page__metric-label">{label}</span>
+    <article className="moderation-queue-page__metric-card stats-panel__card" aria-hidden="true">
+      <span className="moderation-queue-page__metric-label stats-panel__label">{label}</span>
       <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--metric-value" />
     </article>
   );
@@ -120,16 +136,13 @@ function ContentModerationRowSkeleton() {
   return (
     <article className="moderation-queue-page__submission moderation-queue-page__submission--skeleton" aria-hidden="true">
       <div className="moderation-queue-page__submission-summary">
-        <div className="moderation-queue-page__submission-select">
-          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--mark" />
-        </div>
+        <div className="moderation-queue-page__submission-select" />
         <div className="moderation-queue-page__submission-overview">
           <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--title" />
           <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--cell" />
           <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--cell" />
           <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--cell" />
           <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--badge" />
-          <span className="moderation-queue-page__skeleton moderation-queue-page__skeleton--actions" />
         </div>
       </div>
     </article>
@@ -482,14 +495,29 @@ export function ContentModerationPage() {
   const total = contentQuery.data?.data?.total ?? 0;
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
   const pageNumbers = buildPageNumbers(page, totalPages);
-  const allRowsSelected = sortedItems.length > 0 && selectedIds.length === sortedItems.length;
+  const selectableItems = useMemo(
+    () => sortedItems.filter((item) => item.status === "pending_review" || item.status === "changes_requested"),
+    [sortedItems],
+  );
+  const allRowsSelected =
+    selectableItems.length > 0 && selectableItems.every((item) => selectedIds.includes(item.id));
   const currentExpandedItem = sortedItems.find((item) => item.id === expandedItemId) ?? null;
+  const selectedItemsForBulkActions = useMemo(() => {
+    const selectedIdSet = new Set(selectedIds);
+    return sortedItems.filter((item) => selectedIdSet.has(item.id));
+  }, [selectedIds, sortedItems]);
   const anyMutationPending =
     approveMutation.isPending ||
     rejectMutation.isPending ||
     requestChangesMutation.isPending ||
     bulkActionMutation.isPending ||
     updateChecklistMutation.isPending;
+  const isBulkRequestChangesDisabled =
+    anyMutationPending || selectedItemsForBulkActions.some((item) => item.status === "changes_requested");
+  const isBulkRejectDisabled =
+    anyMutationPending || selectedItemsForBulkActions.some((item) => item.status === "rejected");
+  const isBulkApproveDisabled =
+    anyMutationPending || selectedItemsForBulkActions.some((item) => item.status === "approved");
   const isTableLoading = contentQuery.isPending;
   const counts = useMemo(() => {
     return {
@@ -537,7 +565,105 @@ export function ContentModerationPage() {
     }, 40);
   };
 
-  const profileMenuItems = buildModerationProfileMenuItems();
+  const profileMenuItems = buildModerationProfileMenuItems(navigate);
+
+  useEffect(() => {
+    if (!isFilterOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const filtersElement = filtersRef.current;
+      if (!filtersElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = filtersElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isFilterOpen]);
+
+  useEffect(() => {
+    if (!isSortOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const sortingElement = sortingRef.current;
+      if (!sortingElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = sortingElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isSortOpen]);
 
   const toggleFilterValue = <T extends string>(
     nextValue: T | "all",
@@ -595,11 +721,16 @@ export function ContentModerationPage() {
   };
 
   const toggleSelectedId = (itemId: string) => {
+    const targetItem = sortedItems.find((item) => item.id === itemId);
+    if (!targetItem || (targetItem.status !== "pending_review" && targetItem.status !== "changes_requested")) {
+      return;
+    }
+
     setSelectedIds((current) => (current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]));
   };
 
   const toggleSelectAll = () => {
-    setSelectedIds(allRowsSelected ? [] : sortedItems.map((item) => item.id));
+    setSelectedIds(allRowsSelected ? [] : selectableItems.map((item) => item.id));
   };
 
   const handleExpand = (item: ContentModerationItem) => {
@@ -610,6 +741,10 @@ export function ContentModerationPage() {
   const handleRowClick = (event: ReactMouseEvent<HTMLElement>, item: ContentModerationItem) => {
     const target = event.target as HTMLElement;
     if (target.closest("button, a, input, textarea, select, label")) {
+      return;
+    }
+
+    if (hasSelectedText()) {
       return;
     }
 
@@ -739,7 +874,16 @@ export function ContentModerationPage() {
                   setIsSortOpen(false);
                   setIsFilterOpen((current) => !current);
                 }}
-              />
+              >
+                <span
+                  className={
+                    isFilterOpen
+                      ? "moderation-queue-page__icon moderation-queue-page__icon--filter-open"
+                      : "moderation-queue-page__icon moderation-queue-page__icon--filter"
+                  }
+                  aria-hidden="true"
+                />
+              </button>
 
               {isFilterOpen ? (
                 <div className="moderation-queue-page__filters-popover">
@@ -805,14 +949,24 @@ export function ContentModerationPage() {
                   setIsSortOpen((current) => !current);
                 }}
               >
-                <span
-                  className={
-                    appliedSortDirection === "desc"
-                      ? "moderation-queue-page__icon moderation-queue-page__icon--descending"
-                      : "moderation-queue-page__icon moderation-queue-page__icon--ascending"
-                  }
-                  aria-hidden="true"
-                />
+                <span className="moderation-queue-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isSortOpen
+                        ? `moderation-queue-page__icon ${appliedSortDirection === "desc" ? "moderation-queue-page__icon--sorting" : "moderation-queue-page__icon--sorting moderation-queue-page__icon--ascending"} moderation-queue-page__icon--hidden`
+                        : appliedSortDirection === "desc"
+                          ? "moderation-queue-page__icon moderation-queue-page__icon--sorting"
+                          : "moderation-queue-page__icon moderation-queue-page__icon--sorting moderation-queue-page__icon--ascending"
+                    }
+                  />
+                  <span
+                    className={
+                      isSortOpen
+                        ? "moderation-queue-page__icon moderation-queue-page__icon--filter-open moderation-queue-page__icon--visible"
+                        : "moderation-queue-page__icon moderation-queue-page__icon--filter-open moderation-queue-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isSortOpen ? (
@@ -844,12 +998,12 @@ export function ContentModerationPage() {
                   <div className="moderation-queue-page__filters-section">
                     <div className="moderation-queue-page__filters-options moderation-queue-page__filters-options--radio">
                       <label className="moderation-queue-page__filter-option">
-                        <Radio checked={selectedSortDirection === "desc"} onChange={() => setSelectedSortDirection("desc")} variant="accent" />
-                        <span>{selectedSortField === "alphabet" ? "Я-А" : "Сначала новые"}</span>
-                      </label>
-                      <label className="moderation-queue-page__filter-option">
                         <Radio checked={selectedSortDirection === "asc"} onChange={() => setSelectedSortDirection("asc")} variant="accent" />
                         <span>{selectedSortField === "alphabet" ? "А-Я" : "Сначала старые"}</span>
+                      </label>
+                      <label className="moderation-queue-page__filter-option">
+                        <Radio checked={selectedSortDirection === "desc"} onChange={() => setSelectedSortDirection("desc")} variant="accent" />
+                        <span>{selectedSortField === "alphabet" ? "Я-А" : "Сначала новые"}</span>
                       </label>
                     </div>
                   </div>
@@ -881,13 +1035,13 @@ export function ContentModerationPage() {
               <span className="moderation-queue-page__bulk-bar-count">Выбрано: {selectedIds.length}</span>
             </div>
             <div className="moderation-queue-page__bulk-bar-actions">
-              <Button type="button" variant="accent-outline" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("request-changes")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
+              <Button type="button" variant="accent-outline" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("request-changes")} loading={bulkActionMutation.isPending} disabled={isBulkRequestChangesDisabled}>
                 Запросить правки
               </Button>
-              <Button type="button" variant="danger" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("reject")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
+              <Button type="button" variant="danger" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("reject")} loading={bulkActionMutation.isPending} disabled={isBulkRejectDisabled}>
                 Отклонить
               </Button>
-              <Button type="button" variant="success" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("approve")} loading={bulkActionMutation.isPending} disabled={anyMutationPending}>
+              <Button type="button" variant="success" size="md" className="moderation-queue-page__bulk-bar-button" onClick={() => handleBulkAction("approve")} loading={bulkActionMutation.isPending} disabled={isBulkApproveDisabled}>
                 Одобрить
               </Button>
             </div>
@@ -899,7 +1053,14 @@ export function ContentModerationPage() {
         <section className="moderation-queue-page__records">
           <div className="moderation-queue-page__table-head">
             <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--check">
-              <Checkbox checked={allRowsSelected} onChange={toggleSelectAll} variant="accent" />
+              <Checkbox
+                checked={allRowsSelected}
+                onChange={toggleSelectAll}
+                onClick={stopCheckboxEvent}
+                onMouseDown={stopCheckboxEvent}
+                variant="accent"
+                disabled={selectableItems.length === 0}
+              />
             </div>
             <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--subject">Контент</div>
             <div className="moderation-queue-page__table-cell moderation-queue-page__table-cell--company">Компания</div>
@@ -918,6 +1079,8 @@ export function ContentModerationPage() {
                   const statusMeta = resolveStatusMeta(item.status);
                   const isExpanded = expandedItemId === item.id;
                   const canReview = item.status === "pending_review";
+                  const canEditChecklist = item.status === "pending_review" || item.status === "changes_requested";
+                  const isSelectable = item.status === "pending_review" || item.status === "changes_requested";
 
                   return (
                     <article
@@ -931,7 +1094,14 @@ export function ContentModerationPage() {
                           ? "moderation-queue-page__submission-summary moderation-queue-page__submission-summary--centered"
                           : "moderation-queue-page__submission-summary"}>
                         <div className="moderation-queue-page__submission-select">
-                          <Checkbox checked={selectedIds.includes(item.id)} onChange={() => toggleSelectedId(item.id)} variant="accent" />
+                          <Checkbox
+                            checked={selectedIds.includes(item.id)}
+                            onChange={() => toggleSelectedId(item.id)}
+                            onClick={stopCheckboxEvent}
+                            onMouseDown={stopCheckboxEvent}
+                            variant="accent"
+                            disabled={!isSelectable}
+                          />
                         </div>
 
                         <div className="moderation-queue-page__submission-overview">
@@ -987,7 +1157,13 @@ export function ContentModerationPage() {
                               type="button"
                               className="moderation-queue-page__action-button"
                               aria-label={`Открыть ${item.title}`}
-                              onClick={() => handleExpand(item)}
+                              onClick={() => {
+                                if (hasSelectedText()) {
+                                  return;
+                                }
+
+                                handleExpand(item);
+                              }}
                             >
                               <img src={editIcon} alt="" aria-hidden="true" />
                             </button>
@@ -1020,10 +1196,6 @@ export function ContentModerationPage() {
                                 <div className="moderation-queue-page__detail-value">{item.format_label}</div>
                               </div>
                               <div className="moderation-queue-page__detail">
-                                <div className="moderation-queue-page__detail-label">Краткое описание</div>
-                                <div className="moderation-queue-page__detail-rich-text">{item.short_description}</div>
-                              </div>
-                              <div className="moderation-queue-page__detail">
                                 <div className="moderation-queue-page__detail-label">Описание</div>
                                 <div className="moderation-queue-page__detail-rich-text">{item.description}</div>
                               </div>
@@ -1045,7 +1217,23 @@ export function ContentModerationPage() {
                                     ["Условия указаны", item.checklist.conditions_specified],
                                   ].map(([label, checked], index) => (
                                     <label key={String(label)} className="moderation-queue-page__checklist-option">
-                                      <Checkbox checked={Boolean(checked)} onChange={() => handleChecklistChange(item.id, item.checklist, (["salary_specified", "requirements_completed", "responsibilities_completed", "conditions_specified"] as const)[index])} variant="accent" disabled={updateChecklistMutation.isPending} />
+                                      <Checkbox
+                                        checked={Boolean(checked)}
+                                        onChange={() =>
+                                          handleChecklistChange(
+                                            item.id,
+                                            item.checklist,
+                                            ([
+                                              "salary_specified",
+                                              "requirements_completed",
+                                              "responsibilities_completed",
+                                              "conditions_specified",
+                                            ] as const)[index],
+                                          )
+                                        }
+                                        variant="accent"
+                                        disabled={!canEditChecklist || updateChecklistMutation.isPending}
+                                      />
                                       <span>{label}</span>
                                     </label>
                                   ))}
@@ -1093,7 +1281,7 @@ export function ContentModerationPage() {
             ) : null}
           </div>
 
-          {!isTableLoading && sortedItems.length > 0 ? (
+          {!isTableLoading && sortedItems.length > 0 && totalPages > 1 ? (
             <nav className="moderation-queue-page__pagination" aria-label="Пагинация">
               <button
                 type="button"

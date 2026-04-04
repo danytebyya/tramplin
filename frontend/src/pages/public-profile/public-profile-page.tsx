@@ -48,6 +48,7 @@ type SeekerLevel = "Junior" | "Middle" | "Senior";
 type PublicProfileReturnState = {
   restoreScrollY?: number;
   restoreViewMode?: "list" | "map";
+  ownerRole?: "applicant" | "employer";
   returnTo?: {
     pathname: string;
     search?: string;
@@ -135,18 +136,6 @@ function resolveViewerTheme(role: string | null | undefined) {
   }
 
   return "employer";
-}
-
-function resolveViewerBadgeVariant(theme: "applicant" | "employer" | "curator") {
-  if (theme === "employer") {
-    return "primary" as const;
-  }
-
-  if (theme === "curator") {
-    return "info" as const;
-  }
-
-  return "secondary" as const;
 }
 
 function mapProject(item: ApplicantDashboardProject) {
@@ -391,6 +380,7 @@ export function PublicProfilePage() {
   const { publicId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const navigationState = location.state as PublicProfileReturnState | null;
   const [selectedCity, setSelectedCity] = useState(() => readSelectedCityCookie() ?? "Чебоксары");
   const [selectedEmployerOpportunityId, setSelectedEmployerOpportunityId] = useState<string | null>(null);
   const [employerOpportunityViewMode, setEmployerOpportunityViewMode] = useState<"map" | "list">("map");
@@ -403,28 +393,31 @@ export function PublicProfilePage() {
     activeRole === "employer"
       ? buildEmployerProfileMenuItems(navigate, employerAccess)
       : activeRole === "junior" || activeRole === "curator" || activeRole === "admin"
-        ? buildModerationProfileMenuItems()
+        ? buildModerationProfileMenuItems(navigate)
         : buildApplicantProfileMenuItems(navigate);
   const viewerTheme = resolveViewerTheme(activeRole);
-  const viewerBadgeVariant = resolveViewerBadgeVariant(viewerTheme);
   const fallbackHeaderTheme = viewerTheme;
-  const fallbackHeaderContainerClassName = "home-page__shell";
+  const viewerBadgeVariant =
+    viewerTheme === "employer"
+      ? "primary"
+      : viewerTheme === "curator"
+        ? "info"
+        : "secondary";
+  const fallbackHeaderContainerClassName = "public-profile-page__header-shell";
   const backNavigationTarget = useMemo(() => {
-    const state = location.state as PublicProfileReturnState | null;
-
-    if (!state?.returnTo?.pathname) {
+    if (!navigationState?.returnTo?.pathname) {
       return null;
     }
 
     return {
-      to: `${state.returnTo.pathname}${state.returnTo.search ?? ""}${state.returnTo.hash ?? ""}`,
+      to: `${navigationState.returnTo.pathname}${navigationState.returnTo.search ?? ""}${navigationState.returnTo.hash ?? ""}`,
       state: {
-        restoreScrollY: state.restoreScrollY,
-        restoreViewMode: state.restoreViewMode,
+        restoreScrollY: navigationState.restoreScrollY,
+        restoreViewMode: navigationState.restoreViewMode,
       },
       replace: true,
     };
-  }, [location.state]);
+  }, [navigationState]);
 
   const profileQuery = useQuery({
     queryKey: ["public-profile", publicId],
@@ -520,7 +513,13 @@ export function PublicProfilePage() {
               >
                 Вход
               </Button>
-              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                className="header__action-button header__action-button--register"
+                onClick={() => navigate("/register")}
+              >
                 Регистрация
               </Button>
             </>
@@ -534,7 +533,7 @@ export function PublicProfilePage() {
             <Link to="/" className="public-profile-page__status-link">Вернуться на главную</Link>
           </div>
         </Container>
-        <Footer theme={viewerTheme} />
+        <Footer theme={fallbackHeaderTheme} />
       </main>
     );
   }
@@ -560,7 +559,13 @@ export function PublicProfilePage() {
               >
                 Вход
               </Button>
-              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                className="header__action-button header__action-button--register"
+                onClick={() => navigate("/register")}
+              >
                 Регистрация
               </Button>
             </>
@@ -568,7 +573,7 @@ export function PublicProfilePage() {
         />
         <BackNavigation {...backNavigationTarget} />
         <PublicProfileSkeleton />
-        <Footer theme={viewerTheme} />
+        <Footer theme={fallbackHeaderTheme} />
       </main>
     );
   }
@@ -594,7 +599,13 @@ export function PublicProfilePage() {
               >
                 Вход
               </Button>
-              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                className="header__action-button header__action-button--register"
+                onClick={() => navigate("/register")}
+              >
                 Регистрация
               </Button>
             </>
@@ -610,7 +621,7 @@ export function PublicProfilePage() {
             <Link to="/" className="public-profile-page__status-link">Вернуться на главную</Link>
           </div>
         </Container>
-        <Footer theme={viewerTheme} />
+        <Footer theme={fallbackHeaderTheme} />
       </main>
     );
   }
@@ -664,7 +675,13 @@ export function PublicProfilePage() {
               >
                 Вход
               </Button>
-              <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                className="header__action-button header__action-button--register"
+                onClick={() => navigate("/register")}
+              >
                 Регистрация
               </Button>
             </>
@@ -1008,7 +1025,7 @@ export function PublicProfilePage() {
   );
 
   return (
-    <main className={`public-profile-page public-profile-page--employer public-profile-page--viewer-${viewerTheme}`}>
+    <main className={`employer-dashboard public-profile-page public-profile-page--employer public-profile-page--viewer-${viewerTheme}`}>
       <Header
         containerClassName={fallbackHeaderContainerClassName}
         profileMenuItems={profileMenuItems}
@@ -1027,7 +1044,13 @@ export function PublicProfilePage() {
             >
               Вход
             </Button>
-            <Button type="button" variant="primary" size="md" onClick={() => navigate("/register")}>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              className="header__action-button header__action-button--register"
+              onClick={() => navigate("/register")}
+            >
               Регистрация
             </Button>
           </>
@@ -1243,7 +1266,7 @@ export function PublicProfilePage() {
         </section>
       </Container>
 
-      <Footer theme={viewerTheme} />
+      <Footer theme={theme} />
     </main>
   );
 }

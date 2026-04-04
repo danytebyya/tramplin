@@ -66,10 +66,21 @@ class ApplicationService:
                 Application.opportunity_id == opportunity.id,
                 Application.applicant_user_id == current_user.id,
                 Application.deleted_at.is_(None),
-                Application.status != ApplicationStatus.CANCELED,
+                Application.status.not_in(
+                    [
+                        ApplicationStatus.WITHDRAWN,
+                        ApplicationStatus.CANCELED,
+                    ]
+                ),
             )
         ).scalar_one_or_none()
         if existing_application is not None:
+            if existing_application.status == ApplicationStatus.REJECTED:
+                raise AppError(
+                    code="APPLICATION_REAPPLY_FORBIDDEN",
+                    message="Нельзя повторно откликнуться на возможность после отказа работодателя",
+                    status_code=409,
+                )
             raise AppError(
                 code="APPLICATION_ALREADY_EXISTS",
                 message="Вы уже откликнулись на эту возможность",
@@ -161,9 +172,6 @@ class ApplicationService:
             )
 
         if application.status in {
-            ApplicationStatus.INTERVIEW,
-            ApplicationStatus.OFFER,
-            ApplicationStatus.ACCEPTED,
             ApplicationStatus.REJECTED,
         }:
             raise AppError(

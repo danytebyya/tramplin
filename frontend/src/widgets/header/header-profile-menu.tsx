@@ -199,6 +199,7 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
   }
 
   const user = meQuery.data?.data?.user;
+  const applicantAvatarUrl = user?.applicant_profile?.avatar_url ?? null;
   const employerAvatarUrl = user?.employer_profile?.avatar_url ?? null;
   const currentRole = activeContextRole ?? user?.role;
   const isModerationRole = currentRole === "curator" || currentRole === "junior" || currentRole === "admin";
@@ -300,7 +301,11 @@ export function HeaderProfileMenu({ items }: HeaderProfileMenuProps) {
                       <img
                         src={resolveAccountContextAvatar(
                           item.role,
-                          item.role === "employer" ? employerAvatarUrl : null,
+                          item.role === "employer"
+                            ? employerAvatarUrl
+                            : item.role === "applicant"
+                              ? applicantAvatarUrl
+                              : null,
                         )}
                         alt=""
                         aria-hidden="true"

@@ -35,6 +35,10 @@ const roleOptions: Array<{ value: CuratorRole; label: string }> = [
   { value: "junior", label: "Junior" },
 ];
 
+function easeOutQuad(value: number) {
+  return 1 - (1 - value) * (1 - value);
+}
+
 const curatorRoleDescriptions: Record<CuratorRole, ReactNode> = {
   junior: (
     <div className="curator-management-page__modal-role-description">
@@ -209,9 +213,7 @@ function CuratorManagementRowSkeleton() {
   return (
     <article className="curator-management-page__profile curator-management-page__profile--skeleton" aria-hidden="true">
       <div className="curator-management-page__profile-summary">
-        <div className="curator-management-page__profile-select">
-          <span className="curator-management-page__skeleton curator-management-page__skeleton--toggle-mark" />
-        </div>
+        <div className="curator-management-page__profile-select" />
         <div className="curator-management-page__profile-overview">
           <span className="curator-management-page__skeleton curator-management-page__skeleton--title" />
           <span className="curator-management-page__skeleton curator-management-page__skeleton--cell" />
@@ -219,7 +221,6 @@ function CuratorManagementRowSkeleton() {
           <span className="curator-management-page__skeleton curator-management-page__skeleton--cell" />
           <span className="curator-management-page__skeleton curator-management-page__skeleton--cell" />
           <span className="curator-management-page__skeleton curator-management-page__skeleton--cell" />
-          <span className="curator-management-page__skeleton curator-management-page__skeleton--actions" />
         </div>
       </div>
     </article>
@@ -569,7 +570,105 @@ export function CuratorManagementPage() {
     }, 40);
   };
 
-  const profileMenuItems = buildModerationProfileMenuItems();
+  const profileMenuItems = buildModerationProfileMenuItems(navigate);
+
+  useEffect(() => {
+    if (!isFilterOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const filtersElement = filtersRef.current;
+      if (!filtersElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = filtersElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isFilterOpen]);
+
+  useEffect(() => {
+    if (!isSortOpen) {
+      return;
+    }
+
+    let scrollAnimationFrameId = 0;
+    const frameId = window.requestAnimationFrame(() => {
+      const sortingElement = sortingRef.current;
+      if (!sortingElement) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const rect = sortingElement.getBoundingClientRect();
+      const startScrollY = window.scrollY;
+      const targetScrollY = Math.max(startScrollY + rect.top - viewportPadding, 0);
+      const distance = targetScrollY - startScrollY;
+
+      if (Math.abs(distance) < 4) {
+        return;
+      }
+
+      const duration = 620;
+      const animationStart = window.performance.now();
+
+      const animateScroll = (currentTime: number) => {
+        const elapsed = currentTime - animationStart;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutQuad(progress);
+
+        window.scrollTo({
+          top: startScrollY + distance * easedProgress,
+          behavior: "auto",
+        });
+
+        if (progress < 1) {
+          scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+        }
+      };
+
+      scrollAnimationFrameId = window.requestAnimationFrame(animateScroll);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.cancelAnimationFrame(scrollAnimationFrameId);
+    };
+  }, [isSortOpen]);
 
   const toggleFilterValue = <T extends string>(
     nextValue: T | "all",
@@ -864,7 +963,24 @@ export function CuratorManagementPage() {
                   setIsSortOpen(false);
                   setIsFilterOpen((current) => !current);
                 }}
-              />
+              >
+                <span className="curator-management-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isFilterOpen
+                        ? "curator-management-page__icon curator-management-page__icon--filter curator-management-page__icon--hidden"
+                        : "curator-management-page__icon curator-management-page__icon--filter"
+                    }
+                  />
+                  <span
+                    className={
+                      isFilterOpen
+                        ? "curator-management-page__icon curator-management-page__icon--filter-open curator-management-page__icon--visible"
+                        : "curator-management-page__icon curator-management-page__icon--filter-open curator-management-page__icon--hidden"
+                    }
+                  />
+                </span>
+              </button>
 
               {isFilterOpen ? (
                 <div className="curator-management-page__filters-popover">
@@ -970,14 +1086,24 @@ export function CuratorManagementPage() {
                   setIsSortOpen((current) => !current);
                 }}
               >
-                <span
-                  aria-hidden="true"
-                  className={
-                    appliedSortDirection === "desc"
-                      ? "curator-management-page__icon curator-management-page__icon--descending"
-                      : "curator-management-page__icon curator-management-page__icon--ascending"
-                  }
-                />
+                <span className="curator-management-page__icon-stack" aria-hidden="true">
+                  <span
+                    className={
+                      isSortOpen
+                        ? `curator-management-page__icon ${appliedSortDirection === "desc" ? "curator-management-page__icon--sorting" : "curator-management-page__icon--sorting curator-management-page__icon--ascending"} curator-management-page__icon--hidden`
+                        : appliedSortDirection === "desc"
+                          ? "curator-management-page__icon curator-management-page__icon--sorting"
+                          : "curator-management-page__icon curator-management-page__icon--sorting curator-management-page__icon--ascending"
+                    }
+                  />
+                  <span
+                    className={
+                      isSortOpen
+                        ? "curator-management-page__icon curator-management-page__icon--filter-open curator-management-page__icon--visible"
+                        : "curator-management-page__icon curator-management-page__icon--filter-open curator-management-page__icon--hidden"
+                    }
+                  />
+                </span>
               </button>
 
               {isSortOpen ? (
@@ -1018,7 +1144,7 @@ export function CuratorManagementPage() {
                           onChange={() => setSelectedSortDirection("asc")}
                           variant="accent"
                         />
-                        <span>{selectedSortField === "alphabet" ? "Я-А" : "По возрастанию"}</span>
+                        <span>{selectedSortField === "alphabet" ? "А-Я" : "По возрастанию"}</span>
                       </label>
                       <label className="curator-management-page__filter-option">
                         <Radio
@@ -1026,7 +1152,7 @@ export function CuratorManagementPage() {
                           onChange={() => setSelectedSortDirection("desc")}
                           variant="accent"
                         />
-                        <span>{selectedSortField === "alphabet" ? "А-Я" : "По убыванию"}</span>
+                        <span>{selectedSortField === "alphabet" ? "Я-А" : "По убыванию"}</span>
                       </label>
                     </div>
                   </div>
@@ -1192,7 +1318,7 @@ export function CuratorManagementPage() {
             ) : null}
           </div>
 
-          {!isTableLoading && isAuthenticated && paginatedItems.length > 0 ? (
+          {!isTableLoading && isAuthenticated && paginatedItems.length > 0 && totalPages > 1 ? (
             <nav className="curator-management-page__pagination" aria-label="Пагинация">
               <button
                 type="button"

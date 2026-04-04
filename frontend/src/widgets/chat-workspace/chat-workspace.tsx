@@ -66,6 +66,7 @@ type ConversationListItem = {
   unreadCount: number;
   previewText: string;
   updatedAt: string;
+  isPreviewResolved: boolean;
 };
 
 type ChatMessageView = ChatMessage & {
@@ -107,6 +108,8 @@ const SYSTEM_WELCOME_AT_STORAGE_KEY_PREFIX = "tramplin.chat.welcome-at";
 const ACTIVE_CONVERSATION_STORAGE_KEY_PREFIX = "tramplin.chat.active-conversation";
 const CHAT_DECRYPTION_ERROR_TEXT = "Не удалось расшифровать сообщение. Скорее всего, оно было зашифровано старым ключом.";
 const SYSTEM_BRAND_AVATAR_URL = "/favicon.svg";
+const CHAT_PREVIEW_TEXT_CACHE = new Map<string, string>();
+const CHAT_MESSAGE_TEXT_CACHE = new Map<string, string>();
 
 type LocalNoteRecord = {
   id: string;
@@ -377,12 +380,68 @@ function ChatWorkspaceDirectorySkeleton({ detailed = true }: { detailed?: boolea
   );
 }
 
+function ChatWorkspaceThreadSkeleton() {
+  return (
+    <>
+      <header className="chat-workspace__thread-header chat-workspace__thread-header--skeleton" aria-hidden="true">
+        <div className="chat-workspace__thread-title-group">
+          <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar" />
+          <div className="chat-workspace__thread-title-skeleton">
+            <ChatWorkspaceSkeleton className="chat-workspace__skeleton--thread-name" />
+            <ChatWorkspaceSkeleton className="chat-workspace__skeleton--thread-meta" />
+          </div>
+        </div>
+      </header>
+
+      <div className="chat-workspace__messages">
+        <div className="chat-workspace__messages-inner">
+          <div className="chat-workspace__messages-skeleton">
+            {Array.from({ length: CHAT_MESSAGE_SKELETON_COUNT }, (_, index) => {
+              const isOwn = index % 2 === 1;
+
+              return (
+                <div
+                  key={`chat-thread-skeleton-${index}`}
+                  className={`chat-workspace__message-skeleton-line${isOwn ? " chat-workspace__message-skeleton-line--own" : ""}`}
+                >
+                  {!isOwn ? (
+                    <ChatWorkspaceSkeleton className="chat-workspace__skeleton--avatar chat-workspace__skeleton--avatar-small" />
+                  ) : null}
+                  <div className="chat-workspace__message-skeleton-bubble">
+                    <ChatWorkspaceSkeleton className="chat-workspace__skeleton--message-line" />
+                    <ChatWorkspaceSkeleton
+                      className={`chat-workspace__skeleton--message-line${index % 2 === 0 ? " chat-workspace__skeleton--message-line-short" : ""}`}
+                    />
+                    <ChatWorkspaceSkeleton className="chat-workspace__skeleton--message-meta" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="chat-workspace__composer chat-workspace__composer--skeleton" aria-hidden="true">
+        <div className="chat-workspace__composer-actions">
+          <span className="chat-workspace__composer-attach chat-workspace__composer-attach--placeholder" />
+          <ChatWorkspaceSkeleton className="chat-workspace__skeleton--composer-input" />
+          <ChatWorkspaceSkeleton className="chat-workspace__skeleton--composer-send" />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function resolveMessageCounterpartKey(message: ChatMessageView, fallbackCounterpartKey?: JsonWebKey | null) {
   if (message.isOwn) {
     return message.recipientPublicKeyJwk ?? fallbackCounterpartKey ?? null;
   }
 
   return message.senderPublicKeyJwk ?? fallbackCounterpartKey ?? null;
+}
+
+function isChatScrolledToBottom(container: HTMLDivElement, threshold = 40) {
+  return container.scrollHeight - container.clientHeight - container.scrollTop <= threshold;
 }
 
 function resolveDirectoryLevelTagClass(levelLabel: string | null) {
@@ -399,6 +458,10 @@ function resolveDirectoryLevelTagClass(levelLabel: string | null) {
   return "chat-workspace__directory-tag--success";
 }
 
+function readCachedTextMap(cache: Map<string, string>) {
+  return Object.fromEntries(cache.entries());
+}
+
 export function ChatWorkspace({
   title,
   subtitle,
@@ -412,19 +475,26 @@ export function ChatWorkspace({
   const accessToken = useAuthStore((state) => state.accessToken);
   const isHydrated = useAuthStore((state) => state.isHydrated);
   const currentRole = useAuthStore((state) => state.role);
+  const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesInnerRef = useRef<HTMLDivElement | null>(null);
   const composerInputRef = useRef<HTMLInputElement | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
+  const shouldStickMessagesToBottomRef = useRef(true);
+  const lastScrolledThreadRef = useRef<string | null>(null);
+  const lastVisibleMessageKeyRef = useRef<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [contactSearchValue, setContactSearchValue] = useState("");
   const [messageDraft, setMessageDraft] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() =>
+    readStoredActiveConversationId(currentUserId, currentRole ?? null),
+  );
   const [activeDraftContact, setActiveDraftContact] = useState<ChatContact | null>(null);
   const [messageMenu, setMessageMenu] = useState<{ messageId: string; x: number; y: number } | null>(null);
   const [keyPair, setKeyPair] = useState<Awaited<ReturnType<typeof ensureChatKeyPair>> | null>(null);
-  const [decryptedPreviewMap, setDecryptedPreviewMap] = useState<Record<string, string>>({});
-  const [decryptedMessageMap, setDecryptedMessageMap] = useState<Record<string, string>>({});
+  const [decryptedPreviewMap, setDecryptedPreviewMap] = useState<Record<string, string>>(() => readCachedTextMap(CHAT_PREVIEW_TEXT_CACHE));
+  const [decryptedMessageMap, setDecryptedMessageMap] = useState<Record<string, string>>(() => readCachedTextMap(CHAT_MESSAGE_TEXT_CACHE));
   const [optimisticMessages, setOptimisticMessages] = useState<ChatMessageView[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
@@ -442,14 +512,18 @@ export function ChatWorkspace({
   const appliedPreferredRecipientUserIdRef = useRef<string | null>(null);
   const deferredSearchValue = useDeferredValue(searchValue);
   const deferredContactSearchValue = useDeferredValue(contactSearchValue);
-  const currentUserId = useMemo(() => readAccessTokenSubject(accessToken), [accessToken]);
 
-  const openPublicProfile = (publicId: string | null | undefined) => {
+  const openPublicProfile = (publicId: string | null | undefined, role?: string | null) => {
     if (!publicId) {
       return;
     }
 
-    navigate(`/profiles/${publicId}`);
+    navigate(`/profiles/${publicId}`, {
+      state:
+        role === "applicant" || role === "employer"
+          ? { ownerRole: role }
+          : undefined,
+    });
   };
 
   useEffect(() => {
@@ -689,6 +763,7 @@ export function ChatWorkspace({
       unreadCount: 0,
       previewText: lastSystemMessage.clientText ?? "Ваши заметки",
       updatedAt: lastSystemMessage.createdAt,
+      isPreviewResolved: true,
     };
   }, [systemCounterpart, systemMessages, systemWelcomeMessage]);
 
@@ -699,8 +774,9 @@ export function ChatWorkspace({
         id: item.id,
         counterpart: item.counterpart,
         unreadCount: item.unreadCount,
-        previewText: item.lastMessage ? (decryptedPreviewMap[item.id] ?? "Сообщение") : "Нет сообщений",
+        previewText: item.lastMessage ? (decryptedPreviewMap[item.id] ?? "") : "Нет сообщений",
         updatedAt: item.updatedAt,
+        isPreviewResolved: !item.lastMessage || Object.prototype.hasOwnProperty.call(decryptedPreviewMap, item.id),
       })),
     ],
     [decryptedPreviewMap, systemConversationItem, visibleConversations],
@@ -1016,6 +1092,23 @@ export function ChatWorkspace({
       lastSeenAt: activeDraftContact.lastSeenAt,
     };
   }, [activeConversation, activeDraftContact, activeSystemConversation, systemCounterpart]);
+  const activeCounterpartTitle = activeCounterpart ? resolveParticipantTitle(activeCounterpart) : null;
+  const visibleMessages = activeSystemConversation ? systemMessages : activeMessages;
+  const hasPreferredThreadTarget = Boolean(preferredEmployerId || preferredRecipientUserId);
+  const shouldShowThreadSkeleton =
+    !activeCounterpart &&
+    ((hasPreferredThreadTarget && (isConversationListLoading || isSearchLoading)) ||
+      (!hasRestoredActiveConversationRef.current && isConversationListLoading));
+  const lastVisibleMessageKey = useMemo(() => {
+    const lastMessage = visibleMessages[visibleMessages.length - 1];
+
+    if (!lastMessage) {
+      return null;
+    }
+
+    return `${lastMessage.id}:${lastMessage.createdAt}:${lastMessage.clientStatus ?? "sent"}:${lastMessage.isReadByPeer ? "read" : "delivered"}`;
+  }, [visibleMessages]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -1023,6 +1116,11 @@ export function ChatWorkspace({
       const nextPreviewMap: Record<string, string> = {};
       for (const item of conversations) {
         if (!item.lastMessage) {
+          continue;
+        }
+
+        if (CHAT_PREVIEW_TEXT_CACHE.has(item.id)) {
+          nextPreviewMap[item.id] = CHAT_PREVIEW_TEXT_CACHE.get(item.id) ?? "";
           continue;
         }
 
@@ -1038,7 +1136,6 @@ export function ChatWorkspace({
           }
 
           if (!keyPair) {
-            nextPreviewMap[item.id] = "Сообщение";
             continue;
           }
 
@@ -1060,6 +1157,9 @@ export function ChatWorkspace({
 
       if (isMounted) {
         setDecryptedPreviewMap(nextPreviewMap);
+        Object.entries(nextPreviewMap).forEach(([conversationId, previewText]) => {
+          CHAT_PREVIEW_TEXT_CACHE.set(conversationId, previewText);
+        });
       }
     })();
 
@@ -1082,6 +1182,11 @@ export function ChatWorkspace({
     void (async () => {
       const nextMessageMap: Record<string, string> = {};
       for (const item of activeMessages) {
+        if (CHAT_MESSAGE_TEXT_CACHE.has(item.id)) {
+          nextMessageMap[item.id] = CHAT_MESSAGE_TEXT_CACHE.get(item.id) ?? "";
+          continue;
+        }
+
         if (item.clientText) {
           nextMessageMap[item.id] = item.clientText;
           continue;
@@ -1099,7 +1204,6 @@ export function ChatWorkspace({
           }
 
           if (!keyPair) {
-            nextMessageMap[item.id] = "Сообщение";
             continue;
           }
 
@@ -1121,6 +1225,9 @@ export function ChatWorkspace({
 
       if (isMounted) {
         setDecryptedMessageMap(nextMessageMap);
+        Object.entries(nextMessageMap).forEach(([messageId, messageText]) => {
+          CHAT_MESSAGE_TEXT_CACHE.set(messageId, messageText);
+        });
       }
     })();
 
@@ -1165,13 +1272,68 @@ export function ChatWorkspace({
     return groups;
   }, [activeMessages, activeSystemConversation, systemMessages]);
 
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const updateStickiness = () => {
+      shouldStickMessagesToBottomRef.current = isChatScrolledToBottom(container);
+    };
+
+    updateStickiness();
+    container.addEventListener("scroll", updateStickiness, { passive: true });
+
+    return () => {
+      container.removeEventListener("scroll", updateStickiness);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) {
       return;
     }
-    container.scrollTop = container.scrollHeight;
-  }, [activeConversationId, messageDayGroups.length, activeMessages.length, systemMessages.length]);
+
+    const didThreadChange = lastScrolledThreadRef.current !== activeThreadKey;
+    const didTailChange = lastVisibleMessageKeyRef.current !== lastVisibleMessageKey;
+
+    if (didThreadChange || (didTailChange && shouldStickMessagesToBottomRef.current)) {
+      container.scrollTop = container.scrollHeight;
+      shouldStickMessagesToBottomRef.current = true;
+    }
+
+    lastScrolledThreadRef.current = activeThreadKey;
+    lastVisibleMessageKeyRef.current = lastVisibleMessageKey;
+  }, [activeThreadKey, lastVisibleMessageKey]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    const inner = messagesInnerRef.current;
+    if (!container || !inner || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    let frameId = 0;
+    const observer = new ResizeObserver(() => {
+      if (!shouldStickMessagesToBottomRef.current) {
+        return;
+      }
+
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+    });
+
+    observer.observe(inner);
+
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [activeThreadKey]);
 
   useEffect(() => {
     if (!editingMessageId) {
@@ -1546,8 +1708,6 @@ export function ChatWorkspace({
     }
   };
 
-  const activeCounterpartTitle = activeCounterpart ? resolveParticipantTitle(activeCounterpart) : null;
-  const visibleMessages = activeSystemConversation ? systemMessages : activeMessages;
   const activeApplicantRelation =
     activeCounterpart && currentRole === "applicant" && activeCounterpart.role === "applicant"
       ? applicantContacts.find((item) => item.userId === activeCounterpart.userId && item.role === "applicant") ?? null
@@ -1753,13 +1913,13 @@ export function ChatWorkspace({
                             className="chat-workspace__list-name chat-workspace__list-name--link"
                             onClick={(event) => {
                               event.stopPropagation();
-                              openPublicProfile(item.counterpart.publicId);
+                              openPublicProfile(item.counterpart.publicId, item.counterpart.role);
                             }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                openPublicProfile(item.counterpart.publicId);
+                                openPublicProfile(item.counterpart.publicId, item.counterpart.role);
                               }
                             }}
                           >
@@ -1783,7 +1943,11 @@ export function ChatWorkspace({
                         </span>
                       </span>
                       <span className="chat-workspace__list-meta">
-                        <span className="chat-workspace__list-preview">{item.previewText}</span>
+                        {item.isPreviewResolved ? (
+                          <span className="chat-workspace__list-preview">{item.previewText}</span>
+                        ) : (
+                          <ChatWorkspaceSkeleton className="chat-workspace__skeleton--preview chat-workspace__skeleton--preview-inline" />
+                        )}
                         <span className="chat-workspace__list-time">{formatTime(item.updatedAt)}</span>
                       </span>
                     </span>
@@ -1809,7 +1973,7 @@ export function ChatWorkspace({
                       <button
                         type="button"
                         className="chat-workspace__thread-name chat-workspace__thread-name-button"
-                        onClick={() => openPublicProfile(activeCounterpart.publicId)}
+                        onClick={() => openPublicProfile(activeCounterpart.publicId, activeCounterpart.role)}
                       >
                         {activeCounterpartTitle}
                       </button>
@@ -1832,7 +1996,7 @@ export function ChatWorkspace({
               </header>
 
               <div className="chat-workspace__messages" ref={messagesContainerRef}>
-                <div className="chat-workspace__messages-inner">
+                <div className="chat-workspace__messages-inner" ref={messagesInnerRef}>
                   {activeConversation && isMessagesLoading ? (
                     <div className="chat-workspace__messages-skeleton">
                       {Array.from({ length: CHAT_MESSAGE_SKELETON_COUNT }, (_, index) => {
@@ -1928,6 +2092,9 @@ export function ChatWorkspace({
                                 : previousMessage
                                   ? " chat-workspace__message--spaced"
                                   : "";
+                            const isMessageResolved =
+                              Object.prototype.hasOwnProperty.call(decryptedMessageMap, item.id) || Boolean(item.clientText);
+                            const messageText = decryptedMessageMap[item.id] ?? item.clientText ?? "";
 
                             return (
                             <div key={item.id} className="chat-workspace__message-entry">
@@ -1952,10 +2119,15 @@ export function ChatWorkspace({
                                     avatarUrl={activeCounterpart.avatarUrl}
                                   />
                                 ) : null}
-                                <div className="chat-workspace__message-body">
-                                  <p className="chat-workspace__message-text">
-                                    {decryptedMessageMap[item.id] ?? item.clientText ?? "Расшифровка сообщения..."}
-                                  </p>
+                                <div className={`chat-workspace__message-body${isMessageResolved ? "" : " chat-workspace__message-body--loading"}`}>
+                                  {isMessageResolved ? (
+                                    <p className="chat-workspace__message-text">{messageText}</p>
+                                  ) : (
+                                    <div className="chat-workspace__message-loading" aria-hidden="true">
+                                      <ChatWorkspaceSkeleton className="chat-workspace__skeleton--message-inline" />
+                                      <ChatWorkspaceSkeleton className="chat-workspace__skeleton--message-inline chat-workspace__skeleton--message-inline-short" />
+                                    </div>
+                                  )}
                                   <div className="chat-workspace__message-meta">
                                     <span>{formatTime(item.createdAt)}</span>
                                     {item.isOwn ? (
@@ -2113,6 +2285,8 @@ export function ChatWorkspace({
                 </div>
               </div>
             </>
+          ) : shouldShowThreadSkeleton ? (
+            <ChatWorkspaceThreadSkeleton />
           ) : (
             <div className="chat-workspace__placeholder">
               <h2 className="chat-workspace__empty-title">{emptyTitle}</h2>
@@ -2122,7 +2296,7 @@ export function ChatWorkspace({
         </div>
       </div>
       {currentRole === "applicant" ? (
-        <section className="chat-workspace__directory">
+        <section id="chat-contacts" className="chat-workspace__directory">
           <div className="chat-workspace__directory-header">
             <h2 className="chat-workspace__directory-title">Контакты ({combinedDirectoryItems.length})</h2>
           </div>

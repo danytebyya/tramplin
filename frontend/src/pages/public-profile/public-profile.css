@@ -6,6 +6,19 @@
   padding-top: 12px;
 }
 
+.public-profile-page__header-shell.page-shell {
+  width: min(1080px, 100%);
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  column-gap: 32px;
+  padding: 0 24px;
+}
+
+.public-profile-page__status-shell.page-shell {
+  width: min(1080px, 100%);
+  padding: 24px;
+}
+
 .public-profile-page__status-shell--loading {
   align-items: flex-start;
 }
@@ -71,36 +84,9 @@
   font-weight: 400;
 }
 
-.public-profile-page {
-  --public-profile-accent: var(--color-secondary);
-  --public-profile-accent-light: var(--color-secondary-light);
-  --public-profile-accent-hover: var(--color-secondary-hover);
-  --public-profile-accent-active: var(--color-secondary-active);
-}
-
-.public-profile-page--viewer-employer {
-  --public-profile-accent: var(--color-primary);
-  --public-profile-accent-light: var(--color-primary-light);
-  --public-profile-accent-hover: var(--color-primary-hover);
-  --public-profile-accent-active: var(--color-primary-active);
-}
-
-.public-profile-page--viewer-curator {
-  --public-profile-accent: var(--color-accent);
-  --public-profile-accent-light: var(--color-accent-light);
-  --public-profile-accent-hover: var(--color-accent-hover);
-  --public-profile-accent-active: var(--color-accent-active);
-}
-
-.public-profile-page.seeker-dashboard {
-  --color-secondary: var(--public-profile-accent);
-  --color-secondary-light: var(--public-profile-accent-light);
-  --color-secondary-hover: var(--public-profile-accent-hover);
-  --color-secondary-active: var(--public-profile-accent-active);
-}
-
-.public-profile-page--employer .seeker-dashboard__link-value {
-  color: var(--public-profile-accent);
+.public-profile-page--applicant {
+  min-height: 100vh;
+  background: var(--color-bg-primary);
 }
 
 .public-profile-page--employer {
@@ -108,10 +94,113 @@
   background: var(--color-bg-primary);
 }
 
+.public-profile-page--viewer-applicant {
+  --public-profile-accent: var(--color-secondary);
+  --public-profile-accent-light: var(--color-secondary-light);
+  --public-profile-accent-hover: var(--color-secondary-hover);
+  --public-profile-accent-active: var(--color-secondary-active);
+  --home-accent: var(--color-secondary);
+  --home-accent-soft: var(--color-secondary-light);
+  --home-accent-strong: var(--color-secondary-active);
+  --settings-accent: var(--color-secondary);
+  --header-top-gradient:
+    linear-gradient(
+      90deg,
+      var(--color-bg-primary) 0%,
+      var(--color-secondary) 5%,
+      var(--color-primary) 14%,
+      var(--color-primary-hover) 36%,
+      #2EB7DD 62%,
+      #07B3D5 78%,
+      #A4BDF3 100%
+    );
+}
+
+.public-profile-page--viewer-employer {
+  --public-profile-accent: #2563eb;
+  --public-profile-accent-light: #dbeafe;
+  --public-profile-accent-hover: #1d4ed8;
+  --public-profile-accent-active: #1e40af;
+  --home-accent: #2563eb;
+  --home-accent-soft: #dbeafe;
+  --home-accent-strong: #1e40af;
+  --settings-accent: #2563eb;
+  --header-top-gradient:
+    linear-gradient(
+      90deg,
+      var(--color-bg-primary) 0%,
+      var(--color-secondary) 13%,
+      var(--color-primary) 37%,
+      #487CEE 74%,
+      #ACE7F1 100%
+    );
+}
+
+.public-profile-page--viewer-curator {
+  --public-profile-accent: var(--color-accent);
+  --public-profile-accent-light: var(--color-accent-light);
+  --public-profile-accent-hover: var(--color-accent-hover);
+  --public-profile-accent-active: var(--color-accent-active);
+  --home-accent: var(--color-accent);
+  --home-accent-soft: var(--color-accent-light);
+  --home-accent-strong: var(--color-accent-active);
+  --settings-accent: var(--color-accent);
+  --header-top-gradient:
+    linear-gradient(
+      90deg,
+      #F8995E 0%,
+      #0D6EFF 80%,
+      #9BE6F8 99%
+    );
+}
+
+.public-profile-page--applicant .seeker-dashboard__shell.page-shell {
+  --color-secondary: var(--public-profile-accent);
+  --color-secondary-light: var(--public-profile-accent-light);
+  --color-secondary-hover: var(--public-profile-accent-hover);
+  --color-secondary-active: var(--public-profile-accent-active);
+}
+
+.public-profile-page--applicant .header__top {
+  background: var(--header-top-gradient);
+}
+
+.public-profile-page--employer .header__top {
+  background:
+    linear-gradient(
+      90deg,
+      var(--color-bg-primary) 0%,
+      var(--color-secondary) 13%,
+      var(--color-primary) 37%,
+      #487cee 74%,
+      #ace7f1 100%
+    ) !important;
+}
+
+.public-profile-page--employer .seeker-dashboard__link-value {
+  color: var(--public-profile-accent);
+}
+
 .public-profile-page--employer .notification-menu {
   --notification-menu-primary: var(--public-profile-accent);
+  --notification-menu-light: var(--public-profile-accent-light);
   --notification-menu-secondary: var(--public-profile-accent-hover);
   --notification-menu-accent: var(--public-profile-accent-active);
+}
+
+.public-profile-page--applicant .notification-menu {
+  --notification-menu-primary: var(--public-profile-accent);
+  --notification-menu-light: var(--public-profile-accent-light);
+  --notification-menu-secondary: var(--public-profile-accent-hover);
+  --notification-menu-accent: var(--public-profile-accent-active);
+}
+
+.public-profile-page--employer {
+  --color-primary: var(--public-profile-accent);
+  --color-primary-light: var(--public-profile-accent-light);
+  --color-primary-hover: var(--public-profile-accent-hover);
+  --color-primary-active: var(--public-profile-accent-active);
+  --page-tabs-accent: var(--public-profile-accent);
 }
 
 .public-profile-page--employer .employer-dashboard__shell.page-shell {
